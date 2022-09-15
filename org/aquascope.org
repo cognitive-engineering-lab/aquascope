@@ -103,7 +103,7 @@ wants to categorize them together.
 One trend I see emerging is the necessity to understand /a little/ of what's going
 on at the memory level. Take for example a question about returning a reference
 to a local variable.
-#+begin_src rustic
+#+begin_src rust
 // NOTE even including a lifetime &'a String doesn't help.
 fn foo() -> & String {
     & String::new()
@@ -112,7 +112,7 @@ fn foo() -> & String {
 This would be an error, because as soon as the function returns, that memory
 could be used by someone else. Confusion can arise however when comparing the
 previous to the following.
-#+begin_src rustic
+#+begin_src rust
 fn foo() -> & 'static i32 {
     & 42
 }
@@ -131,7 +131,7 @@ interned values is useful.
 As pointed out in the answers, the misunderstanding demonstrated is what a
 lifetime actually represents. This is how long a value is valid /at a specific
 location/. If that value gets moved into a different context, the lifetime changes.
-#+BEGIN_SRC rustic
+#+BEGIN_SRC rust
 struct Parent {
     count: u32,
 }
@@ -167,7 +167,7 @@ function frame.
 
 * Implementation and Structure
 ** Backend Considerations
-*** Lifetime & Plonius interactions
+*** Lifetime & Polonius interactions
 **** Polonius and his Sacred Facts
 The borrow check information ~rustc~ gives you is in the form of Datalog facts.
 There is a set of so-called [[https://docs.rs/polonius-engine/0.13.0/polonius_engine/struct.AllFacts.html][input facts]] and the dual [[https://docs.rs/polonius-engine/0.13.0/polonius_engine/struct.Output.html#structfield.dump_enabled][output facts]]. The output
