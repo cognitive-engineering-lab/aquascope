@@ -1,0 +1,32 @@
+[package]
+name = "aquascope_front"
+version = "0.1.0"
+edition = "2021"
+authors = ["Gavin Gray <gagray@ethz.ch>"]
+
+[package.metadata.rust-analyzer]
+rustc_private = true
+
+# [features]
+# decompose = ["petgraph", "rayon"]
+
+[dependencies]
+aquascope = {version = "0.1", path = "../aquascope"}
+rustc_plugin = {version = "0.1", path = "../rustc_plugin"}
+anyhow = "1"
+log = "0.4"
+syntect = "5.0"
+getopts = "0.2"
+# fluid-let = "1.0"
+cfg-if = "1.0"
+itertools = "0.10"
+serde = {version = "1", features = ["derive"]}
+serde_json = "1"
+
+# Decompose
+# petgraph = {version = "0.6", default-features = false, optional = true}
+# rayon = {version = "1.5", optional = true}
+
+# For binaries
+env_logger = {version = "0.9", default-features = false}
+clap = {version = "3.1", default-features = false, features = ["std", "derive"]}

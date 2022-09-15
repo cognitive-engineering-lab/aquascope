@@ -1,0 +1,335 @@
+#+TITLE: Aquascope
+#+SUBTITLE: raising Rustaceans with deep understanding.
+#+AUTHOR: Gavin Gray
+#+DATE: 20.08.2022
+#+OPTIONS: toc:nil num:nil
+#+LANGUAGE: en
+#+OPTIONS: ':t
+#+LATEX_CLASS_OPTIONS: [11pt]
+#+LATEX_HEADER: \usepackage[T1]{fontenc}
+#+LATEX_HEADER: \usepackage[bitstream-charter]{mathdesign}
+#+LATEX_HEADER: \usepackage[margin=2.0in]{geometry}
+#+LATEX_HEADER: \usepackage[backend=bibtex]{biblatex}
+#+LATEX_HEADER: \bibliography{aquascope.bib}
+
+* Current tasks
+*** Backend
+**** TODO create a function which given a ~hir::LocalDefID~ will produce the lifetimes for all internal identifiers. This should be given back in some form.
+**** TODO The driver (here) should loop over all local definitions and use the above analysis before sending the contents.
+**** TODO Map all of these identifier locations back to the original source code using spans.
+**** TODO Create a test suite that will allow you to test the above actions for a given analysis.
+
+*** Frontend
+**** DONE tokenize and fontify a source text.
+**** TODO Setup a logging framework
+**** TODO display this stylized code in the GUI
+
+
+* What is Aquascope and its Goals
+A good way to get some cursory information about the Aquascope project is to
+read the [[file:proposal-praktische-arbeit.org][initial proposal]]. This uses some different language, and remained
+vague, but it does contain some good objectives.
+By definition, the /Praktische Arbeit/ credits at ETH have two sets of --
+potentially overlapping -- core goals. These fall into two categories: learning
+goals, and contribution goals.
+
+**** TODO write a set of finite goals here that you can /accomplish/
+**** TODO get the org-agenda to work for the 'GOAL' keyword ...
+**** GOAL /todo/ ...
+
+** Learning Goals
+The learning goals is a set of goals which should contribute to my education and
+make me more rounded as a developer. I see this project as having two
+overarching themes.
+- /Compilers & Systems/: my degree focus, titled: /Safe and Reliable Systems/, aims
+  to teach students how to build up a large-scale system in a reliable,
+  well-engineered, manner. Many of the core courses have a focus on low level
+  systems programming, and interacting with a compiler also falls into this
+  category. The Aquascope project will give me more of a reality check when it
+  comes to working with compilers. Until now, courses have a focus on student
+  languages which tend to be greatly oversimplified and working with a
+  production-ready compiler gets left as a learning exercise. In order to build
+  a successful product at the end of this project, I will need to interact with
+  the ~rustc~ compiler, utilizing static information it provides, and potentially,
+  doing my own set of analyses.
+
+- /Education/: outside of my studies I have a personal interest in how people
+  learn. I feel fortunate that, until now, my studies have gone well but I know
+  that in Computer Science education many people can get lost in the lurch. This
+  can be due to lots of things, but often it comes down to how professors teach
+  and the learning material available. The programming language [[https://www.rust-lang.org/][Rust]], known for
+  its steep learning curve, is a good focus because there is lots of room for
+  improvement. Because education is a core goal of the project (discussed
+  below), I hope to develop a richer understanding of how people learn and how I
+  can tune my own teaching (present and future) to be more effective.
+
+** Contribution Goals
+Outside of personal learning goals the project deliverable should provide some
+benefit to its target audience. In this case, the target audience is developers
+learning or using Rust, as well as education in general. As stated in [[file:proposal-praktische-arbeit.org::Outcome Goal][the initial proposal]].
+#+BEGIN_QUOTE
+My goals for this project is to leverage static information in order to give the
+user a set of visualizations that will simplify understanding errors, and ultimately, facilitate learning. Specifically, such a visualization should /make errors obvious to learners/. Visualizations should require minimal knowledge in order to understand them; one could imagine a version of the Rust Book which includes such visualizations alongside code snippets to reinforce the learning of difficult concepts.
+#+END_QUOTE
+I'm obviously biased, but I think this is well-stated. These visualizations
+should target specific, common problems people have when learning Rust, and
+most importantly, are uncluttered and easy to read. This is why there should be
+a /set/ of visualizations. Previous projects attempt to provide the users with
+static information, which ultimately  douse them in a heavy firehose stream of
+complex glyphs and arrows. I want a user to quickly understand why they are
+getting a particular compiler error.
+
+If making such easy tools were as simple as stating them as above, why do we
+have such complex tools to begin with? I concede that making a user-friendly
+tool as described above is much easier said than done. Textbooks often contain
+example programs that demonstrate common surface-level issues, but with a few
+simple tweaks become a much deeper, harder to understand problem. Rust is no
+exception. The language is full of prickly syntax and it's easy to program
+oneself into a semantic corner with no escape hatch. Discerning between
+/textbook style error/ and /deep semantic error/ is not always trivial, and there is
+no hard line that separates the two. The following section [[*Planning and
+Discussion]] will attempt to address these ambiguities.
+
+* Planning and Discussion
+** TODO finish reading the StackOverflow questions and categorizing them.
+My starting place for understanding where people lack knowledge in Rust is [[https://docs.google.com/document/d/14tRKe-__8CFwfE8yQisCEk_nETBojri5K5aaAd4hP4I/edit#heading=h.h54jfz2x2m50][this
+collection of StackOverflow questions]]. These are questions tagged with "rust"
+and sorted by frequency. I will link to the topics here and discuss them
+briefly, then I will use my own categorization to understand which tasks I want
+to target for visualization. They first are ordered and discussed as they are
+listed in the aforementioned document, and then analyzed for how this project
+wants to categorize them together.
+
+One trend I see emerging is the necessity to understand /a little/ of what's going
+on at the memory level. Take for example a question about returning a reference
+to a local variable.
+#+begin_src rustic
+// NOTE even including a lifetime &'a String doesn't help.
+fn foo() -> & String {
+    & String::new()
+}
+#+end_src
+This would be an error, because as soon as the function returns, that memory
+could be used by someone else. Confusion can arise however when comparing the
+previous to the following.
+#+begin_src rustic
+fn foo() -> & 'static i32 {
+    & 42
+}
+fn bar() -> & 'static [i32] {
+    & [1, 2, 3]
+}
+#+end_src
+This *will* compile. The reason behind this is that the literal values got
+interned and have a static lifetime.
+In short where each respective value lives is important and can affect how the
+code compiles. I wonder if allowing users of Aquascope to view static or
+interned values is useful.
+
+** Ownership
+*** [[https://stackoverflow.com/questions/32300132/why-cant-i-store-a-value-and-a-reference-to-that-value-in-the-same-struct][+]] Why can't I store a value and a reference to that value in the same struct?
+As pointed out in the answers, the misunderstanding demonstrated is what a
+lifetime actually represents. This is how long a value is valid /at a specific
+location/. If that value gets moved into a different context, the lifetime changes.
+#+BEGIN_SRC rustic
+struct Parent {
+    count: u32,
+}
+
+struct Child<'a> {
+    parent: &'a Parent,
+}
+
+struct Combined<'a> {
+    parent: Parent,
+    child: Child<'a>,
+}
+
+impl<'a> Combined<'a> {
+    fn new() -> Self {
+        /*  -- */ /* 0x00 */ let parent = Parent { count: 42 };
+        /*  |        ^^^^ value of child points to memory addr */
+        /*  |  */ let child = Child { parent: &parent };
+        /*  |  */ /*         vvvvvv -- moved to new address */
+        /*  -- */ Combined { parent, child }
+    }
+}
+#+END_SRC
+In theory, if the value of src_rust{child} moved with the parent, then this code
+wouldn't result in a dangling pointer.
+
+** Dangling Pointers
+*** [[https://docs.google.com/document/d/14tRKe-__8CFwfE8yQisCEk_nETBojri5K5aaAd4hP4I/edit#][+]] Is there a way to return a reference to a variable created inside a function?
+Again I would classify this as a misconception of lifetimes. Here, the OP is
+wondering why a reference to a locally created variable can not be returned.
+Specifically, the lifetime is tied to the stack address within the current
+function frame.
+
+* Implementation and Structure
+** Backend Considerations
+*** Lifetime & Plonius interactions
+**** Polonius and his Sacred Facts
+The borrow check information ~rustc~ gives you is in the form of Datalog facts.
+There is a set of so-called [[https://docs.rs/polonius-engine/0.13.0/polonius_engine/struct.AllFacts.html][input facts]] and the dual [[https://docs.rs/polonius-engine/0.13.0/polonius_engine/struct.Output.html#structfield.dump_enabled][output facts]]. The output
+facts contains information about errors and such, but for the time being, let's
+ignore that. I would like to focus on the successful case; what information can
+we learn from the *input facts* and how can a visualization give deeper meaning to
+a program. An explanation of the input facts, found [[https://rust-lang.github.io/polonius/rules/relations.html][at this poorly
+marketed mdoc]], is where I will start. A brief summary and personal thoughts
+are provided below.
+
+**** A Bit of Backstory
+A small splash of extra information that provides context to the rules. The
+rules run on so-called /fact types/. Defined as follows are the ~RustcFacts~. These
+are the Atoms of the borrow checker and a rough description of them is found at
+the following [[https://rust-lang.github.io/polonius/rules/atoms.html][MDoc link]].
+
+#+BEGIN_SRC rust
+impl polonius_engine::FactTypes for RustcFacts {
+    type Origin = RegionVid;
+    type Loan = BorrowIndex;
+    type Point = LocationIndex;
+    type Variable = Local;
+    type Path = MovePathIndex;
+}
+#+END_SRC
+
+- A ~Variable~ represents user variables from the /source code/ -- as well as parameters. Thus, if the user clickable actions for lifetimes are variables, then this is a good place to start.
+
+- ~Path~ s are not bijective. That is, all MIR /places/ map to a Path, but the
+opposite is not true. Roughly speaking, a path is a path through memory to a
+memory location. E.g. ~arr[]~ or ~tup.0~.
+
+<<describing points>>
+- For each statement in the MIR, there are *two* associated ~Nodes~ s, the start node
+which represents before the statement $S$ has  started executing, and the "mid
+node" which represents were $S$ has /taken effect/. XXX the last statement I
+haven't fully understood so let's revisit that later [ ] TODO. Nonetheless,
+nodes are related by the ~cfg_edge~ fact, more on this below.
+
+- A ~Loan~ represents some borrow that occurs in the source. Each loan has an
+associated path that was borrowed along with a mutability. So, in our example,
+there would be a single loan, for the ~&x.1~ expression.
+
+- An ~Origin~ is what it typically called in Rust a lifetime. In Polonius, an origin
+refers to the set of loans from which a reference may have been created.
+
+**** On to the Juicy Facts
+- src_rust{pub cfg_edge: Vec<(T::Point, T::Point)>}
+  The first, and most trivial, is the relation that records connected CFG
+  points. For each [[https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/struct.Statement.html][MIR statement]] location, two points are generated: the /start/
+  and the /mid/. See the above description regarding ~Node~ s [[describing points]].
+
+- src_rust{pub loan_issued_at: Vec<(T::Origin, T::Loan, T::Point)>}
+  ~(o: Origin, l: Loan, p: Point)~ The loan ~l~ was issued at point ~p~ creating a
+  reference with the origin ~o~. The documentation has a good example of this
+  which I will copy here.
+  #+begin_src rust
+#![allow(unused)]
+fn main() {
+let mut a = 0;
+let r = &mut a; // this creates the loan L0
+//      ^ let's call this 'a
+}
+  #+end_src
+  There will be a ~loan_issued_at~ fact linking the loan ~L0~ to the origin ~'a~.
+
+- src_rust{pub placeholder: Vec<(T::Origin, T::Loan)>}
+  States that the origin is currently a placeholder, with its associated
+  placeholder loan. The placeholder represent the scenario of having a function
+  who does not know about the loans and thus cannot make assumptions about origins.
+- src_rust{pub universal_region: Vec<T::Origin>}
+  *Deprecated* : achieves the same thing as ~placeholder~ but does not have an
+  associated loan.
+
+- src_rust{pub loan_killed_at: Vec<(T::Loan, T::Point)>}
+  A prefix of the path borrowed in ~loan~ is overwritten at ~point~. After this
+  point, mutations to the borrowed path no longer invalidate the loan.
+
+- src_rust{pub subset_base: Vec<(T::Origin, T::Origin, T::Point)>}
+  ~(o1 origin, o2 origin, p point)~ states that origin ~o1~ outlives origin ~o2~
+  at point ~p~. This is denoted in Rust syntax as ~'a: 'b~ where ~'a~ outlives
+  lifetime ~'b~.
+  NOTE: viewing origins as /sets of loans/ would say that ~o1 <: o2~ meaning that
+  all loans of ~o1~ flow into ~o2~. Meaning that ~o1~ is a subset of ~o2~.
+  NOTE: this fact is *not* transitive and formes the base of the transitive
+  closure computation (hence the prefix ~_base~).
+
+- src_rust{pub loan_invalidated_at: Vec<(T::Point, T::Loan)>}
+  At the given ~point~ the ~loan~ has been invalidated by some action. A fact about
+  any live loan would indicate an error.
+
+- src_rust{pub known_placeholder_subset: Vec<(T::Origin, T::Origin)>}
+  Stores /known/ relationships about placeholder origins. An example would be
+  a function with explicitly annotated lifetimes, and those lifetimes contain --
+  explicitly or implicitly -- lifetime relationships.
+
+  For the remainder of the facts refer yourself to the current implementation of
+  ~facts.rs~ within the [[https://github.com/rust-lang/polonius/blob/master/polonius-engine/src/facts.rs][polonius-engine]]. There are some small useful comments.
+
+- src_rust{pub var_used_at: Vec<(T::Variable, T::Point)>}
+- src_rust{pub var_defined_at: Vec<(T::Variable, T::Point)>}
+- src_rust{pub var_dropped_at: Vec<(T::Variable, T::Point)>}
+- src_rust{pub use_of_var_derefs_origin: Vec<(T::Variable, T::Origin)>}
+- src_rust{pub drop_of_var_derefs_origin: Vec<(T::Variable, T::Origin)>}
+- src_rust{pub child_path: Vec<(T::Path, T::Path)>}
+- src_rust{pub path_is_var: Vec<(T::Path, T::Variable)>}
+- src_rust{pub path_assigned_at_base: Vec<(T::Path, T::Point)>}
+- src_rust{pub path_moved_at_base: Vec<(T::Path, T::Point)>}
+- src_rust{pub path_accessed_at_base: Vec<(T::Path, T::Point)>}
+
+**** About Retrieving Info ...
+With how these facts are stored, the ~AllFacts~ data structure resembles a
+mini-database (of sorts). Thus, I can construct a series of /queries/ which will
+chop and combine the *relations* to get the info I need. What sorts of things are
+interesting? Here are some bits of information we'll want, or questions to ponder.
+
+- NEED: Set of live points for a MIR place.
+- Q: What information do we need to explain errors?
+  This topic is going to be more difficult that anticipated. The reason for this
+  is Polonius information is /not enough in all cases/. This point needs to be
+  explained a little further, it involves non-variant lifetimes and the MIR
+  typechecker. In brief, the typechecker information isn't retrievable but the
+  polonius facts are only sufficient in the easy cases.
+  - [ ] TODO explain this with an example.
+
+
+** Frontend Considerations
+*** Flexibility
+One of the main considerations for a frontend is my lack of expertise with the
+traditional tools. I believe that if I start with a webpage a lot of time will
+be lost trying to figure out how to even start or structure things. This
+obviously is one of my (many) weaknesses with the project. However, I don't
+believe this will hinder me if I start the right way.
+
+Pigeonholing myself into a specific frontend too early would be a mistake.
+Thus, the format by which information is passed from the backend should include
+enough information that any frontend could easily display the information later.
+I believe that a good choice of frontend for getting things off the ground is
+the *Racket GUI* framework. Racket is not only a good choice for many things but
+I already have familiarity with it and know how to quickly get answers to
+questions. I also think that Racket has good libraries on which I can build to
+reduce the necessity to /reinvent the wheel/ so-to-say. Lastly, the ~racket/gui~
+language provides flexibility that other editors would not. For example, a
+common plugin target for projects like these is VSCode. While VSCode is a
+popular editor, it does have limitations that would restrict the set of
+visualizations. Additionally, VSCode could simply be used in a split-screen mode
+and display HTML if that is a desired outcome. However, I think requiring that
+the visualizations work as an overlay on the code already shows that VSCode is
+not flexible enough.
+
+*** Receiving Information
+**** TODO describe how the frontend receives information.
+This section is currently incomplete.
+
+The frontend receives information from the back via a JSON string describing the
+query result (for queries see section TODO). The IO interface is specified in
+[file:../frontend/private/io-spec.rkt], these declarations use a custom DSL
+defined in [file:../frontend/private/serde.rkt] which interfaces with the Rust
+Serde package. This interface is unfortunately not automatically synchronized
+between the two, however, generating a Rust file with the required types should
+not be /too/ difficult to add.
+TODO
+
+*** High-level Architecture
+**** TODO describe architectural design.

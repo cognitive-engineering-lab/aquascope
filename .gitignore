@@ -1,0 +1,12 @@
+.DS_Store
+.idea
+*.log
+tmp/
+
+# Tmp testing things
+/files
+
+# Rust things
+target/
+debug/
+.rustfmt.toml

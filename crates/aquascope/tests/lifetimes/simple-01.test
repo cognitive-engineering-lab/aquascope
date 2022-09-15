@@ -1,0 +1,12 @@
+fn main() {
+    let x = 0;
+    {
+        let borrow_0 = &x;
+
+        println!("{}", borrow_0);
+    }
+    {
+        let borrow_1 = &x;
+        println!("{}", borrow_1);
+    }
+}

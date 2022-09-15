@@ -1,0 +1,22 @@
+[package]
+name = "aquascope"
+version = "0.1.0"
+edition = "2021"
+authors = ["Gavin Gray <gavinleroy6@gmail.com>"]
+repository = "https://github.com/gavinleroy/aquascope"
+license = "MIT"
+
+[package.metadata.rust-analyzer]
+rustc_private=true
+
+[dependencies]
+anyhow = "1.0"
+env_logger = "0.9"
+log = "0.4"
+lazy_static = "1.4"
+rustc_plugin = {version = "0.1.0", path = "../rustc_plugin"}
+thread_local = "1.1"
+intervaltree = "0.2"
+serde = "1.0"
+unicode-segmentation = "1.9"
+cfg-if = "1.0"
