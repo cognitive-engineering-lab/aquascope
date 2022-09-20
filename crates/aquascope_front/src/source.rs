@@ -1,13 +1,15 @@
-use serde::Serialize;
-use syntect::highlighting::Style;
+use serde::{Deserialize, Serialize};
 
-use crate::{plugin::AquascopeResult, style};
+use crate::{
+  plugin::AquascopeResult,
+  style::{self, Style},
+};
 
-#[derive(Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceOutput {
-  filename: String,
-  enriched_toks: Vec<Vec<(Style, String)>>,
+  pub filename: String,
+  pub styles: Vec<Style>,
+  pub enriched_toks: Vec<Vec<(String, u8)>>,
 }
 
 struct Callbacks {
@@ -25,12 +27,13 @@ impl rustc_driver::Callbacks for Callbacks {
   ) -> rustc_driver::Compilation {
     log::debug!("Highlighting code in {}", self.filename);
 
-    let stylized_source_toks =
+    let (styled_source_toks, styles) =
       style::stylize_source(self.filename.clone(), Vec::default());
 
     self.output = Some(SourceOutput {
       filename: self.filename.clone(),
-      enriched_toks: stylized_source_toks,
+      styles,
+      enriched_toks: styled_source_toks,
     });
 
     rustc_driver::Compilation::Stop
@@ -41,6 +44,9 @@ pub fn source(
   args: &[String],
   filename: String,
 ) -> AquascopeResult<SourceOutput> {
+  log::debug!("Running source for {filename}");
+  log::debug!("with args {args:?}");
+
   let mut callbacks = Callbacks {
     filename,
     output: None,

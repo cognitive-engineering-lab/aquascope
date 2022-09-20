@@ -15,7 +15,7 @@ use rustc_hir::BodyId;
 use rustc_interface::interface::Result as RustcResult;
 use rustc_middle::ty::TyCtxt;
 use rustc_plugin::{RustcPlugin, RustcPluginArgs, Utf8Path};
-use serde::{Deserialize, Serialize};
+use serde::{self, Deserialize, Serialize};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -88,9 +88,6 @@ impl RustcPlugin for AquascopePlugin {
     let (file, flags) = match &args.command {
       Source { file, flags } => (file, flags),
       Spans { file, flags } => (file, flags),
-      // Focus { file, flags, .. } => (file, flags),
-      // Decompose { file, flags, .. } => (file, flags),
-      // Playground { file, flags, .. } => (file, flags),
       _ => unreachable!(),
     };
 
@@ -106,15 +103,6 @@ impl RustcPlugin for AquascopePlugin {
     compiler_args: Vec<String>,
     plugin_args: AquascopePluginArgs,
   ) -> RustcResult<()> {
-    // let eval_mode = EvalMode {
-    //   context_mode: plugin_args.context_mode.unwrap_or(ContextMode::SigOnly),
-    //   mutability_mode: plugin_args
-    //     .mutability_mode
-    //     .unwrap_or(MutabilityMode::DistinguishMut),
-    //   pointer_mode: plugin_args.pointer_mode.unwrap_or(PointerMode::Precise),
-    // };
-    // fluid_set!(EVAL_MODE, eval_mode);
-
     use AquascopeCommand::*;
     match plugin_args.command {
       Source { file, .. } => {
@@ -123,47 +111,17 @@ impl RustcPlugin for AquascopePlugin {
       Spans { file, .. } => {
         postprocess(crate::spans::spans(&compiler_args, file))
       }
-      // Playground {
-      //   file, start, end, ..
-      // } => {
-      //   let indices = GraphemeIndices::from_path(&file).unwrap();
-      //   let range = Range::from_char_range(start, end, &file, &indices);
-      //   postprocess(run(crate::playground::playground, range, &compiler_args))
-      // }
-      // Focus { file, pos, .. } => {
-      //   let indices = GraphemeIndices::from_path(&file).unwrap();
-      //   let id = FunctionIdentifier::Range(Range::from_char_range(
-      //     pos, pos, &file, &indices,
-      //   ));
-      //   postprocess(run(crate::focus::focus, id, &compiler_args))
-      // }
-      // Decompose {
-      //   file: _file,
-      //   pos: _pos,
-      //   ..
-      // } => {
-      //   cfg_if::cfg_if! {
-      //     if #[cfg(feature = "decompose")] {
-      //       let indices = GraphemeIndices::from_path(&_file).unwrap();
-      //       let id =
-      //         FunctionIdentifier::Range(Range::from_char_range(_pos, _pos, &_file, &indices));
-      //       postprocess(run(
-      //         crate::decompose::decompose,
-      //         id,
-      //         &compiler_args,
-      //       ))
-      //     } else {
-      //       panic!("Aquascope must be built with the decompose feature")
-      //     }
-      //   }
-      // }
       _ => unreachable!(),
     }
   }
 }
 
+// TODO you could simplify the interface of the Server by converting
+// AquascopeResults into a shared form of Result. Then for native commands
+// like below you'd go to a RustcResult whereas the server would turn this
+// into an axum Result.
 fn postprocess<T: Serialize>(result: AquascopeResult<T>) -> RustcResult<()> {
-  let result = match result {
+  let result: Result<T, String> = match result {
     Ok(output) => Ok(output),
     Err(e) => match e {
       AquascopeError::BuildError => {
@@ -190,6 +148,8 @@ pub fn run_with_callbacks(
       .split(' ')
       .map(|s| s.to_owned()),
   );
+
+  log::debug!("Running command with callbacks: {args:?}");
 
   let compiler = rustc_driver::RunCompiler::new(&args, callbacks);
   compiler.run().map_err(|_| AquascopeError::BuildError)
@@ -219,7 +179,8 @@ fn run<A: AquascopeAnalysis, T: ToSpan>(
     .map_err(|e| AquascopeError::AnalysisError(e.to_string()))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "variant")]
 pub enum AquascopeError {
   BuildError,
   AnalysisError(String),

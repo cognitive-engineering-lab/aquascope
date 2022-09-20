@@ -24,8 +24,8 @@ extern crate rustc_span;
 // #[cfg(feature = "decompose")]
 // mod decompose;
 // mod focus;
-mod plugin;
-mod source;
+pub mod plugin;
+pub mod source;
 mod spans;
 mod style;
 

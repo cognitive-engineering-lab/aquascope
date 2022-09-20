@@ -10,3 +10,6 @@ tmp/
 target/
 debug/
 .rustfmt.toml
+
+# Elm things
+elm-stuff/
