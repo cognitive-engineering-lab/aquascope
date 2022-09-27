@@ -1,5 +1,5 @@
 #+TITLE: Aquascope
-#+SUBTITLE: raising Rustaceans with deep understanding.
+#+SUBTITLE: raising rustaceans a with deep understanding.
 #+AUTHOR: Gavin Gray
 #+DATE: 20.08.2022
 #+OPTIONS: toc:nil num:nil
@@ -14,15 +14,8 @@
 
 * Current tasks
 *** Backend
-**** TODO create a function which given a ~hir::LocalDefID~ will produce the lifetimes for all internal identifiers. This should be given back in some form.
-**** TODO The driver (here) should loop over all local definitions and use the above analysis before sending the contents.
-**** TODO Map all of these identifier locations back to the original source code using spans.
-**** TODO Create a test suite that will allow you to test the above actions for a given analysis.
-
 *** Frontend
-**** DONE tokenize and fontify a source text.
-**** TODO Setup a logging framework
-**** TODO display this stylized code in the GUI
+**** DONE tokenize and fontify a source text (~<--~ sadly no longer needed 😿)
 
 
 * What is Aquascope and its Goals
@@ -33,9 +26,28 @@ By definition, the /Praktische Arbeit/ credits at ETH have two sets of --
 potentially overlapping -- core goals. These fall into two categories: learning
 goals, and contribution goals.
 
-**** TODO write a set of finite goals here that you can /accomplish/
-**** TODO get the org-agenda to work for the 'GOAL' keyword ...
-**** GOAL /todo/ ...
+** Visualization Set
+The set of visualizations that Aquascope will target is currently in the
+brainstorming phase. The visualization ideas listed below are not set in stone.
+A good resource on what things are difficult for newcomers to the language is
+[[https://songlh.github.io/paper/survey.pdf][this reserach paper]].
+
+*** Using a variable at a higher-than-allowed mutatibility.
+The typing relationships for mutability are ~immutable :> mut :> owned~ and
+helpful visualization may be to show users when they're attempting to use a
+higher mutability level than they currently have. For me, something like
+src_rust{let v: Vec<u8> = Vec::default(); v.push(0u8);} falls into this
+category, where the ~push~ method requires a ~&mut self~ but only a ~&self~ is
+achievable.
+A (/possibly few/) concern(s) I have with this visualization:
+- How can a visual representation be more helpful than the compiler message?
+- Other than a declaration point and usage point, is there anything else
+  important to include in a visualization?
+
+*** Using a value after its lifetime has expired.
+This is what I would categorize as a /simple/ lifetime mistake. Even though it's
+"simple", that doesn't mean it isn't hard for those starting with Rust. A lot of
+the popular StackOverflow questions regarding dangling pointers,
 
 ** Learning Goals
 The learning goals is a set of goals which should contribute to my education and
@@ -91,7 +103,7 @@ no hard line that separates the two. The following section [[*Planning and
 Discussion]] will attempt to address these ambiguities.
 
 * Planning and Discussion
-** TODO finish reading the StackOverflow questions and categorizing them.
+**** TODO finish reading the StackOverflow questions and categorizing them.
 My starting place for understanding where people lack knowledge in Rust is [[https://docs.google.com/document/d/14tRKe-__8CFwfE8yQisCEk_nETBojri5K5aaAd4hP4I/edit#heading=h.h54jfz2x2m50][this
 collection of StackOverflow questions]]. These are questions tagged with "rust"
 and sorted by frequency. I will link to the topics here and discuss them
@@ -295,41 +307,5 @@ interesting? Here are some bits of information we'll want, or questions to ponde
 
 
 ** Frontend Considerations
-*** Flexibility
-One of the main considerations for a frontend is my lack of expertise with the
-traditional tools. I believe that if I start with a webpage a lot of time will
-be lost trying to figure out how to even start or structure things. This
-obviously is one of my (many) weaknesses with the project. However, I don't
-believe this will hinder me if I start the right way.
-
-Pigeonholing myself into a specific frontend too early would be a mistake.
-Thus, the format by which information is passed from the backend should include
-enough information that any frontend could easily display the information later.
-I believe that a good choice of frontend for getting things off the ground is
-the *Racket GUI* framework. Racket is not only a good choice for many things but
-I already have familiarity with it and know how to quickly get answers to
-questions. I also think that Racket has good libraries on which I can build to
-reduce the necessity to /reinvent the wheel/ so-to-say. Lastly, the ~racket/gui~
-language provides flexibility that other editors would not. For example, a
-common plugin target for projects like these is VSCode. While VSCode is a
-popular editor, it does have limitations that would restrict the set of
-visualizations. Additionally, VSCode could simply be used in a split-screen mode
-and display HTML if that is a desired outcome. However, I think requiring that
-the visualizations work as an overlay on the code already shows that VSCode is
-not flexible enough.
-
-*** Receiving Information
-**** TODO describe how the frontend receives information.
-This section is currently incomplete.
-
-The frontend receives information from the back via a JSON string describing the
-query result (for queries see section TODO). The IO interface is specified in
-[file:../frontend/private/io-spec.rkt], these declarations use a custom DSL
-defined in [file:../frontend/private/serde.rkt] which interfaces with the Rust
-Serde package. This interface is unfortunately not automatically synchronized
-between the two, however, generating a Rust file with the required types should
-not be /too/ difficult to add.
-TODO
-
 *** High-level Architecture
 **** TODO describe architectural design.
