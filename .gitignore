@@ -5,6 +5,9 @@ tmp/
 
 # Tmp testing things
 /files
+/org/meeting*
+/org/*.png
+/org/media/
 
 # Rust things
 target/
