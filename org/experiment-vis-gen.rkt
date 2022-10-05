@@ -5,44 +5,93 @@
          racket/function
          pict)
 
-#;(define color-wheel '())
+;; ------------------------------------------------
+;; Lifetime Things
 
-(define interp-start "@{")
-(define interp-split "@:")
-(define interp-end "@}")
+(define default-font-color (make-object color% 0 0 0))
+;; tab 10 colors
+(define color-wheel
+  (vector (make-object color% 78  121 167)
+          (make-object color% 242 142 43 )
+          (make-object color% 225 87  89 )
+          (make-object color% 118 183 178)
+          (make-object color% 89  161 79 )
+          (make-object color% 237 201 72 )
+          (make-object color% 176 122 161)
+          (make-object color% 255 157 167)
+          (make-object color% 156 117 95 )
+          (make-object color% 186 176 172)))
+
+(define interp-end #\©)
 
 (define code-string
 #<<```
-fn make_separator(user_str: &@{'a@} str) -> &@{'a@} str {
-    if user_str == "" {
-        let @{default@} = String::default()
-        &@{'b@} default
-    } else {
-        user_str
+fn foo() {
+`ES:0`   let x;
+    {
+    `AS:0`   let y = 0;
+    `AE:0`   x = &`H0:'a` y;
     }
+`EE:0`   println!("{}", x);
 }
 ```
   )
-
-(define light-blue (make-object color% 30 129 176 0.2))
-(define light-blue-font (make-object color% 30 129 176 1.0))
-
-(define light-orange (make-object color% 226 135 67 0.2))
-(define light-orange-font (make-object color% 226 135 67 1.0))
-(define black-color (make-object color% 0 0 0 1.0))
-
-(define get-color
-  (let ([lifetime-colors (make-immutable-hash
-                          `(("'a" . ,light-blue-font)
-                            ("'b" . ,light-orange-font)))])
-    (lambda (s) (hash-ref lifetime-colors s black-color))))
 
 (define font-size 18)
 (define line-height 40)
 (define line-width  500)
 (define font-face "Fantasque Sans Mono")
 
-(define (txt msg)
+(struct visual-line (style from to))
+(struct group (text styles))
+
+(define (parse-source code)
+  (define enriched? (lambda (s) (string-contains? s "`")))
+
+  (define (handle-enriched-word word)
+    (define make-basic-group
+      (lambda (w) (group w `((font . ,font-face)
+                        (color . ,default-font-color)))))
+    (define has-prefix? (not (string-prefix? word "`")))
+    (define has-suffix? (not (string-suffix? word "`")))
+    (define split (string-split word "`"))
+    (define (make-enriched-group w)
+      w)
+    (match split
+      [(list pref tok suff)
+       (list (make-basic-group pref)
+             (make-enriched-group tok)
+             (make-basic-group suff))]
+      [(list pref tok)
+       #:when has-prefix?
+       (list (make-basic-group pref)
+             (make-enriched-group tok))]
+      [(list tok suff)
+       #:when has-suffix?
+       (list (make-enriched-group tok)
+             (make-basic-group suff))]
+      [(list tok)
+       (list (make-enriched-group tok))]))
+
+  (define (handle-any-word word)
+    (if (enriched? word)
+        (handle-enriched-word word)
+        (list word)))
+
+  (for/fold ()
+            ([(line ri) (in-indexed (string-split code "\n"))])
+    (for/fold (#;[ci 0])
+              ([(word ci) (in-indexed (string-split line))])
+
+      (define i (handle-any-word word))
+
+      (values)
+      )
+    ))
+
+(module+ test)
+
+#;(define (txt msg)
   (define line (blank line-width line-height))
   (define (draw-font m . styles)
     (define style
@@ -63,7 +112,7 @@ fn make_separator(user_str: &@{'a@} str) -> &@{'a@} str {
          (string-split msg interp-start)))
   (launder (lc-superimpose line (apply hc-append fontified))))
 
-(define (gen-example-lifetime . _)
+#;(define (gen-example-lifetime . _)
   (define lines (map txt (string-split code-string "\n")))
   (define base-text (apply vl-append lines))
   (define first-lifetime-bar
@@ -90,7 +139,71 @@ fn make_separator(user_str: &@{'a@} str) -> &@{'a@} str {
   with-second-lifetime)
 
 ;; ------------------------------------------------
-;; Color Type Squares
+;; Receiver / Method Expectations
+
+
+(define (filled-triangle h base
+                         #:draw-border? [db? #true]
+                         #:border-width [bw 1]
+                         #:border-color [bc "black"]
+                         #:color [c "white"])
+  (dc (λ (dc dx dy)
+        (define old-brush (send dc get-brush))
+        (define old-pen (send dc get-pen))
+        (send dc set-brush (new brush%
+                                [style 'solid]
+                                [color c]))
+        (send dc set-pen (new pen%
+                              [width (if db? bw 0)]
+                              [color (if db? bc c)]))
+        (define path (new dc-path%))
+        (send path move-to 0 h)
+        (send path line-to (/ base 2) 0)
+        (send path line-to base h)
+        (send path close)
+        (send dc draw-path path dx dy)
+        (send dc set-brush old-brush)
+        (send dc set-pen old-pen))
+      base h))
+
+
+(define-values (write-visual-symbol write-problem-representation)
+  (let ([make-write (lambda (mode)
+                      (case mode
+                        [(#t) write]
+                        [(#f) display]
+                        [else (lambda (p port) (print p port mode))])) ])
+    (values (lambda (vs port mode)
+              (define do-write (make-write mode))
+              (write-string "Actual: " port)
+              (do-write (visual-symbol-actual vs) port)
+              (write-string ", Expected: " port)
+              (do-write (visual-symbol-expected vs) port)
+              (write-string "  " port)
+              (do-write (visual-symbol-visual vs) port))
+            (lambda (pr port mode)
+              (define do-write (make-write mode))
+              (define gs (problem-representation-goods pr))
+              (define es (problem-representation-bads pr))
+              (define space-print (lambda (v)
+                                    (write-string "\n" port)
+                                    (do-write v port)))
+              (write-string "--- Accepted ---" port)
+              (for-each  space-print gs)
+              (write-string "\n\n--- Rejected ---" port)
+              (for-each space-print es)))))
+
+(struct allowed-receivers (expected allowed) #:transparent)
+
+(struct visual-symbol (expected actual visual)
+  #:transparent
+  #:methods gen:custom-write
+  [(define write-proc write-visual-symbol)])
+
+(struct problem-representation (goods bads)
+  #:transparent
+  #:methods gen:custom-write
+  [(define write-proc write-problem-representation)])
 
 (define-values (shade lighten)
   (let* ([d 10]
@@ -104,73 +217,110 @@ fn make_separator(user_str: &@{'a@} str) -> &@{'a@} str {
   (values (curry alter-tone -)
           (curry alter-tone +))))
 
-(define options '(&T T &mut-T mut-T))
-(define colors-cyan/violet
-  (list
-   "White Smoke"
-   "Deep Sky Blue"
-   "Medium Orchid"
-   "Dark Slate Gray"
-   ))
-(define colors-blue/gold
-  (list
-   "White Smoke"
-   (make-object color% 113 166 210 1.0)
-   (make-object color% 247 203 21 1.0)
-   (make-object color% 69 88 66 1.0)))
-
-(define allowed-relations
-  '((&T T &mut-T mut-T) ; &T
-   (T mut-T) ; T
-   (&mut-T mut-T) ; &mut T
-   (mut-T T) ; mut T
-   ))
-
-(define (list-subtract l1 l2)
-  (set->list (set-subtract (list->set l1)
-                           (list->set l2))))
-
-(define (gen-squares [scheme 'blue/gold] [invert #false])
-  (let* ([colors (eval (string->symbol (string-append "colors-" (symbol->string scheme))))]
-         [colors (if invert (reverse colors) colors)]
-         [zipped-colors (map list options colors)]
-         [get-colors (lambda (syms) (filter-map (lambda (s)
-                                             (let ([m-c (assq s zipped-colors)])
-                                               (and m-c (cadr m-c)))) syms))]
-         [make-entry (lambda (e ec r rc [alter-with identity])
-                       (list r e (filled-rectangle
-                                  30 30
-                                  #:draw-border? #true
-                                  #:border-width 8
-                                  #:border-color (alter-with ec)
-                                  #:color (alter-with rc))))])
-    (for/fold ([allowed '()]
-               [errors  '()])
-              ([p (in-list zipped-colors)]
-               #:do [(define expected (car p))
-                     (define rec-color (cadr p))
-                     (define make-square (curry make-entry expected rec-color))]
-
-               #:unless (eq? expected 'mut-T))
-      (define ok-passed (assq expected allowed-relations))
-      (define bad-passed (list-subtract options ok-passed))
-      (define ok-square (map (lambda (f s) (make-square f s)) ok-passed (get-colors ok-passed)))
-      (define bad-square (map (lambda (f s) (make-square f s shade)) bad-passed (get-colors bad-passed)))
-      (values (append allowed ok-square #;(map (lambda (t)
-                                     (list (car t)
-                                           (cadr t)
-                                           (cellophane (caddr t) 0.3))) ok-square))
-              (append errors bad-square)))))
+(define (receiver/expected-options-generator expected-shape-gen
+                                             actual-shape-gen
+                                             type-options
+                                             allowed-recv/exp?
+                                             get-color
+                                             #:black-list-receivers [ignore-recvs '()]
+                                             #:black-list-expected [ignore-exp '()])
+  (let* ([cons-if (lambda (cnd e ls) (if cnd (cons e ls) ls))])
+    (for*/fold ([allowed '()] [errors  '()]
+                              #:result (problem-representation allowed errors))
+               ([expected (in-list type-options)]
+                #:unless (member expected ignore-exp)
+                [actual (in-list type-options)]
+                #:unless (member actual ignore-recvs))
+      (define ok? (allowed-recv/exp? actual expected))
+      (define exp/color (get-color expected))
+      (define act/color (get-color actual))
+      (define (make-entry [combine cc-superimpose] [alter identity])
+        (visual-symbol
+         expected actual
+         (alter (combine (expected-shape-gen expected exp/color)
+                         (actual-shape-gen actual act/color)))))
+      (define elem (make-entry))
+      (values (cons-if ok? elem allowed)
+              (cons-if (not ok?) elem errors)))))
 
 
-;; -------------
-;; TODO
+;; ---------------------------------------
+;; Main Things
 
-(module+ test
-  (define (get-data s . oths)
-    (cond [(eq? s 'squares) (apply gen-squares oths)]
-          [(eq? s 'lifetime) (apply gen-example-lifetime oths)]
-          [else (raise-argument-error "unrecognized data source" s)])))
+(define rust-T-options '(&T T &mut-T mut-T))
+(define rust-T-allowed-receiver-relations
+  (list (allowed-receivers '&T     '(&T T &mut-T mut-T))
+        (allowed-receivers 'T      '(T mut-T))
+        (allowed-receivers '&mut-T '(&mut-T mut-T))
+        (allowed-receivers 'mut-T  '(mut-T T))))
+#;(module+ test
+  (define rust-T-allowed?
+    (lambda (recv exp)
+      (define p
+        (findf (lambda (s) (eq? (allowed-receivers-expected s) exp))
+               rust-T-allowed-receiver-relations))
+      (member recv (allowed-receivers-allowed p))))
+
+  (define (gen-visual s)
+    (define size 30)
+    (cond
+
+      ;; - all shapes are square
+      ;; - each type gets it's own color
+      ;; - darker border is an error
+      ;; - blue/gold cyan/magenta combinations are disallowed
+      [(eq? s 'square/color)
+       (define scaled-size (* 1.3 size))
+       (define colors-blue/gold
+         (list
+          "White Smoke"
+          (make-object color% 113 166 210 1.0)
+          (make-object color% 247 203 21 1.0)
+          (make-object color% 69 88 66 1.0)))
+       (receiver/expected-options-generator
+        (lambda (_ c) (filled-rectangle scaled-size scaled-size #:draw-border? #false #:color c))
+        (lambda (_ c) (filled-rectangle size size #:draw-border? #false #:color c))
+        rust-T-options
+        rust-T-allowed?
+        (let ([zip (map cons rust-T-options colors-blue/gold)])
+          (lambda (s) (cdr (assq s zip))))
+        #:black-list-expected '(mut-T))]
+
+      ;; - expected color (background) is 'color-pop
+      ;; - actual color (foreground) is 'color-boring
+      ;; - owned values are drawn at scale x1.2
+      ;; - mutable values are drawn as rectangles refs as disks
+      [(eq? s 'square/circle/size)
+       (define color-pop "magenta")
+       (define color-boring "gainsboro")
+       (define decompose-type
+         (lambda (s)
+           (define st (symbol->string s))
+           (values (string-contains? st "mut")
+                   (not (char=? #\& (string-ref st 0))))))
+       (define (oval s c)
+         (filled-ellipse (* s 2) s #:draw-border? #true #:border-color c #:color c))
+       (define (rect s c)
+         (filled-rectangle (* s 2) s #:draw-border? #true #:border-color c #:color c))
+       (define (sym-draw sym c)
+         (define-values (mut? owned?) (decompose-type sym))
+         (define s (if owned? (* 1.20 size) size))
+         (define drawer (if mut? rect oval))
+         (drawer s c))
+       (receiver/expected-options-generator
+        (lambda (sym _) (sym-draw sym color-pop))
+        (lambda (sym _) (sym-draw sym color-boring))
+        rust-T-options
+        rust-T-allowed?
+        (lambda _ #false) ;; XXX color not used
+        #:black-list-expected '(mut-T))]
+
+      ;; ---------------------------
+      ;; lifetime related operations
+      [(eq? s 'lifetime) (apply gen-example-lifetime)]
+
+      [else
+       (error 'gen-visual "unrecognized data source ~v" s)])))
 
 #;(module+ main
   (send (pict->bitmap (gen-example-lifetime) 'smoothed)
