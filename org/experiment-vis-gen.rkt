@@ -1,6 +1,7 @@
 #lang racket
 
-(require racket/string
+(require (for-syntax racket/syntax)
+         racket/string
          racket/draw
          racket/function
          pict)
@@ -8,23 +9,29 @@
 ;; ------------------------------------------------
 ;; Lifetime Things
 
-(define default-font-color (make-object color% 0 0 0))
 ;; tab 10 colors
-(define color-wheel
-  (vector (make-object color% 78  121 167)
-          (make-object color% 242 142 43 )
-          (make-object color% 225 87  89 )
-          (make-object color% 118 183 178)
-          (make-object color% 89  161 79 )
-          (make-object color% 237 201 72 )
-          (make-object color% 176 122 161)
-          (make-object color% 255 157 167)
-          (make-object color% 156 117 95 )
-          (make-object color% 186 176 172)))
+(define hash->color
+  (let* ([color-wheel
+          (vector (make-object color% 78  121 167)
+                  (make-object color% 242 142 43 )
+                  (make-object color% 225 87  89 )
+                  (make-object color% 118 183 178)
+                  (make-object color% 89  161 79 )
+                  (make-object color% 237 201 72 )
+                  (make-object color% 176 122 161)
+                  (make-object color% 255 157 167)
+                  (make-object color% 156 117 95 )
+                  (make-object color% 186 176 172))]
+         [maxl (vector-length color-wheel)])
+    (lambda (n)
+      (when (and (0 . <= . n)
+                 (n . >= . maxl))
+        (raise-argument-error 'hash->color
+                              (format "expected value in range ~v ~v" 0 maxl)
+                              n))
+      (vector-ref color-wheel n))))
 
-(define interp-end #\©)
-
-(define code-string
+(define simple-lifetime-0
 #<<```
 fn foo() {
 `ES:0`   let x;
@@ -37,28 +44,158 @@ fn foo() {
 ```
   )
 
+(define theme 'light)
 (define font-size 18)
-(define line-height 40)
-(define line-width  500)
-(define font-face "Fantasque Sans Mono")
+(define default-font-color
+  (cond [(eq? theme 'light) (make-object color% 0 0 0)]
+        [(eq? theme 'dark) (make-object color% 250 250 250)]))
+(define default-font
+  (make-object font% font-size "Fantasque Sans Mono" 'modern))
 
-(struct visual-line (style from to))
-(struct group (text styles))
+(struct visual-line (styles from to) #:transparent)
+(struct group (text meta styles) #:transparent)
+
+(define (group-color g) (hash-ref (group-styles g) 'color default-font-color))
+(define (group-font g) (hash-ref (group-styles g) 'font default-font))
+(define (visual-line-color vl) (hash-ref (visual-line-styles vl) 'color))
+(define (visual-line-brush vl) (hash-ref (visual-line-styles vl) 'brush))
+(define (visual-line-pen vl) (hash-ref (visual-line-styles vl) 'pen))
+
+(define-syntax (render-code stx)
+  (syntax-case stx ()
+    [(_ src)
+     (with-syntax ([f (format-id #f "~a.png" #'src)])
+       #'(*render-code src (symbol->string 'f)))]
+    [(_ src f) #'(*render-code src f)]))
+
+(define (*render-code source fn #:save? [s? #true])
+  (define p (render-parsed-source (parse-source source)))
+  (when s?
+    (send (pict->bitmap p 'smoothed) save-file fn 'png))
+  p)
+
+(define (render-parsed-source ls)
+  (struct point (row col))
+  (define default-pen (new pen% [width 1] [color default-font-color]))
+  (define (expected-brush c) (new brush% [style 'fdiagonal-hatch] [color c]))
+  (define (actual-brush c) (new brush% [style 'solid] [color c]))
+  (define (collapse-into-lines asps aeps esps eeps)
+    (define make-visual-line
+      (lambda (brsh pen v s e)
+        (visual-line (make-immutable-hasheq `((brush . ,(brsh (hash->color v)))
+                                              (pen . ,pen)))
+                     s e)))
+    (define actual-lines
+      (for/list ([(v start) (in-hash asps)])
+        (define end (hash-ref aeps v))
+        (make-visual-line actual-brush default-pen v start end)))
+    (define expected-lines
+      (for/list ([(v start) (in-hash esps)])
+        (define end (hash-ref eeps v))
+        (make-visual-line expected-brush default-pen v start end)))
+    (append expected-lines actual-lines))
+  (define lines
+    (for*/fold ([asps (make-immutable-hash)]
+                [aeps (make-immutable-hash)]
+                [esps (make-immutable-hash)]
+                [eeps (make-immutable-hash)]
+                #:result (collapse-into-lines asps aeps esps eeps))
+               ([l (in-list ls)]
+                [g (in-list l)]
+                [(k v) (in-hash (group-meta g))])
+      (define with-point
+        (lambda (hsh)
+          (define m (group-meta g))
+          (hash-set hsh v (point (hash-ref m 'row) (hash-ref m 'col)))))
+      (cond [(eq? 'actual-start k)
+             (values (with-point asps) aeps esps eeps)]
+            [(eq? 'actual-end k)
+             (values asps (with-point aeps) esps eeps)]
+            [(eq? 'expected-start k)
+             (values asps aeps (with-point esps) eeps)]
+            [(eq? 'expected-end k)
+             (values asps aeps esps (with-point eeps))]
+            [else (values asps aeps esps eeps)])))
+  (define base-render
+    (apply vl-append
+           (map (lambda (l)
+                  (apply hc-append
+                         (map (lambda (g)
+                                (define t (group-text g))
+                                (define f (group-font g))
+                                (define c (group-color g))
+                                (text t (cons c f))) l))) ls)))
+  (define (draw-visual-line vl base)
+    (match-define (point row-from col-from) (visual-line-from vl))
+    (match-define (point row-to col-to) (visual-line-to vl))
+    (define brush (visual-line-brush vl))
+    (define pen (visual-line-pen vl))
+    ;; HACK using the 'font-size as an adjuster is very crude.
+    ;; It kind of works but you can tell it's off. Additionally
+    ;; manually drawing the box with 'dc is hacky especially
+    ;; since I use the same width and height as the base pict, then
+    ;; the pen is moved further to the right.
+    (define lifetime
+      (let* ([adjust-c (/ font-size 2)]
+             [adjust-r font-size])
+        (dc (λ (dc dx dy)
+              (define old-brush (send dc get-brush))
+              (define old-pen (send dc get-pen))
+              (send dc set-brush brush)
+              (send dc set-pen pen)
+              (define path (new dc-path%))
+              (send path move-to
+                    (* adjust-c col-from)
+                    (* adjust-r row-from))
+              (send path line-to
+                    (* adjust-c col-to)
+                    (+ (* adjust-r row-to) adjust-r))
+              (send path line-to
+                    (+ adjust-c (* adjust-c col-to))
+                    (+ (* adjust-r row-to) adjust-r))
+              (send path line-to
+                    (+ adjust-c (* adjust-c col-from))
+                    (* adjust-r row-from))
+              (send path close)
+              (send dc draw-path path dx dy)
+              (send dc set-brush old-brush)
+              (send dc set-pen old-pen))
+            (pict-width base) (pict-height base))))
+    (lc-superimpose base (cellophane lifetime 0.5)))
+
+  (foldl draw-visual-line base-render lines))
 
 (define (parse-source code)
   (define enriched? (lambda (s) (string-contains? s "`")))
-
+  (define basic-styles
+    (make-immutable-hasheq `((font . ,default-font)
+                             (color . ,default-font-color))))
+  (define make-basic-group (lambda (w) (group w (make-immutable-hasheq) basic-styles)))
   (define (handle-enriched-word word)
-    (define make-basic-group
-      (lambda (w) (group w `((font . ,font-face)
-                        (color . ,default-font-color)))))
     (define has-prefix? (not (string-prefix? word "`")))
     (define has-suffix? (not (string-suffix? word "`")))
     (define split (string-split word "`"))
     (define (make-enriched-group w)
-      w)
+      (match-define (list id v) (string-split w ":"))
+      (define-values (t mta ss)
+        (cond [(char=? #\H (string-ref id 0))
+               (values v (make-immutable-hasheq)
+                       (hash-set basic-styles
+                                 'color (hash->color (string->number (substring id 1)))))]
+              [else
+               (define make-it (lambda (id) (make-immutable-hasheq `((,id . ,(string->number v))))))
+               (define mta
+                 (match id
+                   ["AS" (make-it 'actual-start)]
+                   ["AE" (make-it 'actual-end)]
+                   ["ES" (make-it 'expected-start)]
+                   ["EE" (make-it 'expected-end)]
+                   [else (error "in token" word "malformed tag" id)]))
+               (values " " mta basic-styles)]))
+      (group t mta ss))
     (match split
       [(list pref tok suff)
+       #:when (and has-prefix? has-suffix?)
        (list (make-basic-group pref)
              (make-enriched-group tok)
              (make-basic-group suff))]
@@ -72,71 +209,32 @@ fn foo() {
              (make-basic-group suff))]
       [(list tok)
        (list (make-enriched-group tok))]))
-
   (define (handle-any-word word)
     (if (enriched? word)
         (handle-enriched-word word)
-        (list word)))
+        (list (make-basic-group word))))
+  (for/list ([(line ri) (in-indexed (string-split code "\n"))])
+    (for/fold ([col-pnt 0]
+                [current-line '()]
+                #:result (reverse current-line))
+                ([word (in-list (add-between (string-split line " " #:trim? #false) " " ))])
+                (define gs (handle-any-word word))
+                (define gls
+                  (map (curry + col-pnt)
+                       (cons 0 (map (compose string-length group-text)
+                                    gs))))
+                (define w/pnts
+                  (map (lambda (g ci)
+                         (struct-copy group g
+                                      [meta (hash-set* (group-meta g)
+                                                      'row ri
+                                                      'col ci)]))
+                       gs (take gls (length gs))))
 
-  (for/fold ()
-            ([(line ri) (in-indexed (string-split code "\n"))])
-    (for/fold (#;[ci 0])
-              ([(word ci) (in-indexed (string-split line))])
-
-      (define i (handle-any-word word))
-
-      (values)
-      )
-    ))
+                (values (last gls)
+                        (append (reverse w/pnts) current-line)))))
 
 (module+ test)
-
-#;(define (txt msg)
-  (define line (blank line-width line-height))
-  (define (draw-font m . styles)
-    (define style
-      (let loop ([sty styles])
-        (if (null? sty)
-            font-face
-            (cons (car sty) (loop (cdr sty))))))
-    (text m style font-size))
-
-  (define fontified
-    (map (lambda (tok)
-           (if (string-contains? tok interp-end)
-               (let* ([inners (string-split tok interp-end)]
-                      [special-str (car inners)]
-                      [special (draw-font special-str (get-color special-str)) ])
-                 (apply hc-append (cons special (map draw-font (cdr inners)))))
-               (draw-font tok)))
-         (string-split msg interp-start)))
-  (launder (lc-superimpose line (apply hc-append fontified))))
-
-#;(define (gen-example-lifetime . _)
-  (define lines (map txt (string-split code-string "\n")))
-  (define base-text (apply vl-append lines))
-  (define first-lifetime-bar
-    (filled-rectangle
-     10
-     (* (- (length lines) 1.5)
-        line-height)
-     #:draw-border? #false
-     #:color light-blue))
-  (define second-lifetime-bar
-    (filled-rectangle
-     10
-     (* 2.5 line-height)
-     #:draw-border? #false
-     #:color light-orange))
-  (define with-first-lifetime
-    (lc-superimpose base-text
-                    first-lifetime-bar))
-  (define with-second-lifetime
-    (pin-over with-first-lifetime
-              40
-              70
-              second-lifetime-bar))
-  with-second-lifetime)
 
 ;; ------------------------------------------------
 ;; Receiver / Method Expectations
@@ -322,8 +420,3 @@ fn foo() {
       [else
        (error 'gen-visual "unrecognized data source ~v" s)])))
 
-#;(module+ main
-  (send (pict->bitmap (gen-example-lifetime) 'smoothed)
-        save-file
-        "with-lifetimes.png"
-        'png))
