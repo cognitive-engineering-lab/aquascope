@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require racket/string
+(require (for-syntax racket/base syntax/parse)
+         racket/string
          racket/class
          racket/draw
          pict)
@@ -20,33 +21,61 @@
 ;; until I invest the time for a proper fix, this also depends on which
 ;; visualizations we actually go with.
 
-;; HACK using the 'font-size as an adjuster is very crude.
-;; It kind of works but you can tell it's off. Additionally
-;; manually drawing the box with 'dc is hacky especially
+(define-syntax (dc-with-restore stx)
+  (syntax-parse stx
+    [(_ (dc dx dy) bodies ... bw bh)
+     #'(dc (lambda (dc dx dy)
+             (define old-brush (send dc get-brush))
+             (define old-pen (send dc get-pen))
+             bodies ...
+             (send dc set-brush old-brush)
+             (send dc set-pen old-pen)) bw bh)]))
+
+;; HACK Manually drawing the box with 'dc is hacky especially
 ;; since I use the same width and height as the base pict, then
 ;; the pen is moved further to the right.
+;; These functions shouldn't require the base image to draw, they
+;; could be refocused after.
 (define (custom-rectangle rf rt cf ct base
                           #:adjust-by [adjust 0]
                           #:brush [brush (new brush%)]
                           #:pen [pen (new pen%)])
   (let* ([a adjust] [a/2 (/ adjust 2)]
-         [sr (* a rf)] [er (* a (add1 rt))]
-         [sc (* a/2 cf)] [ec (* a/2 (add1 ct))])
-    (dc (λ (dc dx dy)
-          (define old-brush (send dc get-brush))
-          (define old-pen (send dc get-pen))
-          (send dc set-brush brush)
-          (send dc set-pen pen)
-          (define path (new dc-path%))
-          (send path move-to sc sr)
-          (send path line-to sc er)
-          (send path line-to ec er)
-          (send path line-to ec sr)
-          (send path close)
-          (send dc draw-path path dx dy)
-          (send dc set-brush old-brush)
-          (send dc set-pen old-pen))
-        (pict-width base) (pict-height base))))
+                    [sr (* a rf)] [er (* a (add1 rt))]
+                    [sc (* a/2 cf)] [ec (* a/2 (add1 ct))])
+    (dc-with-restore
+     (dc dx dy)
+     (send dc set-brush brush)
+     (send dc set-pen pen)
+     (begin
+       (define path (new dc-path%))
+       (send path move-to sc sr)
+       (send path line-to sc er)
+       (send path line-to ec er)
+       (send path line-to ec sr)
+       (send path close)
+       (send dc draw-path path dx dy))
+     (pict-width base) (pict-height base))))
+
+(define (custom-disk row col diameter base
+                     #:adjust-by [adjust 1]
+                     #:brush [brush (new brush%)]
+                     #:pen [pen (new pen%)])
+  (let* ([d diameter]
+         [ar adjust]
+         [ac (/ adjust 2)]
+         [ad (/ d 2)])
+    (define disk
+      (dc-with-restore
+       (dc dx dy)
+       (send dc set-brush brush)
+       (send dc set-pen pen)
+       (send dc draw-ellipse dx dy d d)
+       d d))
+    (launder (pin-over (ghost base)
+                       (+ (* ac col) ad)
+                       (+ (* ar row) ad)
+                       disk))))
 
 (define (filled-triangle h base
                          #:draw-border? [db? #true]
