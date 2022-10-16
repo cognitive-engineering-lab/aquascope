@@ -53,7 +53,7 @@ pub fn find_bodies(tcx: TyCtxt) -> Vec<(Span, BodyId)> {
     tcx,
     bodies: Vec::new(),
   };
-  tcx.hir().deep_visit_all_item_likes(&mut finder);
+  tcx.hir().visit_all_item_likes_in_crate(&mut finder);
   finder.bodies
 }
 

@@ -262,10 +262,10 @@
 (define simple-lifetime-0
 #<<```
 fn foo() {
-`L@0@5@crossdiag-hatch`    let x;
+`L@2@5`     let `H@2~x`;
     {
-    `L@0@1`    let y = 0;
-        x = &`H@0~'a` y;
+    `L@1@3@cellophane``L@1@1`    let y = 0;
+        x = &`H@1~'a` y;
     }
     println!("{}", x);
 }
@@ -327,10 +327,10 @@ fn foo() {
 #<<```
 fn foo() {
 `L@1@7`    let `H@1~v` = 10;
-    let mut x: &`H@0~'0` i32 = &`H@0~'1` v; // `H@0~'1` -> { `S@1`}
+    let mut x: &`H@0~'0` i32 = &`H@0~'1` v; // `H@0~'1` -> {`S@1~ `}
     if false {
-   `L@2@3@cellophane` `L@2@1`    let `H@2~y` = 0;
-        x = &`H@0~'2` y; // `H@0~'2` -> { `S@2~ `}
+    `L@2@4@cellophane``L@2@1`    let `H@2~y` = 0;
+        x = &`H@0~'2` y; // `H@0~'2` -> {`S@2~ `}
     }
     // `H@0~'0` -> {`S@1~ `, `S@2~ `}
     println!("{}", x);
@@ -346,16 +346,16 @@ fn foo() {
 #<<```
 fn foo() {
 `L@1@11`    let `H@1~v` = 10;
-    let mut x: &`H@0~'0` i32 = &`H@0~'1` v; // `H@0~'1` -> { `S@1`}
-    // `H@0~'1` -> {`S@1~ `}
+    let mut x: &`H@0~'0` i32 = &`H@0~'1` v; // `H@0~'1` -> {`S@1~ `}
+    // `H@0~'1` -> {`S@1~ ` }
     if false {
-    // `H@0~'1` -> {`S@1~ `}
-   `L@2@3@cellophane` `L@2@1`    let `H@2~y` = 0; // `H@0~'1` -> { `S@1~ `}
-        x = &`H@0~'2` y; // `H@0~'2` -> { `S@2~ `}
-                   // `H@0~'1` -> { `S@1~ `}
-    // `H@0~'0` -> {`S@1~ `, `S@2~ `}
+        // `H@0~'1` -> {`S@1~ ` }
+    `L@2@6@cellophane``L@2@1`    let `H@2~y` = 0; // `H@0~'1` -> {`S@1~ `}
+        x = &`H@0~'2` y; // `H@0~'2` -> {`S@2~ `}
+                   // `H@0~'1` -> {`S@1~ `}
+        // `H@0~'0` -> {`S@1~ `, `S@2~ ` }
     }
-    // `H@0~'0` -> {`S@1~ `, `S@2~ `}
+    // `H@0~'0` -> {`S@1~ `, `S@2~ ` }
     println!("{}", x);
 }
 ```
@@ -392,20 +392,43 @@ fn foo() {
 #<<```
 fn main() {
 
-  let mut x: i32 = 22;
+    let mut x: i32 = 22;
 
-  let mut v: Vec<&'0 i32> = vec![];
+    let mut v: Vec<&'0 i32> = vec![];
 
-  let r: &'1 mut Vec<&'2 i32> = &'3 mut v; // L0
+    let r: &'1 mut Vec<&'2 i32> = &'3 mut v; // Loan0
+    // '3: '1
+    // '0: '2
+    // '2: '0
+    // requires('3, Loan0)
 
-  let p: &'5 i32 = &'4 x; // L1
+    let p: &'5 i32 = &'4 x; // Loan1
+    // '3: '1
+    // '0: '2
+    // '2: '0
+    // '4: '5
+    // requires('3, Loan0)
+    // requires('4, Loan1)
 
-  r.push(p);
+    r.push(p);
+    // '3: '1
+    // '0: '2
+    // '2: '0
+    // '4: '5
+    // '5: '2
+    // requires('3, Loan0)
+    // requires('4, Loan1)
 
-  x += 1; // L1 INVAIDATED
+    x += 1; // Loan1 INVAIDATED
+    // '3: '1
+    // '0: '2
+    // '2: '0
+    // '4: '5
+    // '5: '2
+    // requires('3, Loan0)
+    // requires('4, Loan1)
 
-  take::<Vec<&'6 i32>>(v);
-
+    take::<Vec<&'6 i32>>(v);
 }
 ```
   )

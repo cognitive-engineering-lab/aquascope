@@ -40,6 +40,12 @@ enum AquascopeCommand {
     #[clap(last = true)]
     flags: Vec<String>,
   },
+  VisMethodCalls {
+    file: String,
+
+    #[clap(last = true)]
+    flags: Vec<String>,
+  },
   Preload,
   RustcVersion,
 }
@@ -88,6 +94,7 @@ impl RustcPlugin for AquascopePlugin {
     let (file, flags) = match &args.command {
       Source { file, flags } => (file, flags),
       Spans { file, flags } => (file, flags),
+      VisMethodCalls { file, flags } => (file, flags),
       _ => unreachable!(),
     };
 
@@ -107,6 +114,9 @@ impl RustcPlugin for AquascopePlugin {
     match plugin_args.command {
       Source { file, .. } => {
         postprocess(crate::source::source(&compiler_args, file))
+      }
+      VisMethodCalls { file, .. } => {
+        postprocess(crate::method_receivers::method_calls(&compiler_args, file))
       }
       Spans { file, .. } => {
         postprocess(crate::spans::spans(&compiler_args, file))

@@ -269,12 +269,6 @@
        #:black-list-receivers '()
        #:black-list-expected '(mut-T)))))
 
-(define (symbol-append s1 s2)
-  (string->symbol
-   (string-append (symbol->string s1)
-                  " "
-                  (symbol->string s2))))
-
 (define (visual-symbol-append vs1 vs2)
   (match-define (visual-symbol e1 a1 v1) vs1)
   (match-define (visual-symbol e2 a2 v2) vs2)

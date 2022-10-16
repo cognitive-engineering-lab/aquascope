@@ -1,4 +1,7 @@
-use aquascope::source_map::{find_bodies, find_enclosing_bodies, Range};
+use aquascope::{
+  mir::borrowck_facts::get_body_with_borrowck_facts,
+  source_map::{find_bodies, find_enclosing_bodies, Range},
+};
 use serde::Serialize;
 
 use crate::plugin::AquascopeResult;
@@ -20,13 +23,8 @@ impl rustc_driver::Callbacks for Callbacks {
     queries: &'tcx rustc_interface::Queries<'tcx>,
   ) -> rustc_driver::Compilation {
     queries.global_ctxt().unwrap().take().enter(|tcx| {
-      let spans = find_bodies(tcx).into_iter().map(|(span, bodyid)| {
-        log::debug!("BodyID: {bodyid:?} {span:?}");
-        span
-      });
-
+      let spans = find_bodies(tcx).into_iter().map(|(span, _)| span);
       log::debug!("All spans {spans:?}");
-
       let source_map = compiler.session().source_map();
       let source_file = Range {
         byte_start: 0,

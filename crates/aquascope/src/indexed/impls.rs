@@ -37,7 +37,7 @@ pub fn arg_location<'tcx>(
   body: &Body<'tcx>,
 ) -> Option<Location> {
   place.is_arg(body).then(|| {
-    let arg_block = BasicBlock::from_usize(body.basic_blocks().len());
+    let arg_block = BasicBlock::from_usize(body.basic_blocks.len());
     Location {
       block: arg_block,
       statement_index: place.local.as_usize(),
@@ -49,7 +49,7 @@ impl LocationDomain {
   pub fn new(body: &Body) -> Rc<Self> {
     let mut locations = body.all_locations().collect::<Vec<_>>();
 
-    let arg_block = BasicBlock::from_usize(body.basic_blocks().len());
+    let arg_block = BasicBlock::from_usize(body.basic_blocks.len());
 
     let real_locations = locations.len();
 

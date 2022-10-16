@@ -83,49 +83,38 @@
                          #:border-color [bc "black"]
                          #:color [c "white"]
                          #:brush-style [bstyle 'solid])
-  (dc (λ (dc dx dy)
-        (define old-brush (send dc get-brush))
-        (define old-pen (send dc get-pen))
-        (send dc set-brush (new brush%
-                                [style bstyle]
-                                [color c]))
-        (send dc set-pen (new pen%
-                              [width (if db? bw 0)]
-                              [color (if db? bc c)]))
-        (define path (new dc-path%))
-        (send path move-to 0 h)
-        (send path line-to (/ base 2) 0)
-        (send path line-to base h)
-        (send path close)
-        (send dc draw-path path dx dy)
-        (send dc set-brush old-brush)
-        (send dc set-pen old-pen))
-      base h))
+  (let ([brush (new brush% [style bstyle] [color c])]
+        [pen (new pen% [width (if db? bw 0)] [color (if db? bc c)])])
+    (dc-with-restore
+     (dc dx dy)
+     (begin
+       (send dc set-brush brush)
+       (send dc set-pen pen)
+       (define path (new dc-path%))
+       (send path move-to 0 h)
+       (send path line-to (/ base 2) 0)
+       (send path line-to base h)
+       (send path close)
+       (send dc draw-path path dx dy))
+     base h)))
 
 (define (altered-rectangle w h
-                         #:draw-border? [db? #true]
-                         #:border-width [bw 1]
-                         #:border-color [bc "black"]
-                         #:color [c "white"]
-                         #:brush-style [bstyle 'solid])
-  (dc (λ (dc dx dy)
-        (define old-brush (send dc get-brush))
-        (define old-pen (send dc get-pen))
-        (send dc set-brush (new brush%
-                                [style bstyle]
-                                [color c]))
-        (send dc set-pen (new pen%
-                              [width (if db? bw 0)]
-                              [color (if db? bc c)]))
-        (define path (new dc-path%))
+                           #:draw-border? [db? #true]
+                           #:border-width [bw 1]
+                           #:border-color [bc "black"]
+                           #:color [c "white"]
+                           #:brush-style [bstyle 'solid])
+  (let ([brush (new brush% [style bstyle] [color c])]
+        [pen (new pen% [width (if db? bw 0)] [color (if db? bc c)])])
+    (dc-with-restore
+     (dc dx dy)
+     (send dc set-brush brush)
+     (send dc set-pen pen)
+     (send dc draw-rectangle dx dy w h)
+     w h)))
 
-        (send path move-to 0 0)
-
-        (send path line-to w 0)
-        (send path line-to w h)
-        (send path line-to 0 h)
-        (send path close)
-        (send dc draw-path path dx dy)
-        (send dc set-brush old-brush)
-        (send dc set-pen old-pen))
-      w h))
+(define (symbol-append s1 s2)
+  (string->symbol
+   (string-append (symbol->string s1)
+                  " "
+                  (symbol->string s2))))

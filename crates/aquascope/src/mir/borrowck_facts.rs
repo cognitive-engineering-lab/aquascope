@@ -1,7 +1,5 @@
 //! Polonius integration
 
-use std::{cell::RefCell, collections::HashMap};
-
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
@@ -62,6 +60,7 @@ pub fn mir_borrowck<'tcx>(
   tcx: TyCtxt<'tcx>,
   def_id: LocalDefId,
 ) -> mir_borrowck<'tcx> {
+  log::trace!("custom mir_borrowck");
   let mut body_with_facts =
     rustc_borrowck::consumers::get_body_with_borrowck_facts(
       tcx,

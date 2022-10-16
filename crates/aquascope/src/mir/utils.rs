@@ -256,7 +256,7 @@ where
 }
 
 pub fn location_to_string(location: Location, body: &Body<'_>) -> String {
-  if location.block.as_usize() == body.basic_blocks().len() {
+  if location.block.as_usize() == body.basic_blocks.len() {
     format!("_{}", location.statement_index)
   } else {
     match body.stmt_at(location) {
@@ -272,7 +272,7 @@ impl<'tcx> MirPass<'tcx> for SimplifyMir {
     let return_blocks = body
       .all_returns()
       .filter_map(|loc| {
-        let bb = &body.basic_blocks()[loc.block];
+        let bb = &body.basic_blocks[loc.block];
         (bb.statements.len() == 0).then(|| loc.block)
       })
       .collect::<HashSet<_>>();
@@ -517,15 +517,18 @@ impl<'tcx> PlaceExt<'tcx> for Place<'tcx> {
     //   erase regions, and normalize projections
     let param_env = tcx.param_env(def_id);
     let place = tcx.erase_regions(*self);
-    let place = tcx.infer_ctxt().enter(|infcx| {
-      infcx
-        .partially_normalize_associated_types_in(
-          ObligationCause::dummy(),
-          param_env,
-          place,
-        )
-        .value
-    });
+    // XXX (gavinleroy) added the `build` without any configuration.
+    // Check whether the change from 1.63 -> 1.66 requires any special
+    // configuration before building the full context.
+    let infxc = tcx.infer_ctxt().build();
+
+    let place = infxc
+      .partially_normalize_associated_types_in(
+        ObligationCause::dummy(),
+        param_env,
+        place,
+      )
+      .value;
 
     let projection = place
       .projection
@@ -672,7 +675,7 @@ impl<'tcx> TypeVisitor<'tcx> for CollectRegions<'tcx> {
       | TyKind::FnPtr(_)
       | TyKind::Opaque(_, _)
       | TyKind::Foreign(_)
-      | TyKind::Dynamic(_, _)
+      | TyKind::Dynamic(..)
       | TyKind::Param(_)
       | TyKind::Never => {}
 
@@ -787,7 +790,7 @@ impl<'tcx> BodyExt<'tcx> for Body<'tcx> {
   type AllReturnsIter<'a> = impl Iterator<Item = Location>   where Self: 'a;
   fn all_returns(&self) -> Self::AllReturnsIter<'_> {
     self
-      .basic_blocks()
+      .basic_blocks
       .iter_enumerated()
       .filter_map(|(block, data)| match data.terminator().kind {
         TerminatorKind::Return => Some(Location {
@@ -801,7 +804,7 @@ impl<'tcx> BodyExt<'tcx> for Body<'tcx> {
   type AllLocationsIter<'a> = impl Iterator<Item = Location>   where Self: 'a;
   fn all_locations(&self) -> Self::AllLocationsIter<'_> {
     self
-      .basic_blocks()
+      .basic_blocks
       .iter_enumerated()
       .flat_map(|(block, data)| {
         (0 .. data.statements.len() + 1).map(move |statement_index| Location {
@@ -813,7 +816,7 @@ impl<'tcx> BodyExt<'tcx> for Body<'tcx> {
 
   type LocationsIter = impl Iterator<Item = Location>;
   fn locations_in_block(&self, block: BasicBlock) -> Self::LocationsIter {
-    let num_stmts = self.basic_blocks()[block].statements.len();
+    let num_stmts = self.basic_blocks[block].statements.len();
     (0 ..= num_stmts).map(move |statement_index| Location {
       block,
       statement_index,

@@ -21,7 +21,7 @@ use rustc_middle::{
   },
   ty::{
     Region, RegionKind, RegionVid, Ty, TyCtxt, TyKind, TypeAndMut,
-    TypeFoldable, TypeVisitor,
+    TypeFoldable, TypeSuperVisitable, TypeVisitor,
   },
 };
 
