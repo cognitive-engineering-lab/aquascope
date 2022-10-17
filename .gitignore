@@ -1,7 +1,11 @@
 .DS_Store
 .idea
 *.log
+.cache/
+.parcel-cache/
 tmp/
+dist/
+node_modules/
 
 # Tmp testing things
 /files
