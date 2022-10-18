@@ -3,10 +3,10 @@ import { EditorView } from "@codemirror/view"
 import { EditorState } from "@codemirror/state"
 import { rust } from "@codemirror/lang-rust"
 
-export const runEditor = () => {
+export const run_editor = () => {
     const app = document.getElementById("editor");
 
-    const initialState = EditorState.create({
+    const initial_state = EditorState.create({
         doc: "// please, start typing!",
         extensions: [
             basicSetup,
@@ -15,8 +15,16 @@ export const runEditor = () => {
     });
 
     const view = new EditorView({
-        state: initialState,
+        state: initial_state,
         parent: app,
     });
 
 };
+
+export const get_contents = async () => {
+    return document
+        .getElementById("editor")
+        .state
+        .doc
+        .toString()
+}
