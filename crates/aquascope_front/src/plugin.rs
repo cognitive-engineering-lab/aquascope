@@ -16,6 +16,7 @@ use rustc_interface::interface::Result as RustcResult;
 use rustc_middle::ty::TyCtxt;
 use rustc_plugin::{RustcPlugin, RustcPluginArgs, Utf8Path};
 use serde::{self, Deserialize, Serialize};
+use ts_rs::TS;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -189,9 +190,11 @@ fn run<A: AquascopeAnalysis, T: ToSpan>(
     .map_err(|e| AquascopeError::AnalysisError(e.to_string()))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "variant")]
+#[ts(export)]
 pub enum AquascopeError {
+  // An error occured before the intended analysis could run.
   BuildError,
   AnalysisError(String),
 }

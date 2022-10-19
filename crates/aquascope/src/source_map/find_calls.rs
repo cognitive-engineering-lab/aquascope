@@ -1,22 +1,17 @@
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::{
-  def_id::{DefId, LocalDefId},
+  def_id::LocalDefId,
   intravisit::{self, Visitor},
-  Expr, ExprKind, HirId, Node,
+  Expr, ExprKind, HirId,
 };
 // use rustc_hir_analysis;
 use rustc_middle::{hir::nested_filter::OnlyBodies, ty::TyCtxt};
-use rustc_span::Span;
-
-use crate::mir::utils::SpanExt;
 
 type MultiMap<K, V> = HashMap<K, Vec<V>>;
 
 struct MethodCallFinder<'tcx> {
   tcx: TyCtxt<'tcx>,
   call_node_ids: MultiMap<LocalDefId, HirId>,
-  // call_node_ids: Vec<(LocalDefId, Vec<HirId>)>,
-  // call_node_ids: Vec<(Span, HirId)>,
 }
 
 impl<'tcx> Visitor<'tcx> for MethodCallFinder<'tcx> {
@@ -30,7 +25,6 @@ impl<'tcx> Visitor<'tcx> for MethodCallFinder<'tcx> {
     intravisit::walk_expr(self, expression);
 
     let hir_id = expression.hir_id;
-    let span = expression.span;
     if let ExprKind::MethodCall(..) = expression.kind {
       log::trace!("I found a method call!");
 

@@ -7,12 +7,15 @@ export let globals: {
     backend: Oracle;
 };
 
-window.onload = () => {
+window.onload = async () => {
+    // Probably best to turn the Editor into an object, on which I can call run,
+    // but additionally things like "get the editor contents", etc...
+    ed.run_editor();
 
     let recv_t_btn = document.getElementById("receiver_types_btn");
 
-    let globals = {
-        backend = () => {
+    globals = {
+        backend: () => {
             throw new Error(`Unreachable`);
         },
     };
@@ -20,7 +23,7 @@ window.onload = () => {
     let oracle = await initialize();
 
     if (oracle === null) {
-        throw Error(`Handle Me Pls`);
+        throw Error(`Handle me pls`);
     }
 
     globals.backend = oracle;
@@ -28,14 +31,11 @@ window.onload = () => {
     recv_t_btn.addEventListener("click", (e:Event) =>
        get_receiver_types());
 
-
     let get_receiver_types = async () => {
 
-        // Get the current
+        // Get the contents of the editor.
+        let contents = ed.get_contents()
 
-        alert('You got the receiver types!');
-
+        alert(`The current editor contents are:\n ${contents}`);
     };
-
-    ed.run_editor();
 }

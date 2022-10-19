@@ -5,6 +5,7 @@ use std::{env, net::SocketAddr};
 const DEFAULT_ADDRESS: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 8008;
 
+mod container;
 mod server;
 
 fn main() {
@@ -46,19 +47,27 @@ impl Config {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+// FIXME this was a test request and shouldn't actually be here.
 struct SourceRequest {
     filename: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct ReceiverTypesRequest {
+    code: String,
+}
+
 #[derive(Debug, Snafu)]
-pub enum ServeError {
+pub enum Error {
+    #[snafu(display("Creating the container failed {source}"))]
+    ContainerCreation { source: container::Error },
     #[snafu(display("An Unknown error occurred: {msg}"))]
     Unknown { msg: String },
 }
 
-pub type Result<T, E = ServeError> = ::std::result::Result<T, E>;
+pub type Result<T, E = Error> = ::std::result::Result<T, E>;
 
-impl axum::response::IntoResponse for ServeError {
+impl axum::response::IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
         let body = format!("{}", self);
         (axum::http::StatusCode::INTERNAL_SERVER_ERROR, body).into_response()

@@ -4,8 +4,10 @@ use std::cell::RefCell;
 
 use polonius_engine::{Algorithm, Output};
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
+use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::{
-  def_id::LocalDefId, hir_id::HirId, BodyId, Expr, ExprKind, Node,
+  def_id::LocalDefId, hir_id::HirId, BindingAnnotation, BodyId, Expr, ExprKind,
+  Node,
 };
 use rustc_hir_analysis::{
   self,
@@ -13,6 +15,10 @@ use rustc_hir_analysis::{
 };
 use rustc_middle::ty::{Ty, TyCtxt};
 use rustc_span::Span;
+use serde::Serialize;
+use ts_rs::TS;
+
+use crate::source_map::Range;
 
 // TODO what sorts of things are we going to include in the contex?
 // What sort of information do we want to know?
@@ -91,69 +97,120 @@ pub fn compute_context<'a, 'tcx>(
   })
 }
 
-struct BodyMethodCallAnalysis<'tcx> {
-  body_id: BodyId,
-  // FIXME if a failure occurs it will happen at the level of
-  // individual `HirId`s. We need a good way of indicating what happened
-  // though, I imagine, if the `HirId`s are actually `ExprKind::MethodCall`s
-  // they shouldn't fail.
-  // TODO make this return type better. (Actual, Expected)
-  call_exprs: Vec<(TyInfo<'tcx>, TyInfo<'tcx>)>,
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct CallTypes {
+  expected: TyInfo,
+  actual: TyInfo,
 }
 
-struct TyInfo<'tcx> {
-  span: Span,
-  raw_ty: Ty<'tcx>,
-  is_mut: bool,
-  is_ref: bool,
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct TyInfo {
+  range: Range,
+  of_type: TypeState,
 }
 
-// TODO what we want back is a vector of results
-// - Ok({ Rcvr: (Span, Ty), FnSig: (Span, FnSig) })
-// - Err(
-//   - Not a method call
-//   - No type dependent sig
-// )
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub enum TypeState {
+  Owned { mutably_bound: bool },
+  Ref { is_mut: bool },
+}
+
+impl TypeState {
+  fn from_ty<'tcx>(ty: &Ty<'tcx>, ba: Option<&BindingAnnotation>) -> Self {
+    if ty.is_mutable_ptr() {
+      TypeState::Ref { is_mut: true }
+    } else if ty.is_ref() {
+      TypeState::Ref { is_mut: false }
+    } else {
+      match ba {
+        // No binding annotations suggest that this is an expected type
+        // of the method signature. If the type is something like `foo(mut self, ...)`
+        // we ignore the `mut` modifier because this is only relevant for the
+        // bindings after. Hence the hardcoded `false` below.
+        None => TypeState::Owned {
+          mutably_bound: false,
+        },
+        Some(ba) => {
+          todo!()
+        }
+      }
+    }
+  }
+}
+
 pub fn process_method_calls_in_item<'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
   parent_item: LocalDefId,
   call_ids: Vec<HirId>,
-) -> Result<BodyMethodCallAnalysis, String>
-// FIXME Results should be unified for d
-{
+  program_bindings: &HashMap<HirId, BindingAnnotation>,
+  span_to_range: impl Fn(Span) -> Range,
+) -> Vec<CallTypes> {
   let hir = tcx.hir();
   let def_id_of_body = hir.body_owner_def_id(body_id);
   let body = hir.body(body_id);
 
-  // NOTE `typeck_body` does all of the heavy lifting in typechecking.
-  // However, I can't figure out how to do a `lookup_method` from the POV
-  // of the typechecked body. We can easily get the receiver type with
-  // `expr_ty` but I don't see a way (with the public interface) to
-  // get the signature of the resolved method.
   let tyck_res = tcx.typeck_body(body_id);
 
-  call_ids.iter().for_each(|call_node_hir_id| {
-    if let Some(Node::Expr(expr)) = hir.find(*call_node_hir_id) {
-      match expr.kind {
-        ExprKind::MethodCall(segment, rcvr, args, _) => {
-          if let Some((def_kind, def_id)) =
-            tyck_res.type_dependent_def(*call_node_hir_id)
-          {
-            // TODO How can we get the binding mutability of the receiver?
-            // Tricky, is if this is a chained method call, the receiver
-            // could be currently unbound (at the source level) and can still
-            // be coerced into a `&mut T`.
-            log::debug!("Rcvr Ty {:?}", tyck_res.expr_ty(rcvr));
-            log::debug!("Fn Sig {:?}", tcx.fn_sig(def_id));
-          } else {
-            log::debug!("No dependent def found");
-          }
-        }
-        _ => unreachable!(),
-      }
-    }
-  });
+  // FIXME using filter_map here is lossy. IF there's some Id that
+  // fails (for a number of reasons) then filter_map will just ignore
+  // it. However, this could indicate an error somewhere. (or simply
+  // naïveté on my part in previous logic).
+  call_ids
+    .iter()
+    .filter_map(|call_node_hir_id| {
+      if let Some(Node::Expr(expr)) = hir.find(*call_node_hir_id) {
+        match expr.kind {
+          ExprKind::MethodCall(_, rcvr, _, call_span) => {
+            if let Some((_, def_id)) =
+              tyck_res.type_dependent_def(*call_node_hir_id)
+            {
+              let rcvr_t = tyck_res.expr_ty(rcvr);
+              // HACK FIXME
+              // See: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/ty/sty/struct.Binder.html#method.skip_binder
+              let fn_sig = tcx.fn_sig(def_id).skip_binder();
+              let expected_rcvr_t = fn_sig.inputs_and_output[0];
+              let rcvr_range = span_to_range(rcvr.span);
+              // The range of the method Segment.
+              let method_range = span_to_range(call_span);
 
-  todo!();
+              log::trace!("Found receiver type: {rcvr_t:?}");
+              log::trace!("Found function signature: {fn_sig:?}");
+
+              log::trace!("Getting bindings for receiver: {:?}", rcvr.hir_id);
+
+              // FIXME there's a mismatch somewhere with the binding annotations
+              // retrieved and this lookup always returns None.
+              let rcvr_bound = program_bindings.get(&rcvr.hir_id);
+              let actual_tys = TypeState::from_ty(&rcvr_t, rcvr_bound);
+              // XXX Is there a case when we'd want to know a
+              // potential binding for the expected type?
+              let expected_tys = TypeState::from_ty(&expected_rcvr_t, None);
+
+              let call_type = CallTypes {
+                actual: TyInfo {
+                  range: rcvr_range,
+                  of_type: actual_tys,
+                },
+                expected: TyInfo {
+                  range: method_range,
+                  of_type: expected_tys,
+                },
+              };
+
+              Some(call_type)
+            } else {
+              panic!("No dependent def found for method call HirId.");
+            }
+          }
+          _ => unreachable!(),
+        }
+      } else {
+        unreachable!();
+      }
+    })
+    .collect()
 }

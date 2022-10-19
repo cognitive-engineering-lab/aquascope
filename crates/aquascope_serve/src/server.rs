@@ -1,5 +1,9 @@
-use crate::{Config, ErrorJson, Result, ServeError, SourceRequest};
+use crate::{
+    container::{self, Container},
+    Config, ContainerCreationSnafu, Error, ErrorJson, ReceiverTypesRequest, Result, SourceRequest,
+};
 use aquascope_front::{
+    method_receivers::ReceiverTypesOutput,
     plugin::{AquascopeError, AquascopeResult},
     source::SourceOutput,
 };
@@ -14,22 +18,10 @@ use axum::{
     routing::{get, get_service, post, MethodRouter},
     Router,
 };
+use futures::future::BoxFuture;
+use snafu::{prelude::*, IntoError};
 use std::process::Command;
-// use futures::{future::BoxFuture, FutureExt};
-// use snafu::{prelude::*, IntoError};
-// use std::{
-//     convert::{TryFrom, TryInto},
-//     future::Future,
-//     mem, path,
-//     str::FromStr,
-//     sync::Arc,
-//     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
-// };
-// use tokio::sync::Mutex;
 use tower_http::cors::{self, CorsLayer};
-
-#[derive(Debug)]
-pub enum Error {}
 
 #[tokio::main]
 pub(crate) async fn serve(cfg: Config) {
@@ -41,7 +33,8 @@ pub(crate) async fn serve(cfg: Config) {
                 "HELLO!"
             }),
         )
-        .route("/example-source", post(source));
+        .route("/example-source", post(source))
+        .route("/receiver-types", post(receiver_types));
 
     app = app.layer({
         CorsLayer::new()
@@ -74,7 +67,7 @@ async fn source(Json(req): Json<SourceRequest>) -> Result<Json<AquascopeResult<S
             log::debug!("Processed string {}", s);
             serde_json::from_str(s)
                 .map(Json)
-                .map_err(|e| ServeError::Unknown { msg: e.to_string() })
+                .map_err(|e| Error::Unknown { msg: e.to_string() })
         }
         // FIXME this would be an internal error and they
         // should be converted into responses anyways. Perhaps
@@ -85,6 +78,24 @@ async fn source(Json(req): Json<SourceRequest>) -> Result<Json<AquascopeResult<S
             panic!("Invalid utf8 sequence {e}");
         }
     }
+}
+
+async fn receiver_types(
+    Json(req): Json<ReceiverTypesRequest>,
+) -> Result<Json<AquascopeResult<ReceiverTypesOutput>>> {
+    todo!()
+}
+
+async fn with_container<F, Req, Resp, KReq, KResp, Ctx>(req: Req, f: F, ctx: Ctx) -> Result<Resp>
+where
+    for<'req> F: FnOnce(Container, &'req KReq) -> BoxFuture<'req, container::Result<KResp>>,
+    Resp: From<KResp>,
+    KReq: TryFrom<Req, Error = Error>,
+    Ctx: IntoError<Error, Source = container::Error>,
+{
+    let container = Container::new().await.context(ContainerCreationSnafu)?;
+    let request = req.try_into()?;
+    f(container, request).await.map(Into::into).context(ctx)
 }
 
 /// This type only exists so that we can recover from the `axum::Json`

@@ -1,18 +1,22 @@
 use aquascope::{
-  analysis,
+  analysis::{self, CallTypes},
   mir::borrowck_facts::get_body_with_borrowck_facts,
-  source_map::{find_bodies, find_method_calls, Range},
+  source_map::{find_bindings, find_bodies, find_method_calls, Range},
 };
 use serde::Serialize;
+use ts_rs::TS;
 
 use crate::plugin::AquascopeResult;
 
-#[derive(Serialize)]
-pub struct ReceivierTypesOutput {}
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct ReceiverTypesOutput {
+  call_info: Vec<CallTypes>,
+}
 
 struct Callbacks {
   filename: String,
-  output: Option<ReceivierTypesOutput>,
+  output: Option<ReceiverTypesOutput>,
 }
 
 impl rustc_driver::Callbacks for Callbacks {
@@ -24,39 +28,55 @@ impl rustc_driver::Callbacks for Callbacks {
     queries.global_ctxt().unwrap().take().enter(|tcx| {
       let hir_call_ids = find_method_calls(tcx);
       let body_ids = find_bodies(tcx);
-
+      let bindings = find_bindings(tcx);
       let hir = tcx.hir();
 
-      log::debug!("CALLS {hir_call_ids:?}");
-      log::debug!("BODYS {body_ids:?}");
+      log::debug!("Found program bindings: {:?}", bindings);
 
-      hir_call_ids.iter().for_each(|(parent, calls)| {
-        let body_id = hir.body_owned_by(*parent);
+      let source_map = compiler.session().source_map();
+      let source_file = Range {
+        byte_start: 0,
+        byte_end: 0,
+        char_start: 0,
+        char_end: 0,
+        filename: self.filename.clone(),
+      }
+      .source_file(source_map)
+      .unwrap();
 
-        // Every MethodCall should have a corresponding Node in the Hir Map.
+      let call_info: Vec<CallTypes> = hir_call_ids
+        .iter()
+        .flat_map(|(parent, calls)| {
+          let body_id = hir.body_owned_by(*parent);
 
-        analysis::process_method_calls_in_item(
-          tcx,
-          body_id,
-          *parent,
-          calls.to_vec(),
-        );
+          analysis::process_method_calls_in_item(
+            tcx,
+            body_id,
+            *parent,
+            calls.to_vec(),
+            &bindings,
+            |span| Range::from_span(span, source_map).ok().unwrap_or_default(),
+          )
 
-        // For the given parts in the method call.
-        // We want the DefId in order to get the type of it.
-        // That is, for the first argument to the Call (the receiver)
-        // we want to know where that's defined.
-        // For the function itself, we want to know where it's defined.
-      });
-      todo!()
-    })
+          // For the given parts in the method call.
+          // We want the DefId in order to get the type of it.
+          // That is, for the first argument to the Call (the receiver)
+          // we want to know where that's defined.
+          // For the function itself, we want to know where it's defined.
+        })
+        .collect();
+
+      self.output = Some(ReceiverTypesOutput { call_info });
+    });
+
+    rustc_driver::Compilation::Stop
   }
 }
 
 pub fn method_calls(
   args: &[String],
   filename: String,
-) -> AquascopeResult<ReceivierTypesOutput> {
+) -> AquascopeResult<ReceiverTypesOutput> {
   let mut callbacks = Callbacks {
     filename,
     output: None,

@@ -3,6 +3,9 @@ import { EditorView } from "@codemirror/view"
 import { EditorState } from "@codemirror/state"
 import { rust } from "@codemirror/lang-rust"
 
+// This module needs to get updated.
+let cm = undefined;
+
 export const run_editor = () => {
     const app = document.getElementById("editor");
 
@@ -19,12 +22,13 @@ export const run_editor = () => {
         parent: app,
     });
 
+    cm = view;
+
 };
 
-export const get_contents = async () => {
-    return document
-        .getElementById("editor")
+export const get_contents = () => {
+    return cm
         .state
         .doc
-        .toString()
+        .toString();
 }

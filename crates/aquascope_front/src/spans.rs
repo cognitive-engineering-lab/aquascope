@@ -3,10 +3,12 @@ use aquascope::{
   source_map::{find_bodies, find_enclosing_bodies, Range},
 };
 use serde::Serialize;
+use ts_rs::TS;
 
 use crate::plugin::AquascopeResult;
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export)]
 pub struct SpansOutput {
   spans: Vec<Range>,
 }
