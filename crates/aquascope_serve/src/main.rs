@@ -57,10 +57,41 @@ struct ReceiverTypesRequest {
     code: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct ReceiverTypesResponse {
+    success: bool,
+    stdout: String,
+    stderr: String,
+}
+
+// NOTE this layer of indirection "might" be helpful in the future
+// if anything needs to be validated or converted between types, but
+// currently it is overkill.
+// FIXME probably simpify this when you have a ground zero version running.
+
+impl TryFrom<ReceiverTypesRequest> for container::ReceiverTypesRequest {
+    type Error = Error;
+    fn try_from(this: ReceiverTypesRequest) -> Result<Self> {
+        Ok(container::ReceiverTypesRequest { code: this.code })
+    }
+}
+
+impl From<container::ReceiverTypesResponse> for ReceiverTypesResponse {
+    fn from(this: container::ReceiverTypesResponse) -> Self {
+        ReceiverTypesResponse {
+            success: this.success,
+            stdout: this.stdout,
+            stderr: this.stderr,
+        }
+    }
+}
+
 #[derive(Debug, Snafu)]
 pub enum Error {
     #[snafu(display("Creating the container failed {source}"))]
     ContainerCreation { source: container::Error },
+    #[snafu(display("Visualizing receiver types failed {source}"))]
+    ReceiverTypes { source: container::Error },
     #[snafu(display("An Unknown error occurred: {msg}"))]
     Unknown { msg: String },
 }

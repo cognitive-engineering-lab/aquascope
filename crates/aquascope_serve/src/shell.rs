@@ -1,6 +1,5 @@
 use std::{future::Future, path::PathBuf, pin::Pin, process::Command, sync::Arc};
 
-use anyhow::Result;
 use bollard::{
     container::LogOutput,
     exec::{CreateExecOptions, StartExecResults},
@@ -86,44 +85,44 @@ impl Shell {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use std::{sync::Arc, time::Duration};
+// #[cfg(test)]
+// mod test {
+//     use std::{sync::Arc, time::Duration};
 
-    use anyhow::anyhow;
-    use bollard::Docker;
-    use tokio::sync::Mutex;
+//     use anyhow::anyhow;
+//     use bollard::Docker;
+//     use tokio::sync::Mutex;
 
-    use super::*;
+//     use super::*;
 
-    #[tokio::test]
-    async fn shell_test() -> Result<()> {
-        env_logger::init();
-        let docker = Arc::new(Docker::connect_with_local_defaults()?);
-        docker.ping().await?;
+//     #[tokio::test]
+//     async fn shell_test() -> Result<()> {
+//         env_logger::init();
+//         let docker = Arc::new(Docker::connect_with_local_defaults()?);
+//         docker.ping().await?;
 
-        let container = Arc::new(Container::new(&docker, "rust").await?);
-        let stdout = Arc::new(Mutex::new(Vec::new()));
-        let stdout_ref = Arc::clone(&stdout);
-        let mut shell = Shell::new(&container, move |log| {
-            let stdout_ref = Arc::clone(&stdout_ref);
-            async move {
-                stdout_ref.lock().await.push(format!("{}", log));
-            }
-        })
-        .await?;
-        shell.run("cd /tmp && echo hey").await?;
-        assert_eq!(shell.cwd().await?, PathBuf::from("/tmp/"));
+//         let container = Arc::new(Container::new(&docker, "rust").await?);
+//         let stdout = Arc::new(Mutex::new(Vec::new()));
+//         let stdout_ref = Arc::clone(&stdout);
+//         let mut shell = Shell::new(&container, move |log| {
+//             let stdout_ref = Arc::clone(&stdout_ref);
+//             async move {
+//                 stdout_ref.lock().await.push(format!("{}", log));
+//             }
+//         })
+//         .await?;
+//         shell.run("cd /tmp && echo hey").await?;
+//         assert_eq!(shell.cwd().await?, PathBuf::from("/tmp/"));
 
-        // TODO: this might be flaky one day
-        tokio::time::sleep(Duration::from_millis(1000)).await;
-        assert_eq!(*stdout.lock().await, vec!["hey\n".to_owned()]);
+//         // TODO: this might be flaky one day
+//         tokio::time::sleep(Duration::from_millis(1000)).await;
+//         assert_eq!(*stdout.lock().await, vec!["hey\n".to_owned()]);
 
-        drop(shell);
-        Arc::try_unwrap(container)
-            .map_err(|_| anyhow!("Hanging container reference"))?
-            .cleanup()
-            .await?;
-        Ok(())
-    }
-}
+//         drop(shell);
+//         Arc::try_unwrap(container)
+//             .map_err(|_| anyhow!("Hanging container reference"))?
+//             .cleanup()
+//             .await?;
+//         Ok(())
+//     }
+// }
