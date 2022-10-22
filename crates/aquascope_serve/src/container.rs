@@ -7,17 +7,11 @@ use bollard::{
     models::{ContainerCreateResponse, HostConfig},
     Docker,
 };
-use flate2::{write::GzEncoder, Compression};
 use futures::StreamExt;
 use serde::Serialize;
 use snafu::prelude::*;
 use std::process::Command;
-use std::{env, io, iter, os::unix::fs::PermissionsExt, path::PathBuf, sync::Arc};
-use tempfile::{self, TempDir};
-use tokio::{
-    fs, // process::Command,
-    time,
-};
+use std::{env, io, iter, os::unix::fs::PermissionsExt, sync::Arc};
 
 const DEFAULT_IMAGE: &str = "aquascope";
 const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
@@ -45,9 +39,6 @@ pub enum Error {
 pub type Result<T, E = Error> = ::std::result::Result<T, E>;
 
 pub struct Container {
-    // my_dir: TempDir,
-    // input_file: PathBuf,
-    // output_dir: PathBuf,
     id: String,
     killed: bool,
     project_dir: Option<String>,
@@ -87,29 +78,16 @@ impl Container {
         docker.start_container(&id, options).await?;
         log::info!("Container started: {id}");
 
-        // create temporary files in a scratch buffer.
-        // let my_dir = tempfile::Builder::new()
-        //     .prefix("aquascope")
-        //     .tempdir()
-        //     .context(UnableToCreateTempDirSnafu)?;
-        // let input_file = my_dir.path().join("input.rs");
-        // let output_dir = my_dir.path().join("output");
-        // fs::create_dir(&output_dir)
-        //     .await
-        //     .context(UnableToCreateOutputDirSnafu)?;
-        // fs::set_permissions(&output_dir, full_permissions())
-        //     .await
-        //     .context(UnableToSetOutputPermissionsSnafu)?;
-
-        Ok(Container {
-            // my_dir,
-            // input_file,
-            // output_dir,
+        let mut this = Container {
             id,
             killed: false,
             docker: docker.clone(),
             project_dir: None,
-        })
+        };
+
+        this.cargo_new().await?;
+
+        Ok(this)
     }
 
     pub async fn exec(
@@ -123,7 +101,7 @@ impl Container {
             .context(BollardSnafu)
     }
 
-    pub async fn get_pid(&self, process: &str) -> Result<i64, Error> {
+    pub async fn get_pid(&self, process: &str) -> Result<i64> {
         let mut cmd = Command::new("pidof");
         cmd.arg(process);
         let response = self.exec_output(&cmd).await?;
@@ -140,7 +118,7 @@ impl Container {
             }))
     }
 
-    pub async fn exec_output(&self, cmd: &Command) -> Result<String, Error> {
+    pub async fn exec_output(&self, cmd: &Command) -> Result<String> {
         let args = iter::once(cmd.get_program())
             .chain(cmd.get_args())
             .map(|s| s.to_string_lossy().to_string())
@@ -250,9 +228,11 @@ impl Container {
         req: &ReceiverTypesRequest,
     ) -> Result<ReceiverTypesResponse> {
         self.write_source_code(&req.code).await?;
-        let cmd = self.receiver_types_command("src/main.rs");
+        let cmd = self.receiver_types_command("/app/aquascope_tmp_proj/src/main.rs");
 
         let output = self.exec_output(&cmd).await?;
+
+        // panic!("Debug me pls");
 
         Ok(ReceiverTypesResponse {
             success: true,
@@ -263,7 +243,8 @@ impl Container {
 
     fn receiver_types_command(&self, filename: &str) -> Command {
         let mut cmd = Command::new("cargo");
-        cmd.args(["aquascope", "vis-method-calls", filename]);
+        cmd.args(["aquascope", "vis-method-calls", filename])
+            .current_dir("/app/aquascope_tmp_proj");
         cmd
     }
 

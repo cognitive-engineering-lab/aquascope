@@ -6,7 +6,8 @@ use crate::{
 use async_trait::async_trait;
 use axum::{
     extract,
-    http::{header, Method, Uri},
+    handler::Handler,
+    http::{header, Method},
     response::IntoResponse,
     routing::{get, post},
     Router,
@@ -18,8 +19,9 @@ use tower_http::cors::{self, CorsLayer};
 #[tokio::main]
 pub(crate) async fn serve(cfg: Config) {
     let mut app = Router::new()
+        .fallback(fallback.into_service())
         .route(
-            "/",
+            "/hi",
             get(|| async {
                 log::info!("Received Message");
                 "HELLO!"
@@ -44,43 +46,25 @@ pub(crate) async fn serve(cfg: Config) {
         .unwrap();
 }
 
-// #[axum_macros::debug_handler]
-// async fn source(Json(req): Json<SourceRequest>) ->
-// Result<Json<AquascopeResult<SourceOutput>>> {     log::info!("Processing
-// source for {}", req.filename);
-
-//     let output = Command::new("cargo")
-//         .current_dir("/Users/gavinleroy/dev/prj/aquascope/files/hello")
-//         .args(["aquascope", "source", &req.filename])
-//         .output()
-//         .expect("failed to execute process");
-
-//     match std::str::from_utf8(&output.stdout) {
-//         Ok(s) => {
-//             log::debug!("Processed string {}", s);
-//             serde_json::from_str(s)
-//                 .map(Json)
-//                 .map_err(|e| Error::Unknown { msg: e.to_string() })
-//         }
-//         // FIXME this would be an internal error and they
-//         // should be converted into responses anyways. Perhaps
-//         // some sort of Internal Error flag that could be sent
-//         // to users (even though it shouldn't happen).
-//         Err(e) => {
-//             log::debug!("Couldn't parse Json");
-//             panic!("Invalid utf8 sequence {e}");
-//         }
-//     }
-// }
-
 // TODO get rid of the `AquascopeResult` from the return type
 // this can be coerced into our Server types here (build error, etc).
 async fn receiver_types(
     Json(req): Json<ReceiverTypesRequest>,
 ) -> Result<Json<ReceiverTypesResponse>> {
+    log::trace!("Received request for receiver types");
+
     with_container(
         req,
-        |knt, req| async move { knt.receiver_types(req).await }.boxed(),
+        |knt, req| {
+            async move {
+                let v = knt.receiver_types(req).await;
+                if let Err(e) = knt.cleanup().await {
+                    log::warn!("Error cleaning up container: {:?}", e);
+                }
+                v
+            }
+            .boxed()
+        },
         ReceiverTypesSnafu,
     )
     .await
@@ -101,6 +85,15 @@ where
     let container = Container::new().await.context(ContainerCreationSnafu)?;
     let request = req.try_into()?;
     f(container, &request).await.map(Into::into).context(ctx)
+}
+
+/// Axum handler for any request that fails to match the router routes.
+/// This implementation returns HTTP status code Not Found (404).
+pub async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
+    (
+        axum::http::StatusCode::NOT_FOUND,
+        format!("No route {}", uri),
+    )
 }
 
 /// This type only exists so that we can recover from the `axum::Json`
@@ -130,9 +123,10 @@ where
 
 impl<T> IntoResponse for Json<T>
 where
-    T: serde::Serialize,
+    T: serde::Serialize + std::fmt::Debug,
 {
     fn into_response(self) -> axum::response::Response {
+        log::trace!("Turning Json<T> into response {:?}", self.0);
         axum::Json(self.0).into_response()
     }
 }
