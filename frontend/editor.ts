@@ -11,10 +11,11 @@ import {
     Compartment
 } from "@codemirror/state"
 import { rust } from "@codemirror/lang-rust"
+import { indentUnit } from "@codemirror/language"
 import * from "./types"
 
-const initial_code: string = `
-// Please start typing :)
+const initial_code: string =
+    `// Please start typing :)
 
 #[derive(Debug, Default)]
 struct Box {
@@ -25,6 +26,8 @@ impl Box {
     fn inc(&mut self) {
         self.value += 1;
     }
+
+    fn destroy(mut self) {}
 }
 
 fn main() {
@@ -37,6 +40,11 @@ fn main() {
 
     let b1 = &Box::default();
     b1.inc();
+
+    let mut b2 = Box::default();
+    b2.inc();
+
+    Box::default().destroy();
 
     println!("Gruëzi, Weltli");
 }
@@ -55,6 +63,7 @@ export class Editor {
                 basicSetup,
                 rust(),
                 readOnly.of(EditorState.readOnly.of(false)),
+                indentUnit.of("    "),
                 methodCallPoints
             ],
         });
