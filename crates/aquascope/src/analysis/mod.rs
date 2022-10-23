@@ -6,8 +6,8 @@ use polonius_engine::{Algorithm, Output};
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::{
-  def_id::LocalDefId, hir_id::HirId, BindingAnnotation, BodyId, Expr, ExprKind,
-  Node,
+  def::Res, def_id::LocalDefId, hir_id::HirId, BindingAnnotation, BodyId, Expr,
+  ExprKind, Node, QPath,
 };
 use rustc_hir_analysis::{
   self,
@@ -120,17 +120,17 @@ impl TypeState {
     } else if ty.is_ref() {
       TypeState::Ref { is_mut: false }
     } else {
-      match ba {
-        // No binding annotations suggest that this is an expected type
-        // of the method signature. If the type is something like `foo(mut self, ...)`
-        // we ignore the `mut` modifier because this is only relevant for the
-        // bindings after. Hence the hardcoded `false` below.
-        None => TypeState::Owned {
-          mutably_bound: false,
+      log::debug!("Owned value {:?} {:?}", ty, ba);
+      TypeState::Owned {
+        mutably_bound: if let Some(BindingAnnotation(
+          _,
+          rustc_hir::Mutability::Mut,
+        )) = ba
+        {
+          true
+        } else {
+          false
         },
-        Some(ba) => {
-          todo!()
-        }
       }
     }
   }
@@ -177,9 +177,20 @@ pub fn process_method_calls_in_item<'tcx>(
 
               log::trace!("Getting bindings for receiver: {:?}", rcvr.hir_id);
 
-              // FIXME there's a mismatch somewhere with the binding annotations
-              // retrieved and this lookup always returns None.
-              let rcvr_bound = program_bindings.get(&rcvr.hir_id);
+              let rcvr_bound =
+                if let ExprKind::Path(QPath::Resolved(_, path)) = rcvr.kind {
+                  match path.res {
+                    Res::Local(id) => program_bindings.get(&id),
+                    _ => None,
+                  }
+                } else {
+                  None
+                };
+
+              log::debug!("RCVR BOUND: {:?}", rcvr);
+              log::debug!("ALL BINDINGS: {:?}", program_bindings);
+              log::debug!("Rcvr_bound: {:?}", rcvr_bound);
+
               let actual_tys = TypeState::from_ty(&rcvr_t, rcvr_bound);
               // XXX Is there a case when we'd want to know a
               // potential binding for the expected type?
