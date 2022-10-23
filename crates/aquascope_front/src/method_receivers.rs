@@ -7,9 +7,7 @@ use ts_rs::TS;
 
 use crate::plugin::{AquascopeResult, Range};
 
-// XXX I really dislike this HACK, these types are all duplicated from
-// the `aquascope::analysis` module because the TS export needs to happen
-// all from the `aquascope_front` crate.
+// TODO just generate the bindings from each respective crate and symlink to the files.
 
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../frontend/interface/ReceiverTypes.ts")]

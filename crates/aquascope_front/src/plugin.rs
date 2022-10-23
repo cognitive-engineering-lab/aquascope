@@ -19,45 +19,7 @@ use rustc_plugin::{RustcPlugin, RustcPluginArgs, Utf8Path};
 use serde::{self, Deserialize, Serialize};
 use ts_rs::TS;
 
-// XXX this value is not actually used anywhere (currently)
-// see below comment for an explanaition why I couldn't get
-// what I wanted to working.
-const INTERFACE_TYPES_DIR: &str = "../../frontend/interface/";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-// FIXME ideally, I would like to say:
-// `#[ts(export, export_to = interface_file!("Filename.ts"))]`
-// in the attribute, but I couldn't get it to work.
-// Below is the hollow shell of what I tried.
-//
-// I "think" a proc_macro_attribute might work, but I wasn't
-// convinced enough to create a new library just for that reason.
-// If in the future further macros might be of use then I'd be open
-// to the idea. Ideally, I could get concat!(...) to expand eagarly
-// *before* the `ts` attribute is expanded, but it seems that is only
-// possible with "key-value" attributes, e.g. `#[doc = concat!(...)]`.
-
-// trace_macros!(true);
-// eager_macro_rules! { $eager_1
-//   macro_rules! weird_inner_macro {
-//     ($path:literal, $($tt:tt)*) => {
-//       #[derive(Debug, Serialize, Deserialize, TS)]
-//       #[ts(export, export_to = $path)]
-//       $($tt)*
-//     };
-//   }
-// }
-
-// macro_rules! export_interface_file {
-//   ($file:literal, $($tt:tt)*) => {
-//     eager!{
-//       weird_inner_macro!{
-//         concat!("../../frontend/interface/", $file),
-//         $($tt)*
-//       }
-//     }
-//   };
-// }
 
 #[derive(Debug, Parser, Serialize, Deserialize)]
 #[clap(version = VERSION)]
