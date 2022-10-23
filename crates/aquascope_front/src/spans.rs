@@ -7,8 +7,7 @@ use ts_rs::TS;
 
 use crate::plugin::AquascopeResult;
 
-#[derive(Serialize, TS)]
-#[ts(export)]
+#[derive(Serialize)]
 pub struct SpansOutput {
   spans: Vec<Range>,
 }

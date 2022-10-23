@@ -1,0 +1,21 @@
+span {
+    display: inline-block;
+    font-weight: 900;
+}
+
+.fa-stack {
+    font-family: "Font Awesome 5 Free Solid";
+}
+
+.fa-stack.small {
+    font-size: 0.5em;
+    --fa-inverse: #1da1f2;
+}
+
+i {
+    vertical-align: middle;
+}
+
+.top-pict {
+    margin-bottom: -10px;
+}

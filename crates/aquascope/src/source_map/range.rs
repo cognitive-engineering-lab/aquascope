@@ -13,7 +13,6 @@ use rustc_span::{
   source_map::SourceMap, BytePos, FileName, RealFileName, SourceFile, Span,
 };
 use serde::Serialize;
-use ts_rs::TS;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::cached::Cache;
@@ -101,8 +100,7 @@ fn qpath_to_span(tcx: TyCtxt, qpath: String) -> Result<Span> {
     .with_context(|| format!("No function with qpath {}", finder.qpath))
 }
 
-#[derive(Serialize, Debug, Clone, Hash, PartialEq, Eq, Default, TS)]
-#[ts(export)]
+#[derive(Serialize, Debug, Clone, Hash, PartialEq, Eq, Default)]
 pub struct Range {
   pub char_start: usize,
   pub char_end: usize,

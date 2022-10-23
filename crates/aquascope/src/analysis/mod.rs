@@ -15,8 +15,6 @@ use rustc_hir_analysis::{
 };
 use rustc_middle::ty::{Ty, TyCtxt};
 use rustc_span::Span;
-use serde::Serialize;
-use ts_rs::TS;
 
 use crate::source_map::Range;
 
@@ -97,22 +95,19 @@ pub fn compute_context<'a, 'tcx>(
   })
 }
 
-#[derive(Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Clone)]
 pub struct CallTypes {
-  expected: TyInfo,
-  actual: TyInfo,
+  pub expected: TyInfo,
+  pub actual: TyInfo,
 }
 
-#[derive(Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Clone)]
 pub struct TyInfo {
-  range: Range,
-  of_type: TypeState,
+  pub range: Range,
+  pub of_type: TypeState,
 }
 
-#[derive(Serialize, TS)]
-#[ts(export)]
+#[derive(Debug, Clone)]
 pub enum TypeState {
   Owned { mutably_bound: bool },
   Ref { is_mut: bool },

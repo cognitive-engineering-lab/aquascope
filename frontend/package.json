@@ -1,11 +1,20 @@
 {
+  "name": "@gavinleroy/aquascope-frontend",
+  "version": "1.0.0",
+  "description": "",
+  "author": "Gavin Gray",
+  "homepage": "https://github.com/gavinleroy/aquascope",
+  "license": "MIT",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint --ext js,ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "parcel index.html"
+  },
   "devDependencies": {
     "parcel": "1.12.3",
     "parcel-bundler": "1.12.3"
   },
-  "name": "frontend",
-  "version": "1.0.0",
-  "main": "index.js",
   "dependencies": {
     "@codemirror/autocomplete": "^6.3.0",
     "@codemirror/commands": "^6.1.2",
@@ -104,13 +113,5 @@
     "weak-lru-cache": "^1.2.2",
     "xxhash-wasm": "^0.4.2",
     "yaml": "^1.10.2"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "parcel index.html"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": ""
+  }
 }

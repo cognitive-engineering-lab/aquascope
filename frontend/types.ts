@@ -1,3 +1,12 @@
+// Re-export auto-generated types
+
+export { AquascopeError } from "./interface/AquascopeError";
+export { CallTypes } from "./interface/CallTypes";
+export { Range } from "./interface/Range";
+export { ReceiverTypesOutput as ReceiverTypes } from "./interface/ReceiverTypes";
+export { TypeInfo } from "./interface/TypeInfo";
+export { TypeState } from "./interface/TypeState";
+
 interface BuildError {
   type: "BuildError";
   error: string;

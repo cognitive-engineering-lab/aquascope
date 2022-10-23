@@ -8,9 +8,10 @@ use std::{
 use anyhow::Context;
 use aquascope::{
   mir::borrowck_facts,
-  source_map::{self, FunctionIdentifier, GraphemeIndices, Range, ToSpan},
+  source_map::{self, FunctionIdentifier, GraphemeIndices, ToSpan},
 };
 use clap::{Parser, Subcommand};
+use eager;
 use rustc_hir::BodyId;
 use rustc_interface::interface::Result as RustcResult;
 use rustc_middle::ty::TyCtxt;
@@ -18,7 +19,45 @@ use rustc_plugin::{RustcPlugin, RustcPluginArgs, Utf8Path};
 use serde::{self, Deserialize, Serialize};
 use ts_rs::TS;
 
+// XXX this value is not actually used anywhere (currently)
+// see below comment for an explanaition why I couldn't get
+// what I wanted to working.
+const INTERFACE_TYPES_DIR: &str = "../../frontend/interface/";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+// FIXME ideally, I would like to say:
+// `#[ts(export, export_to = interface_file!("Filename.ts"))]`
+// in the attribute, but I couldn't get it to work.
+// Below is the hollow shell of what I tried.
+//
+// I "think" a proc_macro_attribute might work, but I wasn't
+// convinced enough to create a new library just for that reason.
+// If in the future further macros might be of use then I'd be open
+// to the idea. Ideally, I could get concat!(...) to expand eagarly
+// *before* the `ts` attribute is expanded, but it seems that is only
+// possible with "key-value" attributes, e.g. `#[doc = concat!(...)]`.
+
+// trace_macros!(true);
+// eager_macro_rules! { $eager_1
+//   macro_rules! weird_inner_macro {
+//     ($path:literal, $($tt:tt)*) => {
+//       #[derive(Debug, Serialize, Deserialize, TS)]
+//       #[ts(export, export_to = $path)]
+//       $($tt)*
+//     };
+//   }
+// }
+
+// macro_rules! export_interface_file {
+//   ($file:literal, $($tt:tt)*) => {
+//     eager!{
+//       weird_inner_macro!{
+//         concat!("../../frontend/interface/", $file),
+//         $($tt)*
+//       }
+//     }
+//   };
+// }
 
 #[derive(Debug, Parser, Serialize, Deserialize)]
 #[clap(version = VERSION)]
@@ -49,6 +88,29 @@ enum AquascopeCommand {
   },
   Preload,
   RustcVersion,
+}
+
+// HACK! FIXME
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../frontend/interface/Range.ts")]
+pub struct Range {
+  char_start: usize,
+  char_end: usize,
+  byte_start: usize,
+  byte_end: usize,
+  filename: String,
+}
+
+impl From<source_map::Range> for Range {
+  fn from(i: source_map::Range) -> Self {
+    Range {
+      char_start: i.char_start,
+      char_end: i.char_end,
+      byte_start: i.byte_start,
+      byte_end: i.byte_end,
+      filename: i.filename,
+    }
+  }
 }
 
 pub struct AquascopePlugin;
@@ -192,7 +254,7 @@ fn run<A: AquascopeAnalysis, T: ToSpan>(
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "variant")]
-#[ts(export)]
+#[ts(export, export_to = "../../frontend/interface/AquascopeError.ts")]
 pub enum AquascopeError {
   // An error occured before the intended analysis could run.
   BuildError,

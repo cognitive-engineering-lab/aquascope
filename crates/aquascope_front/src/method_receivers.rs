@@ -1,18 +1,42 @@
 use aquascope::{
-  analysis::{self, CallTypes},
-  mir::borrowck_facts::get_body_with_borrowck_facts,
-  source_map::{find_bindings, find_bodies, find_method_calls, Range},
+  analysis,
+  source_map::{self, find_bindings, find_bodies, find_method_calls},
 };
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::plugin::AquascopeResult;
+use crate::plugin::{AquascopeResult, Range};
+
+// XXX I really dislike this HACK, these types are all duplicated from
+// the `aquascope::analysis` module because the TS export needs to happen
+// all from the `aquascope_front` crate.
 
 #[derive(Serialize, TS)]
-#[ts(export)]
-pub struct ReceiverTypesOutput {
-  call_info: Vec<CallTypes>,
+#[ts(export, export_to = "../../frontend/interface/ReceiverTypes.ts")]
+pub struct ReceiverTypesOutput(Vec<CallTypes>);
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../frontend/interface/CallTypes.ts")]
+pub struct CallTypes {
+  expected: TypeInfo,
+  actual: TypeInfo,
 }
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../frontend/interface/TypeInfo.ts")]
+pub struct TypeInfo {
+  range: Range,
+  of_type: TypeState,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../frontend/interface/TypeState.ts")]
+pub enum TypeState {
+  Owned { mutably_bound: bool },
+  Ref { is_mut: bool },
+}
+
+// --------------------------------------
 
 struct Callbacks {
   filename: String,
@@ -34,7 +58,7 @@ impl rustc_driver::Callbacks for Callbacks {
       log::debug!("Found program bindings: {:?}", bindings);
 
       let source_map = compiler.session().source_map();
-      let source_file = Range {
+      let source_file = source_map::Range {
         byte_start: 0,
         byte_end: 0,
         char_start: 0,
@@ -55,21 +79,54 @@ impl rustc_driver::Callbacks for Callbacks {
             *parent,
             calls.to_vec(),
             &bindings,
-            |span| Range::from_span(span, source_map).ok().unwrap_or_default(),
+            |span| {
+              source_map::Range::from_span(span, source_map)
+                .ok()
+                .unwrap_or_default()
+            },
           )
-
           // For the given parts in the method call.
           // We want the DefId in order to get the type of it.
           // That is, for the first argument to the Call (the receiver)
           // we want to know where that's defined.
           // For the function itself, we want to know where it's defined.
         })
+        .map(|v| v.into())
         .collect();
 
-      self.output = Some(ReceiverTypesOutput { call_info });
+      self.output = Some(ReceiverTypesOutput(call_info));
     });
 
     rustc_driver::Compilation::Stop
+  }
+}
+
+impl From<analysis::CallTypes> for CallTypes {
+  fn from(i: analysis::CallTypes) -> Self {
+    CallTypes {
+      expected: i.expected.into(),
+      actual: i.actual.into(),
+    }
+  }
+}
+
+impl From<analysis::TyInfo> for TypeInfo {
+  fn from(i: analysis::TyInfo) -> Self {
+    TypeInfo {
+      range: i.range.into(),
+      of_type: i.of_type.into(),
+    }
+  }
+}
+
+impl From<analysis::TypeState> for TypeState {
+  fn from(i: analysis::TypeState) -> Self {
+    match i {
+      analysis::TypeState::Owned { mutably_bound: b } => {
+        TypeState::Owned { mutably_bound: b }
+      }
+      analysis::TypeState::Ref { is_mut: b } => TypeState::Ref { is_mut: b },
+    }
   }
 }
 
