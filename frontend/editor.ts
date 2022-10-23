@@ -7,8 +7,8 @@ import {
 } from "@codemirror/view"
 import {
     EditorState, StateField,
-    StateEffect, RangeSet,
-    Compartment
+    StateEffect, StateEffectType,
+    RangeSet, Compartment
 } from "@codemirror/state"
 import { rust } from "@codemirror/lang-rust"
 import { indentUnit } from "@codemirror/language"
@@ -52,6 +52,37 @@ fn main() {
 
 let readOnly = new Compartment
 
+interface IconTransformer<Ico> {
+    make_widget(Ico, Ico): WidgetType;
+    from_call_types(CallTypes): [Ico, Ico, number];
+}
+
+let set_method_call_points =
+    StateEffect.define<Array<[ColorDiffIco, ColorDiffIco, number]>>();
+
+let method_call_points = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(points, transactions) {
+        console.log(transactions);
+        for (let e of transactions.effects) {
+            if (e.is(set_method_call_points)) {
+                return RangeSet.of(e.value.map(([ico_o, ico_m, from]) =>
+                    method_call_point(ico_o, ico_m).range(from)));
+            }
+        }
+
+        return points;
+    },
+    provide: f => EditorView.decorations.from(f),
+});
+
+let method_call_point = (ico_o: Ico, ico_m: Ico): WidgetType => {
+    return Decoration.widget({
+        widget: ShapeT.make_widget(ico_o, ico_m),
+        side: 0,
+    });
+};
+
 export class Editor {
     private view: EditorView;
 
@@ -64,7 +95,7 @@ export class Editor {
                 rust(),
                 readOnly.of(EditorState.readOnly.of(false)),
                 indentUnit.of("    "),
-                methodCallPoints
+                method_call_points
             ],
         });
 
@@ -73,6 +104,8 @@ export class Editor {
             parent: dom,
         });
 
+
+        this.set_method_call_points
         this.view = initial_view;
     }
 
@@ -90,7 +123,7 @@ export class Editor {
     // the code changes in the editor. TODO
     public remove_receiver_types(): void {
         this.view.dispatch({
-            effects: [ setMethodCallPoints.of([]) ]
+            effects: [ set_method_call_points.of([]) ]
         });
     }
 
@@ -100,59 +133,82 @@ export class Editor {
     public show_receiver_types(method_call_points: ReceiverTypes): void {
         this.view.dispatch({
             effects: [
-                // Process the set of visual marks that need to be included.
-                setMethodCallPoints.of(
-                    method_call_points.map((call_type: CallTypes) => {
-                        // FIXME I would like a more flexible way to represent
-                        // actual vs expected instead of explicitly using colors
-                        // in the Icon type. Ideally, I could have some modifier
-                        // which will change the types, I may not have enough knowledge
-                        // about the DOM to create that right now.
-                        //
-                        // Regardless this is pretty ugly.
-                        let high_color = `rgba(112,128,144,1)`;
-                        let low_color = `rgba(233,236,238,1)`;
-                        let color = (b) => (b ? high_color : low_color);
-
-                        let ts_actual: TypeState = call_type.actual.of_type;
-                        let ts_expected: TypeState = call_type.expected.of_type;
-
-                        let [a_o, a_m] =
-                            (("Owned" in ts_actual) ?
-                                [true, ts_actual.Owned.mutably_bound] :
-                                [false, ts_actual.Ref.is_mut]);
-
-                        let [e_o, e_m] =
-                            (("Owned" in ts_expected) ?
-                                [true, ts_expected.Owned.mutably_bound] :
-                                [false, ts_expected.Ref.is_mut]);
-
-                        let owned_ico: Icon = {
-                            class_name: "fa-square",
-                            color_expected: color(e_o),
-                            color_actual: color(a_o)
-                        };
-
-                        let mut_ico: Icon = {
-                            class_name: "fa-circle",
-                            color_expected: color(e_m),
-                            color_actual: color(a_m)
-                        };
-
-                        // HACK the ending character of the actual type
-                        // might not actually be right before the dereference
-                        // operator `.`, do some testing and then we can probably
-                        // use the character preceding the expected `char_start`.
-                        let loc = call_type.expected.range.char_start - 1;
-                        return [owned_ico, mut_ico, loc];
-                    }))]
+                set_method_call_points.of(
+                    method_call_points.map(ShapeT.from_call_types))
+            ]
         });
+    }
+}
+
+// NOTE (to self) XXX: last night I tried to make Editor generic
+// over a class and an "IconTransformer" (there must be a better
+// name for that) but the `ShapeEffectType.is` method didn't seem
+// to be identifying the effect type. Not sure why that was, things
+// are currently working but I would like them to be more generic
+// so I can easily switch between things like Icons, what differentiates,
+// etc so we can try out a myriad of things.
+
+// ----------------------------------------
+// Types to use as an icon transformer
+
+type RGBA = `rgba(${number},${number},${number},${number})`;
+
+type ColorDiffIco {
+    class_name: string,
+    color_expected: RGBA,
+    color_actual: RGBA,
+}
+
+export let ShapeT: IconTransformer<ColorDiffIco> = {
+
+    make_widget(ico_l, ico_r) {
+        return new CallTypesWidget(ico_l, ico_r);
+    }
+
+    from_call_types(call_type: CallTypes): [ColorDiffIco, ColorDiffIco, number] {
+        let high_color = `rgba(112,128,144,1)`;
+        let low_color = `rgba(233,236,238,1)`;
+        let own_shape = "fa-square";
+        let mut_shape = "fa-circle";
+
+        let color = (b) => (b ? high_color : low_color);
+        let ts_actual: TypeState = call_type.actual.of_type;
+        let ts_expected: TypeState = call_type.expected.of_type;
+
+        let [a_o, a_m] =
+            (("Owned" in ts_actual) ?
+                [true, ts_actual.Owned.mutably_bound] :
+                [false, ts_actual.Ref.is_mut]);
+
+        let [e_o, e_m] =
+            (("Owned" in ts_expected) ?
+                [true, ts_expected.Owned.mutably_bound] :
+                [false, ts_expected.Ref.is_mut]);
+
+        let owned_ico: ColorDiffIco = {
+            class_name: own_shape,
+            color_expected: color(e_o),
+            color_actual: color(a_o)
+        };
+
+        let mut_ico: ColorDiffIco = {
+            class_name: mut_shape,
+            color_expected: color(e_m),
+            color_actual: color(a_m)
+        };
+
+        // HACK the ending character of the actual type
+        // might not actually be right before the dereference
+        // operator `.`, do some testing and then we can probably
+        // use the character preceding the expected `char_start`.
+        let loc = call_type.expected.range.char_start - 1;
+        return [owned_ico, mut_ico, loc];
     }
 }
 
 // Example Widget from the codemirror 6 api doc.
 class CallTypesWidget extends WidgetType {
-    constructor(readonly owner: Icon, readonly mut: Icon) { super() }
+    constructor(readonly owner: ColorDiffIco, readonly mut: ColorDiffIco) { super() }
 
     eq(other: CallTypesWidget) {
         return other.owner == this.owner && other.mut == this.mut;
@@ -198,38 +254,3 @@ class CallTypesWidget extends WidgetType {
 
     ignoreEvent() { return false }
 }
-
-// ----------------------------------------
-
-type Icon {
-    class_name: string,
-    color_expected: `rgba(${number},${number},${number},${number})`,
-    color_actual: `rgba(${number},${number},${number},${number})`,
-}
-
-let setMethodCallPoints = StateEffect.define<Array<[Icon, Icon, number]>>();
-
-let  methodCallPoint = (ico_o, ico_m) =>
-    Decoration.widget({
-    widget: new CallTypesWidget(ico_o, ico_m),
-    side: 0,
-});
-
-let methodCallPoints = StateField.define<DecorationSet>({
-    create: () => Decoration.none,
-    update(points, transactions) {
-
-        console.log(transactions);
-
-        for (let e of transactions.effects) {
-            if (e.is(setMethodCallPoints)) {
-                console.log(e);
-                return RangeSet.of(e.value.map(([ico_o, ico_m, from]) =>
-                    methodCallPoint(ico_o, ico_m).range(from)));
-            }
-        }
-
-        return points;
-    },
-    provide: f => EditorView.decorations.from(f),
-});
