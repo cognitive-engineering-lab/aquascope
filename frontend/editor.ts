@@ -1,4 +1,5 @@
 import { basicSetup } from "./setup"
+import { vim } from "@replit/codemirror-vim"
 import {
     EditorView, WidgetType,
     Decoration, DecorationSet,
@@ -6,21 +7,42 @@ import {
 } from "@codemirror/view"
 import {
     EditorState, StateField,
-    StateEffect, RangeSet
+    StateEffect, RangeSet,
+    Compartment
 } from "@codemirror/state"
 import { rust } from "@codemirror/lang-rust"
 import * from "./types"
 
 const initial_code: string = `
 // Please start typing :)
+
+#[derive(Debug, Default)]
+struct Box {
+    value: i32,
+}
+
+impl Box {
+    fn inc(&mut self) {
+        self.value += 1;
+    }
+}
+
 fn main() {
 
-    let v = vec![1, 2, 3];
-    v.push(0);
+    let v1 = vec![1, 2, 3];
+    v1.push(0);
+
+    let v2 = &mut vec![1, 2, 3];
+    v2.push(0);
+
+    let b1 = &Box::default();
+    b1.inc();
 
     println!("Gruëzi, Weltli");
 }
 `;
+
+let readOnly = new Compartment
 
 export class Editor {
     private view: EditorView;
@@ -29,8 +51,10 @@ export class Editor {
         let initial_state = EditorState.create({
             doc: initial_code,
             extensions: [
+                vim(),
                 basicSetup,
                 rust(),
+                readOnly.of(EditorState.readOnly.of(false)),
                 methodCallPoints
             ],
         });
@@ -47,57 +71,72 @@ export class Editor {
         return this.view.state.doc.toString();
     }
 
+    public toggle_readonly(b: boolean): void {
+        this.view.dispatch({
+            effects: [readOnly.reconfigure(EditorState.readOnly.of(b))]
+        });
+    }
+
+    // Ideally we could just allow the receiver marks to stay until
+    // the code changes in the editor. TODO
+    public remove_receiver_types(): void {
+        this.view.dispatch({
+            effects: [ setMethodCallPoints.of([]) ]
+        });
+    }
 
     // XXX this method gets called when the receiver types are received from
     // the backend, however, on `update` (e.g. someone is typing code) we
     // probably want them to go away.
-    public swap_receiver_type_widgets(method_call_points: ReceiverTypes): void {
+    public show_receiver_types(method_call_points: ReceiverTypes): void {
         this.view.dispatch({
-            effects: [setMethodCallPoints.of(
-                method_call_points.map((call_type: CallTypes) => {
-                    // FIXME I would like a more flexible way to represent
-                    // actual vs expected instead of explicitly using colors
-                    // in the Icon type. Ideally, I could have some modifier
-                    // which will change the types, I may not have enough knowledge
-                    // about the DOM to create that right now.
-                    //
-                    // Regardless this is pretty ugly.
-                    let high_color = `rgba(112,128,144,1)`;
-                    let low_color = `rgba(233,236,238,1)`;
-                    let color = (b) => (b ? high_color : low_color);
+            effects: [
+                // Process the set of visual marks that need to be included.
+                setMethodCallPoints.of(
+                    method_call_points.map((call_type: CallTypes) => {
+                        // FIXME I would like a more flexible way to represent
+                        // actual vs expected instead of explicitly using colors
+                        // in the Icon type. Ideally, I could have some modifier
+                        // which will change the types, I may not have enough knowledge
+                        // about the DOM to create that right now.
+                        //
+                        // Regardless this is pretty ugly.
+                        let high_color = `rgba(112,128,144,1)`;
+                        let low_color = `rgba(233,236,238,1)`;
+                        let color = (b) => (b ? high_color : low_color);
 
-                    let ts_actual: TypeState = call_type.actual.of_type;
-                    let ts_expected: TypeState = call_type.expected.of_type;
+                        let ts_actual: TypeState = call_type.actual.of_type;
+                        let ts_expected: TypeState = call_type.expected.of_type;
 
-                    let [a_o, a_m] =
-                        (("Owned" in ts_actual) ?
-                            [true, ts_actual.Owned.mutably_bound] :
-                            [false, ts_actual.Ref.is_mut]);
+                        let [a_o, a_m] =
+                            (("Owned" in ts_actual) ?
+                                [true, ts_actual.Owned.mutably_bound] :
+                                [false, ts_actual.Ref.is_mut]);
 
-                    let [e_o, e_m] =
-                        (("Owned" in ts_expected) ?
-                            [true, ts_expected.Owned.mutably_bound] :
-                            [false, ts_expected.Ref.is_mut]);
+                        let [e_o, e_m] =
+                            (("Owned" in ts_expected) ?
+                                [true, ts_expected.Owned.mutably_bound] :
+                                [false, ts_expected.Ref.is_mut]);
 
-                    let owned_ico: Icon = {
-                        class_name: "fa-square",
-                        color_expected: color(e_o),
-                        color_actual: color(a_o)
-                    };
+                        let owned_ico: Icon = {
+                            class_name: "fa-square",
+                            color_expected: color(e_o),
+                            color_actual: color(a_o)
+                        };
 
-                    let mut_ico: Icon = {
-                        class_name: "fa-circle",
-                        color_expected: color(e_m),
-                        color_actual: color(a_m)
-                    };
+                        let mut_ico: Icon = {
+                            class_name: "fa-circle",
+                            color_expected: color(e_m),
+                            color_actual: color(a_m)
+                        };
 
-                    // HACK the ending character of the actual type
-                    // might not actually be right before the dereference
-                    // operator `.`, do some testing and then we can probably
-                    // use the character preceding the expected `char_start`.
-                    let loc = call_type.actual.range.char_end;
-                    return [owned_ico, mut_ico, loc];
-                }))]
+                        // HACK the ending character of the actual type
+                        // might not actually be right before the dereference
+                        // operator `.`, do some testing and then we can probably
+                        // use the character preceding the expected `char_start`.
+                        let loc = call_type.expected.range.char_start - 1;
+                        return [owned_ico, mut_ico, loc];
+                    }))]
         });
     }
 }
@@ -170,6 +209,9 @@ let  methodCallPoint = (ico_o, ico_m) =>
 let methodCallPoints = StateField.define<DecorationSet>({
     create: () => Decoration.none,
     update(points, transactions) {
+
+        console.log(transactions);
+
         for (let e of transactions.effects) {
             if (e.is(setMethodCallPoints)) {
                 console.log(e);
@@ -178,7 +220,7 @@ let methodCallPoints = StateField.define<DecorationSet>({
             }
         }
 
-        return RangeSet.of([]);
+        return points;
     },
     provide: f => EditorView.decorations.from(f),
 });

@@ -24,6 +24,7 @@
     "@codemirror/search": "^6.2.1",
     "@codemirror/state": "^6.1.2",
     "@codemirror/view": "^6.3.1",
+    "@replit/codemirror-vim": "^6.0.3",
     "abortcontroller-polyfill": "^1.7.5",
     "acorn": "^8.8.0",
     "ansi-styles": "^4.3.0",

@@ -23,7 +23,7 @@ type ServerResponse = {
 };
 
 window.onload = async () => {
-    let recv_t_btn: HTMLElement = document.getElementById("receiver_types_btn");
+    let show_rcvr_types_toggle: HTMLElement = document.getElementById("show_receiver_types");
     let editor_element: HTMLElement = document.getElementById("editor");
 
     globals = {
@@ -33,18 +33,23 @@ window.onload = async () => {
         },
     };
 
-    recv_t_btn.addEventListener("click", (e:Event) =>
-       refresh_receiver_vis());
+    show_rcvr_types_toggle.addEventListener("click", (e:Event) => {
+        globals.editor.toggle_readonly(show_rcvr_types_toggle.checked);
+        if (show_rcvr_types_toggle.checked) {
+            return refresh_receiver_vis();
+        }
 
+        return globals.editor.remove_receiver_types();
+    });
 }
 
-async function refresh_receiver_vis() {
+async function refresh_receiver_vis(show_marks: boolean) {
     get_receiver_types()
         .then((output: BackendOutput<ReceiverTypes>) => {
             if (output.type === "output") {
                 console.log("output is successful");
                 console.log(output.value);
-                return globals.editor.swap_receiver_type_widgets(output.value);
+                return globals.editor.show_receiver_types(output.value);
             } else {
                 console.log("An error occurred");
                 console.log(output);
