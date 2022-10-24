@@ -77,6 +77,20 @@
                        (+ (* ar row) ad)
                        disk))))
 
+(define (filled-circle d #:draw-border? [db? #true]
+                         #:border-width [bw 1]
+                         #:border-color [bc "black"]
+                         #:color [c "white"]
+                         #:brush-style [bstyle 'solid])
+  (let ([brush (new brush% [style bstyle] [color c])]
+        [pen (new pen% [width (if db? bw 0)] [color (if db? bc c)])])
+    (dc-with-restore
+       (dc dx dy)
+       (send dc set-brush brush)
+       (send dc set-pen pen)
+       (send dc draw-ellipse dx dy d d)
+       d d)))
+
 (define (filled-triangle h base
                          #:draw-border? [db? #true]
                          #:border-width [bw 1]

@@ -250,6 +250,9 @@
       (values (+ ci (string-length (group-text g)))
               (cons ns ls)))))
 
+;; -----------------------
+;; Expected / Actual panel
+
 
 ;; ----------------------
 ;; Sample pieces of code
@@ -429,6 +432,116 @@ fn main() {
     // requires('4, Loan1)
 
     take::<Vec<&'6 i32>>(v);
+}
+```
+  )
+
+;; Progression of show-loans-0-1
+
+(define show-loans-0-0
+  #<<```
+// Goal: detect overlapping borrows
+//
+// iter :: <'a, T>(&'a self) -> Iterator<Item = 'a T>
+//
+fn remove_zeros(v: &'`S@1~ ` mut Vec<i32>) {
+
+  for (t: (&'`S@3~ ` i32), i) in (&'`S@2~ ` v).iter().enumerate().rev() {
+
+    if *t == 0 {
+
+      (&'`S@4~ ` mut v).remove(i);
+
+    }
+
+  }
+
+}
+```
+  )
+
+(define show-loans-0-1
+  #<<```
+// Goal: detect overlapping borrows
+//
+// iter :: <'a, T>(&'a self) -> Iterator<Item = 'a T>
+//
+fn remove_zeros(v: &'`S@1~ ` mut Vec<i32>) {
+
+  for (t: (&'`S@3~ ` i32), i) in (&'`S@3~ ` v).iter().enumerate().rev() {
+
+    if *t == 0 {
+
+      (&'`S@4~ ` mut v).remove(i);
+
+    }
+
+  }
+
+}
+```
+  )
+
+(define panel-show-loans-0-1
+  (let* ([make-set (lambda (n #:bs [bs 'solid])
+                     (define c (hash->color n))
+                     (cellophane
+                      (filled-circle 80
+                                     #:draw-border? #t
+                                     #:border-width 2
+                                     #:border-color c
+                                     #:color c
+                                     #:brush-style bs)
+                      0.6))]
+         [make-e-set (lambda (n) (make-set n #:bs 'crossdiag-hatch))])
+    (define blue-set (make-set 1))
+    (define red-set (make-set 3))
+    (define green-set (make-set 4))
+    (define ex-blue-set (make-e-set 1))
+    (define ex-red-set (make-e-set 3))
+    (define ex-green-set (make-e-set 4))
+    (define (overlap-sets s1 s2)
+      (hc-append -10 s1 s2))
+    (frame (inset
+            (vc-append 10
+                       (overlap-sets red-set green-set)
+
+                       (hc-append 10 ex-red-set ex-green-set)
+
+                       )
+            10))
+    ))
+
+(define (show-loans-0-progression)
+  (define p
+    (vl-append 20
+               (render-code show-loans-0-0)
+               (hc-append 50 (render-code show-loans-0-1) panel-show-loans-0-1)))
+  (send (pict->bitmap p 'smoothed) save-file "show-loans-0-progression.png" 'png)
+  p)
+
+(define show-loans-1-0
+  #<<```
+struct TestResult { scores: Vec<usize>, min: Option<usize> }
+
+impl TestResult {
+
+  pub fn get_min(&self) -> &Option<usize> { &self.min }
+
+  pub fn finalize(&mut self) {
+
+    if let Some(min) = self.get_min() {
+
+      for score in self.scores.iter_mut() {
+
+        *score = (*score).max(*min);
+
+      }
+
+    }
+
+  }
+
 }
 ```
   )

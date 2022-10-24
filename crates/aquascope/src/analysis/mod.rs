@@ -67,29 +67,57 @@ pub fn compute_context<'a, 'tcx>(
     //     type Path = MovePathIndex;
     // }
     // ```
-    log::debug!("Input Facts: {:?}", body_with_facts.input_facts);
+    // log::debug!("Input Facts: {:?}", body_with_facts.input_facts);
+    // log::debug!("Output Facts: {:?}", body_with_facts.output_facts);
 
-    log::debug!("Output Facts: {:?}", body_with_facts.output_facts);
+    log::debug!(
+      "Loans issued in body {:?}",
+      body_with_facts.input_facts.loan_issued_at
+    );
 
-    let naive_output =
-      Output::compute(&body_with_facts.input_facts, Algorithm::Naive, true);
+    log::debug!(
+      "Loan invalidated at {:?}",
+      body_with_facts.input_facts.loan_invalidated_at
+    );
 
-    if !naive_output.errors.is_empty() {
-      log::debug!("THERE IS A BORROWCK ERROR!");
-      todo!();
-    }
+    // HACK this is essentially copying the
+    // `LocationTable` logic from `rustc_borrowck::location`.
 
-    log::debug!("No borrowck errors found.");
+    let mut num_points = 0;
+    let bbds: Vec<(usize, &Vec<rustc_middle::mir::Statement<'tcx>>)> =
+      body_with_facts
+        .body
+        .basic_blocks
+        .iter()
+        .map(|block_data| {
+          let v = num_points;
+          num_points += (block_data.statements.len() + 1) * 2;
+          (v, &block_data.statements)
+        })
+        .collect();
 
-    log::debug!("Extracting information for: {:?}", body_id.hir_id.local_id);
+    log::debug!("Body Statements {:?}", bbds);
 
-    let input_facts = &body_with_facts.input_facts;
-    let local_point: u32 = body_id.hir_id.local_id.into();
-    let Some((path, point)) = input_facts
-      .path_assigned_at_base
-      .iter()
-      .filter(|(_, pnt)| pnt.as_u32() == local_point)
-      .next() else { todo!() };
+    // TODO
+    // let naive_output =
+    //   Output::compute(&body_with_facts.input_facts, Algorithm::Naive, true);
+
+    // if !naive_output.errors.is_empty() {
+    //   log::debug!("THERE IS A BORROWCK ERROR!");
+    //   todo!();
+    // }
+
+    // log::debug!("No borrowck errors found.");
+
+    // log::debug!("Extracting information for: {:?}", body_id.hir_id.local_id);
+
+    // let input_facts = &body_with_facts.input_facts;
+    // let local_point: u32 = body_id.hir_id.local_id.into();
+    // let Some((path, point)) = input_facts
+    //   .path_assigned_at_base
+    //   .iter()
+    //   .filter(|(_, pnt)| pnt.as_u32() == local_point)
+    //   .next() else { todo!() };
 
     0
   })

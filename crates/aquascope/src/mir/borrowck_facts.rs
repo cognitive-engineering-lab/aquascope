@@ -18,6 +18,7 @@ pub fn override_queries(
   local: &mut query::Providers,
   _external: &mut query::ExternProviders,
 ) {
+  log::trace!("overriding mir_borrowck query");
   local.mir_borrowck = mir_borrowck;
 }
 
