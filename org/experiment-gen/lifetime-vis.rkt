@@ -54,7 +54,7 @@
 ;; ----------------------
 ;; Source style modifiers
 
-(define theme 'light #;'dark)
+(define theme #;'light 'dark)
 (define font-size 18)
 (define default-font (make-object font% font-size "Fantasque Sans Mono" 'modern))
 (define font-pnt-size (send default-font get-size #true))
@@ -603,11 +603,13 @@ fn add_to_stream<`S@1~ `, `S@2~ `, `S@3~ `>(
     (let* ([p (pin-arrow-line 15 base
                               3-set cb-find
                               1-set ct-find
+                              #:color default-font-color
                               #:style 'dot
                               #:solid? #f)]
            [p (pin-arrow-line 15 p
                               3-set cb-find
                               2-set ct-find
+                              #:color default-font-color
                               #:style 'dot
                               #:solid? #f)])
       (frame (inset p 10)))))
@@ -621,6 +623,83 @@ fn add_to_stream<`S@1~ `, `S@2~ `, `S@3~ `>(
                           show-loans-1-tree))))
   (send (pict->bitmap p 'smoothed) save-file "show-loans-1-options.png" 'png)
   p)
+
+(define show-loans-2
+  #<<```
+fn main() {
+    let r: &`S@1~ ` i32;
+    {
+      `H@2~{` let x: i32 = 5;
+        r = &`L@2@0~ ` x;
+    } `H@2~}`
+
+    println!("r: {}", r);
+}
+```
+  )
+
+(define show-loans-2-venn
+  (let* ()
+    (define 1-set (cellophane (colorize (disk 80) (hash->color 1)) 0.5))
+    (define 2-loc (filled-rectangle 15 20
+                                    #:draw-border? #t
+                                    #:border-width 2
+                                    #:border-color (hash->color 2)
+                                    #:color (hash->color 2)))
+    (define p
+      (cc-superimpose 1-set 2-loc))
+    (frame (inset p 10))))
+
+(define (show-loans-2-combined)
+  (define p
+    (let* ([c (render-code show-loans-2)])
+    (ht-append 40 c show-loans-2-venn)))
+  (send (pict->bitmap p 'smoothed) save-file "show-loans-2-options.png" 'png)
+  p)
+
+(define show-loans-3
+  #<<```
+fn main() {
+  `H@3~{` let y: i32 = 0;
+    let r: &`S@1~ ` i32;
+    {
+      `H@2~{` let x: i32 = 5;
+        r = if false {
+          &`L@2@0~ ` x
+        } else {
+          &`L@3@0~ ` y
+        }
+    } `H@2~}`
+
+    println!("r: {}", r);
+} `H@3~}`
+```
+  )
+
+(define show-loans-3-venn
+  (let* ()
+    (define 1-set (cellophane (colorize (disk 80) (hash->color 1)) 0.5))
+    (define 2-loc (filled-rectangle 15 20
+                                    #:draw-border? #t
+                                    #:border-width 2
+                                    #:border-color (hash->color 2)
+                                    #:color (hash->color 2)))
+    (define 3-loc (filled-rectangle 15 20
+                                    #:draw-border? #t
+                                    #:border-width 2
+                                    #:border-color (hash->color 3)
+                                    #:color (hash->color 3)))
+    (define p
+      (cc-superimpose 1-set (hc-append 15 2-loc 3-loc)))
+    (frame (inset p 10))))
+
+(define (show-loans-3-combined)
+  (define p
+    (let* ([c (render-code show-loans-3)])
+    (ht-append 40 c show-loans-3-venn)))
+  (send (pict->bitmap p 'smoothed) save-file "show-loans-3-options.png" 'png)
+  p)
+
 
 ;; -----------------------
 ;; Main lifetime renderers
