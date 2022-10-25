@@ -522,29 +522,105 @@ fn remove_zeros(v: &'`S@1~ ` mut Vec<i32>) {
 
 (define show-loans-1-0
   #<<```
-struct TestResult { scores: Vec<usize>, min: Option<usize> }
+fn add_to_stream<`S@1~ `, `S@2~ `, `S@3~ `>(
 
-impl TestResult {
+  iter: impl Iterator<Item = i32> + `S@1~ `,
 
-  pub fn get_min(&self) -> &Option<usize> { &self.min }
+  x: &`S@2~ ` i32
 
-  pub fn finalize(&mut self) {
+) -> impl Iterator<Item = i32> + `S@3~ ` {
 
-    if let Some(min) = self.get_min() {
-
-      for score in self.scores.iter_mut() {
-
-        *score = (*score).max(*min);
-
-      }
-
-    }
-
-  }
+  iter.map(move |n| n + *x)
 
 }
 ```
   )
+
+(define show-loans-1-venn
+  (let* ([make-set (lambda (n #:bs [bs 'solid])
+                     (define c (hash->color n))
+                     (cellophane
+                      (filled-circle 80
+                                     #:draw-border? #t
+                                     #:border-width 2
+                                     #:border-color c
+                                     #:color c
+                                     #:brush-style bs)
+                      0.6))]
+         [make-e-set (lambda (n) (make-set n #:bs 'crossdiag-hatch))])
+    (define 1-set (make-set 1))
+    (define 2-set (make-set 2))
+    (define 3-set (make-set 3))
+
+    (define 1-e-set (make-e-set 1))
+    (define 2-e-set (make-e-set 2))
+    (define 3-e-set (make-e-set 3))
+
+    (define actual
+      (hc-append 20 1-set 2-set 3-set))
+
+    (define expected
+      (let* ([big-3 (scale 3-e-set 1.5)]
+             [small-1 (scale 1-e-set 0.5)]
+             [small-2 (scale 2-e-set 0.5)]
+             [p (pin-over big-3
+                          (/ (pict-width small-1) 4)
+                          (- (/ (pict-width big-3) 2)
+                             (/ (pict-height small-2) 2))
+                          small-1)]
+             [p (pin-over p
+                          (- (pict-width p) (* (pict-width small-2) 1.25))
+                          (- (/ (pict-height big-3) 2)
+                             (/ (pict-height small-2) 2))
+                          small-2)])
+        p))
+    (frame
+     (inset
+      (vl-append 20
+                 actual expected) 10))))
+
+(define show-loans-1-tree
+  (let* ([make-set (lambda (n #:bs [bs 'solid])
+                     (define c (hash->color n))
+                     (cellophane
+                      (filled-circle 80
+                                     #:draw-border? #t
+                                     #:border-width 2
+                                     #:border-color c
+                                     #:color c
+                                     #:brush-style bs)
+                      0.6))]
+         [make-e-set (lambda (n) (make-set n #:bs 'crossdiag-hatch))])
+    (define 1-set (make-set 1))
+    (define 2-set (make-set 2))
+    (define 3-set (make-set 3))
+
+    (define base
+      (vc-append 40
+                 3-set
+                 (hc-append 40 1-set 2-set)))
+
+    (let* ([p (pin-arrow-line 15 base
+                              3-set cb-find
+                              1-set ct-find
+                              #:style 'dot
+                              #:solid? #f)]
+           [p (pin-arrow-line 15 p
+                              3-set cb-find
+                              2-set ct-find
+                              #:style 'dot
+                              #:solid? #f)])
+      (frame (inset p 10)))))
+
+(define (show-loans-1-combined)
+  (define p
+    (let* ([c (render-code show-loans-1-0)])
+    (vl-append 40 c
+               (ht-append 20
+                          show-loans-1-venn
+                          show-loans-1-tree))))
+  (send (pict->bitmap p 'smoothed) save-file "show-loans-1-options.png" 'png)
+  p)
 
 ;; -----------------------
 ;; Main lifetime renderers
