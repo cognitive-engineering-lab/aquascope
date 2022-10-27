@@ -475,3 +475,92 @@ fn main() {
       println!("r: {}",  r: @c[1] = { @l[2 1 'crossdiag-hatch], @l[3 1] });
   } @h[3]{@"}"}
 }
+
+;; using a POV value
+
+@define/source[show-loans-4-value-0]{
+  fn main() {
+      let y: i32 = 0
+      let r: &i32
+      {
+         let x: i32 @e[2] = 5
+          r = if false {
+            &x
+          } else {
+            &y
+          }
+      }
+
+      println!("r: {}", r);
+  }
+}
+
+@define/source[show-loans-4-value-1]{
+  fn main() {
+      let y: i32 = 0
+      let r: &i32
+      {
+         @h[2]{@"{"} let x: i32 @e[2] = 5
+          r = if false {
+            &@arr[11 6 2]@l[2 1]x
+          } else {
+            &y
+          }
+      } @h[2]{@"}"}
+
+      println!("r: {}", r);
+  }
+}
+
+;; using a POV usage
+
+@define/source[show-loans-4-usage-0]{
+  fn main() {
+      let y: i32 = 0
+      let r: &i32
+      {
+          let x: i32 = 5
+          r = if false {
+            &x
+          } else {
+            &y
+          }
+      }
+
+      println!("r: {}", r @c[1 'fdiagonal-hatch]);
+  }
+}
+
+@define/source[show-loans-4-usage-1]{
+  fn main() {
+    @h[3]{@"{"}  let y: i32 = 0
+      let r: &i32
+      {
+         @h[2]{@"{"} let x: i32 = 5
+          r = if false {
+            &@l[2 1 'crossdiag-hatch]x
+          } else {
+            &@l[3 1] y
+          }
+      } @h[2]{@"}"}
+
+      println!("r: {}", r @arr[-13 -4 3]@arr[-13 -6 2]@c[1 'crossdiag-hatch]);
+  } @h[3]{@"}"}
+}
+
+@define/source[show-loans-4-usage-2]{
+  fn main() {
+    @h[3]{@"{"}  let y: i32 = 0
+      let r: &i32
+      {
+         @h[2]{@"{"} let x: i32 = 5
+          r = if false {
+            &@l[2 1 'crossdiag-hatch]x
+          } else {
+            &@l[3 1] y
+          }
+      } @h[2]{@"}"}
+
+      println!("r: {}", r @arr[-22 1 3]@arr[-18 -2 2]@c[1 'crossdiag-hatch]);
+  } @h[3]{@"}"}
+}

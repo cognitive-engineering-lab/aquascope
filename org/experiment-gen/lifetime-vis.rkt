@@ -7,11 +7,12 @@
          racket/draw
          racket/function
          pict
+         images/icons/stickman
          "utils.rkt")
 
 (provide source-block
          define/source
-         h c l
+         arr e h c l
          hash->color
          font-size
          default-font-color)
@@ -154,8 +155,60 @@
         circ)
        row col)))
 
+(define (exit-drawer pin-at-row-col glyph-width line-height meta)
+  (define c (hash->color (hash-ref meta 'color)))
+  (define col (hash-ref meta 'col))
+  (define row (hash-ref meta 'row))
+  (lambda (base)
+    (define man
+      (bitmap
+       (running-stickman-icon
+        0
+        #:height line-height
+        #:arm-color c
+        #:head-color c
+        #:body-color c)))
+    (pin-at-row-col
+     base
+     (cc-superimpose
+      (blank glyph-width line-height)
+      man)
+     row col)))
+
+(define (arrow-drawer pin-at-row-col glyph-width line-height meta)
+  (define c (hash->color (hash-ref meta 'color)))
+  (define col (hash-ref meta 'col))
+  (define row (hash-ref meta 'row))
+  (define dx (hash-ref meta 'dx))
+  (define dy (hash-ref meta 'dy))
+  (define to-find (if (dy . < . 0) cb-find ct-find))
+  (define from-find (if (dy . < . 0) ct-find cb-find))
+  (lambda (base)
+    (define start (blank glyph-width line-height))
+    (define end (blank glyph-width line-height))
+    (define with-start
+      (pin-at-row-col
+       base
+       start
+       row col))
+    (define with-both
+      (pin-at-row-col
+       with-start
+       end
+       (+ row dy) (+ col dx)))
+    (pin-arrow-line 10
+                    with-both
+                    start from-find
+                    end to-find
+                    #:color c)))
+
 ;; FIXME this got really hacky after the rewrite
 (define (render-parsed-source ls)
+
+  (define empty-group
+    (group " "
+           (make-immutable-hasheq)
+           basic-styles))
 
   ;; XXX Pre-rendering the lines might not work (or perhaps it'll enable)
   ;; adding modifying styles to a line.
@@ -163,11 +216,23 @@
     (map (lambda (l)
             (apply
              hc-append ;; glue word groups together
-             (map (lambda (g)
+
+             (foldr (lambda (g acc)
+                      (define t (group-text g))
+                      (define f (group-font g))
+                      (define c (group-color g))
+                      (cons (text t (cons c f)) acc))
+                    ;; Keep the list with a space at the end, this
+                    ;; way blank lines will get rendered. There are
+                    ;; better ways to handle this but :shrug:
+                    (list (text " "))
+                    l)
+             #;(map (lambda (g)
                     (define t (group-text g))
                     (define f (group-font g))
                     (define c (group-color g))
-                    (text t (cons c f))) l))) ls))
+                    (text t (cons c f))) l)
+             )) ls))
 
   ;; HACK get the actual line-height based on the picture
   ;; height. This is caused by added spacing in the fonts.
@@ -206,6 +271,13 @@
 ;; ------------------
 ;; Internal enrichers
 
+(define (e [clr 0])
+  (define mta
+    (make-immutable-hasheq
+     `((visual-elem? . ,exit-drawer)
+       (color . ,clr))))
+  (group " " mta basic-styles))
+
 (define/contract (h c v)
   (color/c string? . -> . group?)
   (group v (make-immutable-hasheq)
@@ -234,6 +306,18 @@
        (length . ,h)
        (varargs . ,styles))))
   (group " " mta basic-styles))
+
+(define/contract (arr dx dy [clr 0] . styles)
+  (->* (integer? integer?) (color/c) #:rest (listof any/c)
+       group?)
+  (define mta
+    (make-immutable-hasheq
+     `((visual-elem? . ,arrow-drawer)
+       (color . ,clr)
+       (dx . ,dx)
+       (dy . ,dy)
+       (varargs . ,styles))))
+  (group "" mta basic-styles))
 
 (define (tt word)
   (make-basic-group word))
