@@ -1,4 +1,4 @@
-#lang racket
+#lang at-exp racket
 
 (require pict
          "lifetime-vis.rkt"
@@ -7,12 +7,16 @@
 ;; ----------------------
 ;; Sample pieces of code
 
-;; --- Annotation Guide ---
+;; TODO all previous attempts that were using the embedded string
+;; style with `render-code` are not longer valid. If they want to
+;; be used again translate them to using the at-exp notation.
+
+;; --- Annotation Guide --- DEPRECATED
 ;;   NOTE lifetimes do not replace space in the provided text string.
 ;; - (L color height ...) lifetime
 ;; - (H color ...) highlight text
 
-(define simple-lifetime-0
+#;(define simple-lifetime-0
 #<<```
 fn foo() {
 `L@2@5`     let `H@2~x`;
@@ -27,7 +31,7 @@ fn foo() {
 
 ;; using cross-hatch as expectation
 ;; no mut / immut distinction made
-(define simple-lifetime-1
+#;(define simple-lifetime-1
 #<<```
 fn foo() {
 `L@0@5`    let mut `H@0~s` = String::from("hello");
@@ -42,7 +46,7 @@ fn foo() {
 
 ;; using cellophane as expectation
 ;; using cross-hatch as ref
-(define simple-lifetime-2
+#;(define simple-lifetime-2
 #<<```
 fn foo() {
 `L@0@0@cellophane`  `L@0@0`    let mut `H@0~s` = String::from("hello");
@@ -59,7 +63,7 @@ fn foo() {
 
 ;; lifetimes with error : read after mutable ref
 ;; TODO
-(define simple-lifetime-3
+#;(define simple-lifetime-3
 #<<```
 fn foo() {
    let mut `H@0~s` = String::from("hello");
@@ -76,7 +80,7 @@ fn foo() {
 ;; OUTLIVES relations
 ;; Showing the lifetimes of values, and references show the
 ;; set of loans that they could point to.
-(define simple-lifetime-4
+#;(define simple-lifetime-4
 #<<```
 fn foo() {
 `L@1@7`    let `H@1~v` = 10;
@@ -95,7 +99,7 @@ fn foo() {
 ;; lots of set relationships at each point. This is also
 ;; simplified from what the MIR / Polonius would produce so
 ;; some serious pruning needs to happen.
-(define simple-lifetime-4-issue-0
+#;(define simple-lifetime-4-issue-0
 #<<```
 fn foo() {
 `L@1@11`    let `H@1~v` = 10;
@@ -116,7 +120,7 @@ fn foo() {
 
 ;; This DOESN'T scale well to showing the information
 ;; about any rust body.
-(define simple-lifetime-4-issue-1
+#;(define simple-lifetime-4-issue-1
 #<<```
 fn foo() {
 `L@1@14`    let `H@1~v` = 10;
@@ -141,7 +145,7 @@ fn foo() {
 ;; TODO what invalidates a loan?
 ;; where does this information come from?
 ;; Can we get this from Rustc? (make a reproducable example pls)
-(define simple-lifetime-5
+#;(define simple-lifetime-5
 #<<```
 fn main() {
 
@@ -189,7 +193,7 @@ fn main() {
 ;; Outlives constraints. Danglinging pointers. Etc
 ;; Progression of show-loans-0-1
 
-(define show-loans-0-0
+#;(define show-loans-0-0
   #<<```
 // Goal: detect overlapping borrows
 //
@@ -211,7 +215,7 @@ fn remove_zeros(v: &'`S@1~ ` mut Vec<i32>) {
 ```
   )
 
-(define show-loans-0-1
+#;(define show-loans-0-1
   #<<```
 // Goal: detect overlapping borrows
 //
@@ -233,7 +237,7 @@ fn remove_zeros(v: &'`S@1~ ` mut Vec<i32>) {
 ```
   )
 
-(define panel-show-loans-0-1
+#;(define panel-show-loans-0-1
   (let* ([make-set (lambda (n #:bs [bs 'solid])
                      (define c (hash->color n))
                      (cellophane
@@ -263,7 +267,7 @@ fn remove_zeros(v: &'`S@1~ ` mut Vec<i32>) {
             10))
     ))
 
-(define (show-loans-0-progression)
+#;(define (show-loans-0-progression)
   (define p
     (vl-append 20
                (render-code show-loans-0-0)
@@ -271,7 +275,7 @@ fn remove_zeros(v: &'`S@1~ ` mut Vec<i32>) {
   (send (pict->bitmap p 'smoothed) save-file "show-loans-0-progression.png" 'png)
   p)
 
-(define show-loans-1-0
+#;(define show-loans-1-0
   #<<```
 fn add_to_stream<`S@1~ `, `S@2~ `, `S@3~ `>(
 
@@ -287,7 +291,7 @@ fn add_to_stream<`S@1~ `, `S@2~ `, `S@3~ `>(
 ```
   )
 
-(define show-loans-1-venn
+#;(define show-loans-1-venn
   (let* ([make-set (lambda (n #:bs [bs 'solid])
                      (define c (hash->color n))
                      (cellophane
@@ -330,7 +334,7 @@ fn add_to_stream<`S@1~ `, `S@2~ `, `S@3~ `>(
       (vl-append 20
                  actual expected) 10))))
 
-(define show-loans-1-tree
+#;(define show-loans-1-tree
   (let* ([make-set (lambda (n #:bs [bs 'solid])
                      (define c (hash->color n))
                      (cellophane
@@ -365,7 +369,7 @@ fn add_to_stream<`S@1~ `, `S@2~ `, `S@3~ `>(
                               #:solid? #f)])
       (frame (inset p 10)))))
 
-(define (show-loans-1-combined)
+#;(define (show-loans-1-combined)
   (define p
     (let* ([c (render-code show-loans-1-0)])
     (vl-append 40 c
@@ -375,7 +379,7 @@ fn add_to_stream<`S@1~ `, `S@2~ `, `S@3~ `>(
   (send (pict->bitmap p 'smoothed) save-file "show-loans-1-options.png" 'png)
   p)
 
-(define show-loans-2
+#;(define show-loans-2
   #<<```
 fn main() {
     let r: &`S@1~ ` i32;
@@ -390,7 +394,7 @@ fn main() {
 ```
   )
 
-(define show-loans-2-venn
+#;(define show-loans-2-venn
   (let* ()
     (define 1-set (cellophane (colorize (disk 80) (hash->color 1)) 0.5))
     (define 2-loc (filled-rectangle 15 20
@@ -402,14 +406,14 @@ fn main() {
       (cc-superimpose 1-set 2-loc))
     (frame (inset p 10))))
 
-(define (show-loans-2-combined)
+#;(define (show-loans-2-combined)
   (define p
     (let* ([c (render-code show-loans-2)])
     (ht-append 40 c show-loans-2-venn)))
   (send (pict->bitmap p 'smoothed) save-file "show-loans-2-options.png" 'png)
   p)
 
-(define show-loans-3
+#;(define show-loans-3
   #<<```
 fn main() {
   `H@3~{` let y: i32 = 0;
@@ -428,7 +432,7 @@ fn main() {
 ```
   )
 
-(define show-loans-3-venn
+#;(define show-loans-3-venn
   (let* ()
     (define 1-set (cellophane (colorize (disk 80) (hash->color 1)) 0.5))
     (define 2-loc (altered-rectangle 15 20
@@ -446,7 +450,7 @@ fn main() {
       (cc-superimpose 1-set (hc-append 15 2-loc 3-loc)))
     (frame (inset p 10))))
 
-(define (show-loans-3-combined)
+#;(define (show-loans-3-combined)
   (define p
     (let* ([c (render-code show-loans-3)])
     (hb-append 40 c show-loans-3-venn)))
@@ -456,21 +460,18 @@ fn main() {
 
 ;; How can we view these differently?
 
-(define show-loans-4
-  #<<```
-fn main() {
-  `H@3~{` let y: i32 = 0;
-    let r: &`S@1~ ` i32;
-    {
-      `H@2~{` let x: i32 = 5;
-        r = if false {
-          &`L@2@0~ ` x
-        } else {
-          &`L@3@0~ ` y
-        }
-    } `H@2~}`
-
-    println!("r: {}",  r: `S@1~ ` = {  `L@2@0@crossdiag-hatch~ `, `L@3@0~ ` });
-} `H@3~}`
-```
-  )
+@define/source[show-loans-4]{
+  fn main() {
+    @h[3]{@"{"} let y: i32 = 0
+      let r: &@c[1] i32
+      {
+        @h[2]{@"{"} let x: i32 = 5
+          r = if false {
+            &@l[2 1] x
+          } else {
+            &@l[3 1] y
+          }
+      } @h[2]{@"}"}
+      println!("r: {}",  r: @c[1] = { @l[2 1 'crossdiag-hatch], @l[3 1] });
+  } @h[3]{@"}"}
+}

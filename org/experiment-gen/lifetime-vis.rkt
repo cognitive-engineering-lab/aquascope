@@ -1,6 +1,8 @@
 #lang at-exp racket
 
-(require (for-syntax racket/syntax)
+(require (for-syntax racket/syntax
+                     syntax/parse)
+         syntax/parse
          racket/string
          racket/draw
          racket/function
@@ -8,8 +10,10 @@
          "utils.rkt")
 
 (provide source-block
-         render-code
+         define/source
+         h c l
          hash->color
+         font-size
          default-font-color)
 
 ;; LINKS
@@ -21,15 +25,12 @@
 ;; Visualizing large sets of data
 ;; https://www.yworks.com/pages/visualizing-database-relationships
 
-;; Regarding Polonius
-;; Vytautas often complains about a lack of information,
-;; I don't see why we can't create our own set of analyses
-;; using DataFrog that computes the things we want (naively).
-;; Things like outlives constraints, etc ... can be done
-;; separately.
-
 ;; ------------------------------------------------
 ;; Lifetime Things
+
+(define (color/c n)
+  (and (< 0 n)
+       (< n 11)))
 
 (define hash->color
   (let* ([color-wheel
@@ -78,7 +79,6 @@
 ;; ---------
 ;; Rendering
 
-
 (struct point (row col)  #:transparent)
 (define brush-styles '(transparent
                        solid
@@ -95,13 +95,67 @@
         [else (printf "[warn] ignoring pict modifier ~v\n" mod)
               pict]))
 
-(define-syntax-rule (cons-if cnd value ls)
-        (let ([t (thunk value)])
-          (if cnd (cons (t) ls) ls)))
+;; --------------
+;; Custom drawers
 
+(define (life-pen [c default-font-color]) (new pen% [width 1] [color c]))
+(define (life-brush c [sty 'transparent]) (new brush% [style sty] [color c]))
+
+(define ((pin-at-row-col glyph-width line-height) base p r c)
+    (pin-over base
+              (* glyph-width c)
+              (* line-height r)
+              p))
+
+(define (find-brush-style ls)
+    (car (foldl (lambda (v acc)
+                  (define cnd (member v brush-styles))
+                  (if cnd
+                      (cons (car cnd) acc)
+                      acc)) '(solid) ls)))
+
+  (define (rectangle-drawer pin-at-row-col glyph-width line-height meta)
+    (define line-span (hash-ref meta 'length))
+    (define c (hash->color (hash-ref meta 'color)))
+    (define varargs (hash-ref meta 'varargs '()))
+    (define col (hash-ref meta 'col))
+    (define row-from (hash-ref meta 'row))
+    (define brush-style (find-brush-style varargs))
+    (define p (if (eq? brush-style 'transparent) (life-pen c) (life-pen)))
+    (lambda (base)
+      (pin-at-row-col
+       base
+       (altered-rectangle
+        glyph-width
+        (* line-span line-height)
+        #:brush-style brush-style
+        #:color c)
+       row-from
+       col)))
+
+  (define (disk-drawer pin-at-row-col glyph-width line-height meta)
+    (define c (hash->color (hash-ref meta 'color)))
+    (define diameter (hash-ref meta 'width glyph-width))
+    (define varargs (hash-ref meta 'varargs '()))
+    (define col (hash-ref meta 'col))
+    (define row (hash-ref meta 'row))
+    (define brush-style (find-brush-style varargs))
+    (define p (if (eq? brush-style 'transparent) (life-pen c) (life-pen)))
+    (lambda (base)
+      (define circ
+        (filled-circle
+         diameter
+         #:brush-style brush-style
+         #:color c))
+      (pin-at-row-col
+       base
+       (cc-superimpose
+        (blank glyph-width line-height)
+        circ)
+       row col)))
+
+;; FIXME this got really hacky after the rewrite
 (define (render-parsed-source ls)
-  (define (life-pen [c default-font-color]) (new pen% [width 1] [color c]))
-  (define (life-brush c [sty 'transparent]) (new brush% [style sty] [color c]))
 
   ;; XXX Pre-rendering the lines might not work (or perhaps it'll enable)
   ;; adding modifying styles to a line.
@@ -121,87 +175,26 @@
   ;; Yeah, this is also a HACK
   (define glyph-width (/ line-height 2))
 
-  ;; --------------------------------
-  ;; Visual creators
-
-  (define (find-brush-style ls)
-    (car (foldl (lambda (v acc)
-                  (define cnd (member v brush-styles))
-                  (if cnd
-                      (cons (car cnd) acc)
-                      acc)) '(solid) ls)))
-
-  (define (pin-at-row-col base p r c)
-    (pin-over base
-              (* glyph-width c)
-              (* line-height r)
-              p))
-
-  (define (lifetime-drawer meta)
-    (define line-span (hash-ref meta 'length))
-    (define c (hash->color (hash-ref meta 'color)))
-    (define varargs (hash-ref meta 'varargs '()))
-    (define col (hash-ref meta 'col))
-    (define row-from (hash-ref meta 'row))
-    (define brush-style (find-brush-style varargs))
-    (define p (if (eq? brush-style 'transparent) (life-pen c) (life-pen)))
-    (lambda (base)
-      (pin-at-row-col
-       base
-       (altered-rectangle
-        glyph-width
-        (* line-span line-height)
-        #:brush-style brush-style
-        #:color c)
-       row-from
-       col)))
-
-  (define (set-member-drawer meta)
-    (define c (hash->color (hash-ref meta 'color)))
-    (define varargs (hash-ref meta 'varargs '()))
-    (define col (hash-ref meta 'col))
-    (define row (hash-ref meta 'row))
-    (define brush-style (find-brush-style varargs))
-    (define p (if (eq? brush-style 'transparent) (life-pen c) (life-pen)))
-    (lambda (base)
-      (printf "pinning circle at ~v ~v ~v\n" row col brush-style)
-      (define circ
-        (filled-circle
-         glyph-width
-         #:brush-style brush-style
-         #:color c))
-      (pin-at-row-col
-       base
-       (cc-superimpose
-        (blank glyph-width line-height)
-        circ)
-       row col)))
-
+  (define pin-at-r/c (pin-at-row-col glyph-width line-height))
   (define (ref-set-member-from-meta meta)
     (define c (hash->color (hash-ref meta 'color default-font-color)))
     (define varargs (hash-ref meta 'varargs '()))
     (void))
+
   (define drawers
     (for*/fold ([ds '()])
                ([l (in-list ls)]
                 [g (in-list l)])
       (define meta (group-meta g))
-      (define starts-lifetime? (hash-ref meta 'lifetime-start? #false))
-      (define loan-member? (hash-ref meta 'loan-elem? #false))
-      (define dp (cons-if starts-lifetime? (lifetime-drawer meta) ds))
-      (cons-if loan-member? (set-member-drawer meta) dp)))
+      (define draw-visual-elem (hash-ref meta 'visual-elem? #false))
+      (if draw-visual-elem
+          (cons (draw-visual-elem pin-at-r/c glyph-width line-height meta) ds)
+          ds)))
   (define base-render
     (apply vl-append rendered-lines))
+  ;; TODO add back in pict modifiers so we can apply things like cellophane
   (foldl (lambda (draw-it base)
            (draw-it base)) base-render drawers))
-
-;; -------
-;; Parsing
-
-;; DEPRECATED
-(define enriched-wrapper "`")
-(define value-sep "~")
-(define arg-sep "@")
 
 (define basic-styles
     (make-immutable-hasheq `((font . ,default-font)
@@ -210,25 +203,33 @@
 (define (make-basic-group w)
   (group w (make-immutable-hasheq) basic-styles))
 
+;; ------------------
 ;; Internal enrichers
 
-(define (h c v)
+(define/contract (h c v)
+  (color/c string? . -> . group?)
   (group v (make-immutable-hasheq)
          (hash-set basic-styles 'color
                    (hash->color c))))
 
-(define (c clr #:diameter [w 1] . styles)
+(define/contract (c clr #:diameter [w #false] . styles)
+  (->* (color/c) (#:diameter integer?) #:rest (listof any/c)
+       group?)
   (define mta
     (make-immutable-hasheq
-     `((loan-elem? . #true)
+     `((visual-elem? . ,disk-drawer)
        (color . ,clr)
        (varargs . ,styles))))
-  (group " " mta basic-styles))
+  (group " " (if w
+                 (hash-set mta 'width w)
+                 mta) basic-styles))
 
-(define (l c h . styles)
+(define/contract (l c h . styles)
+  (->* (color/c integer?) #:rest (listof any/c)
+       group?)
   (define mta
     (make-immutable-hasheq
-     `((lifetime-start? . #true)
+     `((visual-elem? . ,rectangle-drawer)
        (color . ,c)
        (length . ,h)
        (varargs . ,styles))))
@@ -237,56 +238,8 @@
 (define (tt word)
   (make-basic-group word))
 
-;; ---
-
-;; DEPRECATED
-(define (handle-enriched-word word)
-  (define e? (lambda (s) (or (string-contains? s value-sep)
-                        (string-contains? s arg-sep))))
-  (define split (split-string word "`"))
-  (define (make-enriched-group w)
-    (define-values (id v)
-      (match (split-string w value-sep)
-        [(list id) (values id "")]
-        [(list id v) (values id v)]))
-    (match (split-string id arg-sep)
-
-      [(list "H" c)
-       (h (string->number c) v)]
-      [(list "L" c h styles ...)
-       (apply l (list* (string->number c)
-                 (string->number h)
-                 styles))]
-      [(list "S" clr styles ...)
-       (apply c (list* (string->number clr) styles))]
-
-      [else (error 'make-enriched-group "invalid enriched definition" w)]))
-  (map (lambda (t)
-         ((if (e? t)
-              make-enriched-group
-              make-basic-group) t)) split))
-
-;; DEPRECATED use at-exp notation source-block instead
-(define (parse-source code)
-  (define enriched? (lambda (s) (string-contains? s enriched-wrapper)))
-  (define (handle-any-word word)
-    (if (enriched? word)
-        (handle-enriched-word word)
-        (list (make-basic-group word))))
-  (for/list ([(line ri) (in-indexed (split-string code "\n" ))])
-    (for/fold ([ci 0] [ls '()]
-               #:result (reverse ls))
-              ([g (in-list (handle-any-word line))])
-      (define ns (struct-copy group g
-                              [meta (hash-set* (group-meta g)
-                                               'row ri
-                                               'col ci)]))
-      (values (+ ci (string-length (group-text g)))
-              (cons ns ls)))))
-
 ;; -----------------------
 ;; Expected / Actual panel
-
 
 ;; Going back to overlapping borrows
 
@@ -313,12 +266,15 @@
 (define (rev-ll lss)
   (reverse (map reverse lss)))
 
-(define (source-block . args)
+
+;; -----------------------
+;; Main source renderers
+
+(define (source-block #:save-as [sa #false] . args)
   (define grouped-groups
     (for/fold ([ci 0] [ri 0] [ls '(())]
                      #:result (rev-ll ls))
              ([e (in-list args)])
-
      (define b
        (cond [(group? e) e]
              [(string? e) (tt e)]))
@@ -327,56 +283,15 @@
      (define nr (if (is-newline? g) (add1 ri) ri))
      (define nc (if (is-newline? g) 0 (+ next-width ci)))
      (values nc nr (cons-ll g ls (is-newline? g)))))
-  (render-parsed-source grouped-groups))
-
-;; Experimenting with at-exp
-
-
-(define show-loans-4
-@source-block{
-fn main() {
-    @h[3]{@"{"} let y: i32 = 0
-      let r: &@c[1] i32
-      {
-        @h[2]{@"{"} let x: i32 = 5
-          r = if false {
-            &@l[2 1] x
-          } else {
-            &@l[3 1] y
-          }
-      } @h[2]{@"}"}
-      println!("r: {}",  r: @c[1] = { @l[2 1 'crossdiag-hatch], @l[3 1] });
-  } @h[3]{@"}"}
-}
-
-  )
-
-#;(define show-loans-5
-  @source-block{
-
-  fn remove_zeros<@h[0]{'a}>(v: &@h[0]{'a} mut Vec<i32>) {
-    for t in v.iter() {
-      v.remove(0);
-    }
-  }
-
-}
-  )
-
-
-;; -----------------------
-;; Main lifetime renderers
-
-(define-syntax (render-code stx)
-  (syntax-case stx ()
-    [(_ src)
-     (with-syntax ([f (format-id #f "~a.png" #'src)])
-       #'(*render-code src (symbol->string 'f)))]
-    [(_ src f) #'(*render-code src f)]))
-
-(define (*render-code source fn #:save? [s? #true])
-  (define parsed (parse-source source))
-  (define p (render-parsed-source parsed))
-  (when s?
-    (send (pict->bitmap p 'smoothed) save-file fn 'png))
+  (define p (render-parsed-source grouped-groups))
+  (when sa
+    (send (pict->bitmap p 'smoothed)
+          save-file sa 'png))
   p)
+
+(define-syntax (define/source stx)
+  (syntax-parse stx
+    [(_ name:id srcs ...)
+     (with-syntax ([fn (format "~a.png" (syntax-e #'name))])
+       #'(define name
+           (source-block #:save-as fn srcs ...)))]))
