@@ -12,7 +12,7 @@
 
 (provide source-block
          define/source
-         arr e h c l
+         arr e h c l t
          hash->color
          font-size
          default-font-color)
@@ -115,45 +115,66 @@
                       (cons (car cnd) acc)
                       acc)) '(solid) ls)))
 
-  (define (rectangle-drawer pin-at-row-col glyph-width line-height meta)
-    (define line-span (hash-ref meta 'length))
-    (define c (hash->color (hash-ref meta 'color)))
-    (define varargs (hash-ref meta 'varargs '()))
-    (define col (hash-ref meta 'col))
-    (define row-from (hash-ref meta 'row))
-    (define brush-style (find-brush-style varargs))
-    (define p (if (eq? brush-style 'transparent) (life-pen c) (life-pen)))
-    (lambda (base)
-      (pin-at-row-col
-       base
-       (altered-rectangle
-        glyph-width
-        (* line-span line-height)
-        #:brush-style brush-style
-        #:color c)
-       row-from
-       col)))
+(define (rectangle-drawer pin-at-row-col glyph-width line-height meta)
+  (define line-span (hash-ref meta 'length))
+  (define c (hash->color (hash-ref meta 'color)))
+  (define varargs (hash-ref meta 'varargs '()))
+  (define col (hash-ref meta 'col))
+  (define row-from (hash-ref meta 'row))
+  (define brush-style (find-brush-style varargs))
+  (define p (if (eq? brush-style 'transparent) (life-pen c) (life-pen)))
+  (lambda (base)
+    (pin-at-row-col
+     base
+     (altered-rectangle
+      glyph-width
+      (* line-span line-height)
+      #:brush-style brush-style
+      #:color c)
+     row-from
+     col)))
 
-  (define (disk-drawer pin-at-row-col glyph-width line-height meta)
-    (define c (hash->color (hash-ref meta 'color)))
-    (define diameter (hash-ref meta 'width glyph-width))
-    (define varargs (hash-ref meta 'varargs '()))
-    (define col (hash-ref meta 'col))
-    (define row (hash-ref meta 'row))
-    (define brush-style (find-brush-style varargs))
-    (define p (if (eq? brush-style 'transparent) (life-pen c) (life-pen)))
-    (lambda (base)
-      (define circ
-        (filled-circle
-         diameter
-         #:brush-style brush-style
-         #:color c))
-      (pin-at-row-col
-       base
-       (cc-superimpose
-        (blank glyph-width line-height)
-        circ)
-       row col)))
+(define (disk-drawer pin-at-row-col glyph-width line-height meta)
+  (define c (hash->color (hash-ref meta 'color)))
+  (define diameter (hash-ref meta 'width glyph-width))
+  (define varargs (hash-ref meta 'varargs '()))
+  (define col (hash-ref meta 'col))
+  (define row (hash-ref meta 'row))
+  (define brush-style (find-brush-style varargs))
+  (define p (if (eq? brush-style 'transparent) (life-pen c) (life-pen)))
+  (lambda (base)
+    (define circ
+      (filled-circle
+       diameter
+       #:brush-style brush-style
+       #:color c))
+    (pin-at-row-col
+     base
+     (cc-superimpose
+      (blank glyph-width line-height)
+      circ)
+     row col)))
+
+(define (triangle-drawer pin-at-row-col glyph-width line-height meta)
+  (define c (hash->color (hash-ref meta 'color)))
+  (define w (hash-ref meta 'width glyph-width))
+  (define varargs (hash-ref meta 'varargs '()))
+  (define col (hash-ref meta 'col))
+  (define row (hash-ref meta 'row))
+  (define brush-style (find-brush-style varargs))
+  (define p (if (eq? brush-style 'transparent) (life-pen c) (life-pen)))
+  (lambda (base)
+    (define tri
+      (filled-triangle
+       w w
+       #:brush-style brush-style
+       #:color c))
+    (pin-at-row-col
+     base
+     (cc-superimpose
+      (blank glyph-width line-height)
+      tri)
+     row col)))
 
 (define (exit-drawer pin-at-row-col glyph-width line-height meta)
   (define c (hash->color (hash-ref meta 'color)))
@@ -226,15 +247,9 @@
                     ;; way blank lines will get rendered. There are
                     ;; better ways to handle this but :shrug:
                     (list (text " "))
-                    l)
-             #;(map (lambda (g)
-                    (define t (group-text g))
-                    (define f (group-font g))
-                    (define c (group-color g))
-                    (text t (cons c f))) l)
-             )) ls))
+                    l))) ls))
 
-  ;; HACK get the actual line-height based on the picture
+  ;; HACK this gets the actual line-height based on the picture
   ;; height. This is caused by added spacing in the fonts.
   (define line-height (pict-height (car rendered-lines)))
   ;; Yeah, this is also a HACK
@@ -290,6 +305,18 @@
   (define mta
     (make-immutable-hasheq
      `((visual-elem? . ,disk-drawer)
+       (color . ,clr)
+       (varargs . ,styles))))
+  (group " " (if w
+                 (hash-set mta 'width w)
+                 mta) basic-styles))
+
+(define/contract (t clr #:base [w #false] . styles)
+  (->* (color/c) (#:base integer?) #:rest (listof any/c)
+       group?)
+  (define mta
+    (make-immutable-hasheq
+     `((visual-elem? . ,triangle-drawer)
        (color . ,clr)
        (varargs . ,styles))))
   (group " " (if w

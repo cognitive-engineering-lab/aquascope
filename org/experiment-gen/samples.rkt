@@ -527,16 +527,16 @@ fn main() {
           }
       }
 
-      println!("r: {}", r @c[1 'fdiagonal-hatch]);
+      println!("r: {}", r @c[1 'crossdiag-hatch]);
   }
 }
 
 @define/source[show-loans-4-usage-1]{
   fn main() {
-    @h[3]{@"{"}  let y: i32 = 0
+    @h[3]{@"{"} let y: i32 = 0
       let r: &i32
       {
-         @h[2]{@"{"} let x: i32 = 5
+        @h[2]{@"{"} let x: i32 = 5
           r = if false {
             &@l[2 1 'crossdiag-hatch]x
           } else {
@@ -550,10 +550,10 @@ fn main() {
 
 @define/source[show-loans-4-usage-2]{
   fn main() {
-    @h[3]{@"{"}  let y: i32 = 0
+    @h[3]{@"{"} let y: i32 = 0
       let r: &i32
       {
-         @h[2]{@"{"} let x: i32 = 5
+        @h[2]{@"{"} let x: i32 = 5
           r = if false {
             &@l[2 1 'crossdiag-hatch]x
           } else {
@@ -563,4 +563,17 @@ fn main() {
 
       println!("r: {}", r @arr[-22 1 3]@arr[-18 -2 2]@c[1 'crossdiag-hatch]);
   } @h[3]{@"}"}
+}
+
+@define/source[show-loans-5]{
+@h[1]{@"{"}
+  @h[2]{@"{"}
+  fn add_to_stream(
+    iter: impl Iterator<Item = i32> + @t[1],
+    x: &@t[2] i32
+    ) -> impl Iterator<Item = i32>  + @t[1 'crossdiag-hatch] {
+      iter.map(move |n| n + *x)
+    }
+  @h[2]{@"}"}
+@h[1]{@"}"}
 }
