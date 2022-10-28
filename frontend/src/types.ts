@@ -20,7 +20,7 @@ interface FileNotFound {
 }
 export type BackendError = BuildError | AnalysisError | FileNotFound;
 
-interface BackendOutput<T> {
+export interface BackendOutput<T> {
   type: "output";
   value: T;
 }

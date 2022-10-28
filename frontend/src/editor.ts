@@ -12,7 +12,7 @@ import {
 } from "@codemirror/state"
 import { rust } from "@codemirror/lang-rust"
 import { indentUnit } from "@codemirror/language"
-import * from "./types"
+import * as ty from "./types"
 
 const initial_code: string =
     `// Please start typing :)
@@ -53,8 +53,8 @@ fn main() {
 let readOnly = new Compartment
 
 interface IconTransformer<Ico> {
-    make_widget(Ico, Ico): WidgetType;
-    from_call_types(CallTypes): [Ico, Ico, number];
+    make_widget(ico_l: Ico, ico_r: Ico): WidgetType;
+    from_call_types(call_types: ty.CallTypes): [Ico, Ico, number];
 }
 
 let set_method_call_points =
@@ -76,7 +76,7 @@ let method_call_points = StateField.define<DecorationSet>({
     provide: f => EditorView.decorations.from(f),
 });
 
-let method_call_point = (ico_o: Ico, ico_m: Ico): WidgetType => {
+let method_call_point = (ico_o: ColorDiffIco, ico_m: ColorDiffIco): Decoration => {
     return Decoration.widget({
         widget: ShapeT.make_widget(ico_o, ico_m),
         side: 0,
@@ -104,8 +104,6 @@ export class Editor {
             parent: dom,
         });
 
-
-        this.set_method_call_points
         this.view = initial_view;
     }
 
@@ -130,7 +128,7 @@ export class Editor {
     // XXX this method gets called when the receiver types are received from
     // the backend, however, on `update` (e.g. someone is typing code) we
     // probably want them to go away.
-    public show_receiver_types(method_call_points: ReceiverTypes): void {
+    public show_receiver_types(method_call_points: ty.ReceiverTypes): void {
         this.view.dispatch({
             effects: [
                 set_method_call_points.of(
@@ -153,27 +151,33 @@ export class Editor {
 
 type RGBA = `rgba(${number},${number},${number},${number})`;
 
-type ColorDiffIco {
+type Color = RGBA;
+
+type ColorDiffIco = {
     class_name: string,
     color_expected: RGBA,
     color_actual: RGBA,
-}
+};
+
 
 export let ShapeT: IconTransformer<ColorDiffIco> = {
+// export let ShapeT = {
 
-    make_widget(ico_l, ico_r) {
+
+    make_widget(ico_l: ColorDiffIco, ico_r: ColorDiffIco): WidgetType {
         return new CallTypesWidget(ico_l, ico_r);
-    }
+    },
 
-    from_call_types(call_type: CallTypes): [ColorDiffIco, ColorDiffIco, number] {
-        let high_color = `rgba(112,128,144,1)`;
-        let low_color = `rgba(233,236,238,1)`;
+
+    from_call_types(call_type: ty.CallTypes): [ColorDiffIco, ColorDiffIco, number] {
+        let high_color: RGBA = `rgba(${112},${128},${144},${1})`;
+        let low_color: RGBA = `rgba(${233},${236},${238},${1})`;
         let own_shape = "fa-square";
         let mut_shape = "fa-circle";
 
-        let color = (b) => (b ? high_color : low_color);
-        let ts_actual: TypeState = call_type.actual.of_type;
-        let ts_expected: TypeState = call_type.expected.of_type;
+        let color = (b: boolean) => (b ? high_color : low_color);
+        let ts_actual: ty.TypeState = call_type.actual.of_type;
+        let ts_expected: ty.TypeState = call_type.expected.of_type;
 
         let [a_o, a_m] =
             (("Owned" in ts_actual) ?
@@ -215,8 +219,9 @@ class CallTypesWidget extends WidgetType {
     }
 
     toDOM() {
-        let gen_ico = (name, color1, color2) => {
-            let make_name_at_size = (ico_name) => (n: number) => `fa ${ico_name} fa-stack-${n}x`;
+        let gen_ico = (name: string, color1: Color, color2: Color) => {
+            let make_name_at_size = (ico_name: string) =>
+                (n: number) => `fa ${ico_name} fa-stack-${n}x`;
             // Create the DOM element for Ownership
             let wrap = document.createElement("span");
             wrap.className = "fa-stack small";

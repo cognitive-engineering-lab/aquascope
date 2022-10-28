@@ -1,7 +1,10 @@
 import { Editor } from "./editor"
 import * as cp from "child_process"
 import os from "os"
-import { BackendResult, BackendError, ReceiverTypes } from "./types"
+import {
+    BackendResult, BackendError,
+    ReceiverTypes, BackendOutput
+} from "./types"
 
 const SERVER_HOST = "127.0.0.1";
 const SERVER_PORT = "8008";
@@ -23,18 +26,19 @@ type ServerResponse = {
 };
 
 window.onload = async () => {
-    let show_rcvr_types_toggle: HTMLElement = document.getElementById("show_receiver_types");
-    let editor_element: HTMLElement = document.getElementById("editor");
+    const show_rcvr_types_toggle = document.getElementById("show_receiver_types") as HTMLInputElement | null;
+    const editor_element = document.getElementById("editor") as HTMLElement | null;
+
+    if (show_rcvr_types_toggle == null || editor_element == null) {
+        throw new Error ("document elements cannot be null");
+    }
 
     globals = {
-        editor: new Editor(editor_element);
-        backend: () => {
-            throw new Error('TODO');
-        },
+        editor: new Editor(editor_element),
     };
 
     show_rcvr_types_toggle.addEventListener("click", (e:Event) => {
-        globals.editor.toggle_readonly(show_rcvr_types_toggle.checked);
+        globals.editor.toggle_readonly(show_rcvr_types_toggle?.checked);
         if (show_rcvr_types_toggle.checked) {
             return refresh_receiver_vis();
         }
@@ -43,7 +47,7 @@ window.onload = async () => {
     });
 }
 
-async function refresh_receiver_vis(show_marks: boolean) {
+async function refresh_receiver_vis() {
     get_receiver_types()
         .then((output: BackendOutput<ReceiverTypes>) => {
             if (output.type === "output") {
@@ -58,7 +62,7 @@ async function refresh_receiver_vis(show_marks: boolean) {
         });
 }
 
-function get_receiver_types(): Promise<BackendResult<ReceiverTypes>> {
+function get_receiver_types(): Promise<BackendOutput<ReceiverTypes>> {
     let code_in_editor = globals.editor.get_current_contents();
     return fetch(`http://${SERVER_HOST}:${SERVER_PORT}/receiver-types`, {
         method: 'POST',
@@ -72,9 +76,13 @@ function get_receiver_types(): Promise<BackendResult<ReceiverTypes>> {
         .then((response) => response.json())
         .then((data: ServerResponse) => JSON.parse(data.stdout))
         .then((data: Result<ReceiverTypes>) => {
-            return {
-                type: "output",
-                value: data.Ok,
-            };
+            if ('Ok' in data) {
+                return {
+                    type: "output",
+                    value: data.Ok,
+                };
+            } else {
+                throw new Error("something bad happened.");
+            }
         });
 }
