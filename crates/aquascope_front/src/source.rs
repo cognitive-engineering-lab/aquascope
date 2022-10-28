@@ -1,20 +1,15 @@
-use aquascope::{
-  analysis::compute_context,
+use aquascope::analysis::compute_context;
+use flowistry::{
   mir::borrowck_facts::{self, get_body_with_borrowck_facts},
   source_map::find_bodies,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-  plugin::AquascopeResult,
-  style::{self, Style},
-};
+use crate::plugin::AquascopeResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceOutput {
   pub filename: String,
-  pub styles: Vec<Style>,
-  pub enriched_toks: Vec<Vec<(String, u8)>>,
 }
 
 struct Callbacks {

@@ -17,7 +17,6 @@ extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_graphviz;
 extern crate rustc_hir;
-extern crate rustc_hir_analysis;
 extern crate rustc_hir_pretty;
 extern crate rustc_index;
 extern crate rustc_infer;
@@ -34,7 +33,3 @@ extern crate rustc_trait_selection;
 extern crate smallvec;
 
 pub mod analysis;
-pub mod cached;
-pub mod indexed;
-pub mod mir;
-pub mod source_map;

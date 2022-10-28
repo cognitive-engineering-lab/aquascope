@@ -28,17 +28,12 @@ extern crate rustc_mir_dataflow;
 extern crate rustc_serialize;
 extern crate rustc_span;
 
-#[macro_use]
-extern crate eager;
-
 // #[cfg(feature = "decompose")]
 // mod decompose;
 // mod focus;
 pub mod method_receivers;
 pub mod plugin;
 pub mod source;
-mod spans;
-mod style;
 
 pub use plugin::AquascopePlugin;
 

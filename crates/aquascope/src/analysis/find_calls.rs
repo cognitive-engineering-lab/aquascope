@@ -29,7 +29,7 @@ impl<'tcx> Visitor<'tcx> for MethodCallFinder<'tcx> {
       log::trace!("I found a method call!");
 
       let hir = self.nested_visit_map();
-      let owner: LocalDefId = hir.get_parent_item(hir_id).def_id;
+      let owner: LocalDefId = hir.get_parent_item(hir_id); // .def_id;
       self.call_node_ids.entry(owner).or_default().push(hir_id);
     }
   }

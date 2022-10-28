@@ -1,7 +1,5 @@
-use aquascope::{
-  analysis,
-  source_map::{self, find_bindings, find_bodies, find_method_calls},
-};
+use aquascope::analysis::{self, find_bindings, find_method_calls};
+use flowistry::{source_map, source_map::find_bodies};
 use serde::Serialize;
 use ts_rs::TS;
 

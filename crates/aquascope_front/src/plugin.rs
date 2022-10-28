@@ -6,12 +6,11 @@ use std::{
 };
 
 use anyhow::Context;
-use aquascope::{
+use clap::{Parser, Subcommand};
+use flowistry::{
   mir::borrowck_facts,
   source_map::{self, FunctionIdentifier, GraphemeIndices, ToSpan},
 };
-use clap::{Parser, Subcommand};
-use eager;
 use rustc_hir::BodyId;
 use rustc_interface::interface::Result as RustcResult;
 use rustc_middle::ty::TyCtxt;
@@ -31,12 +30,6 @@ pub struct AquascopePluginArgs {
 #[derive(Debug, Subcommand, Serialize, Deserialize)]
 enum AquascopeCommand {
   Source {
-    file: String,
-
-    #[clap(last = true)]
-    flags: Vec<String>,
-  },
-  Spans {
     file: String,
 
     #[clap(last = true)]
@@ -118,7 +111,6 @@ impl RustcPlugin for AquascopePlugin {
 
     let (file, flags) = match &args.command {
       Source { file, flags } => (file, flags),
-      Spans { file, flags } => (file, flags),
       VisMethodCalls { file, flags } => (file, flags),
       _ => unreachable!(),
     };
@@ -142,9 +134,6 @@ impl RustcPlugin for AquascopePlugin {
       }
       VisMethodCalls { file, .. } => {
         postprocess(crate::method_receivers::method_calls(&compiler_args, file))
-      }
-      Spans { file, .. } => {
-        postprocess(crate::spans::spans(&compiler_args, file))
       }
       _ => unreachable!(),
     }
