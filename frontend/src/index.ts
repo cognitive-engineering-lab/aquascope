@@ -1,4 +1,4 @@
-import { Editor } from "./editor"
+import { Editor, square_circle_field } from "./editor"
 import * as cp from "child_process"
 import os from "os"
 import {
@@ -15,7 +15,7 @@ export let globals: {
 
 type Result<T> = { Ok: T } | { Err: BackendError };
 
-// XXX why this extra server response type is really
+// XXX this extra server response type is really
 // annoying and I'd like to get rid of it. This change would
 // require modifying how command output is read from the spawned
 // docker container on the backend.
@@ -27,23 +27,31 @@ type ServerResponse = {
 
 window.onload = async () => {
     const show_rcvr_types_toggle = document.getElementById("show_receiver_types") as HTMLInputElement | null;
+    // Keybindings should provide more than VIM or nothing so this should be a dropdown.
+    const vim_keybinding_toggle = document.getElementById("vim_keybindings") as HTMLInputElement | null;
     const editor_element = document.getElementById("editor") as HTMLElement | null;
 
-    if (show_rcvr_types_toggle == null || editor_element == null) {
-        throw new Error ("document elements cannot be null");
+    if (show_rcvr_types_toggle == null ||
+        editor_element == null ||
+        vim_keybinding_toggle == null) {
+        throw new Error ("document elements cannot be null (TODO there must be a better way to handle this)");
     }
 
     globals = {
-        editor: new Editor(editor_element),
+        editor: new Editor(editor_element, [square_circle_field.state_field]),
     };
 
-    show_rcvr_types_toggle.addEventListener("click", (e:Event) => {
+    vim_keybinding_toggle.addEventListener("click", (e: Event) => {
+        globals.editor.toggle_vim(vim_keybinding_toggle?.checked);
+    });
+
+    show_rcvr_types_toggle.addEventListener("click", (e: Event) => {
         globals.editor.toggle_readonly(show_rcvr_types_toggle?.checked);
         if (show_rcvr_types_toggle.checked) {
             return refresh_receiver_vis();
         }
 
-        return globals.editor.remove_receiver_types();
+        return globals.editor.remove_icon_field(square_circle_field);
     });
 }
 
@@ -53,7 +61,7 @@ async function refresh_receiver_vis() {
             if (output.type === "output") {
                 console.log("output is successful");
                 console.log(output.value);
-                return globals.editor.show_receiver_types(output.value);
+                return globals.editor.add_icon_field(square_circle_field, output.value);
             } else {
                 console.log("An error occurred");
                 console.log(output);

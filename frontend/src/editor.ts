@@ -50,52 +50,29 @@ fn main() {
 }
 `;
 
-let readOnly = new Compartment
+let readOnly = new Compartment;
+let mainKeybinding = new Compartment;
 
-interface IconTransformer<Ico> {
-    make_widget(ico_l: Ico, ico_r: Ico): WidgetType;
-    from_call_types(call_types: ty.CallTypes): [Ico, Ico, number];
+interface IconField<Ico, T> {
+    effect_type: StateEffectType<Array<T>>;
+    state_field: StateField<DecorationSet>;
+    make_decoration(ico_o: Ico, ico_m: Ico): Decoration;
+    from_call_types(call_types: ty.CallTypes): T;
 }
-
-let set_method_call_points =
-    StateEffect.define<Array<[ColorDiffIco, ColorDiffIco, number]>>();
-
-let method_call_points = StateField.define<DecorationSet>({
-    create: () => Decoration.none,
-    update(points, transactions) {
-        console.log(transactions);
-        for (let e of transactions.effects) {
-            if (e.is(set_method_call_points)) {
-                return RangeSet.of(e.value.map(([ico_o, ico_m, from]) =>
-                    method_call_point(ico_o, ico_m).range(from)));
-            }
-        }
-
-        return points;
-    },
-    provide: f => EditorView.decorations.from(f),
-});
-
-let method_call_point = (ico_o: ColorDiffIco, ico_m: ColorDiffIco): Decoration => {
-    return Decoration.widget({
-        widget: ShapeT.make_widget(ico_o, ico_m),
-        side: 0,
-    });
-};
 
 export class Editor {
     private view: EditorView;
 
-    public constructor(dom: HTMLElement) {
+    public constructor(dom: HTMLElement, supported_fields: Array<StateField<DecorationSet>>) {
         let initial_state = EditorState.create({
             doc: initial_code,
             extensions: [
-                vim(),
+                mainKeybinding.of(vim()),
                 basicSetup,
                 rust(),
                 readOnly.of(EditorState.readOnly.of(false)),
                 indentUnit.of("    "),
-                method_call_points
+                ...supported_fields
             ],
         });
 
@@ -117,37 +94,34 @@ export class Editor {
         });
     }
 
-    // Ideally we could just allow the receiver marks to stay until
-    // the code changes in the editor. TODO
-    public remove_receiver_types(): void {
+
+    public toggle_vim(b: boolean): void {
+        let t = b ? [vim(), basicSetup] : [basicSetup];
         this.view.dispatch({
-            effects: [ set_method_call_points.of([]) ]
+            effects: [mainKeybinding.reconfigure(t)]
         });
     }
 
-    // XXX this method gets called when the receiver types are received from
-    // the backend, however, on `update` (e.g. someone is typing code) we
-    // probably want them to go away.
-    public show_receiver_types(method_call_points: ty.ReceiverTypes): void {
+    public remove_icon_field<T, Ico, F extends IconField<Ico, T>>(f: F) {
         this.view.dispatch({
-            effects: [
-                set_method_call_points.of(
-                    method_call_points.map(ShapeT.from_call_types))
-            ]
+            effects: [ f.effect_type.of([]) ]
+        });
+    }
+
+    public add_icon_field<T, Ico, F extends IconField<Ico, T>>(
+        f: F,
+        method_call_points: ty.ReceiverTypes
+    ) {
+        this.view.dispatch({
+            effects: [ f.effect_type.of(
+                method_call_points.map(f.from_call_types)
+            ) ]
         });
     }
 }
 
-// NOTE (to self) XXX: last night I tried to make Editor generic
-// over a class and an "IconTransformer" (there must be a better
-// name for that) but the `ShapeEffectType.is` method didn't seem
-// to be identifying the effect type. Not sure why that was, things
-// are currently working but I would like them to be more generic
-// so I can easily switch between things like Icons, what differentiates,
-// etc so we can try out a myriad of things.
-
 // ----------------------------------------
-// Types to use as an icon transformer
+// Types to use in an Icon Field
 
 type RGBA = `rgba(${number},${number},${number},${number})`;
 
@@ -155,21 +129,50 @@ type Color = RGBA;
 
 type ColorDiffIco = {
     class_name: string,
-    color_expected: RGBA,
-    color_actual: RGBA,
+    color_expected: Color,
+    color_actual: Color,
 };
 
+type StackedPointIco<Ico> = [Ico, Ico, number];
 
-export let ShapeT: IconTransformer<ColorDiffIco> = {
-// export let ShapeT = {
+let stacked_color_ico_type = StateEffect.define<Array<StackedPointIco<ColorDiffIco>>>();
 
+let make_cdico_decoration = (ico_o: ColorDiffIco, ico_m: ColorDiffIco): Decoration => {
+    return Decoration.widget({
+        widget: new CallTypesWidget(ico_o, ico_m),
+        side: 0,
+    });
+};
 
-    make_widget(ico_l: ColorDiffIco, ico_r: ColorDiffIco): WidgetType {
-        return new CallTypesWidget(ico_l, ico_r);
+export let square_circle_field: IconField<ColorDiffIco, StackedPointIco<ColorDiffIco>> = {
+
+    effect_type: stacked_color_ico_type,
+
+    state_field: StateField.define<DecorationSet>({
+        create: () => Decoration.none,
+        update(points, transactions) {
+            console.log(transactions);
+            for (let e of transactions.effects) {
+                if (e.is(stacked_color_ico_type)) {
+                    return RangeSet.of(e.value.map(([ico_o, ico_m, from]) =>
+                        make_cdico_decoration(ico_o, ico_m).range(from)));
+                }
+            }
+
+            return points;
+        },
+        provide: f => EditorView.decorations.from(f),
+    }),
+
+    make_decoration(ico_o: ColorDiffIco, ico_m: ColorDiffIco): Decoration {
+        return make_cdico_decoration(ico_o, ico_m);
+        // return Decoration.widget({
+        //     widget: new CallTypesWidget(ico_o, ico_m),
+        //     side: 0,
+        // });
     },
 
-
-    from_call_types(call_type: ty.CallTypes): [ColorDiffIco, ColorDiffIco, number] {
+    from_call_types(call_type: ty.CallTypes): StackedPointIco<ColorDiffIco> {
         let high_color: RGBA = `rgba(${112},${128},${144},${1})`;
         let low_color: RGBA = `rgba(${233},${236},${238},${1})`;
         let own_shape = "fa-square";
