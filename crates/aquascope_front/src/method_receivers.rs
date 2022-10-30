@@ -1,38 +1,16 @@
-use aquascope::analysis::{self, find_bindings, find_method_calls};
-use flowistry::{source_map, source_map::find_bodies};
+use aquascope::{
+  analysis::{self, find_bindings, find_method_calls, CallTypes},
+  Range,
+};
+use flowistry::source_map::{self, find_bodies};
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::plugin::{AquascopeResult, Range};
-
-// TODO just generate the bindings from each respective crate and symlink to the files.
+use crate::plugin::AquascopeResult;
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "../../frontend/interface/ReceiverTypes.ts")]
+#[ts(export)]
 pub struct ReceiverTypesOutput(Vec<CallTypes>);
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../frontend/interface/CallTypes.ts")]
-pub struct CallTypes {
-  expected: TypeInfo,
-  actual: TypeInfo,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../frontend/interface/TypeInfo.ts")]
-pub struct TypeInfo {
-  range: Range,
-  of_type: TypeState,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../frontend/interface/TypeState.ts")]
-pub enum TypeState {
-  Owned { mutably_bound: bool },
-  Ref { is_mut: bool },
-}
-
-// --------------------------------------
 
 struct Callbacks {
   filename: String,
@@ -79,6 +57,7 @@ impl rustc_driver::Callbacks for Callbacks {
               source_map::Range::from_span(span, source_map)
                 .ok()
                 .unwrap_or_default()
+                .into()
             },
           )
           // For the given parts in the method call.
@@ -94,35 +73,6 @@ impl rustc_driver::Callbacks for Callbacks {
     });
 
     rustc_driver::Compilation::Stop
-  }
-}
-
-impl From<analysis::CallTypes> for CallTypes {
-  fn from(i: analysis::CallTypes) -> Self {
-    CallTypes {
-      expected: i.expected.into(),
-      actual: i.actual.into(),
-    }
-  }
-}
-
-impl From<analysis::TyInfo> for TypeInfo {
-  fn from(i: analysis::TyInfo) -> Self {
-    TypeInfo {
-      range: i.range.into(),
-      of_type: i.of_type.into(),
-    }
-  }
-}
-
-impl From<analysis::TypeState> for TypeState {
-  fn from(i: analysis::TypeState) -> Self {
-    match i {
-      analysis::TypeState::Owned { mutably_bound: b } => {
-        TypeState::Owned { mutably_bound: b }
-      }
-      analysis::TypeState::Ref { is_mut: b } => TypeState::Ref { is_mut: b },
-    }
   }
 }
 

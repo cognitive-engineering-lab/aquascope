@@ -7,9 +7,6 @@ use std::cell::RefCell;
 
 pub use find_bindings::find_bindings;
 pub use find_calls::find_method_calls;
-// pub use find_bindings::{self, find_bindings};
-// pub use find_calls::{self, find_method_calls};
-use flowistry::source_map::Range;
 use polonius_engine::{Algorithm, Output};
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_data_structures::fx::FxHashMap as HashMap;
@@ -19,6 +16,10 @@ use rustc_hir::{
 };
 use rustc_middle::ty::{Ty, TyCtxt};
 use rustc_span::Span;
+use serde::Serialize;
+use ts_rs::TS;
+
+use crate::Range;
 
 // TODO what sorts of things are we going to include in the contex?
 // What sort of information do we want to know?
@@ -125,19 +126,22 @@ pub fn compute_context<'a, 'tcx>(
   })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 pub struct CallTypes {
-  pub expected: TyInfo,
-  pub actual: TyInfo,
+  pub expected: TypeInfo,
+  pub actual: TypeInfo,
 }
 
-#[derive(Debug, Clone)]
-pub struct TyInfo {
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct TypeInfo {
   pub range: Range,
   pub of_type: TypeState,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 pub enum TypeState {
   Owned { mutably_bound: bool },
   Ref { is_mut: bool },
@@ -227,11 +231,11 @@ pub fn process_method_calls_in_item<'tcx>(
               let expected_tys = TypeState::from_ty(&expected_rcvr_t, None);
 
               let call_type = CallTypes {
-                actual: TyInfo {
+                actual: TypeInfo {
                   range: rcvr_range,
                   of_type: actual_tys,
                 },
-                expected: TyInfo {
+                expected: TypeInfo {
                   range: method_range,
                   of_type: expected_tys,
                 },

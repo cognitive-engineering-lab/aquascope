@@ -33,3 +33,29 @@ extern crate rustc_trait_selection;
 extern crate smallvec;
 
 pub mod analysis;
+
+use serde::Serialize;
+use ts_rs::TS;
+
+// re-export Range from Flowistry with TS.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct Range {
+  pub char_start: usize,
+  pub char_end: usize,
+  pub byte_start: usize,
+  pub byte_end: usize,
+  pub filename: String,
+}
+
+impl From<flowistry::source_map::Range> for Range {
+  fn from(i: flowistry::source_map::Range) -> Self {
+    Range {
+      char_start: i.char_start,
+      char_end: i.char_end,
+      byte_start: i.byte_start,
+      byte_end: i.byte_end,
+      filename: i.filename,
+    }
+  }
+}

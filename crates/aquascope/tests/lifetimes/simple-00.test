@@ -1,8 +1,0 @@
-fn main() {
-    let `(x)` = "string".to_owned();
-
-    let y = &x;
-
-    println!("{}", x);
-    println!("{}", y);
-}

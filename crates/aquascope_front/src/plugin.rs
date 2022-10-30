@@ -45,29 +45,6 @@ enum AquascopeCommand {
   RustcVersion,
 }
 
-// HACK! FIXME
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../frontend/interface/Range.ts")]
-pub struct Range {
-  char_start: usize,
-  char_end: usize,
-  byte_start: usize,
-  byte_end: usize,
-  filename: String,
-}
-
-impl From<source_map::Range> for Range {
-  fn from(i: source_map::Range) -> Self {
-    Range {
-      char_start: i.char_start,
-      char_end: i.char_end,
-      byte_start: i.byte_start,
-      byte_end: i.byte_end,
-      filename: i.filename,
-    }
-  }
-}
-
 pub struct AquascopePlugin;
 impl RustcPlugin for AquascopePlugin {
   type Args = AquascopePluginArgs;
@@ -205,7 +182,7 @@ fn run<A: AquascopeAnalysis, T: ToSpan>(
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "variant")]
-#[ts(export, export_to = "../../frontend/interface/AquascopeError.ts")]
+#[ts(export)]
 pub enum AquascopeError {
   // An error occured before the intended analysis could run.
   BuildError,

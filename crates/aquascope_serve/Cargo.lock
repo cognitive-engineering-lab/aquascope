@@ -32,6 +32,7 @@ dependencies = [
  "log",
  "rustc_plugin",
  "serde",
+ "ts-rs",
 ]
 
 [[package]]
