@@ -577,3 +577,40 @@ fn main() {
   @h[2]{@"}"}
 @h[1]{@"}"}
 }
+
+;; Overlapping borrows
+
+(define-values (mut immut vd)
+  (values @l[3 1]{" "}
+          @l[1 1]{" "}
+          @l[0 1 'fdiagonal-hatch]{" "}))
+
+@define/source[overlapping-borrows-0]{
+// Assume for simplicity:
+// &mut   @mut
+// &immut @immut
+// void   @vd
+//
+fn drain(v: &mut Vec<i32>) {
+  for (i, t) in v @mut @immut .iter() @immut @immut .enumerate() @immut @immut .rev() {
+    if *t == 0 {
+      @u[2]{ v } @immut @mut .remove();
+    }
+  }
+}
+}
+
+@define/source[overlapping-borrows-0-hover-0]{
+// Assume for simplicity:
+// &mut   @mut
+// &immut @immut
+// void   @vd
+//
+fn drain(v: &mut Vec<i32>) {
+  for (i, t) in v @mut @immut .iter() @h[2]{@"{"} @immut @immut .enumerate() @immut @immut .rev() {
+    if *t == 0 {
+      @u[2]{ v } @immut @mut .remove();
+    }
+  } @h[2]{@"}"}
+}
+}

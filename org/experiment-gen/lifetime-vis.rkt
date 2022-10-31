@@ -12,7 +12,7 @@
 
 (provide source-block
          define/source
-         arr e h c l t
+         arr e h c l t u
          hash->color
          font-size
          default-font-color)
@@ -30,7 +30,7 @@
 ;; Lifetime Things
 
 (define (color/c n)
-  (and (< 0 n)
+  (and (<= 0 n)
        (< n 11)))
 
 (define hash->color
@@ -74,6 +74,7 @@
 (struct group (text meta styles) #:transparent)
 (define (group-color g) (hash-ref (group-styles g) 'color default-font-color))
 (define (group-font g) (hash-ref (group-styles g) 'font default-font))
+(define (group-underline? g) (hash-ref (group-styles g) 'underline #false))
 
 (struct visual-line (styles from to) #:transparent)
 
@@ -231,6 +232,12 @@
            (make-immutable-hasheq)
            basic-styles))
 
+  (define (underline-text uc t-pict)
+    (printf "underlining\n")
+    (define line-len (pict-width t-pict))
+    (define line (colorize (hline line-len 10) uc))
+    (cb-superimpose t-pict line))
+
   ;; XXX Pre-rendering the lines might not work (or perhaps it'll enable)
   ;; adding modifying styles to a line.
   (define rendered-lines
@@ -242,7 +249,11 @@
                       (define t (group-text g))
                       (define f (group-font g))
                       (define c (group-color g))
-                      (cons (text t (cons c f)) acc))
+                      (define txt (text t (cons c f)))
+                      (define u? (group-underline? g))
+                      (cons  (if u?
+                                 (underline-text u? txt)
+                                 txt) acc))
                     ;; Keep the list with a space at the end, this
                     ;; way blank lines will get rendered. There are
                     ;; better ways to handle this but :shrug:
@@ -293,11 +304,23 @@
        (color . ,clr))))
   (group " " mta basic-styles))
 
-(define/contract (h c v)
-  (color/c string? . -> . group?)
-  (group v (make-immutable-hasheq)
-         (hash-set basic-styles 'color
-                   (hash->color c))))
+(define/contract (h c . vs)
+  (->* (color/c) #:rest (listof any/c) (listof group?))
+  (for/list ([v (in-list vs)])
+    (define g (tt-unless v))
+    (define g-styles (group-styles g))
+    (struct-copy group g
+                 [styles (hash-set g-styles 'color
+                                   (hash->color c))])))
+
+(define/contract (u c . vs)
+  (->* (color/c) #:rest (listof any/c) (listof group?))
+  (for/list ([v (in-list vs)])
+    (define g (tt-unless v))
+    (define g-styles (group-styles g))
+    (struct-copy group g
+                 [styles (hash-set g-styles 'underline
+                                   (hash->color c))])))
 
 (define/contract (c clr #:diameter [w #false] . styles)
   (->* (color/c) (#:diameter integer?) #:rest (listof any/c)
@@ -346,13 +369,15 @@
        (varargs . ,styles))))
   (group "" mta basic-styles))
 
-(define (tt word)
+(define/contract (tt word)
+  (string? . -> . group?)
   (make-basic-group word))
 
-;; -----------------------
-;; Expected / Actual panel
-
-;; Going back to overlapping borrows
+(define/contract (tt-unless v)
+  ((or/c string? group?) . -> . group?)
+  (if (group? v)
+      v
+      (tt v)))
 
 (define (add-row-col g r c)
   (struct-copy
@@ -385,10 +410,10 @@
   (define grouped-groups
     (for/fold ([ci 0] [ri 0] [ls '(())]
                      #:result (rev-ll ls))
-             ([e (in-list args)])
-     (define b
-       (cond [(group? e) e]
-             [(string? e) (tt e)]))
+              ([e (in-list (flatten args))])
+      (define b
+        (cond [(group? e) e]
+              [(string? e) (tt e)]))
      (define g (add-row-col b ri ci))
      (define next-width (group-len g))
      (define nr (if (is-newline? g) (add1 ri) ri))
