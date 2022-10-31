@@ -53,12 +53,16 @@ fn main() {
 let readOnly = new Compartment;
 let mainKeybinding = new Compartment;
 
-interface IconField<Ico, T> {
+export interface Icon {
+    toDom(): HTMLElement
+};
+
+interface IconField<Ico extends Icon, T> {
     effect_type: StateEffectType<Array<T>>;
     state_field: StateField<DecorationSet>;
     make_decoration(ico_o: Ico, ico_m: Ico): Decoration;
     from_call_types(call_types: ty.CallTypes): T;
-}
+};
 
 export class Editor {
     private view: EditorView;
@@ -94,7 +98,6 @@ export class Editor {
         });
     }
 
-
     public toggle_vim(b: boolean): void {
         let t = b ? [vim(), basicSetup] : [basicSetup];
         this.view.dispatch({
@@ -102,13 +105,13 @@ export class Editor {
         });
     }
 
-    public remove_icon_field<T, Ico, F extends IconField<Ico, T>>(f: F) {
+    public remove_icon_field<T, Ico extends Icon, F extends IconField<Ico, T>>(f: F) {
         this.view.dispatch({
             effects: [ f.effect_type.of([]) ]
         });
     }
 
-    public add_icon_field<T, Ico, F extends IconField<Ico, T>>(
+    public add_call_types_field<T, Ico extends Icon, F extends IconField<Ico, T>>(
         f: F,
         method_call_points: ty.ReceiverTypes
     ) {
@@ -124,139 +127,226 @@ export class Editor {
 // Types to use in an Icon Field
 
 type RGBA = `rgba(${number},${number},${number},${number})`;
+type RGB = `rgba(${number},${number},${number})`;
 
-type Color = RGBA;
+type Color = RGB | RGBA;
 
-type ColorDiffIco = {
-    class_name: string,
-    color_expected: Color,
-    color_actual: Color,
+type StackedPointIco<Ico extends Icon> = [Ico, Ico, number];
+
+type IconToDecoration<I extends Icon> = (l: I, r: I) => Decoration;
+
+// HACK the ending character of the actual type
+// might not actually be right before the dereference
+// operator `.`, do some testing and then we can probably
+// use the character preceding the expected `char_start`.
+let call_type_to_loc = (call_type: ty.CallTypes): number =>
+    call_type.expected.range.char_start - 1;
+
+// -------------------------------
+// Icons that differ only in color
+
+class ColorDiffIco implements Icon {
+    constructor(
+        readonly class_name: string,
+        readonly color_expected: Color,
+        readonly color_actual: Color
+    ) {}
+
+    toDom(): HTMLElement {
+        let make_name_at_size = (ico_name: string) =>
+            (n: number) => `fa ${ico_name} fa-stack-${n}x`;
+        let wrap = document.createElement("span");
+        wrap.className = "fa-stack small";
+        let box_o = wrap.appendChild(document.createElement("i"));
+        let box_i = wrap.appendChild(document.createElement("i"));
+        let make_style = make_name_at_size(this.class_name);
+        box_o.className = make_style(2);
+        box_i.className = make_style(1);
+        box_o.setAttribute("style", `color: ${this.color_expected};`)
+        box_i.setAttribute("style", `color: ${this.color_actual};`)
+        return wrap;
+    }
 };
-
-type StackedPointIco<Ico> = [Ico, Ico, number];
 
 let stacked_color_ico_type = StateEffect.define<Array<StackedPointIco<ColorDiffIco>>>();
 
-let make_cdico_decoration = (ico_o: ColorDiffIco, ico_m: ColorDiffIco): Decoration => {
+let make_decoration_with_icon = <I extends Icon>(ico_o: I, ico_m: I): Decoration => {
     return Decoration.widget({
-        widget: new CallTypesWidget(ico_o, ico_m),
+        widget: new StackedTypeExpectations<I>(ico_o, ico_m),
         side: 0,
     });
 };
 
-export let square_circle_field: IconField<ColorDiffIco, StackedPointIco<ColorDiffIco>> = {
-
-    effect_type: stacked_color_ico_type,
-
-    state_field: StateField.define<DecorationSet>({
+let make_state_field_with_icon = <I extends Icon>(
+    ty: StateEffectType<Array<StackedPointIco<I>>>,
+    cons: IconToDecoration<I>
+) => {
+    return StateField.define<DecorationSet>({
         create: () => Decoration.none,
         update(points, transactions) {
             console.log(transactions);
             for (let e of transactions.effects) {
-                if (e.is(stacked_color_ico_type)) {
+                if (e.is(ty)) {
                     return RangeSet.of(e.value.map(([ico_o, ico_m, from]) =>
-                        make_cdico_decoration(ico_o, ico_m).range(from)));
+                        cons(ico_o, ico_m).range(from)));
                 }
             }
 
             return points;
         },
         provide: f => EditorView.decorations.from(f),
-    }),
+    })
+};
 
-    make_decoration(ico_o: ColorDiffIco, ico_m: ColorDiffIco): Decoration {
-        return make_cdico_decoration(ico_o, ico_m);
-        // return Decoration.widget({
-        //     widget: new CallTypesWidget(ico_o, ico_m),
-        //     side: 0,
-        // });
-    },
-
-    from_call_types(call_type: ty.CallTypes): StackedPointIco<ColorDiffIco> {
-        let high_color: RGBA = `rgba(${112},${128},${144},${1})`;
-        let low_color: RGBA = `rgba(${233},${236},${238},${1})`;
-        let own_shape = "fa-square";
-        let mut_shape = "fa-circle";
-
+let call_types_to_stacked_color = (own_shape: string, mut_shape: string) => {
+    return (call_type: ty.CallTypes): StackedPointIco<ColorDiffIco> => {
+        let high_color: RGB = `rgba(${112},${128},${144})`;
+        let low_color: RGB = `rgba(${233},${236},${238})`;
         let color = (b: boolean) => (b ? high_color : low_color);
         let ts_actual: ty.TypeState = call_type.actual.of_type;
         let ts_expected: ty.TypeState = call_type.expected.of_type;
-
         let [a_o, a_m] =
             (("Owned" in ts_actual) ?
                 [true, ts_actual.Owned.mutably_bound] :
                 [false, ts_actual.Ref.is_mut]);
-
         let [e_o, e_m] =
             (("Owned" in ts_expected) ?
                 [true, ts_expected.Owned.mutably_bound] :
                 [false, ts_expected.Ref.is_mut]);
-
-        let owned_ico: ColorDiffIco = {
-            class_name: own_shape,
-            color_expected: color(e_o),
-            color_actual: color(a_o)
-        };
-
-        let mut_ico: ColorDiffIco = {
-            class_name: mut_shape,
-            color_expected: color(e_m),
-            color_actual: color(a_m)
-        };
-
-        // HACK the ending character of the actual type
-        // might not actually be right before the dereference
-        // operator `.`, do some testing and then we can probably
-        // use the character preceding the expected `char_start`.
-        let loc = call_type.expected.range.char_start - 1;
+        let owned_ico = new ColorDiffIco(own_shape, color(e_o), color(a_o));
+        let mut_ico = new ColorDiffIco(mut_shape, color(e_m), color(a_m));
+        let loc = call_type_to_loc(call_type);
         return [owned_ico, mut_ico, loc];
+
     }
-}
+};
+
+// -------------------------
+// Icons with a state change
+// (e.g. locks that are locked vs unlocked)
+
+class StateDiffIco implements Icon {
+    constructor(
+        readonly state_expected: string,
+        readonly state_actual: string,
+        readonly color_expected: Color,
+        readonly color_actual: Color
+    ) {}
+
+    toDom(): HTMLElement {
+        let make_name_at_size = (ico_name: string) =>
+            (n: number) => `fa-solid ${ico_name} fa-stack-${n}x`;
+        let wrap = document.createElement("span");
+        wrap.className = "fa-stack small";
+        let box_o = wrap.appendChild(document.createElement("i"));
+        let box_i = wrap.appendChild(document.createElement("i"));
+        box_o.className = make_name_at_size(this.state_expected)(2);
+        box_i.className = make_name_at_size(this.state_actual)(2);
+        box_o.setAttribute("style", `color: ${this.color_expected};`)
+        box_i.setAttribute("style", `color: ${this.color_actual};`)
+        return wrap;
+    }
+};
+
+let stacked_state_ico_type = StateEffect.define<Array<StackedPointIco<StateDiffIco>>>();
+
+let call_types_to_stacked_state = (
+    own_shape: string,
+    ref_shape: string,
+    mut_shape: string,
+    immut_shape: string
+) => {
+    return (call_type: ty.CallTypes): StackedPointIco<StateDiffIco> => {
+        let high_color: RGB = `rgba(${255},${0},${0})`;
+        let low_color: RGB = `rgba(${233},${236},${238})`;
+        let ts_actual: ty.TypeState = call_type.actual.of_type;
+        let ts_expected: ty.TypeState = call_type.expected.of_type;
+        let [a_o, a_m] =
+            (("Owned" in ts_actual) ?
+                [true, ts_actual.Owned.mutably_bound] :
+                [false, ts_actual.Ref.is_mut]);
+        let [e_o, e_m] =
+            (("Owned" in ts_expected) ?
+                [true, ts_expected.Owned.mutably_bound] :
+                [false, ts_expected.Ref.is_mut]);
+        let owned_ico = new StateDiffIco(
+            e_o ? own_shape : ref_shape,
+            a_o ? own_shape : ref_shape,
+            high_color, low_color
+        );
+        let mut_ico = new StateDiffIco(
+            e_m ? mut_shape : immut_shape,
+            a_m ? mut_shape : immut_shape,
+            high_color, low_color
+        );
+
+        let loc = call_type_to_loc(call_type);
+        return [owned_ico, mut_ico, loc];
+
+    }
+};
+
+// -------------------
+// Exported interfaces
+
+export let hands_and_bans_field = {
+    effect_type: stacked_state_ico_type,
+    state_field: make_state_field_with_icon(
+        stacked_state_ico_type,
+        make_decoration_with_icon<StateDiffIco>
+    ),
+    make_decoration: make_decoration_with_icon<StateDiffIco>,
+    from_call_types: call_types_to_stacked_state(
+        "fa-hand-holding-droplet",
+        "fa-hand-holding",
+        "fa-circle",
+        "fa-ban"
+    ),
+};
+
+export let hands_and_shields_field = {
+    effect_type: stacked_state_ico_type,
+    state_field: make_state_field_with_icon(
+        stacked_state_ico_type,
+        make_decoration_with_icon<StateDiffIco>
+    ),
+    make_decoration: make_decoration_with_icon<StateDiffIco>,
+    from_call_types: call_types_to_stacked_state(
+        "fa-hands-holding-circle",
+        "fa-hands-holding",
+        "fa-shield",
+        "fa-shield-halved"
+    ),
+};
+
+export let square_circle_field: IconField<ColorDiffIco, StackedPointIco<ColorDiffIco>> = {
+    effect_type: stacked_color_ico_type,
+    state_field: make_state_field_with_icon(
+        stacked_color_ico_type,
+        make_decoration_with_icon<ColorDiffIco>
+    ),
+    make_decoration: make_decoration_with_icon<ColorDiffIco>,
+    from_call_types: call_types_to_stacked_color("fa-square", "fa-circle"),
+};
+
+// ------------------------
+// Widget types
+// (these control the display of the icons)
 
 // Example Widget from the codemirror 6 api doc.
-class CallTypesWidget extends WidgetType {
-    constructor(readonly owner: ColorDiffIco, readonly mut: ColorDiffIco) { super() }
+class StackedTypeExpectations<I extends Icon> extends WidgetType {
+    constructor(readonly owner: I, readonly mut: I) { super() }
 
-    eq(other: CallTypesWidget) {
+    eq(other: StackedTypeExpectations<I>) {
         return other.owner == this.owner && other.mut == this.mut;
     }
 
     toDOM() {
-        let gen_ico = (name: string, color1: Color, color2: Color) => {
-            let make_name_at_size = (ico_name: string) =>
-                (n: number) => `fa ${ico_name} fa-stack-${n}x`;
-            // Create the DOM element for Ownership
-            let wrap = document.createElement("span");
-            wrap.className = "fa-stack small";
-            let box_o = wrap.appendChild(document.createElement("i"));
-            let box_i = wrap.appendChild(document.createElement("i"));
-            let make_style = make_name_at_size(name);
-            box_o.className = make_style(2);
-            box_i.className = make_style(1);
-            box_o.setAttribute("style", `color: ${color1};`)
-            box_i.setAttribute("style", `color: ${color2};`)
-            return wrap;
-        };
-
-        // Main DOM span element
         let wrap = document.createElement("span");
-
-        let l_ico = gen_ico(
-            this.owner.class_name,
-            this.owner.color_expected,
-            this.owner.color_actual
-        );
-        let r_ico = gen_ico(
-            this.mut.class_name,
-            this.mut.color_expected,
-            this.mut.color_actual
-        );
-
+        let l_ico = this.owner.toDom();
+        let r_ico = this.mut.toDom();
         wrap.appendChild(l_ico);
         wrap.appendChild(r_ico);
-
-        console.log(wrap);
-
         return wrap;
     }
 

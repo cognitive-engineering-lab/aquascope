@@ -1,4 +1,4 @@
-import { Editor, square_circle_field } from "./editor"
+import * as Ed from "./editor"
 import * as cp from "child_process"
 import os from "os"
 import {
@@ -10,7 +10,7 @@ const SERVER_HOST = "127.0.0.1";
 const SERVER_PORT = "8008";
 
 export let globals: {
-    editor: Editor;
+    editor: Ed.Editor;
 };
 
 type Result<T> = { Ok: T } | { Err: BackendError };
@@ -25,6 +25,8 @@ type ServerResponse = {
     stderr: string,
 };
 
+const receiver_types_field = Ed.hands_and_shields_field;
+
 window.onload = async () => {
     const show_rcvr_types_toggle = document.getElementById("show_receiver_types") as HTMLInputElement | null;
     // Keybindings should provide more than VIM or nothing so this should be a dropdown.
@@ -38,7 +40,7 @@ window.onload = async () => {
     }
 
     globals = {
-        editor: new Editor(editor_element, [square_circle_field.state_field]),
+        editor: new Ed.Editor(editor_element, [receiver_types_field.state_field]),
     };
 
     vim_keybinding_toggle.addEventListener("click", (e: Event) => {
@@ -51,7 +53,7 @@ window.onload = async () => {
             return refresh_receiver_vis();
         }
 
-        return globals.editor.remove_icon_field(square_circle_field);
+        return globals.editor.remove_icon_field(receiver_types_field);
     });
 }
 
@@ -61,7 +63,7 @@ async function refresh_receiver_vis() {
             if (output.type === "output") {
                 console.log("output is successful");
                 console.log(output.value);
-                return globals.editor.add_icon_field(square_circle_field, output.value);
+                return globals.editor.add_call_types_field(receiver_types_field, output.value);
             } else {
                 console.log("An error occurred");
                 console.log(output);
