@@ -1,5 +1,6 @@
 //! Core contextual analysis for Aquascope.
 
+mod engine;
 pub mod find_bindings;
 pub mod find_calls;
 
@@ -83,44 +84,25 @@ pub fn compute_context<'a, 'tcx>(
       body_with_facts.input_facts.loan_invalidated_at
     );
 
+    engine::compute(body_with_facts);
+
     // HACK this is essentially copying the
     // `LocationTable` logic from `rustc_borrowck::location`.
 
-    let mut num_points = 0;
-    let bbds: Vec<(usize, &Vec<rustc_middle::mir::Statement<'tcx>>)> =
-      body_with_facts
-        .body
-        .basic_blocks
-        .iter()
-        .map(|block_data| {
-          let v = num_points;
-          num_points += (block_data.statements.len() + 1) * 2;
-          (v, &block_data.statements)
-        })
-        .collect();
+    // let mut num_points = 0;
+    // let bbds: Vec<(usize, &Vec<rustc_middle::mir::Statement<'tcx>>)> =
+    //   body_with_facts
+    //     .body
+    //     .basic_blocks
+    //     .iter()
+    //     .map(|block_data| {
+    //       let v = num_points;
+    //       num_points += (block_data.statements.len() + 1) * 2;
+    //       (v, &block_data.statements)
+    //     })
+    //     .collect();
 
-    log::debug!("Body Statements {:?}", bbds);
-
-    // TODO
-    // let naive_output =
-    //   Output::compute(&body_with_facts.input_facts, Algorithm::Naive, true);
-
-    // if !naive_output.errors.is_empty() {
-    //   log::debug!("THERE IS A BORROWCK ERROR!");
-    //   todo!();
-    // }
-
-    // log::debug!("No borrowck errors found.");
-
-    // log::debug!("Extracting information for: {:?}", body_id.hir_id.local_id);
-
-    // let input_facts = &body_with_facts.input_facts;
-    // let local_point: u32 = body_id.hir_id.local_id.into();
-    // let Some((path, point)) = input_facts
-    //   .path_assigned_at_base
-    //   .iter()
-    //   .filter(|(_, pnt)| pnt.as_u32() == local_point)
-    //   .next() else { todo!() };
+    // log::debug!("Body Statements {:?}", bbds);
 
     0
   })
