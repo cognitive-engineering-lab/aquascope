@@ -60,7 +60,7 @@ export interface Icon {
 interface IconField<Ico extends Icon, T> {
     effect_type: StateEffectType<Array<T>>;
     state_field: StateField<DecorationSet>;
-    make_decoration(ico_o: Ico, ico_m: Ico): Decoration;
+    make_decoration(icos: Array<Ico>): Decoration;
     from_call_types(call_types: ty.CallTypes): T;
 };
 
@@ -170,16 +170,20 @@ class ColorDiffIco implements Icon {
 
 let stacked_color_ico_type = StateEffect.define<Array<StackedPointIco<ColorDiffIco>>>();
 
-let make_decoration_with_icon = <I extends Icon>(ico_o: I, ico_m: I): Decoration => {
+let make_decoration_with_icon = <I extends Icon>(icos: Array<I>): Decoration => {
+    const fst = icos[0];
+    const snd = icos[1];
     return Decoration.widget({
-        widget: new StackedTypeExpectations<I>(ico_o, ico_m),
+        widget: new StackedTypeExpectations<I>(fst, snd),
         side: 0,
     });
 };
 
+// FIXME this is a bad abstraction. Obviously, as I now need to copy the
+// whole thing to make it work for the [I, I, I, number] shaped type.
 let make_state_field_with_icon = <I extends Icon>(
     ty: StateEffectType<Array<StackedPointIco<I>>>,
-    cons: IconToDecoration<I>
+    cons: (icos: Array<I>) => Decoration
 ) => {
     return StateField.define<DecorationSet>({
         create: () => Decoration.none,
@@ -188,7 +192,7 @@ let make_state_field_with_icon = <I extends Icon>(
             for (let e of transactions.effects) {
                 if (e.is(ty)) {
                     return RangeSet.of(e.value.map(([ico_o, ico_m, from]) =>
-                        cons(ico_o, ico_m).range(from)));
+                        cons([ico_o, ico_m]).range(from)));
                 }
             }
 
@@ -286,6 +290,102 @@ let call_types_to_stacked_state = (
     }
 };
 
+// ---------------
+// RWD Permissions
+
+type PermissionPoint<I extends Icon> = [I, I, I, number];
+
+class TextIco implements Icon {
+    constructor(
+        readonly contents: string,
+        readonly color_expected: Color,
+        readonly color_actual: Color
+    ) {}
+
+    toDom(): HTMLElement {
+        let tt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        tt.classList.add("permission");
+        tt.setAttribute("stroke", this.color_expected);
+        tt.setAttribute("fill", this.color_actual);
+        tt.textContent = this.contents;
+        return tt as HTMLElement & SVGTextElement;
+    }
+}
+
+let call_types_to_permissions =
+    (call_type: ty.CallTypes): PermissionPoint<TextIco> => {
+        let high_color: RGB = `rgba(${112},${128},${144})`;
+        let low_color: RGB = `rgba(${229},${228},${226})`;
+        let ts_actual: ty.TypeState = call_type.actual.of_type;
+        let ts_expected: ty.TypeState = call_type.expected.of_type;
+        let color = (b: boolean): Color => b ? high_color : low_color;
+        let [a_o, a_m] =
+            (("Owned" in ts_actual) ?
+                [true, ts_actual.Owned.mutably_bound] :
+                [false, ts_actual.Ref.is_mut]);
+        let [e_o, e_m] =
+            (("Owned" in ts_expected) ?
+                [true, ts_expected.Owned.mutably_bound] :
+                [false, ts_expected.Ref.is_mut]);
+
+        // TODO the current implementation can not represent
+        // non-readable types.
+        const read_ico = new TextIco(
+            "R",
+            high_color,
+            high_color
+        );
+
+        const write_ico = new TextIco(
+            "W",
+            color(e_m),
+            color(a_m)
+        );
+
+        const drop_ico = new TextIco(
+            "D",
+            color(e_o),
+            color(a_o)
+        );
+
+        let loc = call_type_to_loc(call_type);
+        return [read_ico, write_ico, drop_ico, loc];
+    };
+
+let permission_state_ico_type = StateEffect.define<Array<PermissionPoint<TextIco>>>();
+
+
+let make_text_state_field_with_icon = <I extends Icon>(
+    ty: StateEffectType<Array<PermissionPoint<I>>>,
+    cons: (icos: Array<I>) => Decoration
+) => {
+    return StateField.define<DecorationSet>({
+        create: () => Decoration.none,
+        update(points, transactions) {
+            console.log(transactions);
+            for (let e of transactions.effects) {
+                if (e.is(ty)) {
+                    return RangeSet.of(e.value.map(([ico_l, ico_m, ico_r, from]) =>
+                        cons([ico_l, ico_m, ico_r]).range(from)));
+                }
+            }
+
+            return points;
+        },
+        provide: f => EditorView.decorations.from(f),
+    })
+};
+
+let make_decoration_with_text_ico = <I extends Icon>(icos: Array<I>): Decoration => {
+    let fst = icos[0];
+    let snd = icos[1];
+    let trd = icos[2];
+    return Decoration.widget({
+        widget: new RWDPermissions<I>(fst, snd, trd),
+        side: 0,
+    });
+};
+
 // -------------------
 // Exported interfaces
 
@@ -329,11 +429,20 @@ export let square_circle_field: IconField<ColorDiffIco, StackedPointIco<ColorDif
     from_call_types: call_types_to_stacked_color("fa-square", "fa-circle"),
 };
 
+export let rwd_permissions_field: IconField<TextIco, PermissionPoint<TextIco>> = {
+    effect_type: permission_state_ico_type,
+    state_field: make_text_state_field_with_icon(
+        permission_state_ico_type,
+        make_decoration_with_text_ico<TextIco>
+    ),
+    make_decoration: make_decoration_with_text_ico<TextIco>,
+    from_call_types: call_types_to_permissions,
+};
+
 // ------------------------
 // Widget types
 // (these control the display of the icons)
 
-// Example Widget from the codemirror 6 api doc.
 class StackedTypeExpectations<I extends Icon> extends WidgetType {
     constructor(readonly owner: I, readonly mut: I) { super() }
 
@@ -348,6 +457,45 @@ class StackedTypeExpectations<I extends Icon> extends WidgetType {
         wrap.appendChild(l_ico);
         wrap.appendChild(r_ico);
         return wrap;
+    }
+
+    ignoreEvent() { return false }
+}
+
+class RWDPermissions<I extends Icon> extends WidgetType {
+    constructor(
+        readonly read: I,
+        readonly write: I,
+        readonly drop: I
+    ) { super() }
+
+    eq(other: RWDPermissions<I>) {
+        return other.read == this.read &&
+            other.write == this.write &&
+            other.drop == this.drop;
+    }
+
+    toDOM() {
+        // The RWD Permission is currently rendered as an SVG
+        let wrap = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        wrap.setAttribute("class", "svg-perm");
+
+        let r_ico = this.read.toDom();
+        let w_ico = this.write.toDom();
+        let d_ico = this.drop.toDom();
+
+        r_ico.setAttribute("x", "10");
+        w_ico.setAttribute("x", "40");
+        d_ico.setAttribute("x", "70");
+
+        r_ico.setAttribute("y", "35");
+        w_ico.setAttribute("y", "35");
+        d_ico.setAttribute("y", "35");
+
+        wrap.appendChild(r_ico);
+        wrap.appendChild(w_ico);
+        wrap.appendChild(d_ico);
+        return wrap as HTMLElement & SVGSVGElement;
     }
 
     ignoreEvent() { return false }

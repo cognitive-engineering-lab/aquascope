@@ -1,6 +1,4 @@
 import * as Ed from "./editor"
-import * as cp from "child_process"
-import os from "os"
 import {
     BackendResult, BackendError,
     ReceiverTypes, BackendOutput
@@ -25,7 +23,7 @@ type ServerResponse = {
     stderr: string,
 };
 
-const receiver_types_field = Ed.hands_and_shields_field;
+const receiver_types_field = Ed.rwd_permissions_field;
 
 window.onload = async () => {
     const show_rcvr_types_toggle = document.getElementById("show_receiver_types") as HTMLInputElement | null;

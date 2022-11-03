@@ -21,3 +21,24 @@ i {
 .top-pict {
     margin-bottom: -10px;
 }
+
+/* SVG read / write / drop permission icons */
+
+text {
+    font-family: sans-serif, 40px;
+    font-size: 40px;
+    font-weight: "bold";
+}
+
+.svg-perm {
+    width: 120px;
+    height: 40px;
+}
+
+.permission {
+    font-family: 'IBM Plex Sans', sans-serif, 40px;
+    font-size: 40px;
+    font-weight: "bold";
+    stroke-width: 8;
+    paint-order: stroke;
+}
