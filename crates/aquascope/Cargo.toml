@@ -12,7 +12,7 @@ rustc_private=true
 [dependencies]
 env_logger = "0.9"
 log = "0.4"
-flowistry = "0.5.30"
+flowistry = { path = "../../../flowistry/crates/flowistry" }
 rustc_plugin = "0.5.30"
 datafrog = "2.0.0"
 serde = "1.0"

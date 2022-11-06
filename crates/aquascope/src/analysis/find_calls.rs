@@ -1,45 +1,71 @@
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_hir::{
-  def_id::LocalDefId,
-  intravisit::{self, Visitor},
-  Expr, ExprKind, HirId,
+use rustc_middle::mir::{
+  visit::Visitor, Body, Location, Operand, Place, Terminator, TerminatorKind,
 };
-// use rustc_hir_analysis;
-use rustc_middle::{hir::nested_filter::OnlyBodies, ty::TyCtxt};
+use rustc_span::Span;
 
-type MultiMap<K, V> = HashMap<K, Vec<V>>;
-
-struct MethodCallFinder<'tcx> {
-  tcx: TyCtxt<'tcx>,
-  call_node_ids: MultiMap<LocalDefId, HirId>,
+pub trait FindCalls<'tcx> {
+  fn find_calls(&self) -> HashMap<Location, CallInfo<'tcx>>;
 }
 
-impl<'tcx> Visitor<'tcx> for MethodCallFinder<'tcx> {
-  type NestedFilter = OnlyBodies;
+pub struct CallInfo<'tcx> {
+  pub receiver_place: Place<'tcx>,
+  pub fn_span: Span,
+}
 
-  fn nested_visit_map(&mut self) -> Self::Map {
-    self.tcx.hir()
-  }
+struct CallFinder<'tcx> {
+  call_node_info: HashMap<Location, CallInfo<'tcx>>,
+}
 
-  fn visit_expr(&mut self, expression: &'tcx Expr) {
-    intravisit::walk_expr(self, expression);
+impl<'tcx> Visitor<'tcx> for CallFinder<'tcx> {
+  fn visit_terminator(
+    &mut self,
+    terminator: &Terminator<'tcx>,
+    location: Location,
+  ) {
+    log::debug!("found terminator {:?}", terminator);
+    if let TerminatorKind::Call {
+      func,
+      args,
+      destination,
+      target,
+      cleanup,
+      from_hir_call,
+      fn_span,
+    } = &terminator.kind
+    {
+      if !args.is_empty() {
+        let receiver_place = match args[0] {
+          Operand::Copy(p) => p,
+          Operand::Move(p) => p,
+          _ => panic!(),
+        };
 
-    let hir_id = expression.hir_id;
-    if let ExprKind::MethodCall(..) = expression.kind {
-      log::trace!("I found a method call!");
+        // TODO: can we map calls more accurately to method calls?
+        // this here is a rough approximation for demo purposes.
 
-      let hir = self.nested_visit_map();
-      let owner: LocalDefId = hir.get_parent_item(hir_id); // .def_id;
-      self.call_node_ids.entry(owner).or_default().push(hir_id);
+        log::debug!("Found method call at {:?}", location);
+
+        self.call_node_info.insert(location, CallInfo {
+          receiver_place,
+          fn_span: *fn_span,
+        });
+      }
     }
+
+    // self.super_terminator(terminator, location);
   }
 }
 
-pub fn find_method_calls(tcx: TyCtxt) -> MultiMap<LocalDefId, HirId> {
-  let mut finder = MethodCallFinder {
-    tcx,
-    call_node_ids: MultiMap::default(),
-  };
-  tcx.hir().visit_all_item_likes_in_crate(&mut finder);
-  finder.call_node_ids
+impl<'tcx> FindCalls<'tcx> for Body<'tcx> {
+  fn find_calls(&self) -> HashMap<Location, CallInfo<'tcx>> {
+    let mut finder = CallFinder {
+      call_node_info: HashMap::default(),
+    };
+
+    log::debug!("Scraping MIR for function calls");
+
+    finder.visit_body(self);
+    finder.call_node_info
+  }
 }

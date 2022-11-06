@@ -1,237 +1,121 @@
 //! Core contextual analysis for Aquascope.
 
-mod engine;
 pub mod find_bindings;
 pub mod find_calls;
+mod permissions;
 
 use std::cell::RefCell;
 
 pub use find_bindings::find_bindings;
-pub use find_calls::find_method_calls;
-use polonius_engine::{Algorithm, Output};
-use rustc_borrowck::consumers::BodyWithBorrowckFacts;
-use rustc_data_structures::fx::FxHashMap as HashMap;
+use find_calls::FindCalls;
+use rustc_borrowck::consumers::{BodyWithBorrowckFacts, RustcFacts};
+use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{
   def::Res, def_id::LocalDefId, hir_id::HirId, BindingAnnotation, BodyId, Expr,
   ExprKind, Node, QPath,
 };
-use rustc_middle::ty::{Ty, TyCtxt};
+use rustc_middle::{mir::Place, ty::TyCtxt};
+use rustc_mir_dataflow::move_paths::{LookupResult, MoveData};
 use rustc_span::Span;
 use serde::Serialize;
 use ts_rs::TS;
 
 use crate::Range;
 
-// TODO what sorts of things are we going to include in the contex?
-// What sort of information do we want to know?
-pub type ScopeResults<'a, 'tcx> = i32;
+type PermissionsResults = permissions::Output<RustcFacts>;
 
 thread_local! {
   pub static BODY_ID_STACK: RefCell<Vec<BodyId>> =
     RefCell::new(Vec::default());
 }
 
-// TODO promote comments like these into more informative doc comments.
-//
-// This enumerates the different kinds of analyses that Aquascope
-// will perform. During initial development the running experiment
-// will regard Lifetimes, however, many of the analysis results
-// can probably be cached and used within each other.
-pub enum ScopeAnalysisKind {
-  Lifetime,
-}
-
-// TODO This function should take a BodyId and produce a context with
-// information about the body. Preprocessing can be done when the
-// resulting context
-pub fn compute_context<'a, 'tcx>(
+pub fn compute_permissions<'a, 'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
   body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
-) -> ScopeResults<'a, 'tcx> {
+) -> PermissionsResults {
   BODY_ID_STACK.with(|stack| {
     stack.borrow_mut().push(body_id);
 
-    log::debug!("Context for: {:?}", body_id);
-    log::debug!(
-      "{}",
-      rustc_hir_pretty::to_string(rustc_hir_pretty::NO_ANN, |s| s
-        .print_expr(&tcx.hir().body(body_id).value))
-    );
+    let permissions = permissions::compute(tcx, body_id, body_with_facts);
 
-    // The input facts information gives a list of input facts for each Fact.
-    //
-    // A RustcFact is defined as follows:
-    // ```rust
-    // impl polonius_engine::FactTypes for RustcFacts {
-    //     type Origin = RegionVid;
-    //     type Loan = BorrowIndex;
-    //     type Point = LocationIndex;
-    //     type Variable = Local;
-    //     type Path = MovePathIndex;
-    // }
-    // ```
-    // log::debug!("Input Facts: {:?}", body_with_facts.input_facts);
-    // log::debug!("Output Facts: {:?}", body_with_facts.output_facts);
+    // TODO rather than just computing the permissions, we should return a
+    // permission context which includes all the information necessary to
+    // map things back to the source level.
 
-    log::debug!(
-      "Loans issued in body {:?}",
-      body_with_facts.input_facts.loan_issued_at
-    );
-
-    log::debug!(
-      "Loan invalidated at {:?}",
-      body_with_facts.input_facts.loan_invalidated_at
-    );
-
-    engine::compute(body_with_facts);
-
-    // HACK this is essentially copying the
-    // `LocationTable` logic from `rustc_borrowck::location`.
-
-    // let mut num_points = 0;
-    // let bbds: Vec<(usize, &Vec<rustc_middle::mir::Statement<'tcx>>)> =
-    //   body_with_facts
-    //     .body
-    //     .basic_blocks
-    //     .iter()
-    //     .map(|block_data| {
-    //       let v = num_points;
-    //       num_points += (block_data.statements.len() + 1) * 2;
-    //       (v, &block_data.statements)
-    //     })
-    //     .collect();
-
-    // log::debug!("Body Statements {:?}", bbds);
-
-    0
+    permissions
   })
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
-pub struct CallTypes {
-  pub expected: TypeInfo,
-  pub actual: TypeInfo,
-}
-
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export)]
-pub struct TypeInfo {
+pub struct PermissionsInfo {
   pub range: Range,
-  pub of_type: TypeState,
+  pub read: bool,
+  pub write: bool,
+  pub drop: bool,
+  pub refined_by: Option<RefinementInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
-pub enum TypeState {
-  Owned { mutably_bound: bool },
-  Ref { is_mut: bool },
-}
+pub struct RefinementInfo {}
 
-impl TypeState {
-  fn from_ty<'tcx>(ty: &Ty<'tcx>, ba: Option<&BindingAnnotation>) -> Self {
-    if ty.is_mutable_ptr() {
-      TypeState::Ref { is_mut: true }
-    } else if ty.is_ref() {
-      TypeState::Ref { is_mut: false }
-    } else {
-      log::debug!("Owned value {:?} {:?}", ty, ba);
-      TypeState::Owned {
-        mutably_bound: if let Some(BindingAnnotation(
-          _,
-          rustc_hir::Mutability::Mut,
-        )) = ba
-        {
-          true
-        } else {
-          false
-        },
-      }
-    }
-  }
-}
-
-pub fn process_method_calls_in_item<'tcx>(
+pub fn pair_permissions_to_calls<'a, 'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
-  parent_item: LocalDefId,
-  call_ids: Vec<HirId>,
-  program_bindings: &HashMap<HirId, BindingAnnotation>,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+  permissions: &'a PermissionsResults,
   span_to_range: impl Fn(Span) -> Range,
-) -> Vec<CallTypes> {
-  let hir = tcx.hir();
-  let def_id_of_body = hir.body_owner_def_id(body_id);
-  let body = hir.body(body_id);
+) -> Vec<PermissionsInfo> {
+  // FIXME: the MoveData should only be computed once.
 
-  let tyck_res = tcx.typeck_body(body_id);
+  let def_id = tcx.hir().body_owner_def_id(body_id);
+  let (_, move_data) =
+    MoveData::gather_moves(&body_with_facts.body, tcx, tcx.param_env(def_id))
+      .unwrap();
+  let move_data = &move_data;
 
-  // FIXME using filter_map here is lossy. IF there's some Id that
-  // fails (for a number of reasons) then filter_map will just ignore
-  // it. However, this could indicate an error somewhere. (or simply
-  // naïveté on my part in previous logic).
-  call_ids
+  let place_to_path = |p: Place| match move_data.rev_lookup.find(p.as_ref()) {
+    LookupResult::Exact(path) => path,
+    LookupResult::Parent(Some(path)) => path,
+    r => {
+      log::debug!("place to path failed with {:?}", p);
+      log::debug!("lookupres {:?}", r);
+      todo!()
+    }
+  };
+
+  let locations_to_body_info = body_with_facts.body.find_calls();
+
+  let never_write = &permissions.never_write;
+  let never_drop = &permissions.never_drop;
+
+  locations_to_body_info
     .iter()
-    .filter_map(|call_node_hir_id| {
-      if let Some(Node::Expr(expr)) = hir.find(*call_node_hir_id) {
-        match expr.kind {
-          ExprKind::MethodCall(_, rcvr, _, call_span) => {
-            if let Some((_, def_id)) =
-              tyck_res.type_dependent_def(*call_node_hir_id)
-            {
-              let rcvr_t = tyck_res.expr_ty(rcvr);
-              // HACK FIXME
-              // See: https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/ty/sty/struct.Binder.html#method.skip_binder
-              let fn_sig = tcx.fn_sig(def_id).skip_binder();
-              let expected_rcvr_t = fn_sig.inputs_and_output[0];
-              let rcvr_range = span_to_range(rcvr.span);
-              // The range of the method Segment.
-              let method_range = span_to_range(call_span);
+    .map(|(loc, call_info)| {
+      // we need to turn the locations into `LocationIndex`s
+      // XXX: assuming the important information we need is at
+      // the mid_point
+      let point = body_with_facts.location_table.mid_index(*loc);
+      // get the permissions for the given receivers place
+      let path = &place_to_path(call_info.receiver_place);
+      let empty = &HashMap::default();
+      let cannot_read = permissions.cannot_read.get(&point).unwrap_or(empty);
+      let cannot_write = permissions.cannot_write.get(&point).unwrap_or(empty);
+      let cannot_drop = permissions.cannot_drop.get(&point).unwrap_or(empty);
+      let read = !cannot_read.contains_key(path);
+      let write =
+        !(never_write.contains(path) || cannot_write.contains_key(path));
+      let drop = !(never_drop.contains(path) || cannot_drop.contains_key(path));
 
-              log::trace!("Found receiver type: {rcvr_t:?}");
-              log::trace!("Found function signature: {fn_sig:?}");
-
-              log::trace!("Getting bindings for receiver: {:?}", rcvr.hir_id);
-
-              let rcvr_bound =
-                if let ExprKind::Path(QPath::Resolved(_, path)) = rcvr.kind {
-                  match path.res {
-                    Res::Local(id) => program_bindings.get(&id),
-                    _ => None,
-                  }
-                } else {
-                  None
-                };
-
-              log::debug!("RCVR BOUND: {:?}", rcvr);
-              log::debug!("ALL BINDINGS: {:?}", program_bindings);
-              log::debug!("Rcvr_bound: {:?}", rcvr_bound);
-
-              let actual_tys = TypeState::from_ty(&rcvr_t, rcvr_bound);
-              // XXX Is there a case when we'd want to know a
-              // potential binding for the expected type?
-              let expected_tys = TypeState::from_ty(&expected_rcvr_t, None);
-
-              let call_type = CallTypes {
-                actual: TypeInfo {
-                  range: rcvr_range,
-                  of_type: actual_tys,
-                },
-                expected: TypeInfo {
-                  range: method_range,
-                  of_type: expected_tys,
-                },
-              };
-
-              Some(call_type)
-            } else {
-              panic!("No dependent def found for method call HirId.");
-            }
-          }
-          _ => unreachable!(),
-        }
-      } else {
-        unreachable!();
+      PermissionsInfo {
+        range: span_to_range(call_info.fn_span),
+        read,
+        write,
+        drop,
+        // TODO
+        refined_by: None,
       }
     })
     .collect()

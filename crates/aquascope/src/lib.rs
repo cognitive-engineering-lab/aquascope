@@ -6,7 +6,8 @@
   type_alias_impl_trait,
   generic_associated_types,
   trait_alias,
-  let_else
+  let_else,
+  let_chains
 )]
 #![allow(clippy::needless_lifetimes)]
 

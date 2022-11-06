@@ -27,6 +27,7 @@ checksum = "b9a8f622bcf6ff3df478e9deba3e03e4e04b300f8e6a139e192c05fa3490afc7"
 name = "aquascope"
 version = "0.1.0"
 dependencies = [
+ "datafrog",
  "env_logger",
  "flowistry",
  "log",
@@ -148,6 +149,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "datafrog"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0afaad2b26fa326569eb264b1363e8ae3357618c43982b3f285f0774ce76b69"
+
+[[package]]
 name = "env_logger"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -163,8 +170,6 @@ dependencies = [
 [[package]]
 name = "flowistry"
 version = "0.5.30"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a71fd6b0f0a9a624c62e52b9903f764d541b2606fdf933fd4ca2b407259d0a5"
 dependencies = [
  "anyhow",
  "cfg-if",

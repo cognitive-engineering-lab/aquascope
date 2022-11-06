@@ -109,8 +109,10 @@ impl RustcPlugin for AquascopePlugin {
       Source { file, .. } => {
         postprocess(crate::source::source(&compiler_args, file))
       }
+      // TODO rename the command because it will eventually show *all* permissions
+      // and not just those for method calls.
       VisMethodCalls { file, .. } => {
-        postprocess(crate::method_receivers::method_calls(&compiler_args, file))
+        postprocess(crate::permissions::permissions(&compiler_args, file))
       }
       _ => unreachable!(),
     }
@@ -166,11 +168,9 @@ fn run<A: AquascopeAnalysis, T: ToSpan>(
     target,
     output: None,
     rustc_start: Instant::now(),
-    // eval_mode: EVAL_MODE.copied(),
   };
 
   log::info!("Starting rustc analysis...");
-  // log::debug!("Eval mode: {:?}", callbacks.eval_mode);
 
   run_with_callbacks(args, &mut callbacks)?;
 

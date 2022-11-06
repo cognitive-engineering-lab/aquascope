@@ -21,7 +21,8 @@ extern crate rustc_mir_dataflow;
 extern crate rustc_serialize;
 extern crate rustc_span;
 
-pub mod method_receivers;
+// pub mod method_receivers;
+pub mod permissions;
 pub mod plugin;
 pub mod source;
 
