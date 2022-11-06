@@ -53,7 +53,7 @@ async fn receiver_types(
 ) -> Result<Json<ReceiverTypesResponse>> {
     log::trace!("Received request for receiver types");
 
-    with_container(
+    let json = with_container(
         req,
         |knt, req| {
             async move {
@@ -68,7 +68,11 @@ async fn receiver_types(
         ReceiverTypesSnafu,
     )
     .await
-    .map(Json)
+    .map(Json);
+
+    log::debug!("returning JSON {:?}", json);
+
+    json
 }
 
 async fn with_container<F, Req, Resp, KReq, KResp, Ctx>(
@@ -98,6 +102,7 @@ pub async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse
 
 /// This type only exists so that we can recover from the `axum::Json`
 /// error and format it using our expected JSON error object.
+#[derive(Debug)]
 struct Json<T>(T);
 
 #[async_trait]

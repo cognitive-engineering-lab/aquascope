@@ -12,7 +12,8 @@ aquascope = {version = "0.1", path = "../aquascope"}
 rustc_plugin = "0.5.30"
 anyhow = "1"
 log = "0.4"
-flowistry = { path = "../../../flowistry/crates/flowistry" }
+# flowistry = { path = "../../../flowistry/crates/flowistry" }
+flowistry = { path = "../flowistry" }
 serde = {version = "1", features = ["derive"]}
 serde_json = "1"
 ts-rs = "6.1"

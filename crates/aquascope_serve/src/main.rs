@@ -22,6 +22,7 @@ fn main() {
 struct Config {
     address: String,
     port: u16,
+    deploy_local: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -37,7 +38,15 @@ impl Config {
             .ok()
             .and_then(|p| p.parse().ok())
             .unwrap_or(DEFAULT_PORT);
-        Config { address, port }
+        let deploy_local = env::var("AQUASCOPE_NO_DOCKER")
+            .ok()
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(false);
+        Config {
+            address,
+            port,
+            deploy_local,
+        }
     }
 
     fn socket_address(&self) -> SocketAddr {

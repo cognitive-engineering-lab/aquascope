@@ -2,12 +2,14 @@
 
 pub mod find_bindings;
 pub mod find_calls;
+mod find_hir_calls;
 mod permissions;
 
 use std::cell::RefCell;
 
 pub use find_bindings::find_bindings;
 use find_calls::FindCalls;
+use find_hir_calls::find_method_call_spans;
 use rustc_borrowck::consumers::{BodyWithBorrowckFacts, RustcFacts};
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{
@@ -91,13 +93,23 @@ pub fn pair_permissions_to_calls<'a, 'tcx>(
   let never_write = &permissions.never_write;
   let never_drop = &permissions.never_drop;
 
+  let method_spans = find_method_call_spans(tcx);
+
   locations_to_body_info
     .iter()
-    .map(|(loc, call_info)| {
+    .filter_map(|(loc, call_info)| {
+      // HACK: if there is no overlap, then just ignore the call.
+      if !method_spans
+        .iter()
+        .any(|&method_span| call_info.fn_span.overlaps(method_span))
+      {
+        return None;
+      }
+
       // we need to turn the locations into `LocationIndex`s
       // XXX: assuming the important information we need is at
       // the mid_point
-      let point = body_with_facts.location_table.mid_index(*loc);
+      let point = body_with_facts.location_table.start_index(*loc);
       // get the permissions for the given receivers place
       let path = &place_to_path(call_info.receiver_place);
       let empty = &HashMap::default();
@@ -109,14 +121,14 @@ pub fn pair_permissions_to_calls<'a, 'tcx>(
         !(never_write.contains(path) || cannot_write.contains_key(path));
       let drop = !(never_drop.contains(path) || cannot_drop.contains_key(path));
 
-      PermissionsInfo {
+      Some(PermissionsInfo {
         range: span_to_range(call_info.fn_span),
         read,
         write,
         drop,
         // TODO
         refined_by: None,
-      }
+      })
     })
     .collect()
 }

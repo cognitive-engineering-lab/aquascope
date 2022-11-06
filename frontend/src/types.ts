@@ -3,6 +3,13 @@
 export { AquascopeError } from "./bindings/AquascopeError";
 export { CallTypes } from "./bindings/CallTypes";
 export { Range } from "./bindings/Range";
+
+
+export { PermissionsInfo } from "./bindings/PermissionsInfo";
+export { RefinementInfo } from "./bindings/RefinementInfo";
+export { PermissionsOutput } from "./bindings/PermissionsOutput";
+
+// TODO remove the following types which should no longer be used
 export { ReceiverTypesOutput as ReceiverTypes } from "./bindings/ReceiverTypesOutput";
 export { TypeInfo } from "./bindings/TypeInfo";
 export { TypeState } from "./bindings/TypeState";

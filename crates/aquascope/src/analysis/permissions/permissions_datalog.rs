@@ -50,8 +50,6 @@ pub struct Output<T: FactTypes> {
  * .decl never_drop(Path)
  *
  * never_drop(Path) :-
- *
- * never_drop(Path)
  *    !is_direct(Path).
  *
  ****
@@ -170,9 +168,22 @@ impl Output<RustcFacts> {
       body.local_decls[place.local].mutability != Mutability::Mut
     };
 
-    let is_never_write = |place: Place| {
-      // TODO: indirect paths with a mutable prefix are also never_write
-      !place.is_indirect() && is_declared_readonly(place)
+    let is_never_write = |place: Place<'tcx>| {
+      (!place.is_indirect() && is_declared_readonly(place)) || {
+        // Iff there exists an immutable prefix it is also `never_write`
+        place
+          .iter_projections()
+          .filter_map(|(prefix, elem)| {
+            matches!(elem, ProjectionElem::Deref).then_some(prefix)
+          })
+          .any(|prefix| {
+            let ty = prefix.ty(&body.local_decls, tcx).ty;
+            match ty.ref_mutability() {
+              Some(mutability) => mutability == Mutability::Not,
+              None => false, // TODO: unimplemented!(), // raw pointers, not handling this now
+            }
+          })
+      }
     };
 
     let is_never_drop = |place: Place| place.is_indirect();

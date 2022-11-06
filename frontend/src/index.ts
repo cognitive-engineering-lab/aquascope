@@ -1,7 +1,8 @@
 import * as Ed from "./editor"
 import {
     BackendResult, BackendError,
-    ReceiverTypes, BackendOutput
+    // ReceiverTypes,
+    BackendOutput, PermissionsOutput
 } from "./types"
 
 const SERVER_HOST = "127.0.0.1";
@@ -57,7 +58,7 @@ window.onload = async () => {
 
 async function refresh_receiver_vis() {
     get_receiver_types()
-        .then((output: BackendOutput<ReceiverTypes>) => {
+        .then((output: BackendOutput<PermissionsOutput>) => {
             if (output.type === "output") {
                 console.log("output is successful");
                 console.log(output.value);
@@ -70,7 +71,7 @@ async function refresh_receiver_vis() {
         });
 }
 
-function get_receiver_types(): Promise<BackendOutput<ReceiverTypes>> {
+function get_receiver_types(): Promise<BackendOutput<PermissionsOutput>> {
     let code_in_editor = globals.editor.get_current_contents();
     return fetch(`http://${SERVER_HOST}:${SERVER_PORT}/receiver-types`, {
         method: 'POST',
@@ -83,7 +84,7 @@ function get_receiver_types(): Promise<BackendOutput<ReceiverTypes>> {
     })
         .then((response) => response.json())
         .then((data: ServerResponse) => JSON.parse(data.stdout))
-        .then((data: Result<ReceiverTypes>) => {
+        .then((data: Result<PermissionsOutput>) => {
             if ('Ok' in data) {
                 return {
                     type: "output",

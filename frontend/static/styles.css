@@ -24,18 +24,18 @@ i {
 
 /* SVG read / write / drop permission icons */
 
-text {
-    font-family: sans-serif, 40px;
-    font-size: 40px;
-    font-weight: "bold";
-}
+/* text { */
+/*     font-family: sans-serif, 40px; */
+/*     font-size: 40px; */
+/*     font-weight: "bold"; */
+/* } */
 
-.svg-perm {
-    width: 120px;
-    height: 40px;
-}
+/* .svg-perm { */
+/*     width: 120px; */
+/*     height: 40px; */
+/* } */
 
-.permission {
+text .permission {
     font-family: 'IBM Plex Sans', sans-serif, 40px;
     font-size: 40px;
     font-weight: "bold";
