@@ -8,7 +8,7 @@ use std::{
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use flowistry::{
-  mir::borrowck_facts,
+  mir::borrowck_facts::{self, NO_SIMPLIFY},
   source_map::{self, FunctionIdentifier, GraphemeIndices, ToSpan},
 };
 use rustc_hir::BodyId;
@@ -200,8 +200,6 @@ pub trait AquascopeAnalysis: Sized + Send + Sync {
   ) -> anyhow::Result<Self::Output>;
 }
 
-// Implement AquascopeAnalysis for all functions with a type signature that matches
-// AquascopeAnalysis::analyze
 impl<F, O> AquascopeAnalysis for F
 where
   F: for<'tcx> Fn<(TyCtxt<'tcx>, BodyId), Output = anyhow::Result<O>>
@@ -224,13 +222,13 @@ struct AquascopeCallbacks<A: AquascopeAnalysis, T: ToSpan> {
   target: T,
   output: Option<anyhow::Result<A::Output>>,
   rustc_start: Instant,
-  // eval_mode: Option<EvalMode>,
 }
 
 impl<A: AquascopeAnalysis, T: ToSpan> rustc_driver::Callbacks
   for AquascopeCallbacks<A, T>
 {
   fn config(&mut self, config: &mut rustc_interface::Config) {
+    NO_SIMPLIFY.store(true, std::sync::atomic::Ordering::SeqCst);
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 
@@ -239,12 +237,8 @@ impl<A: AquascopeAnalysis, T: ToSpan> rustc_driver::Callbacks
     _compiler: &rustc_interface::interface::Compiler,
     queries: &'tcx rustc_interface::Queries<'tcx>,
   ) -> rustc_driver::Compilation {
-    // elapsed("rustc", self.rustc_start);
-    // fluid_set!(EVAL_MODE, self.eval_mode.unwrap_or_default());
-
-    let start = Instant::now();
+    let _start = Instant::now();
     queries.global_ctxt().unwrap().take().enter(|tcx| {
-      // elapsed("global_ctxt", start);
       let mut analysis = self.analysis.take().unwrap();
       self.output = Some((|| {
         let target = self.target.to_span(tcx)?;

@@ -5,7 +5,7 @@ use aquascope::{
 };
 use flowistry::{
   mir::{
-    borrowck_facts::{self, get_body_with_borrowck_facts},
+    borrowck_facts::{self, get_body_with_borrowck_facts, NO_SIMPLIFY},
     utils::SpanExt,
   },
   source_map::{self, find_bodies},
@@ -28,6 +28,7 @@ struct Callbacks {
 
 impl rustc_driver::Callbacks for Callbacks {
   fn config(&mut self, config: &mut rustc_interface::Config) {
+    NO_SIMPLIFY.store(true, std::sync::atomic::Ordering::SeqCst);
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 
@@ -38,38 +39,29 @@ impl rustc_driver::Callbacks for Callbacks {
   ) -> rustc_driver::Compilation {
     queries.global_ctxt().unwrap().take().enter(|tcx| {
       find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
+        log::debug!("starting new body: {:?}", body_id);
+
         let def_id = tcx.hir().body_owner_def_id(body_id);
         let body_with_facts = get_body_with_borrowck_facts(tcx, def_id);
-        let permissions_results =
+        let permissions_ctxt =
           &analysis::compute_permissions(tcx, body_id, body_with_facts);
 
-        let source_map = tcx.sess.source_map();
-        // let source_file = source_map::Range {
-        //   byte_start: 0,
-        //   byte_end: 0,
-        //   char_start: 0,
-        //   char_end: 0,
-        //   filename: self.filename.clone(),
-        // }
-        // .source_file(source_map)
-        // .unwrap();
+        log::debug!("after analysis {:?}", body_id);
 
-        let call_infos = analysis::pair_permissions_to_calls(
-          tcx,
-          body_id,
-          body_with_facts,
-          permissions_results,
-          |span| {
+        let source_map = tcx.sess.source_map();
+        let call_infos =
+          analysis::pair_permissions_to_calls(permissions_ctxt, |span| {
             source_map::Range::from_span(span, source_map)
               .ok()
               .unwrap_or_default()
               .into()
-          },
-        );
+          });
 
         self.output.push(call_infos);
       });
     });
+
+    log::debug!("Returning ...");
 
     rustc_driver::Compilation::Stop
   }
