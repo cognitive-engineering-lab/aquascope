@@ -1,343 +1,290 @@
 use std::{
-  collections::hash_map::Entry,
-  fmt::Debug,
-  ops::{Deref, DerefMut},
+    collections::hash_map::Entry,
+    fmt::Debug,
+    ops::{Deref, DerefMut},
 };
 
 use flowistry::mir::utils::{dump_results, PlaceExt};
 use rustc_borrowck::{
-  borrow_set::{BorrowData, BorrowSet},
-  consumers::{BodyWithBorrowckFacts, RichLocation, RustcFacts},
+    borrow_set::{BorrowData, BorrowSet},
+    consumers::{BodyWithBorrowckFacts, RichLocation, RustcFacts},
 };
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::{def_id::DefId, Mutability};
 use rustc_middle::{
-  mir::{Location, Place, ProjectionElem},
-  ty::TyCtxt,
+    mir::{Location, Place, ProjectionElem},
+    ty::TyCtxt,
 };
 use rustc_mir_dataflow::{
-  fmt::DebugWithContext, move_paths::MoveData, Analysis, AnalysisDomain,
-  JoinSemiLattice,
+    fmt::DebugWithContext, move_paths::MoveData, Analysis, AnalysisDomain, JoinSemiLattice,
 };
 
-use super::context::PermissionsCtxt;
+use super::{context::PermissionsCtxt, Permissions};
 
 pub fn dump_permissions_with_mir<'a, 'tcx>(ctxt: &PermissionsCtxt<'a, 'tcx>) {
-  // XXX: Unfortunately, the only way I know how to do this is to do a MIR
-  // dataflow analysis and simply take the information from the context.
-  // This mean there will only be a single pass but :shrug:
+    // XXX: Unfortunately, the only way I know how to do this is to do a MIR
+    // dataflow analysis and simply take the information from the context.
+    // This mean there will only be a single pass but :shrug:
 
-  let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
+    let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
 
-  // Temporary hack: only run the analysis on a specific function
-  let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-  let Some(name) = ctxt.tcx.hir().opt_name(owner) else { return };
-  if name.as_str() != "foo" {
-    return;
-  }
+    // Temporary hack: only run the analysis on a specific function
+    let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
+    let Some(name) = ctxt.tcx.hir().opt_name(owner) else { return };
+    if name.as_str() != "foo" {
+        return;
+    }
 
-  let analysis = PAnalysis { ctxt };
+    let analysis = PAnalysis { ctxt };
 
-  let results = analysis
-    .into_engine(ctxt.tcx, &ctxt.body_with_facts.body)
-    .iterate_to_fixpoint();
+    let results = analysis
+        .into_engine(ctxt.tcx, &ctxt.body_with_facts.body)
+        .iterate_to_fixpoint();
 
-  log::debug!("Dumping results for {:?}", name.as_str());
+    log::debug!("Dumping results for {:?}", name.as_str());
 
-  if let Err(e) = dump_results(
-    &ctxt.body_with_facts.body,
-    &results,
-    def_id.to_def_id(),
-    ctxt.tcx,
-  ) {
-    log::warn!("{:?}", e);
-  }
+    if let Err(e) = dump_results(
+        &ctxt.body_with_facts.body,
+        &results,
+        def_id.to_def_id(),
+        ctxt.tcx,
+    ) {
+        log::warn!("{:?}", e);
+    }
 }
 
 // --------------------------------------------------
 // Domain
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Permissions {
-  pub read: bool,
-  pub write: bool,
-  pub drop: bool,
-}
-
 impl Permissions {
-  pub fn none() -> Self {
-    Permissions {
-      read: false,
-      write: false,
-      drop: false,
+    pub fn none() -> Self {
+        Permissions {
+            read: false,
+            write: false,
+            drop: false,
+        }
     }
-  }
 
-  pub fn all() -> Self {
-    Permissions {
-      read: true,
-      write: true,
-      drop: true,
+    pub fn all() -> Self {
+        Permissions {
+            read: true,
+            write: true,
+            drop: true,
+        }
     }
-  }
 }
 
 impl JoinSemiLattice for Permissions {
-  fn join(&mut self, other: &Self) -> bool {
-    let orig = *self;
-    self.read &= other.read;
-    self.write &= other.write;
-    self.drop &= other.drop;
-    orig != *self
-  }
+    fn join(&mut self, other: &Self) -> bool {
+        let orig = *self;
+        self.read &= other.read;
+        self.write &= other.write;
+        self.drop &= other.drop;
+        orig != *self
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
 pub struct PDomain<'tcx>(HashMap<Place<'tcx>, Permissions>);
 
 impl JoinSemiLattice for PDomain<'_> {
-  fn join(&mut self, other: &Self) -> bool {
-    let mut changed = false;
-    for (place, perms) in other.0.iter() {
-      match self.0.entry(*place) {
-        Entry::Occupied(mut entry) => {
-          changed |= entry.get_mut().join(&perms);
+    fn join(&mut self, other: &Self) -> bool {
+        let mut changed = false;
+        for (place, perms) in other.0.iter() {
+            match self.0.entry(*place) {
+                Entry::Occupied(mut entry) => {
+                    changed |= entry.get_mut().join(&perms);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(*perms);
+                    changed = true;
+                }
+            }
         }
-        Entry::Vacant(entry) => {
-          entry.insert(*perms);
-          changed = true;
-        }
-      }
+        changed
     }
-    changed
-  }
 }
 
 impl<'tcx> Deref for PDomain<'tcx> {
-  type Target = HashMap<Place<'tcx>, Permissions>;
+    type Target = HashMap<Place<'tcx>, Permissions>;
 
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl DerefMut for PDomain<'_> {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
-  }
-}
-
-///// Debugging traits, just for visualization purposes
-impl Debug for Permissions {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    if !self.read && !self.write && !self.drop {
-      write!(f, "∅")
-    } else {
-      if self.read {
-        write!(f, "R")?;
-      }
-      if self.write {
-        write!(f, "W")?;
-      }
-      if self.drop {
-        write!(f, "D")?;
-      }
-      Ok(())
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
-  }
 }
 
 impl<C> DebugWithContext<C> for Permissions {
-  fn fmt_diff_with(
-    &self,
-    old: &Self,
-    _ctxt: &C,
-    f: &mut std::fmt::Formatter<'_>,
-  ) -> std::fmt::Result {
-    let mut fmt_field = |old_field: bool, self_field: bool, letter: char| {
-      if old_field == self_field {
-        if self_field {
-          write!(f, "{letter}")
-        } else {
-          Ok(())
-        }
-      } else if !old_field && self_field {
-        write!(f, "<font color=\"darkgreen\">+{letter}</font>")
-      } else {
-        write!(f, "<font color=\"red\">-{letter}</font>")
-      }
-    };
+    fn fmt_diff_with(
+        &self,
+        old: &Self,
+        _ctxt: &C,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        let mut fmt_field = |old_field: bool, self_field: bool, letter: char| {
+            if old_field == self_field {
+                if self_field {
+                    write!(f, "{letter}")
+                } else {
+                    Ok(())
+                }
+            } else if !old_field && self_field {
+                write!(f, "<font color=\"darkgreen\">+{letter}</font>")
+            } else {
+                write!(f, "<font color=\"red\">-{letter}</font>")
+            }
+        };
 
-    fmt_field(old.read, self.read, 'R')?;
-    fmt_field(old.write, self.write, 'W')?;
-    fmt_field(old.drop, self.drop, 'D')?;
+        fmt_field(old.read, self.read, 'R')?;
+        fmt_field(old.write, self.write, 'W')?;
+        fmt_field(old.drop, self.drop, 'D')?;
 
-    Ok(())
-  }
+        Ok(())
+    }
 }
 
 impl<C> DebugWithContext<C> for PDomain<'_> {
-  fn fmt_with(
-    &self,
-    _ctxt: &C,
-    f: &mut std::fmt::Formatter<'_>,
-  ) -> std::fmt::Result {
-    write!(
-      f,
-      r#"<table border="0" cellborder="1" cellspacing="0" cellpadding="2">"#
-    )?;
-    for (place, perms) in self.iter() {
-      write!(
-        f,
-        r#"<tr><td align="left">{place:?}</td><td align="left">{perms:?}</td></tr>"#
-      )?;
-    }
-    write!(f, "</table>")?;
-
-    Ok(())
-  }
-
-  fn fmt_diff_with(
-    &self,
-    old: &Self,
-    ctxt: &C,
-    f: &mut std::fmt::Formatter<'_>,
-  ) -> std::fmt::Result {
-    if old == self {
-      return Ok(());
-    }
-
-    write!(
-      f,
-      r#"<table border="0" cellborder="1" cellspacing="0" cellpadding="2" sides="rb">"#
-    )?;
-    for (place, perms) in self.0.iter() {
-      match old.0.get(place) {
-        Some(old_perms) => {
-          if perms != old_perms {
-            write!(
-              f,
-              r#"<tr><td align="left">{place:?}</td><td align="left">"#
-            )?;
-            perms.fmt_diff_with(old_perms, ctxt, f)?;
-            write!(f, "</td></tr>")?;
-          }
-        }
-        None => {
-          write!(
+    fn fmt_with(&self, _ctxt: &C, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
             f,
-            r#"<tr><td align="left"><font color="darkgreen">{place:?}</font></td><td align="left">{perms:?}</td></tr>"#
-          )?;
+            r#"<table border="0" cellborder="1" cellspacing="0" cellpadding="2">"#
+        )?;
+        for (place, perms) in self.iter() {
+            write!(
+                f,
+                r#"<tr><td align="left">{place:?}</td><td align="left">{perms:?}</td></tr>"#
+            )?;
         }
-      }
+        write!(f, "</table>")?;
+
+        Ok(())
     }
-    write!(f, "</table>")?;
-    Ok(())
-  }
+
+    fn fmt_diff_with(
+        &self,
+        old: &Self,
+        ctxt: &C,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        if old == self {
+            return Ok(());
+        }
+
+        write!(
+            f,
+            r#"<table border="0" cellborder="1" cellspacing="0" cellpadding="2" sides="rb">"#
+        )?;
+        for (place, perms) in self.0.iter() {
+            match old.0.get(place) {
+                Some(old_perms) => {
+                    if perms != old_perms {
+                        write!(f, r#"<tr><td align="left">{place:?}</td><td align="left">"#)?;
+                        perms.fmt_diff_with(old_perms, ctxt, f)?;
+                        write!(f, "</td></tr>")?;
+                    }
+                }
+                None => {
+                    write!(
+                        f,
+                        r#"<tr><td align="left"><font color="darkgreen">{place:?}</font></td><td align="left">{perms:?}</td></tr>"#
+                    )?;
+                }
+            }
+        }
+        write!(f, "</table>")?;
+        Ok(())
+    }
 }
 
 // --------------------------------------------------
 // Analysis
 
 struct PAnalysis<'a, 'tcx> {
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+    ctxt: &'a PermissionsCtxt<'a, 'tcx>,
 }
 
 impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
-  pub fn max_permissions(&self, place: Place<'tcx>) -> Permissions {
-    let path = self.ctxt.place_to_path(&place);
+    pub fn max_permissions(&self, place: Place<'tcx>) -> Permissions {
+        let path = self.ctxt.place_to_path(&place);
 
-    Permissions {
-      write: !self.ctxt.permissions_output.never_write.contains(&path),
-      read: true,
-      drop: !self.ctxt.permissions_output.never_drop.contains(&path),
+        Permissions {
+            write: !self.ctxt.permissions_output.never_write.contains(&path),
+            read: true,
+            drop: !self.ctxt.permissions_output.never_drop.contains(&path),
+        }
     }
-  }
 
-  fn check_location(&self, state: &mut PDomain<'tcx>, location: Location) {
-    let point = self.ctxt.location_to_point(location);
-    let empty = &HashMap::default();
-    let cannot_read_at_point = self
-      .ctxt
-      .permissions_output
-      .cannot_read
-      .get(&point)
-      .unwrap_or(empty);
-    let cannot_write_at_point = self
-      .ctxt
-      .permissions_output
-      .cannot_write
-      .get(&point)
-      .unwrap_or(empty);
-    let cannot_drop_at_point = self
-      .ctxt
-      .permissions_output
-      .cannot_drop
-      .get(&point)
-      .unwrap_or(empty);
-
-    for (place, perms) in state.iter_mut() {
-      // Reset permissions to their max
-      *perms = self.max_permissions(*place);
-      let path = self.ctxt.place_to_path(place);
-      perms.read &= !cannot_read_at_point.contains_key(&path);
-      perms.write &= !cannot_write_at_point.contains_key(&path);
-      perms.drop &= !cannot_drop_at_point.contains_key(&path);
+    fn check_location(&self, state: &mut PDomain<'tcx>, location: Location) {
+        let point = self.ctxt.location_to_point(location);
+        for (place, perms) in state.iter_mut() {
+            // Reset permissions to their max
+            *perms = self.max_permissions(*place);
+            let path = self.ctxt.place_to_path(place);
+            let perm = self
+                .ctxt
+                .permissions_output
+                .permissions_at_point(path, point);
+            perms.join(&perm);
+        }
     }
-  }
 }
 
 impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
-  type Domain = PDomain<'tcx>;
-  const NAME: &'static str = "PermissionsAnalysisDatalog";
+    type Domain = PDomain<'tcx>;
+    const NAME: &'static str = "PermissionsAnalysisDatalog";
 
-  fn bottom_value(&self, body: &rustc_middle::mir::Body<'tcx>) -> Self::Domain {
-    let mut domain = PDomain::default();
-    let places = body.local_decls.indices().flat_map(|local| {
-      Place::from_local(local, self.ctxt.tcx).interior_paths(
-        self.ctxt.tcx,
-        body,
-        self.ctxt.def_id,
-      )
-    });
-    for place in places {
-      domain.insert(place, self.max_permissions(place));
+    fn bottom_value(&self, body: &rustc_middle::mir::Body<'tcx>) -> Self::Domain {
+        let mut domain = PDomain::default();
+        let places = body.local_decls.indices().flat_map(|local| {
+            Place::from_local(local, self.ctxt.tcx).interior_paths(
+                self.ctxt.tcx,
+                body,
+                self.ctxt.def_id,
+            )
+        });
+        for place in places {
+            domain.insert(place, self.max_permissions(place));
+        }
+        domain
     }
-    domain
-  }
 
-  fn initialize_start_block(
-    &self,
-    _body: &rustc_middle::mir::Body<'tcx>,
-    _state: &mut Self::Domain,
-  ) {
-  }
+    fn initialize_start_block(
+        &self,
+        _body: &rustc_middle::mir::Body<'tcx>,
+        _state: &mut Self::Domain,
+    ) {
+    }
 }
 
 impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
-  fn apply_statement_effect(
-    &self,
-    state: &mut Self::Domain,
-    _statement: &rustc_middle::mir::Statement<'tcx>,
-    location: rustc_middle::mir::Location,
-  ) {
-    self.check_location(state, location);
-  }
+    fn apply_statement_effect(
+        &self,
+        state: &mut Self::Domain,
+        _statement: &rustc_middle::mir::Statement<'tcx>,
+        location: rustc_middle::mir::Location,
+    ) {
+        self.check_location(state, location);
+    }
 
-  fn apply_terminator_effect(
-    &self,
-    state: &mut Self::Domain,
-    _terminator: &rustc_middle::mir::Terminator<'tcx>,
-    location: rustc_middle::mir::Location,
-  ) {
-    self.check_location(state, location);
-  }
+    fn apply_terminator_effect(
+        &self,
+        state: &mut Self::Domain,
+        _terminator: &rustc_middle::mir::Terminator<'tcx>,
+        location: rustc_middle::mir::Location,
+    ) {
+        self.check_location(state, location);
+    }
 
-  fn apply_call_return_effect(
-    &self,
-    _state: &mut Self::Domain,
-    _block: rustc_middle::mir::BasicBlock,
-    _return_places: rustc_mir_dataflow::CallReturnPlaces<'_, 'tcx>,
-  ) {
-  }
+    fn apply_call_return_effect(
+        &self,
+        _state: &mut Self::Domain,
+        _block: rustc_middle::mir::BasicBlock,
+        _return_places: rustc_mir_dataflow::CallReturnPlaces<'_, 'tcx>,
+    ) {
+    }
 }

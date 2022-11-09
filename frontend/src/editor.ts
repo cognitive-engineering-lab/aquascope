@@ -54,6 +54,7 @@ let readOnly = new Compartment;
 let mainKeybinding = new Compartment;
 
 export interface Icon {
+    display: boolean,
     toDom(): HTMLElement
 };
 
@@ -128,7 +129,7 @@ export class Editor {
 // Types to use in an Icon Field
 
 type RGBA = `rgba(${number},${number},${number},${number})`;
-type RGB = `rgba(${number},${number},${number})`;
+type RGB = `rgb(${number},${number},${number})`;
 
 type Color = RGB | RGBA;
 
@@ -145,13 +146,14 @@ let permission_state_ico_type =
 
 type PermissionPoint<I extends Icon> = [I, I, I, number];
 
-let glyph_width = 21;
+let glyph_width = 12;
 
 class TextIco implements Icon {
     constructor(
+        readonly display: boolean,
         readonly contents: string,
-        readonly color_expected: Color,
-        readonly color_actual: Color
+        readonly expected: boolean,
+        readonly actual: boolean
     ) {}
 
     toDom(): HTMLElement {
@@ -159,11 +161,12 @@ class TextIco implements Icon {
         tt.classList.add("permission");
         tt.setAttribute("font-family", "IBM Plex Sans");
         tt.setAttribute("font-size", `${glyph_width}px`);
-        tt.setAttribute("font-weight", "bold");
+        tt.setAttribute("font-weight", "regular");
         tt.setAttribute("stroke-width", "2");
-        tt.setAttribute("stroke", this.color_expected);
-        tt.setAttribute("fill", this.color_actual);
         tt.textContent = this.contents;
+        if (!this.actual) {
+            tt.setAttribute("fill-opacity", "0.1");
+        }
         return tt as HTMLElement & SVGTextElement;
     }
 }
@@ -182,31 +185,43 @@ class RWDPermissions<I extends Icon> extends WidgetType {
     }
 
     toDOM() {
-        // The RWD Permission is currently rendered as an SVG
+        let read_color: RGB = `rgb(${93},${202},${54})`;
+        let write_color: RGB = `rgb(${78},${190},${239})`;
+        let drop_color: RGB = `rgb(${255},${66},${68})`;
+        let all: Array<[I, Color]> =
+            [ [this.read, read_color],
+              [this.write, write_color],
+              [this.drop, drop_color] ];
+        let icons: Array<[I, Color]> = all.filter((t) => t[0].display)
+
         let wrap = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         wrap.classList.add("svg-perm");
-        wrap.setAttribute("width", `${glyph_width * 3}px`);
-        wrap.setAttribute("height", `${glyph_width}px`);
+        let my_height = icons.length * glyph_width;
+        let my_width = 2 * glyph_width;
+        wrap.setAttribute("width", `${my_width + 10}px`);
+        wrap.setAttribute("height", `${my_height}px`);
+        icons.forEach((tup, idx) => {
+            let act_ico = tup[0].toDom();
+            let exp_ico = tup[0].toDom();
 
-        let r_ico = this.read.toDom();
-        let w_ico = this.write.toDom();
-        let d_ico = this.drop.toDom();
+            let y = (idx / icons.length * 100) + (100 / icons.length);
 
-        r_ico.setAttribute("text-anchor", "start");
-        w_ico.setAttribute("text-anchor", "middle");
-        d_ico.setAttribute("text-anchor", "end");
+            act_ico.setAttribute("text-anchor", "middle");
+            exp_ico.setAttribute("text-anchor", "middle");
 
-        r_ico.setAttribute("x", `5%`);
-        w_ico.setAttribute("x", `50%`);
-        d_ico.setAttribute("x", `95%`);
+            exp_ico.setAttribute("x", "70%")
+            exp_ico.setAttribute("y", `${y}%`)
+            exp_ico.setAttribute("fill", tup[1])
+            exp_ico.setAttribute("stroke", tup[1])
 
-        r_ico.setAttribute("y", `95%`);
-        w_ico.setAttribute("y", `95%`);
-        d_ico.setAttribute("y", `95%`);
+            act_ico.setAttribute("x", "25%")
+            act_ico.setAttribute("y", `${y}%`)
+            act_ico.setAttribute("fill", tup[1])
+            act_ico.setAttribute("stroke", tup[1])
 
-        wrap.appendChild(r_ico);
-        wrap.appendChild(w_ico);
-        wrap.appendChild(d_ico);
+            wrap.appendChild(exp_ico);
+            wrap.appendChild(act_ico);
+        });
         return wrap as HTMLElement & SVGSVGElement;
     }
 
@@ -215,28 +230,24 @@ class RWDPermissions<I extends Icon> extends WidgetType {
 
 let call_types_to_permissions =
     (perm_info: ty.PermissionsInfo): PermissionPoint<TextIco> => {
-        let high_color: RGB = `rgba(${112},${128},${144})`;
-        let low_color: RGB = `rgba(${229},${228},${226})`;
-        let color = (b: boolean): Color => b ? high_color : low_color;
-
         const read_ico = new TextIco(
+            perm_info.expected.read,
             "R",
-            high_color, // All borders should be colored
-            color(perm_info.read)
+            perm_info.expected.read,
+            perm_info.actual.read,
         );
-
         const write_ico = new TextIco(
+            perm_info.expected.write,
             "W",
-            high_color,
-            color(perm_info.write)
+            perm_info.expected.write,
+            perm_info.actual.write,
         );
-
         const drop_ico = new TextIco(
+            perm_info.expected.drop,
             "D",
-            high_color,
-            color(perm_info.drop)
+            perm_info.expected.drop,
+            perm_info.actual.drop,
         );
-
         let loc = range_to_loc(perm_info.range);
         return [read_ico, write_ico, drop_ico, loc];
     };

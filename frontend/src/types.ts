@@ -4,7 +4,7 @@ export { AquascopeError } from "./bindings/AquascopeError";
 export { CallTypes } from "./bindings/CallTypes";
 export { Range } from "./bindings/Range";
 
-
+export { Permissions } from "./bindings/Permissions";
 export { PermissionsInfo } from "./bindings/PermissionsInfo";
 export { RefinementInfo } from "./bindings/RefinementInfo";
 export { PermissionsOutput } from "./bindings/PermissionsOutput";
