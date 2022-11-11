@@ -104,7 +104,7 @@ impl Container {
     pub async fn get_pid(&self, process: &str) -> Result<i64> {
         let mut cmd = Command::new("pidof");
         cmd.arg(process);
-        let response = self.exec_output(&cmd).await?;
+        let (response, _) = self.exec_output(&cmd).await?;
         Ok(response
             .split(' ')
             .next()
@@ -118,7 +118,8 @@ impl Container {
             }))
     }
 
-    pub async fn exec_output(&self, cmd: &Command) -> Result<String> {
+    // Returns (Stdout, Stderr)
+    pub async fn exec_output(&self, cmd: &Command) -> Result<(String, String)> {
         let args = iter::once(cmd.get_program())
             .chain(cmd.get_args())
             .map(|s| s.to_string_lossy().to_string())
@@ -139,6 +140,7 @@ impl Container {
         let exec = self
             .exec(CreateExecOptions {
                 attach_stdout: Some(true),
+                attach_stderr: Some(true),
                 working_dir,
                 env: Some(env),
                 cmd: Some(args),
@@ -150,15 +152,48 @@ impl Container {
             let lines = output
                 .filter_map(|log| async move {
                     match log {
-                        Ok(LogOutput::StdOut { message }) => {
-                            Some(String::from_utf8_lossy(message.as_ref()).to_string())
-                        }
+                        Ok(LogOutput::StdOut { message }) => Some(LogOutput::StdOut { message }),
+
+                        Ok(LogOutput::StdErr { message }) => Some(LogOutput::StdErr { message }),
                         _ => None,
                     }
                 })
                 .collect::<Vec<_>>()
                 .await;
-            Ok(lines.join("\n").trim_end().to_owned())
+
+            // FIXME this definitely shouldn't be so verbose...
+            let (stdout, stderr): (Vec<_>, Vec<_>) = lines.iter().partition(|e| match e {
+                LogOutput::StdOut { message: _ } => true,
+                LogOutput::StdErr { message: _ } => false,
+                _ => unreachable!(),
+            });
+
+            let stdout = stdout
+                .iter()
+                .map(|stdout| {
+                    if let LogOutput::StdOut { message } = stdout {
+                        String::from_utf8_lossy(message.as_ref()).to_string()
+                    } else {
+                        unreachable!()
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let stderr = stderr
+                .iter()
+                .map(|stderr| {
+                    if let LogOutput::StdErr { message } = stderr {
+                        String::from_utf8_lossy(message.as_ref()).to_string()
+                    } else {
+                        unreachable!()
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            Ok((
+                stdout.join("\n").trim_end().to_owned(),
+                stderr.join("\n").trim_end().to_owned(),
+            ))
         } else {
             unreachable!()
         }
@@ -175,8 +210,14 @@ impl Container {
         }
         let pwd = DEFAULT_PROJECT_PATH;
         let mut cmd = Command::new("cargo");
-        cmd.args(["new", "--bin", pwd]);
-        let output_s = self.exec_output(&cmd).await?;
+        cmd.args(["new", "--bin", pwd, "--quiet"]);
+
+        let (output_s, stderr) = self.exec_output(&cmd).await?;
+
+        if !stderr.trim().is_empty() {
+            log::error!("{}", stderr);
+            panic!("`cargo new` within bollard failed {}", stderr);
+        }
 
         log::debug!("Cargo output {}", output_s);
 
@@ -230,20 +271,22 @@ impl Container {
         self.write_source_code(&req.code).await?;
         let cmd = self.receiver_types_command("/app/aquascope_tmp_proj/src/main.rs");
 
-        let output = self.exec_output(&cmd).await?;
-
-        // panic!("Debug me pls");
+        let (stdout, stderr) = self.exec_output(&cmd).await?;
 
         Ok(ReceiverTypesResponse {
-            success: true,
-            stdout: output,
-            stderr: String::default(),
+            // XXX: we'll assume that if there was anything on `stdout`
+            // then there's something successful to report. Thid does not
+            // mean that `stderr` was empty and all things there shouldn't
+            // go unreported.
+            success: !stdout.trim().is_empty(),
+            stdout,
+            stderr,
         })
     }
 
     fn receiver_types_command(&self, filename: &str) -> Command {
         let mut cmd = Command::new("cargo");
-        cmd.args(["aquascope", "vis-method-calls", filename])
+        cmd.args(["--quiet", "aquascope", "vis-method-calls", filename])
             .current_dir("/app/aquascope_tmp_proj");
         cmd
     }
@@ -304,7 +347,7 @@ async fn container_test() -> Result<()> {
     let container = Container::with_docker(docker, DEFAULT_IMAGE).await?;
     let mut cmd = Command::new("echo");
     cmd.arg("hey");
-    let output = container.exec_output(&cmd).await?;
+    let (output, _) = container.exec_output(&cmd).await?;
     assert_eq!(output, "hey");
     container.cleanup().await?;
 
@@ -325,7 +368,7 @@ async fn container_test_new_project() -> Result<()> {
     let mut cmd = Command::new("cat");
     cmd.arg(&main_rs);
 
-    let output = container.exec_output(&cmd).await?;
+    let (output, _) = container.exec_output(&cmd).await?;
     assert_eq!(output, code);
     container.cleanup().await?;
 

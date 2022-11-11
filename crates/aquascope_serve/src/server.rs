@@ -27,7 +27,6 @@ pub(crate) async fn serve(cfg: Config) {
                 "HELLO!"
             }),
         )
-        // .route("/example-source", post(source))
         .route("/receiver-types", post(receiver_types));
 
     app = app.layer({

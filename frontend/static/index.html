@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content=
   "width=device-width, initial-scale=1.0">
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@700&display=swap" rel="stylesheet">
-
-
+  <link rel="preconnect" href="https://fonts.gstatic.com"
+  crossorigin="">
+  <link href=
+  "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@700&amp;display=swap"
+  rel="stylesheet">
   <link rel="stylesheet" href=
   "https://www.w3schools.com/w3css/4/w3.css" type="text/css">
   <link rel="stylesheet" href=
@@ -19,13 +19,16 @@
   <title>Gavin Attempting Something</title>
 </head>
 <body>
-  <div id="editor"></div>
   <script src="index.js" type="text/javascript"></script>
-  <div>
-    <b>VIM Keybindings</b> <label class="switch"><input type=
-    "checkbox" id="vim_keybindings" checked></label> <b>Show
-    receiver types</b> <label class="switch"><input type="checkbox"
-    id="show_receiver_types"></label>
-  </div>
+  <nav>
+    <ul>
+      <li class="nav-item"><label for=
+      "vim_keybindings"><input type="checkbox" id="vim_keybindings"
+      checked>VIM Keybindings</label></li>
+      <li class="nav-item"><label><input type="checkbox" id=
+      "show_receiver_types">Show receiver types</label></li>
+    </ul>
+  </nav>
+  <div id="editor"></div>
 </body>
 </html>

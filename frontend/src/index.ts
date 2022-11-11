@@ -58,20 +58,20 @@ window.onload = async () => {
 
 async function refresh_receiver_vis() {
     get_receiver_types()
-        .then((output: BackendOutput<PermissionsOutput>) => {
+        .then((output: BackendResult<PermissionsOutput>) => {
             if (output.type === "output") {
                 console.log("output is successful");
                 console.log(output.value);
                 return globals.editor.add_call_types_field(receiver_types_field, output.value);
             } else {
-                console.log("An error occurred");
                 console.log(output);
+                alert("An error occurred check your logs");
                 return;
             }
         });
 }
 
-function get_receiver_types(): Promise<BackendOutput<PermissionsOutput>> {
+function get_receiver_types(): Promise<BackendResult<PermissionsOutput>> {
     let code_in_editor = globals.editor.get_current_contents();
     return fetch(`http://${SERVER_HOST}:${SERVER_PORT}/receiver-types`, {
         method: 'POST',
@@ -83,15 +83,23 @@ function get_receiver_types(): Promise<BackendOutput<PermissionsOutput>> {
         }),
     })
         .then((response) => response.json())
-        .then((data: ServerResponse) => JSON.parse(data.stdout))
-        .then((data: Result<PermissionsOutput>) => {
-            if ('Ok' in data) {
-                return {
-                    type: "output",
-                    value: data.Ok,
-                };
+        .then((data: ServerResponse) => {
+            if (data.success) {
+                let out: Result<PermissionsOutput> = JSON.parse(data.stdout);
+                if ('Ok' in out) {
+                    console.log(`Stderr: ${data.stderr}`);
+                    return {
+                        type: "output",
+                        value: out.Ok,
+                    };
+                } else {
+                    return out.Err;
+                }
             } else {
-                throw new Error("something bad happened.");
+                return {
+                    type: "BuildError",
+                    error: data.stderr,
+                };
             }
         });
 }

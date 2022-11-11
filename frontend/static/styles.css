@@ -1,44 +1,47 @@
 /* span configuration */
 
-span {
-    display: inline-block;
-    font-weight: 900;
+html, body {
+    height: 100%;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 18px;
+    background-color: lightgray;
 }
 
-.fa-stack {
-    font-family: "Font Awesome 6 Free Solid";
+nav {
+    width: 100%;
+    background-color: firebrick;
+    padding-left: 30px;
+    padding-right: 10px;
 }
 
-.fa-stack.small {
-    font-size: 0.5em;
-    --fa-inverse: #1da1f2;
+.nav-item {
+  display: inline-block;
+  padding: 10px 15px;
+  font-weight: bold;
+  color: white;
 }
 
-i {
-    vertical-align: middle;
+.nav-item:hover {
+    color: whitesmoke;
 }
 
-.top-pict {
-    margin-bottom: -10px;
+#editor {
+    padding-left: 25px;
 }
 
-/* SVG read / write / drop permission icons */
+.cm-editor {
+    height: 100%;
 
-/* text { */
-/*     font-family: sans-serif, 40px; */
-/*     font-size: 40px; */
-/*     font-weight: "bold"; */
-/* } */
+    max-height: 600px;
+    max-width: 700px;
 
-/* .svg-perm { */
-/*     width: 120px; */
-/*     height: 40px; */
-/* } */
+    border-style: solid;
+    border-width: 5px;
+    border-radius: 5px;
+    border-color: #bbb;
 
-text .permission {
-    font-family: 'IBM Plex Sans', sans-serif, 40px;
-    font-size: 40px;
-    font-weight: "bold";
-    stroke-width: 8;
-    paint-order: stroke;
+    background-color: white;
+}
+.cm-scroller {
+    overflow: auto;
 }
