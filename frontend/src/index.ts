@@ -1,7 +1,6 @@
 import * as Ed from "./editor"
 import {
     BackendResult, BackendError,
-    // ReceiverTypes,
     BackendOutput, PermissionsOutput
 } from "./types"
 

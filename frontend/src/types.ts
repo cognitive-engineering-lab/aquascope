@@ -8,6 +8,7 @@ export { Permissions } from "./bindings/Permissions";
 export { PermissionsInfo } from "./bindings/PermissionsInfo";
 export { RefinementInfo } from "./bindings/RefinementInfo";
 export { PermissionsOutput } from "./bindings/PermissionsOutput";
+export { RefinementRegion } from "./bindings/RefinementRegion";
 
 // TODO remove the following types which should no longer be used
 export { ReceiverTypesOutput as ReceiverTypes } from "./bindings/ReceiverTypesOutput";

@@ -29,11 +29,15 @@ nav {
     padding-left: 25px;
 }
 
+.cm-loan {
+    text-decoration: underline 3px lightblue;
+}
+
 .cm-editor {
     height: 100%;
 
-    max-height: 600px;
-    max-width: 700px;
+    max-height: 700px;
+    max-width: 900px;
 
     border-style: solid;
     border-width: 5px;
