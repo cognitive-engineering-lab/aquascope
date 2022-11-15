@@ -1,13 +1,32 @@
-import {keymap, highlightSpecialChars, drawSelection, highlightActiveLine, dropCursor,
-        rectangularSelection, crosshairCursor,
-        lineNumbers, highlightActiveLineGutter} from "@codemirror/view"
-import {Extension, EditorState} from "@codemirror/state"
-import {defaultHighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching,
-        foldGutter, foldKeymap} from "@codemirror/language"
-import {defaultKeymap, history, historyKeymap} from "@codemirror/commands"
-import {searchKeymap, highlightSelectionMatches} from "@codemirror/search"
-import {autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap} from "@codemirror/autocomplete"
-import {lintKeymap} from "@codemirror/lint"
+import {
+  keymap,
+  highlightSpecialChars,
+  drawSelection,
+  highlightActiveLine,
+  dropCursor,
+  rectangularSelection,
+  crosshairCursor,
+  lineNumbers,
+  highlightActiveLineGutter,
+} from "@codemirror/view";
+import { Extension, EditorState } from "@codemirror/state";
+import {
+  defaultHighlightStyle,
+  syntaxHighlighting,
+  indentOnInput,
+  bracketMatching,
+  foldGutter,
+  foldKeymap,
+} from "@codemirror/language";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import {
+  autocompletion,
+  completionKeymap,
+  closeBrackets,
+  closeBracketsKeymap,
+} from "@codemirror/autocomplete";
+import { lintKeymap } from "@codemirror/lint";
 
 // NOTE (gavinleroy) this file was copied from @codemirror so I can play around
 // with local changes. I suspect that as I explore different bits of functionality
@@ -61,7 +80,7 @@ export const basicSetup: Extension = (() => [
   dropCursor(),
   EditorState.allowMultipleSelections.of(true),
   indentOnInput(),
-  syntaxHighlighting(defaultHighlightStyle, {fallback: true}),
+  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
   bracketMatching(),
   closeBrackets(),
   autocompletion(),
@@ -76,9 +95,9 @@ export const basicSetup: Extension = (() => [
     ...historyKeymap,
     ...foldKeymap,
     ...completionKeymap,
-    ...lintKeymap
-  ])
-])()
+    ...lintKeymap,
+  ]),
+])();
 
 /// A minimal set of extensions to create a functional editor. Only
 /// includes [the default keymap](#commands.defaultKeymap), [undo
@@ -90,11 +109,8 @@ export const minimalSetup: Extension = (() => [
   highlightSpecialChars(),
   history(),
   drawSelection(),
-  syntaxHighlighting(defaultHighlightStyle, {fallback: true}),
-  keymap.of([
-    ...defaultKeymap,
-    ...historyKeymap,
-  ])
-])()
+  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  keymap.of([...defaultKeymap, ...historyKeymap]),
+])();
 
-export {EditorView} from "@codemirror/view"
+export { EditorView } from "@codemirror/view";

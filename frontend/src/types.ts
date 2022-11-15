@@ -24,7 +24,7 @@ interface AnalysisError {
   error: string;
 }
 interface FileNotFound {
-  type: "FileNotFound"
+  type: "FileNotFound";
 }
 export type BackendError = BuildError | AnalysisError | FileNotFound;
 
