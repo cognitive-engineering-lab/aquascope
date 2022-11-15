@@ -198,7 +198,9 @@ pub fn pair_permissions_to_calls(
           // for example, in a line such as: `Vec::default().push(0)`.
           let (place_1, point) =
             stmt.left().map_or((place_0, point_call), |stmt| {
-              let place = match stmt.kind {
+              log::debug!("Previous statement {stmt:?}");
+
+              let place = match &stmt.kind {
                 StatementKind::Assign(box (_, Rvalue::Ref(_, _, place))) => {
                   place
                 }
@@ -206,14 +208,33 @@ pub fn pair_permissions_to_calls(
                   _,
                   Rvalue::Use(Operand::Move(place)),
                 )) => place,
-                _ => unreachable!(),
+
+                StatementKind::Assign(box (
+                  _,
+                  Rvalue::Use(Operand::Copy(place)),
+                )) =>
+                // XXX: if a receiver is copied, it will have all required
+                // permissions. the reason this is left unimplemented is because
+                // it may be helpful to actually have some sort of visual indicator
+                // in the frontend which says "hey, this was copied".
+                {
+                  todo!("receivers copied on call not handled")
+                }
+                sk => {
+                  panic!("missing StatementKind {:?}", sk)
+                }
               };
-              (place, point_assign)
+              (*place, point_assign)
             });
+
+          log::debug!("The receiver place chosen is {place_1:?}");
 
           let path = ctxt.place_to_path(&place_1);
           let actual =
             ctxt.permissions_output.permissions_at_point(path, point);
+
+          log::debug!("The permissions are {actual:?}");
+
           let expected = fn_sig.inputs()[0].into();
 
           let refined_by =

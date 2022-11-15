@@ -272,15 +272,17 @@ impl Output<AquascopeFacts> {
 
     let path_moved_at = iteration.variable::<(Path, Point)>("path_moved_at");
 
-    // path_moved_at(Path, Point) :-
-    //    path_moved_at_base(Path, Point)
-    path_moved_at.extend(
+    let path_moved_at_base = Relation::from_iter(
       ctxt
         .polonius_input_facts
         .path_moved_at_base
         .iter()
         .map(|&(mp, point)| (ctxt.moveable_path_to_path(mp), point)),
     );
+
+    // path_moved_at(Path, Point) :-
+    //    path_moved_at_base(Path, Point)
+    path_moved_at.extend(path_moved_at_base.iter());
 
     let mut iterations = 0;
 
@@ -306,6 +308,13 @@ impl Output<AquascopeFacts> {
     let path_moved_at = path_moved_at.complete();
 
     for &(path, point) in path_moved_at.iter() {
+      // HACK: to be removed anyways when a local fork
+      // of polonius-engine is used. We do not want to consider
+      // the actual move points as moved, only the points following.
+      if path_moved_at_base.contains(&(path, point)) {
+        continue;
+      }
+
       ctxt
         .permissions_output
         .path_moved_at
@@ -314,32 +323,17 @@ impl Output<AquascopeFacts> {
         .insert(path);
     }
 
-    for &(path, loan, point) in cannot_read.iter() {
-      ctxt
-        .permissions_output
-        .cannot_read
-        .entry(point)
-        .or_default()
-        .insert(path, loan);
+    macro_rules! insert_facts {
+      ($input:expr, $field:expr) => {
+        for &(path, loan, point) in $input.iter() {
+          $field.entry(point).or_default().insert(path, loan);
+        }
+      };
     }
 
-    for &(path, loan, point) in cannot_write.iter() {
-      ctxt
-        .permissions_output
-        .cannot_write
-        .entry(point)
-        .or_default()
-        .insert(path, loan);
-    }
-
-    for &(path, loan, point) in cannot_drop.iter() {
-      ctxt
-        .permissions_output
-        .cannot_drop
-        .entry(point)
-        .or_default()
-        .insert(path, loan);
-    }
+    insert_facts!(cannot_read, ctxt.permissions_output.cannot_read);
+    insert_facts!(cannot_write, ctxt.permissions_output.cannot_write);
+    insert_facts!(cannot_drop, ctxt.permissions_output.cannot_drop);
 
     log::debug!(
       "#cannot_read {} #cannot_write {} #cannot_drop {}",

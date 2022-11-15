@@ -13,5 +13,6 @@ rustc_private=true
 log = "0.4"
 flowistry = "0.5.31"
 datafrog = "2.0.0"
+# polonius-engine = { path = "../polonius-engine" }
 serde = "1.0"
 ts-rs = "6.1"

@@ -33,6 +33,7 @@ pub struct PermissionsCtxt<'a, 'tcx> {
 
 impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   pub fn place_to_path(&self, p: &Place<'tcx>) -> Path {
+    // log::debug!("looking for place {p:?}");
     *self
       .rev_lookup
       .get(&p.local)
