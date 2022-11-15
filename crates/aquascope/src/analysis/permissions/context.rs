@@ -1,21 +1,16 @@
-use std::collections::BTreeMap;
-
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
 use rustc_borrowck::{
   borrow_set::{BorrowData, BorrowSet},
   consumers::{BodyWithBorrowckFacts, RichLocation, RustcFacts},
 };
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_hir::{
-  def_id::{DefId, LocalDefId},
-  BodyId, Mutability,
-};
+use rustc_hir::{def_id::DefId, BodyId, Mutability};
 use rustc_index::vec::IndexVec;
 use rustc_middle::{
   mir::{BorrowKind, Local, Location, Place},
   ty::TyCtxt,
 };
-use rustc_mir_dataflow::move_paths::{LookupResult, MoveData};
+use rustc_mir_dataflow::move_paths::MoveData;
 
 use super::{AquascopeFacts, Loan, Output, Path, Point};
 
@@ -55,8 +50,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   pub fn path_to_place(&self, p: Path) -> Place<'tcx> {
-    let place = self.place_data[p];
-    place
+    self.place_data[p]
   }
 
   pub fn location_to_point(&self, l: Location) -> Point {
@@ -131,7 +125,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
         loans.iter().for_each(|loan| {
           hash
             .entry(*loan)
-            .or_insert(PointExt::from_point(*point))
+            .or_insert_with(|| PointExt::from_point(*point))
             .expand(*point)
         })
       });

@@ -4,12 +4,12 @@
   associated_type_defaults,
   min_specialization,
   type_alias_impl_trait,
-  generic_associated_types,
   trait_alias,
-  let_else,
   let_chains
 )]
-#![allow(clippy::needless_lifetimes)]
+
+#[macro_use]
+extern crate rustc_middle;
 
 extern crate either;
 extern crate polonius_engine;
@@ -23,7 +23,6 @@ extern crate rustc_index;
 extern crate rustc_infer;
 extern crate rustc_interface;
 extern crate rustc_macros;
-extern crate rustc_middle;
 extern crate rustc_mir_dataflow;
 extern crate rustc_mir_transform;
 extern crate rustc_serialize;

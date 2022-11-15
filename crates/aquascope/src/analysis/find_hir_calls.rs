@@ -1,7 +1,6 @@
 use rustc_hir::{
-  def_id::LocalDefId,
   intravisit::{self, Visitor},
-  BodyId, Expr, ExprKind, HirId,
+  BodyId, Expr, ExprKind,
 };
 use rustc_middle::{
   hir::nested_filter::OnlyBodies,
@@ -26,7 +25,8 @@ impl<'tcx> Visitor<'tcx> for MethodCallFinder<'_, 'tcx> {
     intravisit::walk_expr(self, expression);
 
     let hir_id = expression.hir_id;
-    if let ExprKind::MethodCall(_, _, _, call_span) = expression.kind {
+    if let ExprKind::MethodCall(_ps, _, _, call_span) = expression.kind {
+      log::debug!("HIR method {_ps:?}");
       let def_id = self.typeck_res.type_dependent_def_id(hir_id).unwrap();
       let fn_sig = self.tcx.fn_sig(def_id).skip_binder();
       self.call_spans.push((call_span, fn_sig));
@@ -34,10 +34,10 @@ impl<'tcx> Visitor<'tcx> for MethodCallFinder<'_, 'tcx> {
   }
 }
 
-pub fn find_method_call_spans<'tcx>(
-  tcx: TyCtxt<'tcx>,
+pub fn find_method_call_spans(
+  tcx: TyCtxt,
   body_id: BodyId,
-) -> Vec<(Span, FnSig<'tcx>)> {
+) -> Vec<(Span, FnSig)> {
   log::debug!("Looking in body {:?}", body_id);
   let typeck_res = tcx.typeck_body(body_id);
   let mut finder = MethodCallFinder {

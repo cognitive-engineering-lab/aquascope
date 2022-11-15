@@ -25,12 +25,12 @@ impl<'tcx> Visitor<'tcx> for CallFinder<'tcx> {
   ) {
     log::debug!("found terminator {:?}", terminator);
     if let TerminatorKind::Call {
-      func,
+      func: _,
       args,
-      destination,
-      target,
-      cleanup,
-      from_hir_call,
+      destination: _,
+      target: _,
+      cleanup: _,
+      from_hir_call: _,
       fn_span,
     } = &terminator.kind
     {

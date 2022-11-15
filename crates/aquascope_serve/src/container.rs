@@ -101,6 +101,7 @@ impl Container {
             .context(BollardSnafu)
     }
 
+    #[allow(dead_code)]
     pub async fn get_pid(&self, process: &str) -> Result<i64> {
         let mut cmd = Command::new("pidof");
         cmd.arg(process);
@@ -318,6 +319,7 @@ impl Drop for Container {
     }
 }
 
+#[allow(dead_code)]
 fn full_permissions() -> std::fs::Permissions {
     PermissionsExt::from_mode(0o777)
 }

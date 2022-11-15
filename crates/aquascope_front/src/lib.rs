@@ -24,6 +24,5 @@ extern crate rustc_span;
 // pub mod method_receivers;
 pub mod permissions;
 pub mod plugin;
-pub mod source;
 
 pub use plugin::AquascopePlugin;

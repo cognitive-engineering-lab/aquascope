@@ -1,3 +1,5 @@
+#![deny(rustc::untranslatable_diagnostic)]
+#![deny(rustc::diagnostic_outside_of_impl)]
 use std::{cmp::max, iter};
 
 use log::debug;
@@ -150,7 +152,7 @@ fn place_components_conflict<'tcx>(
 
   match place_base_conflict(borrow_local, access_local) {
     Overlap::Arbitrary => {
-      panic!("Two base can't return Arbitrary");
+      bug!("Two base can't return Arbitrary");
     }
     Overlap::EqualOrDisjoint => {
       // This is the recursive case - proceed to the next element.
@@ -167,6 +169,8 @@ fn place_components_conflict<'tcx>(
   for (i, (borrow_c, &access_c)) in
     iter::zip(borrow_place.projection, access_place.projection).enumerate()
   {
+    debug!("{:?} {:?}", borrow_c, access_c);
+
     let borrow_proj_base = &borrow_place.projection[.. i];
 
     // Borrow and access path both have more components.
@@ -259,7 +263,7 @@ fn place_components_conflict<'tcx>(
         }
         (ProjectionElem::Deref, ty::Ref(_, _, hir::Mutability::Not), _) => {
           // Shouldn't be tracked
-          panic!("Tracking borrow behind shared reference.");
+          bug!("Tracking borrow behind shared reference.");
         }
         (
           ProjectionElem::Deref,
@@ -286,6 +290,7 @@ fn place_components_conflict<'tcx>(
         | (ProjectionElem::Index { .. }, _, _)
         | (ProjectionElem::ConstantIndex { .. }, _, _)
         | (ProjectionElem::Subslice { .. }, _, _)
+        | (ProjectionElem::OpaqueCast { .. }, _, _)
         | (ProjectionElem::Downcast { .. }, _, _) => {
           // Recursive case. This can still be disjoint on a
           // further iteration if this a shallow access and
@@ -352,6 +357,17 @@ fn place_projection_conflict<'tcx>(
       // derefs (e.g., `*x` vs. `*x`) - recur.
       debug!("place_element_conflict: DISJOINT-OR-EQ-DEREF");
       Overlap::EqualOrDisjoint
+    }
+    (ProjectionElem::OpaqueCast(v1), ProjectionElem::OpaqueCast(v2)) => {
+      if v1 == v2 {
+        // same type - recur.
+        debug!("place_element_conflict: DISJOINT-OR-EQ-OPAQUE");
+        Overlap::EqualOrDisjoint
+      } else {
+        // Different types. Disjoint!
+        debug!("place_element_conflict: DISJOINT-OPAQUE");
+        Overlap::Disjoint
+      }
     }
     (ProjectionElem::Field(f1, _), ProjectionElem::Field(f2, _)) => {
       if f1 == f2 {
@@ -624,12 +640,14 @@ fn place_projection_conflict<'tcx>(
       | ProjectionElem::Field(..)
       | ProjectionElem::Index(..)
       | ProjectionElem::ConstantIndex { .. }
+      | ProjectionElem::OpaqueCast { .. }
       | ProjectionElem::Subslice { .. }
       | ProjectionElem::Downcast(..),
       _,
-    ) => panic!(
+    ) => bug!(
       "mismatched projections in place_element_conflict: {:?} and {:?}",
-      pi1_elem, pi2_elem
+      pi1_elem,
+      pi2_elem
     ),
   }
 }

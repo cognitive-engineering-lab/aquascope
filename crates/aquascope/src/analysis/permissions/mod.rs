@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod context;
 mod permissions_datalog;
 mod places_conflict;

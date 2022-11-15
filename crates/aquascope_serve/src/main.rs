@@ -22,7 +22,6 @@ fn main() {
 struct Config {
     address: String,
     port: u16,
-    deploy_local: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -38,27 +37,13 @@ impl Config {
             .ok()
             .and_then(|p| p.parse().ok())
             .unwrap_or(DEFAULT_PORT);
-        let deploy_local = env::var("AQUASCOPE_NO_DOCKER")
-            .ok()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(false);
-        Config {
-            address,
-            port,
-            deploy_local,
-        }
+        Config { address, port }
     }
 
     fn socket_address(&self) -> SocketAddr {
         let a = self.address.parse().expect("Invalid address");
         SocketAddr::new(a, self.port)
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-// FIXME this was a test request and shouldn't actually be here.
-struct SourceRequest {
-    filename: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

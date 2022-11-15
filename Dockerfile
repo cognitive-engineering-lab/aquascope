@@ -1,7 +1,7 @@
 FROM rust:latest
 
-RUN rustup default nightly-2022-09-12 && \
-    rustup component add --toolchain nightly-2022-09-12 rust-src rustc-dev llvm-tools-preview
+RUN rustup default nightly-2022-11-07 && \
+    rustup component add --toolchain nightly-2022-11-07 rust-src rustc-dev llvm-tools-preview
 
 WORKDIR /aquascope
 

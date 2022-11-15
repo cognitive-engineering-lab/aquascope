@@ -1,5 +1,6 @@
 //! Core contextual analysis for Aquascope.
 
+#[allow(dead_code)]
 pub mod find_bindings;
 pub mod find_calls;
 mod find_hir_calls;
@@ -11,17 +12,13 @@ pub use find_bindings::find_bindings;
 use find_calls::FindCalls;
 use find_hir_calls::find_method_call_spans;
 use permissions::PermissionsCtxt;
-use rustc_borrowck::consumers::{BodyWithBorrowckFacts, RustcFacts};
-use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
-use rustc_hir::{
-  def::Res, def_id::LocalDefId, hir_id::HirId, BindingAnnotation, BodyId, Expr,
-  ExprKind, Node, QPath,
-};
+use rustc_borrowck::consumers::BodyWithBorrowckFacts;
+use rustc_data_structures::fx::FxHashMap as HashMap;
+use rustc_hir::BodyId;
 use rustc_middle::{
-  mir::{Location, Mutability, Operand, Place, Rvalue, StatementKind},
+  mir::{Mutability, Operand, Rvalue, StatementKind},
   ty::{Ty, TyCtxt},
 };
-use rustc_mir_dataflow::move_paths::{LookupResult, MoveData};
 use rustc_span::Span;
 use serde::Serialize;
 use ts_rs::TS;
@@ -125,27 +122,28 @@ pub struct RefinementInfo {
   pub drop: Option<RefinementRegion>,
 }
 
-pub fn pair_permissions_to_calls<'a, 'tcx>(
-  ctxt: &PermissionsCtxt<'a, 'tcx>,
+pub fn pair_permissions_to_calls(
+  ctxt: &PermissionsCtxt,
   span_to_range: impl Fn(Span) -> Range + std::marker::Copy,
 ) -> Vec<PermissionsInfo> {
   let locations_to_body_info = ctxt.body_with_facts.body.find_calls();
 
-  let never_write = &ctxt.permissions_output.never_write;
-  let never_drop = &ctxt.permissions_output.never_drop;
+  let _never_write = &ctxt.permissions_output.never_write;
+  let _never_drop = &ctxt.permissions_output.never_drop;
 
   let method_spans = find_method_call_spans(ctxt.tcx, ctxt.body_id);
 
-  locations_to_body_info
+  method_spans
     .iter()
-    .filter_map(|(loc, call_info)| {
-      // HACK: if there is no overlap, then just ignore the call.
-      method_spans
+    .filter_map(|&(fn_span, fn_sig)| {
+      locations_to_body_info
         .iter()
-        .find(|&&(fn_span, _)| call_info.fn_span.overlaps(fn_span))
-        .map(|&(fn_span, fn_sig)| {
+        .find(|&(_, call_info)| call_info.fn_span.overlaps(fn_span))
+        .map(|(loc, call_info)| {
           let point_call = ctxt.location_to_point(*loc);
           let path = &ctxt.place_to_path(&call_info.receiver_place);
+
+          log::debug!("I think this is from the source: {fn_sig:?}");
 
           // HACK: there is a small issue with the path retrived from the call site.
           // A piece of code like the following:
@@ -232,8 +230,8 @@ pub fn pair_permissions_to_calls<'a, 'tcx>(
     .collect()
 }
 
-pub fn find_refinements_at_point<'a, 'tcx>(
-  ctxt: &PermissionsCtxt<'a, 'tcx>,
+pub fn find_refinements_at_point(
+  ctxt: &PermissionsCtxt,
   path: Path,
   point: Point,
   span_to_range: impl Fn(Span) -> Range,

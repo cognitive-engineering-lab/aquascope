@@ -297,7 +297,7 @@ impl Output<AquascopeFacts> {
           cfg_edge.extend_with(|&(_path, point1)| point1),
           path_assigned_at_base.extend_anti(|&(path, _point1)| path),
         ),
-        |&(path, point1), &point2| (path, point2),
+        |&(path, _point1), &point2| (path, point2),
       );
     }
 
@@ -409,7 +409,7 @@ pub fn compute<'a, 'tcx>(
     timer.elapsed()
   );
 
-  ctxt.borrow_set.location_map.iter().for_each(|(k, bd)| {
+  ctxt.borrow_set.location_map.iter().for_each(|(_k, bd)| {
     log::debug!("Borrow Data {:?}", bd);
   });
 

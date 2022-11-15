@@ -5,24 +5,15 @@ use std::{
 };
 
 use flowistry::mir::utils::{dump_results, PlaceExt};
-use rustc_borrowck::{
-  borrow_set::{BorrowData, BorrowSet},
-  consumers::{BodyWithBorrowckFacts, RichLocation, RustcFacts},
-};
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_hir::{def_id::DefId, Mutability};
-use rustc_middle::{
-  mir::{Location, Place, ProjectionElem},
-  ty::TyCtxt,
-};
+use rustc_middle::mir::{Location, Place};
 use rustc_mir_dataflow::{
-  fmt::DebugWithContext, move_paths::MoveData, Analysis, AnalysisDomain,
-  JoinSemiLattice,
+  fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice,
 };
 
 use super::{context::PermissionsCtxt, Permissions};
 
-pub fn dump_permissions_with_mir<'a, 'tcx>(ctxt: &PermissionsCtxt<'a, 'tcx>) {
+pub fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
   // XXX: Unfortunately, the only way I know how to do this is to do a MIR
   // dataflow analysis and simply take the information from the context.
   // This mean there will only be a single pass but :shrug:
@@ -94,7 +85,7 @@ impl JoinSemiLattice for PDomain<'_> {
     for (place, perms) in other.0.iter() {
       match self.0.entry(*place) {
         Entry::Occupied(mut entry) => {
-          changed |= entry.get_mut().join(&perms);
+          changed |= entry.get_mut().join(perms);
         }
         Entry::Vacant(entry) => {
           entry.insert(*perms);

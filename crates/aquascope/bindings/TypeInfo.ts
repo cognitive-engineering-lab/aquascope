@@ -2,4 +2,7 @@
 import type { Range } from "./Range";
 import type { TypeState } from "./TypeState";
 
-export interface TypeInfo { range: Range, of_type: TypeState, }
+export interface TypeInfo {
+  range: Range;
+  of_type: TypeState;
+}
