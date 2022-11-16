@@ -1,25 +1,24 @@
-import { basicSetup } from "./setup";
-import * as ty from "./types";
 import { rust } from "@codemirror/lang-rust";
 import { indentUnit } from "@codemirror/language";
 import {
+  Compartment,
   EditorState,
-  StateField,
+  Range,
+  RangeSet,
   StateEffect,
   StateEffectType,
-  RangeSet,
-  Compartment,
-  Range,
+  StateField,
 } from "@codemirror/state";
 import {
-  EditorView,
-  WidgetType,
   Decoration,
   DecorationSet,
-  ViewUpdate,
-  ViewPlugin,
+  EditorView,
+  WidgetType,
 } from "@codemirror/view";
 import { vim } from "@replit/codemirror-vim";
+
+import { basicSetup } from "./setup";
+import * as ty from "./types";
 
 const initial_code: string = `// Please start typing :)
 
@@ -182,7 +181,7 @@ class RegionEnd extends WidgetType {
     super();
   }
 
-  eq(other: RegionEnd) {
+  eq(_other: RegionEnd) {
     return false;
   }
 
@@ -253,11 +252,11 @@ class TextIco implements Icon {
     tt.setAttribute("paint-order", "stroke");
     tt.textContent = this.contents;
 
-    tt.addEventListener("mouseenter", (_) => {
+    tt.addEventListener("mouseenter", _ => {
       this.start.style.width = "15px";
       this.end.style.width = "15px";
     });
-    tt.addEventListener("mouseleave", (_) => {
+    tt.addEventListener("mouseleave", _ => {
       this.start.style.width = "0px";
       this.end.style.width = "0px";
     });
@@ -281,7 +280,7 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
 
   toDOM() {
     let all: Array<I> = [this.read, this.write, this.drop];
-    let icons: Array<I> = all.filter((t) => t.display);
+    let icons: Array<I> = all.filter(t => t.display);
 
     let wrap = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     wrap.classList.add("svg-perm");
@@ -376,7 +375,7 @@ let make_text_state_field_with_icon = <I extends TextIco>(
 
       return transactions.docChanged ? RangeSet.of([]) : points;
     },
-    provide: (f) => EditorView.decorations.from(f),
+    provide: f => EditorView.decorations.from(f),
   });
 };
 

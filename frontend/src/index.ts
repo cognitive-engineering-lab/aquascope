@@ -1,10 +1,5 @@
 import * as Ed from "./editor";
-import {
-  BackendResult,
-  BackendError,
-  BackendOutput,
-  PermissionsOutput,
-} from "./types";
+import { BackendError, BackendResult, PermissionsOutput } from "./types";
 
 const SERVER_HOST = "127.0.0.1";
 const SERVER_PORT = "8008";
@@ -54,11 +49,11 @@ window.addEventListener("load", () => {
     editor: new Ed.Editor(editor_element, [receiver_types_field.state_field]),
   };
 
-  vim_keybinding_toggle.addEventListener("click", (e: Event) => {
+  vim_keybinding_toggle.addEventListener("click", _ => {
     globals.editor.toggle_vim(vim_keybinding_toggle?.checked);
   });
 
-  show_rcvr_types_toggle.addEventListener("click", (e: Event) => {
+  show_rcvr_types_toggle.addEventListener("click", _ => {
     globals.editor.toggle_readonly(show_rcvr_types_toggle?.checked);
     if (show_rcvr_types_toggle.checked) {
       return refresh_receiver_vis();
@@ -95,7 +90,7 @@ function get_receiver_types(): Promise<BackendResult<PermissionsOutput>> {
       code: code_in_editor,
     }),
   })
-    .then((response) => response.json())
+    .then(response => response.json())
     .then((data: ServerResponse) => {
       if (data.success) {
         let out: Result<PermissionsOutput> = JSON.parse(data.stdout);

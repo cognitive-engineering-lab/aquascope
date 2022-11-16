@@ -1,31 +1,31 @@
 import {
   autocompletion,
-  completionKeymap,
   closeBrackets,
   closeBracketsKeymap,
+  completionKeymap,
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
-  defaultHighlightStyle,
-  syntaxHighlighting,
-  indentOnInput,
   bracketMatching,
+  defaultHighlightStyle,
   foldGutter,
   foldKeymap,
+  indentOnInput,
+  syntaxHighlighting,
 } from "@codemirror/language";
 import { lintKeymap } from "@codemirror/lint";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-import { Extension, EditorState } from "@codemirror/state";
+import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
+import { EditorState, Extension } from "@codemirror/state";
 import {
-  keymap,
-  highlightSpecialChars,
-  drawSelection,
-  highlightActiveLine,
-  dropCursor,
-  rectangularSelection,
   crosshairCursor,
-  lineNumbers,
+  drawSelection,
+  dropCursor,
+  highlightActiveLine,
   highlightActiveLineGutter,
+  highlightSpecialChars,
+  keymap,
+  lineNumbers,
+  rectangularSelection,
 } from "@codemirror/view";
 
 // NOTE (gavinleroy) this file was copied from @codemirror so I can play around

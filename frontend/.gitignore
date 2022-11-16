@@ -28,3 +28,8 @@ yarn-error.log*
 .prettierrc.cjs
 jest.config.cjs
 tsconfig.json
+
+# Managed by Greco
+.eslintrc.js
+.prettierrc.js
+jest.config.js
