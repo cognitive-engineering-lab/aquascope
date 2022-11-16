@@ -1,9 +1,9 @@
 use anyhow::Result;
 use aquascope::analysis::{self, PermissionsInfo};
 use flowistry::{
-  mir::borrowck_facts::{get_body_with_borrowck_facts},
-  source_map,
+  mir::borrowck_facts::get_body_with_borrowck_facts, source_map,
 };
+use itertools::Itertools;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use serde::Serialize;
@@ -15,7 +15,14 @@ pub struct PermissionsOutput(Vec<PermissionsInfo>);
 
 impl super::plugin::Join for PermissionsOutput {
   fn join(self, other: Self) -> Self {
-    PermissionsOutput(self.0.join(other.0))
+    PermissionsOutput(
+      self
+        .0
+        .join(other.0)
+        .into_iter()
+        .unique_by(|pi| pi.range.clone())
+        .collect::<Vec<_>>(),
+    )
   }
 }
 

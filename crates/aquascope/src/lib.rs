@@ -38,7 +38,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 // re-export Range from Flowistry with TS.
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Serialize, Debug, Clone, Hash, PartialEq, Eq, Default, TS)]
 #[ts(export)]
 pub struct Range {
   pub char_start: usize,

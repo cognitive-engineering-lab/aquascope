@@ -28,8 +28,6 @@ pub struct AquascopePluginArgs {
 #[derive(Debug, Subcommand, Serialize, Deserialize)]
 enum AquascopeCommand {
   VisMethodCalls {
-    file: String,
-
     #[clap(last = true)]
     flags: Vec<String>,
   },
@@ -78,14 +76,14 @@ impl RustcPlugin for AquascopePlugin {
       _ => {}
     };
 
-    let (file, flags) = match &args.command {
-      VisMethodCalls { file, flags } => (file, flags),
+    let flags = match &args.command {
+      VisMethodCalls { flags } => flags,
       _ => unreachable!(),
     };
 
     RustcPluginArgs {
       flags: Some(flags.clone()),
-      file: Some(PathBuf::from(file)),
+      file: None,
       args,
     }
   }

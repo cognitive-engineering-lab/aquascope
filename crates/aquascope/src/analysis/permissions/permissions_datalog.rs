@@ -358,8 +358,11 @@ pub fn compute<'a, 'tcx>(
 
   // for debugging pruposes only
   let owner = tcx.hir().body_owner(body_id);
-  let Some(name) = tcx.hir().opt_name(owner) else { unreachable!() };
-  log::debug!("computing body permissions {:?}", name.as_str());
+  let name = match tcx.hir().opt_name(owner) {
+    Some(name) => name.to_ident_string(),
+    None => "<anonymous>".to_owned(),
+  };
+  log::debug!("computing body permissions {:?}", name);
 
   let polonius_input_facts = &body_with_facts.input_facts;
   let polonius_output =
@@ -399,7 +402,7 @@ pub fn compute<'a, 'tcx>(
 
   log::info!(
     "permissions analysis for {:?} took: {:?}",
-    name.as_str(),
+    name,
     timer.elapsed()
   );
 

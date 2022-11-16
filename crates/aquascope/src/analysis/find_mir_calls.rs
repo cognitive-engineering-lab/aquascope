@@ -8,6 +8,7 @@ pub trait FindCalls<'tcx> {
   fn find_calls(&self) -> HashMap<Location, CallInfo<'tcx>>;
 }
 
+#[derive(Debug)]
 pub struct CallInfo<'tcx> {
   pub receiver_place: Place<'tcx>,
   pub fn_span: Span,

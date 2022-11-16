@@ -1,3 +1,4 @@
+use flowistry::mir::utils::PlaceExt;
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
 use rustc_borrowck::{
   borrow_set::{BorrowData, BorrowSet},
@@ -33,17 +34,23 @@ pub struct PermissionsCtxt<'a, 'tcx> {
 
 impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   pub fn place_to_path(&self, p: &Place<'tcx>) -> Path {
-    // log::debug!("looking for place {p:?}");
+    let p = p.normalize(self.tcx, self.def_id);
     *self
       .rev_lookup
       .get(&p.local)
       .unwrap()
       .iter()
-      .find(|path| self.path_to_place(**path) == *p)
-      .unwrap()
+      .find(|path| self.path_to_place(**path) == p)
+      .unwrap_or_else(|| {
+        panic!(
+          "Could not find path for place: {p:?}. Acceptable places are: {:#?}",
+          self.place_data.iter().collect::<Vec<_>>()
+        )
+      })
   }
 
   pub fn new_path(&mut self, place: Place<'tcx>) -> Path {
+    let place = place.normalize(self.tcx, self.def_id);
     let new_path = self.place_data.push(place);
     let local = place.local;
     self.rev_lookup.entry(local).or_default().push(new_path);
