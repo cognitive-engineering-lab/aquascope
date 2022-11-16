@@ -1,4 +1,22 @@
 import {
+  autocompletion,
+  completionKeymap,
+  closeBrackets,
+  closeBracketsKeymap,
+} from "@codemirror/autocomplete";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import {
+  defaultHighlightStyle,
+  syntaxHighlighting,
+  indentOnInput,
+  bracketMatching,
+  foldGutter,
+  foldKeymap,
+} from "@codemirror/language";
+import { lintKeymap } from "@codemirror/lint";
+import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { Extension, EditorState } from "@codemirror/state";
+import {
   keymap,
   highlightSpecialChars,
   drawSelection,
@@ -9,24 +27,6 @@ import {
   lineNumbers,
   highlightActiveLineGutter,
 } from "@codemirror/view";
-import { Extension, EditorState } from "@codemirror/state";
-import {
-  defaultHighlightStyle,
-  syntaxHighlighting,
-  indentOnInput,
-  bracketMatching,
-  foldGutter,
-  foldKeymap,
-} from "@codemirror/language";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-import {
-  autocompletion,
-  completionKeymap,
-  closeBrackets,
-  closeBracketsKeymap,
-} from "@codemirror/autocomplete";
-import { lintKeymap } from "@codemirror/lint";
 
 // NOTE (gavinleroy) this file was copied from @codemirror so I can play around
 // with local changes. I suspect that as I explore different bits of functionality

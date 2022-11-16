@@ -1,13 +1,7 @@
 import { basicSetup } from "./setup";
-import { vim } from "@replit/codemirror-vim";
-import {
-  EditorView,
-  WidgetType,
-  Decoration,
-  DecorationSet,
-  ViewUpdate,
-  ViewPlugin,
-} from "@codemirror/view";
+import * as ty from "./types";
+import { rust } from "@codemirror/lang-rust";
+import { indentUnit } from "@codemirror/language";
 import {
   EditorState,
   StateField,
@@ -17,9 +11,15 @@ import {
   Compartment,
   Range,
 } from "@codemirror/state";
-import { rust } from "@codemirror/lang-rust";
-import { indentUnit } from "@codemirror/language";
-import * as ty from "./types";
+import {
+  EditorView,
+  WidgetType,
+  Decoration,
+  DecorationSet,
+  ViewUpdate,
+  ViewPlugin,
+} from "@codemirror/view";
+import { vim } from "@replit/codemirror-vim";
 
 const initial_code: string = `// Please start typing :)
 
@@ -249,7 +249,7 @@ class TextIco implements Icon {
     tt.setAttribute("font-family", "IBM Plex Sans");
     tt.setAttribute("font-size", `${glyph_width}px`);
     tt.setAttribute("font-weight", "bold");
-    tt.setAttribute("stroke-width", "2");
+    tt.setAttribute("stroke-width", this.actual == this.expected ? "1" : "2");
     tt.setAttribute("paint-order", "stroke");
     tt.textContent = this.contents;
 
@@ -292,7 +292,7 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
 
     icons.forEach((ico_i: I, idx: number) => {
       let ico: HTMLElement = ico_i.toDom();
-      let y = (idx / icons.length) * 100 + 100 / icons.length;
+      let y = (idx / icons.length) * 100 + 100 / icons.length - 5;
       ico.setAttribute("text-anchor", "middle");
       ico.setAttribute("x", "50%");
       ico.setAttribute("y", `${y}%`);

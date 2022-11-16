@@ -22,3 +22,9 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Managed by Graco
+.eslintrc.cjs
+.prettierrc.cjs
+jest.config.cjs
+tsconfig.json
