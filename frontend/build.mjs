@@ -6,5 +6,5 @@ esbuild.build({
   entryPoints: ["src/index.ts", "src/embed.ts"],
   bundle: true,
   watch: process.argv.includes("-w"),
-  outdir: "dist",
+  outdir: "entry",
 });
