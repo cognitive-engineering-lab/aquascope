@@ -37,6 +37,10 @@ pub(crate) async fn serve(cfg: Config) {
             .allow_credentials(false)
     });
 
+    if cfg.no_docker {
+        log::warn!("Requests will be processed outside of docker");
+    }
+
     log::info!("Serving requests on {}:{}", cfg.address, cfg.port);
 
     axum::Server::bind(&cfg.socket_address())

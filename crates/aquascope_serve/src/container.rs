@@ -11,7 +11,14 @@ use futures::StreamExt;
 use serde::Serialize;
 use snafu::prelude::*;
 use std::process::Command;
-use std::{env, io, iter, os::unix::fs::PermissionsExt, sync::Arc};
+use std::{
+    env, fs, io, iter,
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+    str,
+    sync::Arc,
+};
+use tempfile::{tempdir, TempDir};
 
 const DEFAULT_IMAGE: &str = "aquascope";
 const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
@@ -20,24 +27,21 @@ const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
 pub enum Error {
     #[snafu(display("Bollard operation failed {}", source))]
     Bollard { source: bollard::errors::Error },
-
-    // Taken directly from play.rust-lang.org
-    #[snafu(display("Unable to create temporary directory: {}", source))]
+    #[snafu(display("Unable to create temporary local directory {}", source))]
     UnableToCreateTempDir { source: io::Error },
     #[snafu(display("Unable to create output directory: {}", source))]
-    UnableToCreateOutputDir { source: io::Error },
-    #[snafu(display("Unable to set permissions for output directory: {}", source))]
-    UnableToSetOutputPermissions { source: io::Error },
+    UnableToWriteFile { source: io::Error },
+    #[snafu(display("Unable to execute local command {}", source))]
+    UnableToExecCommand { source: io::Error },
     #[snafu(display("Unable to create source file: {}", source))]
     UnableToCreateSourceFile { source: io::Error },
-    #[snafu(display("Unable to set permissions for source file: {}", source))]
-    UnableToSetSourcePermissions { source: io::Error },
     #[snafu(display("Unable to launch the docker container: {}", source))]
     UnableToStartDocker { source: io::Error },
 }
 
 pub type Result<T, E = Error> = ::std::result::Result<T, E>;
 
+#[cfg(not(feature = "no-docker"))]
 pub struct Container {
     id: String,
     killed: bool,
@@ -45,10 +49,28 @@ pub struct Container {
     docker: Arc<Docker>,
 }
 
+#[cfg(feature = "no-docker")]
+pub struct Container {
+    project_dir: Option<String>,
+    workspace: TempDir,
+}
+
 impl Container {
+    #[cfg(feature = "no-docker")]
     pub async fn new() -> Result<Self> {
-        // NOTE this will create a new docker /every time/ a requeust is filed.
-        // I still haven't tested how fast this will be, so let's find out!
+        let td = tempdir().context(UnableToCreateTempDirSnafu)?;
+        let mut this = Container {
+            workspace: td,
+            project_dir: None,
+        };
+
+        this.cargo_new().await?;
+
+        Ok(this)
+    }
+
+    #[cfg(not(feature = "no-docker"))]
+    pub async fn new() -> Result<Self> {
         let d = Docker::connect_with_local_defaults()?;
         let docker = Arc::new(d);
         docker.ping().await?;
@@ -57,6 +79,7 @@ impl Container {
         Self::with_docker(docker, image).await
     }
 
+    #[cfg(not(feature = "no-docker"))]
     pub(crate) async fn with_docker(docker: Arc<Docker>, image: &str) -> Result<Self> {
         // Launch the container with
         let options: Option<CreateContainerOptions<String>> = None;
@@ -90,6 +113,7 @@ impl Container {
         Ok(this)
     }
 
+    #[cfg(not(feature = "no-docker"))]
     pub async fn exec(
         &self,
         options: CreateExecOptions<impl Into<String> + Serialize>,
@@ -105,7 +129,7 @@ impl Container {
     pub async fn get_pid(&self, process: &str) -> Result<i64> {
         let mut cmd = Command::new("pidof");
         cmd.arg(process);
-        let (response, _) = self.exec_output(&cmd).await?;
+        let (response, _) = self.exec_output(&mut cmd).await?;
         Ok(response
             .split(' ')
             .next()
@@ -119,8 +143,19 @@ impl Container {
             }))
     }
 
+    #[cfg(feature = "no-docker")]
+    pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
+        let output = cmd.output().context(UnableToExecCommandSnafu)?;
+        // TODO: FIXME
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let stderr = String::from_utf8(output.stderr).unwrap();
+
+        Ok((stdout, stderr))
+    }
+
     // Returns (Stdout, Stderr)
-    pub async fn exec_output(&self, cmd: &Command) -> Result<(String, String)> {
+    #[cfg(not(feature = "no-docker"))]
+    pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
         let args = iter::once(cmd.get_program())
             .chain(cmd.get_args())
             .map(|s| s.to_string_lossy().to_string())
@@ -209,15 +244,21 @@ impl Container {
             log::warn!("Attempt to create a second project directory ignored");
             return Ok(());
         }
+
         let pwd = DEFAULT_PROJECT_PATH;
+
         let mut cmd = Command::new("cargo");
         cmd.args(["new", "--bin", pwd, "--quiet"]);
 
-        let (output_s, stderr) = self.exec_output(&cmd).await?;
+        // HACK: this is not good practice
+        #[cfg(feature = "no-docker")]
+        cmd.current_dir(self.workspace.path());
+
+        let (output_s, stderr) = self.exec_output(&mut cmd).await?;
 
         if !stderr.trim().is_empty() {
             log::error!("{}", stderr);
-            panic!("`cargo new` within bollard failed {}", stderr);
+            panic!("`cargo new` failed {}", stderr);
         }
 
         log::debug!("Cargo output {}", output_s);
@@ -236,9 +277,21 @@ impl Container {
         prj_root
     }
 
+    #[cfg(feature = "no-docker")]
+    async fn write_source_code(&self, code: &str) -> Result<()> {
+        let path = self
+            .workspace
+            .path()
+            .join(self.project_dir.as_ref().unwrap())
+            .join("src")
+            .join("main.rs");
+        fs::write(path, code).context(UnableToWriteFileSnafu)
+    }
+
     // FIXME: major HACK there should be a much simpler way to copy
     // a temp file to the docker container. Something similar to
     // `docker cp` would be great :)
+    #[cfg(not(feature = "no-docker"))]
     async fn write_source_code(&self, code: &str) -> Result<()> {
         let mut header = tar::Header::new_gnu();
         header.set_size(code.len() as u64);
@@ -270,9 +323,10 @@ impl Container {
         req: &ReceiverTypesRequest,
     ) -> Result<ReceiverTypesResponse> {
         self.write_source_code(&req.code).await?;
-        let cmd = self.receiver_types_command("/app/aquascope_tmp_proj/src/main.rs");
 
-        let (stdout, stderr) = self.exec_output(&cmd).await?;
+        let mut cmd = self.receiver_types_command();
+
+        let (stdout, stderr) = self.exec_output(&mut cmd).await?;
 
         Ok(ReceiverTypesResponse {
             // XXX: we'll assume that if there was anything on `stdout`
@@ -285,13 +339,38 @@ impl Container {
         })
     }
 
-    fn receiver_types_command(&self, filename: &str) -> Command {
+    #[cfg(not(feature = "no-docker"))]
+    fn cwd(&self) -> PathBuf {
+        let prj_dir = self.project_dir.as_ref().unwrap();
+        Path::new("/app").join(prj_dir)
+    }
+
+    #[cfg(feature = "no-docker")]
+    fn cwd(&self) -> PathBuf {
+        let prj_dir = self.project_dir.as_ref().unwrap();
+        self.workspace.path().join(prj_dir)
+    }
+
+    fn receiver_types_command(&self) -> Command {
+        let cwd = self.cwd();
+
         let mut cmd = Command::new("cargo");
-        cmd.args(["--quiet", "aquascope", "vis-method-calls", filename])
-            .current_dir("/app/aquascope_tmp_proj");
+        cmd.args(["--quiet", "aquascope", "vis-method-calls"])
+            .current_dir(cwd);
+
+        if cfg!(no_docker) {
+            let _ = cmd.env("RUST_LOG", "debug");
+        }
+
         cmd
     }
 
+    #[cfg(feature = "no-docker")]
+    pub async fn cleanup(self) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(not(feature = "no-docker"))]
     pub async fn cleanup(mut self) -> Result<()> {
         self.killed = true;
         let options: Option<RemoveContainerOptions> = Some(RemoveContainerOptions {
@@ -308,6 +387,7 @@ impl Container {
     }
 }
 
+#[cfg(not(feature = "no-docker"))]
 impl Drop for Container {
     fn drop(&mut self) {
         if !self.killed {
@@ -343,13 +423,14 @@ pub struct ReceiverTypesResponse {
 }
 
 #[tokio::test]
+#[cfg(not(feature = "no-docker"))]
 async fn container_test() -> Result<()> {
     let docker = Arc::new(Docker::connect_with_local_defaults()?);
     docker.ping().await?;
     let container = Container::with_docker(docker, DEFAULT_IMAGE).await?;
     let mut cmd = Command::new("echo");
     cmd.arg("hey");
-    let (output, _) = container.exec_output(&cmd).await?;
+    let (output, _) = container.exec_output(&mut cmd).await?;
     assert_eq!(output, "hey");
     container.cleanup().await?;
 
@@ -357,10 +438,9 @@ async fn container_test() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg(not(feature = "no-docker"))]
 async fn container_test_new_project() -> Result<()> {
-    let docker = Arc::new(Docker::connect_with_local_defaults()?);
-    docker.ping().await?;
-    let mut container = Container::with_docker(docker, DEFAULT_IMAGE).await?;
+    let mut container = Container::new().await?;
     container.cargo_new().await?;
     assert!(container.project_dir.is_some());
     let code = "fn main() { return 0; }";
@@ -370,7 +450,7 @@ async fn container_test_new_project() -> Result<()> {
     let mut cmd = Command::new("cat");
     cmd.arg(&main_rs);
 
-    let (output, _) = container.exec_output(&cmd).await?;
+    let (output, _) = container.exec_output(&mut cmd).await?;
     assert_eq!(output, code);
     container.cleanup().await?;
 

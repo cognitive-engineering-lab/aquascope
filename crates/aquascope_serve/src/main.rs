@@ -22,6 +22,7 @@ fn main() {
 struct Config {
     address: String,
     port: u16,
+    no_docker: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -37,7 +38,12 @@ impl Config {
             .ok()
             .and_then(|p| p.parse().ok())
             .unwrap_or(DEFAULT_PORT);
-        Config { address, port }
+        let no_docker = env::var("AQUASCOPE_NO_DOCKER").is_ok();
+        Config {
+            address,
+            port,
+            no_docker,
+        }
     }
 
     fn socket_address(&self) -> SocketAddr {
