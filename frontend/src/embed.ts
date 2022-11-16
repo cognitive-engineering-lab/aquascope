@@ -46,6 +46,9 @@ let initEditors = () => {
     computePermBtn.addEventListener("click", _ => {
       ed.computeReceiverPermissions();
     });
+
+    // start loading the permissions
+    ed.computeReceiverPermissions();
   });
 };
 
