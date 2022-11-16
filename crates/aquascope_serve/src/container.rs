@@ -145,7 +145,10 @@ impl Container {
 
     #[cfg(feature = "no-docker")]
     pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
-        let output = cmd.output().context(UnableToExecCommandSnafu)?;
+        let output = cmd
+            .current_dir(self.cwd())
+            .output()
+            .context(UnableToExecCommandSnafu)?;
         // TODO: FIXME
         let stdout = String::from_utf8(output.stdout).unwrap();
         let stderr = String::from_utf8(output.stderr).unwrap();
@@ -251,8 +254,8 @@ impl Container {
         cmd.args(["new", "--bin", pwd, "--quiet"]);
 
         // HACK: this is not good practice
-        #[cfg(feature = "no-docker")]
-        cmd.current_dir(self.workspace.path());
+        // #[cfg(feature = "no-docker")]
+        // cmd.current_dir(self.workspace.path());
 
         let (output_s, stderr) = self.exec_output(&mut cmd).await?;
 
@@ -268,24 +271,32 @@ impl Container {
         Ok(()) // TODO what happens when we can't create the new directory?
     }
 
+    #[cfg(not(feature = "no-docker"))]
+    fn cwd(&self) -> PathBuf {
+        let prj_dir = self.project_dir.as_ref().unwrap();
+        Path::new("/app").join(prj_dir)
+    }
+
+    #[cfg(feature = "no-docker")]
+    fn cwd(&self) -> PathBuf {
+        let base = self.workspace.path();
+        match self.project_dir.as_ref() {
+            None => base.to_path_buf(),
+            Some(p) => base.join(p),
+        }
+    }
+
     fn main_abs_path(&self) -> String {
-        let mut prj_root = self.project_dir.as_ref().unwrap().clone();
-        prj_root.push_str("/src/main.rs");
+        let mut d = self.cwd();
+        d.push("src/main.rs");
 
-        log::debug!("Absolute path to main.rs: {}", prj_root);
-
-        prj_root
+        d.to_str().unwrap().to_owned()
     }
 
     #[cfg(feature = "no-docker")]
     async fn write_source_code(&self, code: &str) -> Result<()> {
-        let path = self
-            .workspace
-            .path()
-            .join(self.project_dir.as_ref().unwrap())
-            .join("src")
-            .join("main.rs");
-        fs::write(path, code).context(UnableToWriteFileSnafu)
+        let main = self.main_abs_path();
+        fs::write(main, code).context(UnableToWriteFileSnafu)
     }
 
     // FIXME: major HACK there should be a much simpler way to copy
@@ -296,10 +307,11 @@ impl Container {
         let mut header = tar::Header::new_gnu();
         header.set_size(code.len() as u64);
         header.set_cksum();
-
         let data = code.as_bytes();
         let mut ar = tar::Builder::new(Vec::new());
-        let path_to_main = self.main_abs_path();
+        // XXX: the method main_abs_path isn't used here because the header needs to
+        // specify a *relative* path.
+        let path_to_main = Path::new(self.project_dir.as_ref().unwrap()).join("src/main.rs");
         ar.append_data(&mut header, &path_to_main, data).unwrap();
 
         let options = Some(UploadToContainerOptions {
@@ -339,18 +351,6 @@ impl Container {
         })
     }
 
-    #[cfg(not(feature = "no-docker"))]
-    fn cwd(&self) -> PathBuf {
-        let prj_dir = self.project_dir.as_ref().unwrap();
-        Path::new("/app").join(prj_dir)
-    }
-
-    #[cfg(feature = "no-docker")]
-    fn cwd(&self) -> PathBuf {
-        let prj_dir = self.project_dir.as_ref().unwrap();
-        self.workspace.path().join(prj_dir)
-    }
-
     fn receiver_types_command(&self) -> Command {
         let cwd = self.cwd();
 
@@ -358,7 +358,7 @@ impl Container {
         cmd.args(["--quiet", "aquascope", "vis-method-calls"])
             .current_dir(cwd);
 
-        if cfg!(no_docker) {
+        if cfg!(feature = "no-docker") {
             let _ = cmd.env("RUST_LOG", "debug");
         }
 
@@ -438,7 +438,6 @@ async fn container_test() -> Result<()> {
 }
 
 #[tokio::test]
-#[cfg(not(feature = "no-docker"))]
 async fn container_test_new_project() -> Result<()> {
     let mut container = Container::new().await?;
     container.cargo_new().await?;
