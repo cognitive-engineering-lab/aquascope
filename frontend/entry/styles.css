@@ -1,0 +1,54 @@
+/* span configuration */
+
+.cm-loan {
+  text-decoration: underline 3px lightblue;
+}
+
+span.cm-region-end {
+  font-family: "IBM Plex Sans", sans-serif, bold;
+  text-align: center;
+  vertical-align: bottom;
+  padding: 0;
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  transition: 1s all;
+}
+
+.aquascope {
+  position: relativie;
+  height: 100%;
+  width: 100%;
+}
+
+.top-right {
+  z-index: 10;
+  position: absolute;
+  top: 25px;
+  right: 25px;
+}
+
+.cm-button {
+  background-color: #a42;
+  border-color: #b75636;
+  border-width: 3px;
+  border-radius: 8px;
+  color: white;
+  font-family: "IBM Plex Sans", sans-serif, 18px;
+  font-weight: bold;
+}
+
+.cm-editor {
+  height: 100%;
+  width: 100%;
+
+  border-style: solid;
+  border-width: 5px;
+  border-radius: 5px;
+  border-color: #bbb;
+
+  background-color: white;
+}
+.cm-scroller {
+  overflow: auto;
+}

@@ -2,7 +2,7 @@ import { Editor, receiverPermissionsField } from "./editor";
 
 // What Gavin thinks the example usage of this is:
 //
-// <div class="aquascope"
+// <pre class="aquascope"
 //      data-server-host="127.0.0.1"
 //      data-server-port="8008"
 //      data-no-interact="true"
@@ -10,32 +10,38 @@ import { Editor, receiverPermissionsField } from "./editor";
 // fn main() {
 //     println!("Hello, Rust Book!");
 // }
-// </div>
+// </pre>
 //
 // The above would render an aquascope editor, pre-loaded with the main function.
 // This editor would send requests to `http://127.0.0.1:8008/...` and it would
 // be *read only* (because no-interact is true).
 let initEditors = () => {
   // embedded aquascope editors should be <div> tags with the class 'aquascope'
-  document.querySelectorAll(".aquascope").forEach(elem => {
+  document.querySelectorAll<HTMLElement>(".aquascope").forEach(elem => {
     // the containing html element
-    let div = elem as HTMLDivElement;
+    let pre = elem;
 
     // container for the button
-    let btnWrap = div.appendChild(document.createElement("div"));
+    let btnWrap = document.createElement("div");
     btnWrap.classList.add("top-right");
 
     // button for computing the receiver permissions
-    let computePermBtn = btnWrap.appendChild(document.createElement("button"));
+    let computePermBtn = document.createElement("button");
     computePermBtn.classList.add("cm-button");
 
-    let initialCode = div.textContent!;
-    let serverHost = div.dataset.serverHost!;
-    let serverPort = div.dataset.serverPort!;
-    let readOnly = div.dataset.noInteract! == "true";
+    let initialCode = pre.textContent!;
+    pre.textContent = "";
+
+    btnWrap.appendChild(computePermBtn);
+    pre.appendChild(btnWrap);
+    computePermBtn.textContent = "Compute Permissions";
+
+    let serverHost = pre.dataset.serverHost!;
+    let serverPort = pre.dataset.serverPort!;
+    let readOnly = pre.dataset.noInteract! == "true";
 
     let ed = new Editor(
-      div,
+      pre,
       [receiverPermissionsField.stateField],
       initialCode,
       serverHost,
@@ -52,4 +58,4 @@ let initEditors = () => {
   });
 };
 
-window.addEventListener("load", initEditors, false);
+window.addEventListener("DOMContentLoaded", initEditors, false);
