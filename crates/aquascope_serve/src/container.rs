@@ -153,6 +153,10 @@ impl Container {
         let stdout = String::from_utf8(output.stdout).unwrap();
         let stderr = String::from_utf8(output.stderr).unwrap();
 
+        // use info here because the "no-docker" feature is used primarily
+        // as a debugging target.
+        log::info!("{}", stderr);
+
         Ok((stdout, stderr))
     }
 
@@ -359,7 +363,7 @@ impl Container {
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {
-            let _ = cmd.env("RUST_LOG", "debug");
+            let _ = cmd.env("RUST_LOG", "debug").env("RUST_BACKTRACE", "1");
         }
 
         cmd
