@@ -18,9 +18,29 @@ import {
 import { vim } from "@replit/codemirror-vim";
 
 import { basicSetup } from "./setup";
-import * as ty from "./types";
+import {
+  BackendError,
+  PermissionsInfo,
+  PermissionsOutput,
+  RefinementRegion,
+} from "./types";
 
-const initial_code: string = `// Please start typing :)
+const DEFAULT_SERVER_HOST = "127.0.0.1";
+const DEFAULT_SERVER_PORT = "8008";
+
+type Result<T> = { Ok: T } | { Err: BackendError };
+
+// XXX this extra server response type is really
+// annoying and I'd like to get rid of it. This change would
+// require modifying how command output is read from the spawned
+// docker container on the backend.
+type ServerResponse = {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+};
+
+export const defaultCodeExample: string = `// Please, start typing :)
 
 #[derive(Debug, Default)]
 struct Box {
@@ -72,10 +92,10 @@ export interface Icon {
 }
 
 interface IconField<C, Ico extends Icon, T> {
-  effect_type: StateEffectType<Array<T>>;
-  state_field: StateField<DecorationSet>;
-  make_decoration(icos: Array<Ico>): Decoration;
-  from_output(call_types: C): T;
+  effectType: StateEffectType<Array<T>>;
+  stateField: StateField<DecorationSet>;
+  makeDecoration(icos: Array<Ico>): Decoration;
+  fromOutput(callTypes: C): T;
 }
 
 export class Editor {
@@ -83,81 +103,114 @@ export class Editor {
 
   public constructor(
     dom: HTMLElement,
-    supported_fields: Array<StateField<DecorationSet>>
+    supportedFields: Array<StateField<DecorationSet>>,
+    initialCode: string = defaultCodeExample,
+    readonly serverHost: string = DEFAULT_SERVER_HOST,
+    readonly serverPort: string = DEFAULT_SERVER_PORT,
+    readonly noInteract: boolean = false
   ) {
-    let initial_state = EditorState.create({
-      doc: initial_code,
+    let initialState = EditorState.create({
+      doc: initialCode,
       extensions: [
-        mainKeybinding.of(vim()),
+        // mainKeybinding.of(vim()),
+        readOnly.of(EditorState.readOnly.of(noInteract)),
         basicSetup,
         rust(),
-        readOnly.of(EditorState.readOnly.of(false)),
         indentUnit.of("    "),
-        ...supported_fields,
+        ...supportedFields,
       ],
     });
 
-    let initial_view = new EditorView({
-      state: initial_state,
+    let initialView = new EditorView({
+      state: initialState,
       parent: dom,
     });
 
-    this.view = initial_view;
+    this.view = initialView;
   }
 
-  public get_current_contents(): string {
+  public getCurrentCode(): string {
     return this.view.state.doc.toString();
   }
 
-  public toggle_readonly(b: boolean): void {
-    this.view.dispatch({
-      effects: [readOnly.reconfigure(EditorState.readOnly.of(b))],
-    });
-  }
-
-  public toggle_vim(b: boolean): void {
+  public toggleVim(b: boolean): void {
     let t = b ? [vim(), basicSetup] : [basicSetup];
     this.view.dispatch({
       effects: [mainKeybinding.reconfigure(t)],
     });
   }
 
-  public remove_icon_field<
+  public removeIconField<
     B,
     T,
     Ico extends Icon,
     F extends IconField<B, Ico, T>
   >(f: F) {
     this.view.dispatch({
-      effects: [f.effect_type.of([])],
+      effects: [f.effectType.of([])],
     });
   }
 
-  public add_call_types_field<
+  public addCallTypesField<
     B,
     T,
     Ico extends Icon,
     F extends IconField<B, Ico, T>
   >(f: F, method_call_points: Array<B>) {
-    let new_effects = method_call_points.map(f.from_output);
+    let new_effects = method_call_points.map(f.fromOutput);
     console.log(new_effects);
     this.view.dispatch({
-      effects: [f.effect_type.of(new_effects)],
+      effects: [f.effectType.of(new_effects)],
     });
+  }
+
+  // Actions to communicate with the aquascope server
+
+  async computeReceiverPermissions() {
+    let inEditor = this.getCurrentCode();
+    let serverResponseRaw = await fetch(
+      `http://${this.serverHost}:${this.serverPort}/receiver-types`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code: inEditor,
+        }),
+      }
+    );
+
+    let serverResponse: ServerResponse = await serverResponseRaw.json();
+
+    // TODO: on errors we should have a side panel where the Rustc output is
+    // placed. It would be /ideal/ to have something like Rust analyzer display
+    // errors with parsing / function type errors but that is out-of-scope for now.
+    let handleErrors = (e: BackendError) => {
+      console.log(e);
+      alert("An error occurred, check your logs");
+      return;
+    };
+
+    if (serverResponse.success) {
+      let out: Result<PermissionsOutput> = JSON.parse(serverResponse.stdout);
+      if ("Ok" in out) {
+        console.log(`Stderr: ${serverResponse.stderr}`);
+        return this.addCallTypesField(receiverPermissionsField, out.Ok);
+      } else {
+        return handleErrors(out.Err);
+      }
+    } else {
+      return handleErrors({
+        type: "BuildError",
+        error: serverResponse.stderr,
+      });
+    }
   }
 }
 
 // ----------------------------------------
 // Types to use in an Icon Field
-
-// function obj_hash(o: object): number {
-//     let str: string = JSON.stringify(o);
-//     var h: number = 0;
-//     for (var i = 0; i < str.length; i++) {
-//         h = 31 * h + str.charCodeAt(i);
-//     }
-//     return h & 0xFFFFFFFF
-// }
 
 type RGBA = `rgba(${number},${number},${number},${number})`;
 type RGB = `rgb(${number},${number},${number})`;
@@ -165,9 +218,9 @@ type RGB = `rgb(${number},${number},${number})`;
 type Color = RGB | RGBA;
 
 // Default colors
-let read_color: RGB = `rgb(${93},${202},${54})`;
-let write_color: RGB = `rgb(${78},${190},${239})`;
-let drop_color: RGB = `rgb(${255},${66},${68})`;
+let read_color: RGB = `rgb(93,202,54)`; // green
+let write_color: RGB = `rgb(78,190,239)`; // blue
+let drop_color: RGB = `rgb(255,66,68)`; // red
 
 let permission_state_ico_type =
   StateEffect.define<Array<PermissionPoint<TextIco>>>();
@@ -208,7 +261,7 @@ class TextIco implements Icon {
     readonly expected: boolean,
     readonly actual: boolean,
     readonly color: Color,
-    readonly on_hover: ty.RefinementRegion | null
+    readonly on_hover: RefinementRegion | null
   ) {
     this.display = expected;
     this.start = makeBraceElem("{ ", color);
@@ -310,13 +363,8 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
 }
 
 let call_types_to_permissions = (
-  perm_info: ty.PermissionsInfo
+  perm_info: PermissionsInfo
 ): PermissionPoint<TextIco> => {
-  // XXX: each text icon *could* be hoverable and onHover this should highlight
-  // - The loan range
-  // - The start of the loan
-  // - The end of the loan
-
   const read_ico = new TextIco(
     "R",
     perm_info.expected.read,
@@ -391,16 +439,16 @@ let make_decoration_with_text_ico = <I extends TextIco>(
   });
 };
 
-export let rwd_permissions_field: IconField<
-  ty.PermissionsInfo,
+export let receiverPermissionsField: IconField<
+  PermissionsInfo,
   TextIco,
   PermissionPoint<TextIco>
 > = {
-  effect_type: permission_state_ico_type,
-  state_field: make_text_state_field_with_icon(
+  effectType: permission_state_ico_type,
+  stateField: make_text_state_field_with_icon(
     permission_state_ico_type,
     make_decoration_with_text_ico<TextIco>
   ),
-  make_decoration: make_decoration_with_text_ico<TextIco>,
-  from_output: call_types_to_permissions,
+  makeDecoration: make_decoration_with_text_ico<TextIco>,
+  fromOutput: call_types_to_permissions,
 };

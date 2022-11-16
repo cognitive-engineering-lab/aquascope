@@ -26,6 +26,7 @@
   </head>
   <body>
     <script src="./src/index.ts" type="module"></script>
+
     <nav>
       <ul>
         <li class="nav-item">
@@ -34,14 +35,14 @@
             Keybindings</label
           >
         </li>
-        <li class="nav-item">
-          <label
-            ><input type="checkbox" id="show_receiver_types" />Show receiver
-            types</label
-          >
-        </li>
       </ul>
     </nav>
-    <div id="editor"></div>
+
+    <div class="static-editor">
+      <div class="top-right">
+        <button class="cm-button" id="show_receiver_types">Compute Permissions</button>
+      </div>
+    </div>
+
   </body>
 </html>

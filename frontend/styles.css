@@ -26,7 +26,13 @@ nav {
   color: whitesmoke;
 }
 
-#editor {
+.static-editor {
+  height: 100%;
+  width: 100%;
+  max-height: 700px;
+  max-width: 900px;
+
+  position: relative;
   padding-left: 25px;
 }
 
@@ -45,11 +51,32 @@ span.cm-region-end {
   transition: 1s all;
 }
 
+.aquascope {
+  position: relativie;
+  height: 100%;
+  width: 100%;
+}
+
+.top-right {
+  z-index: 10;
+  position: absolute;
+  top: 25px;
+  right: 25px;
+}
+
+.cm-button {
+  background-color: #a42;
+  border-color: #b75636;
+  border-width: 3px;
+  border-radius: 8px;
+  color: white;
+  font-family: "IBM Plex Sans", sans-serif, 18px;
+  font-weight: bold;
+}
+
 .cm-editor {
   height: 100%;
-
-  max-height: 700px;
-  max-width: 900px;
+  width: 100%;
 
   border-style: solid;
   border-width: 5px;

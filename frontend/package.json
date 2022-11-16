@@ -11,7 +11,8 @@
     "@codemirror/search": "^6.2.2",
     "@codemirror/state": "^6.1.2",
     "@codemirror/view": "^6.4.0",
-    "@replit/codemirror-vim": "^6.0.3"
+    "@replit/codemirror-vim": "^6.0.3",
+    "esbuild": "^0.15.14"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.0.0",
