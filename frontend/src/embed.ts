@@ -58,4 +58,4 @@ let initEditors = () => {
   });
 };
 
-window.addEventListener("DOMContentLoaded", initEditors, false);
+window.addEventListener("load", initEditors, false);
