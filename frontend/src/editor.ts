@@ -341,7 +341,9 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
     let my_width = glyph_width;
     wrap.setAttribute("width", `${my_width + 10}px`);
     wrap.setAttribute("height", `${my_height}px`);
-
+    wrap.style.position = "relative";
+    wrap.style.top = `${(icons.length - 1) * 4}px`;
+    
     icons.forEach((ico_i: I, idx: number) => {
       let ico: HTMLElement = ico_i.toDom();
       let y = (idx / icons.length) * 100 + 100 / icons.length - 5;
