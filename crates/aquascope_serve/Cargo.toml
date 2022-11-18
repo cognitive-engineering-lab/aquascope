@@ -3,6 +3,7 @@ authors = ["Gavin Gray <gagray@ethz.ch>"]
 name = "aquascope_serve"
 version = "0.1.0"
 edition = "2021"
+default-run = "aquascope_serve"
 
 [dependencies]
 async-trait = "0.1.52"
