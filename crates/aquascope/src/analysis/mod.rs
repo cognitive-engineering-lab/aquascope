@@ -17,7 +17,7 @@ use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::BodyId;
 use rustc_middle::{
-  mir::{Mutability, Operand, Rvalue, Statement, StatementKind},
+  mir::{Mutability, Rvalue, StatementKind},
   ty::{Ty, TyCtxt},
 };
 use rustc_span::Span;
@@ -44,11 +44,9 @@ pub fn compute_permissions<'a, 'tcx>(
 
     let permissions = permissions::compute(tcx, body_id, body_with_facts);
 
-    // TODO rather than just computing the permissions, we should return a
-    // permission context which includes all the information necessary to
-    // map things back to the source level.
-
-    permissions::utils::dump_permissions_with_mir(&permissions);
+    if cfg!(debug_assertions) {
+      permissions::utils::dump_permissions_with_mir(&permissions);
+    }
 
     permissions
   })

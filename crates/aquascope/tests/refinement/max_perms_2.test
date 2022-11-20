@@ -1,0 +1,5 @@
+fn main() {
+    let v = &mut vec![1];
+    let a = &mut `[*v RW]`;
+    `[v RD]`;
+}

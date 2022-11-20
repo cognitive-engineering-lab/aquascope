@@ -10,9 +10,17 @@ license = "MIT"
 rustc_private=true
 
 [dependencies]
+anyhow = "1.0.0"
 log = "0.4"
+itertools = "0.10.5"
 flowistry = "0.5.31"
 datafrog = "2.0.0"
 # polonius-engine = { path = "../polonius-engine" }
 serde = "1.0"
 ts-rs = "6.1"
+# testing
+lazy_static = "1.4"
+
+[dev-dependencies]
+env_logger = "0.9.3"
+test-log = "0.2.11"

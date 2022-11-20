@@ -24,7 +24,11 @@ use super::{
 // FIXME the HashMap should map to multiple loans, because at a
 // given point a path could be refined my multiple loans even
 // if we only care about a single (more recent).
-pub struct Output<T: FactTypes> {
+#[derive(Debug)]
+pub struct Output<T>
+where
+  T: FactTypes + std::fmt::Debug,
+{
   pub cannot_read: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
   pub cannot_write: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
   pub cannot_drop: HashMap<T::Point, HashMap<T::Path, T::Loan>>,

@@ -33,6 +33,7 @@ extern crate rustc_trait_selection;
 extern crate smallvec;
 
 pub mod analysis;
+pub mod test_utils;
 
 use serde::Serialize;
 use ts_rs::TS;
