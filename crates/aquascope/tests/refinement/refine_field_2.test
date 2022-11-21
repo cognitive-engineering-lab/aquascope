@@ -23,5 +23,5 @@ fn func(res: &mut TestResult) {
 
   let _a = &`[*res RW-]`;
   let _a = &`[res.scores RW-]`;
-  let _a = &`[res.min RW0]`;
+  let _a = &`[res.min RW-]`;
 }
