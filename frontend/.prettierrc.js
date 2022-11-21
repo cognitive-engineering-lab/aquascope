@@ -1,0 +1,1 @@
+/usr/local/lib/node_modules/graco/dist/assets/.prettierrc.js

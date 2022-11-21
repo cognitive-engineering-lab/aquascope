@@ -112,7 +112,7 @@ export class Editor {
     let initialState = EditorState.create({
       doc: initialCode,
       extensions: [
-        // mainKeybinding.of(vim()),
+        mainKeybinding.of(basicSetup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
         basicSetup,
         rust(),
@@ -212,6 +212,17 @@ export class Editor {
 // ----------------------------------------
 // Types to use in an Icon Field
 
+let makeId = (length: number) => {
+  var result = "";
+  var characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  var charactersLength = characters.length;
+  for (var i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return "tag" + result;
+};
+
 type RGBA = `rgba(${number},${number},${number},${number})`;
 type RGB = `rgb(${number},${number},${number})`;
 
@@ -256,6 +267,7 @@ class TextIco implements Icon {
   readonly display: boolean;
   readonly start: HTMLElement;
   readonly end: HTMLElement;
+  readonly rndTag: string;
   constructor(
     readonly contents: string,
     readonly expected: boolean,
@@ -266,6 +278,7 @@ class TextIco implements Icon {
     this.display = expected;
     this.start = makeBraceElem("{ ", color);
     this.end = makeBraceElem(" }", color);
+    this.rndTag = makeId(20);
   }
 
   getAuxiliary(): Array<Range<Decoration>> {
@@ -273,26 +286,29 @@ class TextIco implements Icon {
       return [];
     }
 
-    // TODO loan highlighting?
-
-    let loan_deco = Decoration.mark({ class: "cm-loan" }).range(
+    let loanDeco = Decoration.mark({
+      class: "cm-loan",
+      tagName: this.rndTag,
+    }).range(
       this.on_hover.loan_location.char_start,
       this.on_hover.loan_location.char_end
     );
 
-    let start_deco = Decoration.widget({
+    let startDeco = Decoration.widget({
       widget: new RegionEnd(this.start),
-      side: 0,
-    }).range(this.on_hover.start.char_start);
+    }).range(this.on_hover.start.byte_start);
 
-    let end_deco = Decoration.widget({
+    let endDeco = Decoration.widget({
       widget: new RegionEnd(this.end),
-      side: 0,
-    }).range(this.on_hover.end.char_end);
+    }).range(this.on_hover.end.byte_end);
 
-    let extra_decos = [loan_deco, start_deco, end_deco];
+    console.log(
+      `Loan Region ${this.on_hover.start.char_start} ${this.on_hover.start.char_end}`
+    );
 
-    return extra_decos;
+    let extraDecos = [loanDeco, startDeco, endDeco];
+
+    return extraDecos;
   }
 
   toDom(): HTMLElement {
@@ -308,10 +324,25 @@ class TextIco implements Icon {
     tt.addEventListener("mouseenter", _ => {
       this.start.style.width = "15px";
       this.end.style.width = "15px";
+
+      Array.from(
+        document.getElementsByTagName(
+          this.rndTag
+        ) as HTMLCollectionOf<HTMLElement>
+      ).forEach(elem => {
+        elem.style.textDecoration = `underline 3px ${this.color}`;
+      });
     });
     tt.addEventListener("mouseleave", _ => {
       this.start.style.width = "0px";
       this.end.style.width = "0px";
+      Array.from(
+        document.getElementsByTagName(
+          this.rndTag
+        ) as HTMLCollectionOf<HTMLElement>
+      ).forEach(elem => {
+        elem.style.textDecoration = "underline 3px rgba(255, 255, 255, 0)";
+      });
     });
 
     return tt as HTMLElement & SVGTextElement;
@@ -343,7 +374,7 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
     wrap.setAttribute("height", `${my_height}px`);
     wrap.style.position = "relative";
     wrap.style.top = `${(icons.length - 1) * 4}px`;
-    
+
     icons.forEach((ico_i: I, idx: number) => {
       let ico: HTMLElement = ico_i.toDom();
       let y = (idx / icons.length) * 100 + 100 / icons.length - 5;

@@ -37,7 +37,8 @@ nav {
 }
 
 .cm-loan {
-  text-decoration: underline 3px lightblue;
+  text-decoration: underline 3px rgba(255, 255, 255, 0);
+  transition: 1s all;
 }
 
 span.cm-region-end {
