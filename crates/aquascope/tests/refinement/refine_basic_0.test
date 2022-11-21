@@ -2,7 +2,7 @@ fn main() {
     let mut v = vec![0];
     let refiner = &v;
 
-    let a = &`[v R]`;
+    let _a = &`[v R]`;
 
     println!("{}", refiner[0]);
 }

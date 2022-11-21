@@ -1,0 +1,15 @@
+fn main() {
+    let mut v = vec![0];
+
+    let _a = &`[v RWD]`;
+
+    let refine_write = &v;
+
+    let _a = &`[refine_write R-D]`;
+    let _a = &`[*refine_write R--]`;
+    let _a = &`[v R--]`;
+
+    println!("{}", refine_write[0]);
+
+    let _a = &`[v RWD]`;
+}

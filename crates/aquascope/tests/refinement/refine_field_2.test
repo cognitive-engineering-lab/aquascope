@@ -1,0 +1,27 @@
+struct TestResult { scores: Vec<usize>, min: Option<usize> }
+
+impl TestResult {
+  pub fn get_min(&self) -> &Option<usize> { &self.min }
+}
+
+fn func(res: &mut TestResult) {
+  if let Some(min) = res.get_min() {
+
+    let _a = &`[*res R--]`;
+    let _a = &`[res.scores R--]`;
+    let _a = &`[res.min R--]`;
+
+    for score in res.scores.iter_mut() {
+
+      let _a = &`[*res ---]`;
+      let _a = &`[res.scores ---]`;
+      let _a = &`[res.min R--]`;
+
+      *score = (*score).max(*min);
+    }
+  }
+
+  let _a = &`[*res RW-]`;
+  let _a = &`[res.scores RW-]`;
+  let _a = &`[res.min RW0]`;
+}

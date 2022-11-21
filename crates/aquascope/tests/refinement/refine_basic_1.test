@@ -1,8 +1,11 @@
 fn main() {
     let mut v = vec![0];
+
     let refiner = &mut v;
 
-    `[v -]`;
+    let _a = &`[v -]`;
 
     println!("{}", refiner[0]);
+
+    let _a = &`[v RWD]`;
 }

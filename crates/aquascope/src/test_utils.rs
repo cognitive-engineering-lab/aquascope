@@ -7,7 +7,7 @@ use flowistry::{
     borrowck_facts::{self, NO_SIMPLIFY},
     utils::{BodyExt, OperandExt},
   },
-  source_map::{GraphemeIndices, Range, Spanner, ToSpan},
+  source_map::{find_bodies, GraphemeIndices, Range, Spanner, ToSpan},
 };
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
@@ -152,56 +152,63 @@ pub fn test_file(path: &Path) {
     let (clean_input, expected_permissions) =
       parse_test_source(&input, ("`[", "]`"))?;
 
-    compile_bodies(
-      clean_input.clone(),
-      move |tcx, body_id, body_with_facts| {
-        let ctxt = analysis::compute_permissions(tcx, body_id, body_with_facts);
-        let spanner = Spanner::new(tcx, body_id, &body_with_facts.body);
+    compile_bodies(clean_input, move |tcx, body_id, body_with_facts| {
+      let ctxt = analysis::compute_permissions(tcx, body_id, body_with_facts);
+      let spanner = Spanner::new(tcx, body_id, &body_with_facts.body);
 
-        expected_permissions
-          .iter()
-          .for_each(|(range, expected_perms)| {
-            let span = range.to_span(tcx).unwrap();
-            let places = spanner.span_to_places(span);
-            let mir_spanner = places.iter().next().unwrap();
-            let loc = match mir_spanner.locations[0] {
-              LocationOrArg::Location(l) => l,
-              _ => unreachable!("not a location"),
-            };
+      expected_permissions
+        .iter()
+        .for_each(|(range, expected_perms)| {
+          let span = range.to_span(tcx).unwrap();
+          let places = spanner.span_to_places(span);
 
-            // FIXME: this code is to catch any false assumptions I'm making
-            // about the structure of the generated MIR and the Flowistry Spanner.
-            let stmt = ctxt.body_with_facts.body.stmt_at(loc).left().unwrap();
-            let path = match &stmt.kind {
-              StatementKind::Assign(box (lhs, rvalue)) => {
-                let exp = ctxt.place_to_path(&mir_spanner.place);
-                let act = ctxt.place_to_path(lhs);
-                assert_eq!(exp, act);
+          log::debug!(
+            "Spanned places {span:?} {expected_perms:?}: {:?}",
+            places
+          );
 
-                let rplace = match rvalue {
-                  Rvalue::Ref(_, _, place) => *place,
-                  Rvalue::Use(op) => op.to_place().unwrap(),
-                  _ => unimplemented!(),
-                };
+          // HACK: revisit this because it is most certainly based in
+          // a fragile assumption.
+          let mir_spanner = places.first().unwrap();
+          let loc = match mir_spanner.locations[0] {
+            LocationOrArg::Location(l) => l,
+            _ => unreachable!("not a location"),
+          };
 
-                ctxt.place_to_path(&rplace)
-              }
-              _ => unreachable!("not a move"),
-            };
+          // FIXME: this code is to catch any false assumptions I'm making
+          // about the structure of the generated MIR and the Flowistry Spanner.
+          let stmt = ctxt.body_with_facts.body.stmt_at(loc).left().unwrap();
+          let path = match &stmt.kind {
+            StatementKind::Assign(box (lhs, rvalue)) => {
+              let exp = ctxt.place_to_path(&mir_spanner.place);
+              let act = ctxt.place_to_path(lhs);
+              assert_eq!(exp, act);
 
-            let point = ctxt.location_to_point(loc);
-            let computed_perms =
-              ctxt.permissions_output.permissions_at_point(path, point);
+              let rplace = match rvalue {
+                Rvalue::Ref(_, _, place) => *place,
+                Rvalue::Use(op) => op.to_place().unwrap(),
+                _ => unimplemented!(),
+              };
 
-            if *expected_perms != computed_perms {
-              panic!(
-                "Expected {:?} but got {:?} permissions",
-                expected_perms, computed_perms
-              );
+              ctxt.place_to_path(&rplace)
             }
-          });
-      },
-    );
+            _ => unreachable!("not a move"),
+          };
+
+          let point = ctxt.location_to_point(loc);
+          let computed_perms =
+            ctxt.permissions_output.permissions_at_point(path, point);
+
+          if *expected_perms != computed_perms {
+            panic!(
+              "\n\n\x1b[31mExpected {expected_perms:?} \
+               but got {computed_perms:?} permissions\n\t\
+               \x1b[33m{stmt:?}\
+               \x1b[0m\n\n"
+            );
+          }
+        });
+    });
 
     Ok(())
   };
@@ -214,12 +221,6 @@ pub fn run_in_dir(
   test_fn: impl Fn(&Path) + std::panic::RefUnwindSafe,
 ) {
   let main = || -> Result<()> {
-    macro_rules! red {
-      ($s:expr) => {
-        eprintln!("\x1b[31m{}\x1b[0m", $s)
-      };
-    }
-
     let test_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
       .join("tests")
       .join(dir.as_ref());
@@ -234,15 +235,19 @@ pub fn run_in_dir(
 
       if let Err(e) = res {
         failed = true;
-        red!(test_name);
-        eprintln!("{:?}", e);
+        eprintln!("\n\n\x1b[31m{test_name}\x1b[0m\n\t{e:?}\n\n");
       } else {
         passed += 1;
       }
       total += 1;
     }
 
-    log::info!("{:?}: {} / {} succeeded", dir.as_ref(), passed, total);
+    log::info!(
+      "\n\n{:?}: {} / {} succeeded\n\n",
+      dir.as_ref(),
+      passed,
+      total
+    );
 
     if failed {
       panic!("some tests failed");

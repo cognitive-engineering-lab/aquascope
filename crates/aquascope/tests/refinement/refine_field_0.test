@@ -1,0 +1,22 @@
+#[derive(Debug)]
+struct Both {
+    left: i32,
+    right: i32,
+}
+
+fn main() {
+    let mut both = Both { left: 0, right: 1 };
+
+    let left = &mut both.left;
+
+    let _a = &`[left R-D]`;
+    let _a = &`[*left RW-]`;
+
+    let _a = &`[both ---]`;
+    let _a = &`[both.left ---]`;
+    let _a = &`[both.right RWD]`;
+
+    println!("{left:?}");
+
+    let _a = &`[both RWD]`;
+}

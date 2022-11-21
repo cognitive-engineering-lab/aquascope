@@ -1,0 +1,32 @@
+#[derive(Debug)]
+struct Both {
+    left: i32,
+    right: i32,
+}
+
+impl Both {
+    fn borrow_left(&mut self) -> &mut i32 {
+        &mut self.left
+    }
+}
+
+fn main() {
+    let mut both = Both { left: 0, right: 1 };
+
+    let left = both.borrow_left();
+
+    let _a = &`[left R-D]`;
+    let _a = &`[*left RW-]`;
+
+    let _a = &`[both ---]`;
+    let _a = &`[both.left ---]`;
+    let _a = &`[both.right ---]`;
+
+    *left += 1;
+
+    println!("{left:?}");
+
+    let _a = &`[both RWD]`;
+    let _a = &`[both.left RWD]`;
+    let _a = &`[both.right RWD]`;
+}
