@@ -55,6 +55,14 @@ impl Box {
     fn destroy(mut self) {}
 }
 
+fn bar() {
+    let b = Box::default();
+    let refine_all = &mut b.value;
+    b.inc();
+    println!("{refine_all}");
+    b.inc();
+}
+
 fn foo(v: &mut Vec<i32>) {
   for (i, t) in v.iter().enumerate().rev() {
     if *t == 0 {
@@ -212,7 +220,7 @@ export class Editor {
 // ----------------------------------------
 // Types to use in an Icon Field
 
-let makeId = (length: number) => {
+let makeTag = (length: number) => {
   var result = "";
   var characters =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -223,22 +231,46 @@ let makeId = (length: number) => {
   return "tag" + result;
 };
 
-type RGBA = `rgba(${number},${number},${number},${number})`;
-type RGB = `rgb(${number},${number},${number})`;
+class RGB {
+  constructor(readonly r: number, readonly g: number, readonly b: number) {}
+  toString(): string {
+    return `rgb(${this.r},${this.g},${this.b})`;
+  }
+  withAlpha(a: number): RGBA {
+    return new RGBA(this.r, this.g, this.b, a);
+  }
+}
+
+class RGBA {
+  constructor(
+    readonly r: number,
+    readonly g: number,
+    readonly b: number,
+    readonly a: number
+  ) {}
+  toString(): string {
+    return `rgba(${this.r},${this.g},${this.b},${this.a})`;
+  }
+  withAlpha(newA: number): RGBA {
+    return new RGBA(this.r, this.g, this.b, newA);
+  }
+}
 
 type Color = RGB | RGBA;
 
 // Default colors
-let read_color: RGB = `rgb(93,202,54)`; // green
-let write_color: RGB = `rgb(78,190,239)`; // blue
-let drop_color: RGB = `rgb(255,66,68)`; // red
+let dropColor: RGB = new RGB(255, 66, 68); // red
+let readColor: RGB = new RGB(93, 202, 54); // green
+let writeColor: RGB = new RGB(78, 190, 239); // blue
+
+let whiteColor: RGB = new RGB(255, 255, 255);
 
 let permission_state_ico_type =
   StateEffect.define<Array<PermissionPoint<TextIco>>>();
 
 type PermissionPoint<I extends Icon> = [I, I, I, number];
 
-let glyph_width = 12;
+let glyphWidth = 12;
 
 class RegionEnd extends WidgetType {
   constructor(readonly elem: HTMLElement) {
@@ -258,8 +290,8 @@ let makeBraceElem = (content: string, color: Color) => {
   let wrap = document.createElement("span");
   wrap.classList.add("cm-region-end");
   wrap.textContent = content;
-  wrap.style.color = color;
-  wrap.style.fontSize = `${glyph_width * 2}`;
+  wrap.style.color = color.toString();
+  wrap.style.fontSize = `${glyphWidth * 2}`;
   return wrap;
 };
 
@@ -267,7 +299,8 @@ class TextIco implements Icon {
   readonly display: boolean;
   readonly start: HTMLElement;
   readonly end: HTMLElement;
-  readonly rndTag: string;
+  readonly loanTag: string;
+  readonly regionTag: string;
   constructor(
     readonly contents: string,
     readonly expected: boolean,
@@ -278,7 +311,8 @@ class TextIco implements Icon {
     this.display = expected;
     this.start = makeBraceElem("{ ", color);
     this.end = makeBraceElem(" }", color);
-    this.rndTag = makeId(20);
+    this.loanTag = makeTag(20);
+    this.regionTag = makeTag(25);
   }
 
   getAuxiliary(): Array<Range<Decoration>> {
@@ -287,26 +321,41 @@ class TextIco implements Icon {
     }
 
     let loanDeco = Decoration.mark({
-      class: "cm-loan",
-      tagName: this.rndTag,
+      class: "aquascope-loan",
+      tagName: this.loanTag,
     }).range(
-      this.on_hover.loan_location.char_start,
-      this.on_hover.loan_location.char_end
+      this.on_hover.refiner_point.byte_start,
+      this.on_hover.refiner_point.byte_end
     );
 
-    let startDeco = Decoration.widget({
-      widget: new RegionEnd(this.start),
-    }).range(this.on_hover.start.byte_start);
+    let regionDecos = this.on_hover.refined_ranges.map(range => {
+      let highlightedRange = Decoration.mark({
+        class: "aquascope-live-region",
+        tagName: this.regionTag,
+      }).range(range.byte_start, range.byte_end);
+      return highlightedRange;
+    });
 
+    let start = this.start;
+    let byteStart = this.on_hover.start.byte_start;
+    let startDeco = Decoration.widget({
+      widget: new RegionEnd(start),
+    }).range(byteStart);
+
+    let end = this.end;
+    let byteEnd = this.on_hover.end.byte_end;
     let endDeco = Decoration.widget({
-      widget: new RegionEnd(this.end),
-    }).range(this.on_hover.end.byte_end);
+      widget: new RegionEnd(end),
+    }).range(byteEnd);
 
     console.log(
-      `Loan Region ${this.on_hover.start.char_start} ${this.on_hover.start.char_end}`
+      `Loan Region ${this.on_hover.start.byte_start} ${this.on_hover.end.byte_end}`
     );
+    console.log(startDeco);
+    console.log(endDeco);
+    console.log(`Loan Region ${byteStart} ${byteEnd}`);
 
-    let extraDecos = [loanDeco, startDeco, endDeco];
+    let extraDecos = [loanDeco, startDeco, endDeco, ...regionDecos];
 
     return extraDecos;
   }
@@ -315,33 +364,44 @@ class TextIco implements Icon {
     let tt = document.createElementNS("http://www.w3.org/2000/svg", "text");
     tt.classList.add("permission");
     tt.setAttribute("font-family", "IBM Plex Sans");
-    tt.setAttribute("font-size", `${glyph_width}px`);
+    tt.setAttribute("font-size", `${glyphWidth}px`);
     tt.setAttribute("font-weight", "bold");
     tt.setAttribute("stroke-width", this.actual == this.expected ? "1" : "2");
     tt.setAttribute("paint-order", "stroke");
     tt.textContent = this.contents;
 
+    let myColor = this.color;
+    let transparent = whiteColor.withAlpha(0.0);
+
+    let forCustomTag = (tag: string, callback: (e: HTMLElement) => void) => {
+      Array.from(
+        document.getElementsByTagName(tag) as HTMLCollectionOf<HTMLElement>
+      ).forEach(callback);
+    };
+
     tt.addEventListener("mouseenter", _ => {
       this.start.style.width = "15px";
       this.end.style.width = "15px";
 
-      Array.from(
-        document.getElementsByTagName(
-          this.rndTag
-        ) as HTMLCollectionOf<HTMLElement>
-      ).forEach(elem => {
-        elem.style.textDecoration = `underline 3px ${this.color}`;
+      forCustomTag(this.loanTag, elem => {
+        elem.style.textDecoration = `underline 3px ${myColor.toString()}`;
+      });
+
+      forCustomTag(this.regionTag, elem => {
+        elem.style.backgroundColor = myColor.withAlpha(0.2).toString();
       });
     });
+
     tt.addEventListener("mouseleave", _ => {
       this.start.style.width = "0px";
       this.end.style.width = "0px";
-      Array.from(
-        document.getElementsByTagName(
-          this.rndTag
-        ) as HTMLCollectionOf<HTMLElement>
-      ).forEach(elem => {
-        elem.style.textDecoration = "underline 3px rgba(255, 255, 255, 0)";
+
+      forCustomTag(this.loanTag, elem => {
+        elem.style.textDecoration = `underline 3px ${transparent.toString()}`;
+      });
+
+      forCustomTag(this.regionTag, elem => {
+        elem.style.backgroundColor = whiteColor.withAlpha(0).toString();
       });
     });
 
@@ -368,22 +428,22 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
 
     let wrap = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     wrap.classList.add("svg-perm");
-    let my_height = icons.length * glyph_width;
-    let my_width = glyph_width;
-    wrap.setAttribute("width", `${my_width + 10}px`);
-    wrap.setAttribute("height", `${my_height}px`);
+    let myHeight = icons.length * glyphWidth;
+    let myWidth = glyphWidth;
+    wrap.setAttribute("width", `${myWidth + 10}px`);
+    wrap.setAttribute("height", `${myHeight}px`);
     wrap.style.position = "relative";
     wrap.style.top = `${(icons.length - 1) * 4}px`;
 
-    icons.forEach((ico_i: I, idx: number) => {
-      let ico: HTMLElement = ico_i.toDom();
+    icons.forEach((icoI: I, idx: number) => {
+      let ico: HTMLElement = icoI.toDom();
       let y = (idx / icons.length) * 100 + 100 / icons.length - 5;
       ico.setAttribute("text-anchor", "middle");
       ico.setAttribute("x", "50%");
       ico.setAttribute("y", `${y}%`);
-      let fill_color: Color = ico_i.actual ? ico_i.color : "rgb(255,255,255)";
-      ico.setAttribute("fill", fill_color);
-      ico.setAttribute("stroke", ico_i.color);
+      let fillColor: Color = icoI.actual ? icoI.color : whiteColor;
+      ico.setAttribute("fill", fillColor.toString());
+      ico.setAttribute("stroke", icoI.color.toString());
       wrap.appendChild(ico);
     });
 
@@ -402,21 +462,21 @@ let call_types_to_permissions = (
     "R",
     perm_info.expected.read,
     perm_info.actual.read,
-    read_color,
+    readColor,
     perm_info.refined_by == null ? null : perm_info.refined_by.read
   );
   const write_ico = new TextIco(
     "W",
     perm_info.expected.write,
     perm_info.actual.write,
-    write_color,
+    writeColor,
     perm_info.refined_by == null ? null : perm_info.refined_by.write
   );
   const drop_ico = new TextIco(
     "D",
     perm_info.expected.drop,
     perm_info.actual.drop,
-    drop_color,
+    dropColor,
     perm_info.refined_by == null ? null : perm_info.refined_by.drop
   );
 

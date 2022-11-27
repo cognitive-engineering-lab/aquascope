@@ -36,8 +36,14 @@ nav {
   padding-left: 25px;
 }
 
-.cm-loan {
+.aquascope-loan {
   text-decoration: underline 3px rgba(255, 255, 255, 0);
+  transition: 1s all;
+}
+
+.aquascope-live-region {
+  background-color: rgba(255, 255, 255, 0);
+  border-radius: 5px;
   transition: 1s all;
 }
 
@@ -53,7 +59,7 @@ span.cm-region-end {
 }
 
 .aquascope {
-  position: relativie;
+  position: relative;
   height: 100%;
   width: 100%;
 }
