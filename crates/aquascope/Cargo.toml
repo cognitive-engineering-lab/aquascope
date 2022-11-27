@@ -24,3 +24,6 @@ lazy_static = "1.4"
 [dev-dependencies]
 env_logger = "0.9.3"
 test-log = "0.2.11"
+
+[features]
+rustc-hir-origins = []

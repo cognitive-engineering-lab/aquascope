@@ -23,7 +23,7 @@ pub fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
   // Temporary hack: only run the analysis on a specific function
   let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
   let Some(name) = ctxt.tcx.hir().opt_name(owner) else { return };
-  if name.as_str() != "foo" {
+  if name.as_str() != "dump_me" {
     return;
   }
 

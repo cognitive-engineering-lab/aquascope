@@ -8,7 +8,8 @@ authors = ["Gavin Gray <gagray@ethz.ch>"]
 rustc_private = true
 
 [dependencies]
-aquascope = {version = "0.1", path = "../aquascope"}
+aquascope = {version = "0.1", path = "../aquascope", features = ["rustc-hir-origins"]}
+# aquascope = {version = "0.1", path = "../aquascope"}
 anyhow = "1"
 log = "0.4"
 flowistry = "0.5.31"

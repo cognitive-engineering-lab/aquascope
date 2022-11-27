@@ -12,6 +12,7 @@ use rustc_middle::{
   ty::TyCtxt,
 };
 use rustc_mir_dataflow::move_paths::MoveData;
+use rustc_span::Span;
 
 use super::{AquascopeFacts, Loan, Output, Path, Point};
 
@@ -20,7 +21,7 @@ type MoveablePath = <RustcFacts as FactTypes>::Path;
 pub struct PermissionsCtxt<'a, 'tcx> {
   pub tcx: TyCtxt<'tcx>,
   pub polonius_input_facts: &'a AllFacts<RustcFacts>,
-  pub polonius_output: Option<PEOutput<RustcFacts>>,
+  pub polonius_output: PEOutput<RustcFacts>,
   pub permissions_output: Output<AquascopeFacts>,
   pub body_id: BodyId,
   pub def_id: DefId,
@@ -96,6 +97,10 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       != Mutability::Mut
   }
 
+  pub fn location_to_span(&self, l: Location) -> Span {
+    self.body_with_facts.body.source_info(l).span
+  }
+
   pub fn construct_loan_regions(&mut self) {
     if self.loan_regions.is_some() {
       // XXX: disallow reconstrucution of loan regions.
@@ -104,7 +109,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
     trait PointExt {
       fn from_point(p: Point) -> Self;
-      fn expand(&mut self, p: Point);
+      fn expand(&mut self, p: Point, ctxt: &PermissionsCtxt);
     }
 
     impl PointExt for (Point, Point) {
@@ -112,11 +117,31 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
         (p, p)
       }
 
-      fn expand(&mut self, p: Point) {
-        if p < self.0 {
+      fn expand(&mut self, p: Point, ctxt: &PermissionsCtxt) {
+        let curr_earliest = ctxt.point_to_location(self.0);
+        let curr_latest = ctxt.point_to_location(self.1);
+        let candidate = ctxt.point_to_location(p);
+        // let body = &ctxt.body_with_facts.body;
+
+        // TODO: think more about why the CFG predecessor relationship
+        // is insufficient for finding the min / max.
+        // if candidate.is_predecessor_of(curr_earliest, body) {
+        //   self.0 = p;
+        // }
+        // if curr_latest.is_predecessor_of(candidate, body) {
+        //   self.1 = p;
+        // }
+
+        let curr_earliest = ctxt.location_to_span(curr_earliest);
+        let curr_latest = ctxt.location_to_span(curr_latest);
+        let candidate = ctxt.location_to_span(candidate);
+
+        if candidate.lo() < curr_earliest.lo() {
           self.0 = p;
-        } else if p > self.1 {
-          self.1 = p
+        }
+
+        if curr_latest.hi() < candidate.hi() {
+          self.1 = p;
         }
       }
     }
@@ -125,8 +150,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
     self
       .polonius_output
-      .as_ref()
-      .unwrap()
       .loan_live_at
       .iter()
       .for_each(|(point, loans)| {
@@ -134,7 +157,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
           hash
             .entry(*loan)
             .or_insert_with(|| PointExt::from_point(*point))
-            .expand(*point)
+            .expand(*point, self)
         })
       });
 

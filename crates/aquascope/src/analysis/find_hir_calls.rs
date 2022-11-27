@@ -26,7 +26,6 @@ impl<'tcx> Visitor<'tcx> for MethodCallFinder<'_, 'tcx> {
 
     let hir_id = expression.hir_id;
     if let ExprKind::MethodCall(_ps, _, _, call_span) = expression.kind {
-      log::debug!("HIR method {_ps:?}");
       let def_id = self.typeck_res.type_dependent_def_id(hir_id).unwrap();
       let fn_sig = self.tcx.fn_sig(def_id).skip_binder();
       self.call_spans.push((call_span, fn_sig));
@@ -38,7 +37,6 @@ pub fn find_method_call_spans(
   tcx: TyCtxt,
   body_id: BodyId,
 ) -> Vec<(Span, FnSig)> {
-  log::debug!("Looking in body {:?}", body_id);
   let typeck_res = tcx.typeck_body(body_id);
   let mut finder = MethodCallFinder {
     tcx,

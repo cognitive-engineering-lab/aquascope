@@ -6,16 +6,22 @@ mod find_hir_calls;
 pub mod find_mir_calls;
 mod permissions;
 
-use std::cell::RefCell;
+use std::{cell::RefCell, cmp::Ordering};
 
 pub use find_bindings::find_bindings;
 use find_hir_calls::find_method_call_spans;
 use find_mir_calls::FindCalls;
-use flowistry::mir::utils::OperandExt;
+use flowistry::{
+  indexed::impls::LocationOrArg,
+  mir::utils::OperandExt,
+  source_map::{EnclosingHirSpans, Spanner},
+};
 use permissions::PermissionsCtxt;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::BodyId;
+#[cfg(feature = "rustc-hir-origins")]
+use rustc_middle::mir::HirOrigin;
 use rustc_middle::{
   mir::{Mutability, Rvalue, StatementKind},
   ty::{Ty, TyCtxt},
@@ -106,9 +112,18 @@ pub struct PermissionsInfo {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, TS)]
+#[serde(tag = "type")]
+#[ts(export)]
+pub enum Refiner {
+  Loan(Range),
+  Move(Range),
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, TS)]
 #[ts(export)]
 pub struct RefinementRegion {
-  pub loan_location: Range,
+  pub refiner_point: Refiner,
+  pub refined_ranges: Vec<Range>,
   pub start: Range,
   pub end: Range,
 }
@@ -132,24 +147,40 @@ pub fn pair_permissions_to_calls(
 
   let method_spans = find_method_call_spans(ctxt.tcx, ctxt.body_id);
 
+  let body = &ctxt.body_with_facts.body;
+
   // for all method calls foo.bar(..) in the HIR...
   method_spans
     .iter()
     .filter_map(|&(fn_span, fn_sig)| {
       // get the MIR call instructions with an overlapping span
-      let (loc, call_info) = locations_to_body_info
+      let mut potential_call_sites = locations_to_body_info
         .iter()
-        .find(|&(_, call_info)| call_info.fn_span.overlaps(fn_span))?;
+        .filter(|&(_, call_info)| call_info.fn_span.overlaps(fn_span))
+        .collect::<Vec<_>>();
+
+      // Order the function calls by which happens first in the CFG.
+      potential_call_sites.sort_by(|t1, t2| {
+        let t1b = t1.0.is_predecessor_of(*t2.0, body);
+        let t2b = t2.0.is_predecessor_of(*t1.0, body);
+        if t1b && t2b {
+          Ordering::Equal
+        } else if t1b {
+          Ordering::Less
+        } else {
+          Ordering::Greater
+        }
+      });
+
+      log::debug!("Potential call sites {:?}", potential_call_sites);
+
+      let (loc, call_info) = potential_call_sites.first()?;
 
       // point_call is location of the MIR call
-      let point_call = ctxt.location_to_point(*loc);
+      let point_call = ctxt.location_to_point(**loc);
 
       // path is the MIR receiver
       let path = &ctxt.place_to_path(&call_info.receiver_place);
-
-      log::info!(
-        "I'm returning something for this call {call_info:?} {fn_sig:?}",
-      );
 
       // HACK: there is a small issue with the path retrived from the call site.
       // A piece of code like the following:
@@ -273,16 +304,45 @@ pub fn find_refinements_at_point(
       let start_loc = ctxt.point_to_location(*p_0);
       let end_loc = ctxt.point_to_location(*p_e);
 
-      let loan_span = ctxt.body_with_facts.body.source_info(loan_loc).span;
-      let start_span = ctxt.body_with_facts.body.source_info(start_loc).span;
-      let end_span = ctxt.body_with_facts.body.source_info(end_loc).span;
+      let loan_span = ctxt.location_to_span(loan_loc);
+      let start_span = ctxt.location_to_span(start_loc);
+      let end_span = ctxt.location_to_span(end_loc);
+
+      // XXX: currently trying out using the initial loan location as the activation
+      // location. The reason for this can be demonstrated by a simple let.
+      // ```
+      // let s = String::from("hi");
+      // let b = &mut s;
+      //
+      // == Pseudo MIR ==>
+      //
+      // s = String::from("hi");
+      // _t = &mut s;   <-- loan location
+      // b = move _t    <-- initial activation
+      // ```
+      //
+      // The weird thing, is that the actual initial activation occurs at
+      // assignment, which is reversed from the source code representation.
+      // Therefore, to try and hack my way out of this, just take the "start_span"
+      // to be the thing which is first (at the source-level) after the loan issue.
+      let start_span = if start_span.lo() < loan_span.lo() {
+        loan_span
+      } else {
+        start_span
+      };
 
       let loan_location = span_to_range(loan_span);
       let start = span_to_range(start_span);
       let end = span_to_range(end_span);
 
+      let active_nodes = loan_to_hir_spans(ctxt, *loan, start_span, end_span)
+        .into_iter()
+        .map(|span| span_to_range(span))
+        .collect::<Vec<_>>();
+
       RefinementRegion {
-        loan_location,
+        refiner_point: Refiner::Loan(loan_location),
+        refined_ranges: active_nodes,
         start,
         end,
       }
@@ -294,4 +354,137 @@ pub fn find_refinements_at_point(
   let drop = find_refinement(cannot_drop);
 
   Some(RefinementInfo { read, write, drop })
+}
+
+#[cfg(not(feature = "rustc-hir-origins"))]
+pub fn loan_to_hir_spans(
+  ctxt: &PermissionsCtxt,
+  loan: Loan,
+  min_span: Span,
+  max_span: Span,
+) -> Vec<Span> {
+  let body = &ctxt.body_with_facts.body;
+  let spanner = Spanner::new(ctxt.tcx, ctxt.body_id, body);
+  let mut loan_spans = vec![min_span, max_span];
+
+  ctxt
+    .polonius_output
+    .loan_live_at
+    .iter()
+    .for_each(|(point, loans)| {
+      if loans.contains(&loan) {
+        let loc = ctxt.point_to_location(*point);
+
+        macro_rules! insert_if_valid {
+          ($sp:expr) => {
+            if !$sp.is_empty()
+              && min_span.lo() <= $sp.lo()
+              && $sp.hi() <= max_span.hi()
+            {
+              loan_spans.push($sp);
+            }
+          };
+        }
+
+        macro_rules! span_diff {
+          ($outer:expr, $inner:expr) => {
+            (($inner.lo() - $outer.lo()) + ($outer.hi() - $inner.hi()))
+          };
+        }
+
+        let mir_span = body.source_info(loc).span;
+
+        let mut hir_spans = spanner
+          .location_to_spans(
+            LocationOrArg::Location(loc),
+            body,
+            EnclosingHirSpans::Full,
+          )
+          .into_iter()
+          // Remove spans that do not fully contain the MIR span
+          .filter(|sp| mir_span.contains(*sp))
+          .collect::<Vec<_>>();
+
+        // Order them by the amount of source code outside of the MIR span.
+        hir_spans.sort_by(|a, b| {
+          span_diff!(a, mir_span).cmp(&span_diff!(b, mir_span))
+        });
+
+        // Only take the span that fully incloses the mir_span and also
+        // has minimal extraneous source information.
+        hir_spans.first().map(|span| insert_if_valid!(*span));
+      }
+    });
+
+  smooth_spans(loan_spans)
+}
+
+#[cfg(feature = "rustc-hir-origins")]
+pub fn loan_to_hir_spans(
+  ctxt: &PermissionsCtxt,
+  loan: Loan,
+  min_span: Span,
+  max_span: Span,
+) -> Vec<Span> {
+  let hir = ctxt.tcx.hir();
+  let body = &ctxt.body_with_facts.body;
+  let mut loan_spans = vec![min_span, max_span];
+
+  ctxt
+    .polonius_output
+    .loan_live_at
+    .iter()
+    .for_each(|(point, loans)| {
+      if loans.contains(&loan) {
+        let loc = ctxt.point_to_location(*point);
+
+        macro_rules! insert_if_valid {
+          ($sp:expr) => {
+            if !$sp.is_empty()
+              && min_span.lo() <= $sp.lo()
+              && $sp.hi() <= max_span.hi()
+            {
+              loan_spans.push($sp);
+            }
+          };
+        }
+
+        let source_info = body.source_info(loc);
+
+        match source_info.origin {
+          HirOrigin::Untracked => {
+            log::warn!("Mir at point {point:?} has untracked origins")
+          }
+          HirOrigin::FromHir(hir_id) => {
+            let span = hir.span(hir_id);
+            insert_if_valid!(span);
+          }
+        }
+      }
+    });
+
+  smooth_spans(loan_spans)
+}
+
+fn smooth_spans(mut spans: Vec<Span>) -> Vec<Span> {
+  if spans.is_empty() {
+    return spans;
+  }
+
+  // First, sort the spans by starting value.
+  spans.sort_by(|a, b| a.lo().cmp(&b.lo()));
+
+  let mut smoothed_spans = Vec::default();
+  let mut acc = *spans.first().unwrap();
+
+  for span in &spans[1 ..] {
+    if acc.overlaps(*span) || acc.hi() == span.lo() {
+      acc = acc.to(*span);
+    } else {
+      smoothed_spans.push(acc);
+      acc = *span;
+    }
+  }
+
+  smoothed_spans
 }

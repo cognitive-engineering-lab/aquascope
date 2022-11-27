@@ -210,8 +210,6 @@ impl Output<AquascopeFacts> {
     let loan_live_at: Relation<(Loan, Point)> = Relation::from_iter(
       ctxt
         .polonius_output
-        .as_ref()
-        .unwrap()
         .loan_live_at
         .iter()
         .flat_map(|(point, values)| values.iter().map(|loan| (*loan, *point))),
@@ -389,7 +387,7 @@ pub fn compute<'a, 'tcx>(
     tcx,
     permissions_output: Output::default(),
     polonius_input_facts,
-    polonius_output: Some(polonius_output),
+    polonius_output,
     body_id,
     def_id: def_id.to_def_id(),
     body_with_facts,

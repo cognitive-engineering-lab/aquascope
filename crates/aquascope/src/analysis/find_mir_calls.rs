@@ -1,6 +1,7 @@
+use flowistry::mir::utils::OperandExt;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_middle::mir::{
-  visit::Visitor, Body, Location, Operand, Place, Terminator, TerminatorKind,
+  visit::Visitor, Body, Location, Place, Terminator, TerminatorKind,
 };
 use rustc_span::Span;
 
@@ -24,7 +25,6 @@ impl<'tcx> Visitor<'tcx> for CallFinder<'tcx> {
     terminator: &Terminator<'tcx>,
     location: Location,
   ) {
-    log::debug!("found terminator {:?}", terminator);
     if let TerminatorKind::Call {
       func: _,
       args,
@@ -36,27 +36,14 @@ impl<'tcx> Visitor<'tcx> for CallFinder<'tcx> {
     } = &terminator.kind
     {
       if !args.is_empty() {
-        let receiver_place = match &args[0] {
-          Operand::Copy(p) => p,
-          Operand::Move(p) => p,
-          c => {
-            log::warn!(
-              "Cannot find place for constant {:?} ignoring method",
-              c
-            );
-            return;
-          }
-        };
-
-        // TODO: can we map calls more accurately to method calls?
-        // this here is a rough approximation for demo purposes.
-
-        log::debug!("Found method call at {:?}", location);
-
-        self.call_node_info.insert(location, CallInfo {
-          receiver_place: *receiver_place,
-          fn_span: *fn_span,
-        });
+        if let Some(receiver_place) = args[0].to_place() {
+          // TODO: can we map calls more accurately to method calls?
+          // this here is a rough approximation for demo purposes.
+          self.call_node_info.insert(location, CallInfo {
+            receiver_place,
+            fn_span: *fn_span,
+          });
+        }
       }
     }
   }
@@ -67,9 +54,6 @@ impl<'tcx> FindCalls<'tcx> for Body<'tcx> {
     let mut finder = CallFinder {
       call_node_info: HashMap::default(),
     };
-
-    log::debug!("Scraping MIR for function calls");
-
     finder.visit_body(self);
     finder.call_node_info
   }

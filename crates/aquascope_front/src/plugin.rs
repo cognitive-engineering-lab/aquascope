@@ -1,6 +1,5 @@
 use std::{
   env,
-  path::PathBuf,
   process::{exit, Command},
   time::Instant,
 };
@@ -38,6 +37,10 @@ enum AquascopeCommand {
 pub struct AquascopePlugin;
 impl RustcPlugin for AquascopePlugin {
   type Args = AquascopePluginArgs;
+
+  fn version() -> &'static str {
+    "0.0.0"
+  }
 
   fn bin_name() -> String {
     "aquascope-driver".into()
