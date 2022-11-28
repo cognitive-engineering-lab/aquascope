@@ -276,6 +276,10 @@ pub fn find_refinements_at_point(
 
   let loan_regions = ctxt.loan_regions.as_ref().unwrap();
 
+  // Determine if the max permissions for this path would even allow W/D.
+  let never_write = ctxt.permissions_output.never_write.contains(path);
+  let never_drop = ctxt.permissions_output.never_drop.contains(path);
+
   let cannot_read = ctxt
     .permissions_output
     .cannot_read
@@ -350,8 +354,14 @@ pub fn find_refinements_at_point(
   };
 
   let read = find_refinement(cannot_read);
-  let write = find_refinement(cannot_write);
-  let drop = find_refinement(cannot_drop);
+  // If the path couldn't ever be written / dropped, calling this point
+  // a refinement would be inaccurate.
+  let write = (!never_write)
+    .then(|| find_refinement(cannot_write))
+    .flatten();
+  let drop = (!never_drop)
+    .then(|| find_refinement(cannot_drop))
+    .flatten();
 
   Some(RefinementInfo { read, write, drop })
 }
@@ -426,6 +436,8 @@ pub fn loan_to_hir_spans(
   min_span: Span,
   max_span: Span,
 ) -> Vec<Span> {
+  use rustc_hir::{HirId, OwnerId};
+
   let hir = ctxt.tcx.hir();
   let body = &ctxt.body_with_facts.body;
   let mut loan_spans = vec![min_span, max_span];
@@ -455,7 +467,13 @@ pub fn loan_to_hir_spans(
           HirOrigin::Untracked => {
             log::warn!("Mir at point {point:?} has untracked origins")
           }
-          HirOrigin::FromHir(hir_id) => {
+          HirOrigin::FromHir(local_id) => {
+            let hir_id = HirId {
+              owner: OwnerId {
+                def_id: ctxt.def_id.expect_local(),
+              },
+              local_id,
+            };
             let span = hir.span(hir_id);
             insert_if_valid!(span);
           }
@@ -485,6 +503,9 @@ fn smooth_spans(mut spans: Vec<Span>) -> Vec<Span> {
       acc = *span;
     }
   }
+
+  // don't forget the last accumulator
+  smoothed_spans.push(acc);
 
   smoothed_spans
 }
