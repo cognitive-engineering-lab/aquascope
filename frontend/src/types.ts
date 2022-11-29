@@ -5,15 +5,12 @@ export { CallTypes } from "./bindings/CallTypes";
 export { Range } from "./bindings/Range";
 
 export { Permissions } from "./bindings/Permissions";
-export { PermissionsInfo } from "./bindings/PermissionsInfo";
-export { RefinementInfo } from "./bindings/RefinementInfo";
+export { PermissionsBoundary } from "./bindings/PermissionsBoundary";
 export { PermissionsOutput } from "./bindings/PermissionsOutput";
-export { RefinementRegion } from "./bindings/RefinementRegion";
 
-// TODO remove the following types which should no longer be used
-export { ReceiverTypesOutput as ReceiverTypes } from "./bindings/ReceiverTypesOutput";
-export { TypeInfo } from "./bindings/TypeInfo";
-export { TypeState } from "./bindings/TypeState";
+export { Refiner } from "./bindings/Refiner";
+export { RefinementInfo } from "./bindings/RefinementInfo";
+export { RefinementRegion } from "./bindings/RefinementRegion";
 
 interface BuildError {
   type: "BuildError";

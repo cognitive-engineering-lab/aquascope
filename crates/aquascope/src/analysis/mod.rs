@@ -23,7 +23,7 @@ use rustc_hir::BodyId;
 #[cfg(feature = "rustc-hir-origins")]
 use rustc_middle::mir::HirOrigin;
 use rustc_middle::{
-  mir::{Mutability, Rvalue, StatementKind},
+  mir::{Mutability, Operand, Rvalue, StatementKind},
   ty::{Ty, TyCtxt},
 };
 use rustc_span::Span;
@@ -102,12 +102,16 @@ impl<'tcx> From<Ty<'tcx>> for Permissions {
   }
 }
 
+/// A point where the permissions reality are checked against their expectations.
+/// Currently, the only boundary supported is method calls on a receiver, however,
+/// these boundaries could be drawn in any program location.
 #[derive(Debug, Clone, Serialize, PartialEq, TS)]
 #[ts(export)]
-pub struct PermissionsInfo {
+pub struct PermissionsBoundary {
   pub range: Range,
   pub expected: Permissions,
   pub actual: Permissions,
+  pub was_copied: bool,
   pub refined_by: Option<RefinementInfo>,
 }
 
@@ -139,7 +143,7 @@ pub struct RefinementInfo {
 pub fn pair_permissions_to_calls(
   ctxt: &PermissionsCtxt,
   span_to_range: impl Fn(Span) -> Range + std::marker::Copy,
-) -> Vec<PermissionsInfo> {
+) -> Vec<PermissionsBoundary> {
   let locations_to_body_info = ctxt.body_with_facts.body.find_calls();
 
   let _never_write = &ctxt.permissions_output.never_write;
@@ -171,8 +175,6 @@ pub fn pair_permissions_to_calls(
           Ordering::Greater
         }
       });
-
-      log::debug!("Potential call sites {:?}", potential_call_sites);
 
       let (loc, call_info) = potential_call_sites.first()?;
 
@@ -235,11 +237,17 @@ pub fn pair_permissions_to_calls(
       // a terminator, then the default is to take the original
       // place and point of the method call. This could happen,
       // for example, in a line such as: `Vec::default().push(0)`.
+      let mut was_copied = false;
       let (place_1, point) = match definitions.get(0) {
         Some((point_assign, rhs)) => {
           let place = match rhs {
             Rvalue::Ref(_, _, place) => *place,
-            Rvalue::Use(op) => op.to_place().unwrap(),
+            Rvalue::Use(op) => {
+              if let Operand::Copy(_) = op {
+                was_copied = true;
+              };
+              op.to_place().unwrap()
+            }
             _ => unimplemented!(),
           };
           (place, *point_assign)
@@ -248,16 +256,28 @@ pub fn pair_permissions_to_calls(
       };
 
       let path = ctxt.place_to_path(&place_1);
-      let actual = ctxt.permissions_output.permissions_at_point(path, point);
+      let mut actual =
+        ctxt.permissions_output.permissions_at_point(path, point);
+
+      // If an operand is copied, that means that they "gain" drop permissions.
+      // An example of this would be the following:
+      // ```
+      // fn main() {
+      //     let x: &i32 = &0; // x: R--
+      //     x.abs();          // (copy x).abs(); // (copy x): R-D
+      // }
+      // ```
+      actual.drop |= was_copied;
       let expected = fn_sig.inputs()[0].into();
 
       let refined_by =
         find_refinements_at_point(ctxt, path, point, span_to_range);
 
-      Some(PermissionsInfo {
+      Some(PermissionsBoundary {
         range: span_to_range(fn_span),
         actual,
         expected,
+        was_copied,
         refined_by,
       })
     })
@@ -373,6 +393,8 @@ pub fn loan_to_hir_spans(
   min_span: Span,
   max_span: Span,
 ) -> Vec<Span> {
+  let tcx = ctxt.tcx;
+  let hir = tcx.hir();
   let body = &ctxt.body_with_facts.body;
   let spanner = Spanner::new(ctxt.tcx, ctxt.body_id, body);
   let mut loan_spans = vec![min_span, max_span];
@@ -422,7 +444,9 @@ pub fn loan_to_hir_spans(
 
         // Only take the span that fully incloses the mir_span and also
         // has minimal extraneous source information.
-        hir_spans.first().map(|span| insert_if_valid!(*span));
+        if let Some(span) = hir_spans.first() {
+          insert_if_valid!(*span)
+        }
       }
     });
 
@@ -509,3 +533,5 @@ fn smooth_spans(mut spans: Vec<Span>) -> Vec<Span> {
 
   smoothed_spans
 }
+
+fn generate_max_permission_info() {}

@@ -43,6 +43,9 @@ let initEditors = () => {
     let ed = new Editor(
       pre,
       [receiverPermissionsField.stateField],
+      _ => {
+        alert("You aren't handling errors!");
+      },
       initialCode,
       serverHost,
       serverPort,

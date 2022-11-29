@@ -32,8 +32,8 @@ nav {
   max-height: 700px;
   max-width: 900px;
 
-  position: relative;
-  padding-left: 25px;
+  /* position: relative; */
+  /* padding-left: 25px; */
 }
 
 .aquascope-loan {
@@ -46,6 +46,61 @@ nav {
   border-radius: 5px;
   transition: 1s all;
 }
+
+.aquascope-stderr {
+  padding: 15px;
+  background-color: #f9ffff;
+  font-family: "Source Code Pro", monospace;
+  font-size: 0.9em;
+  overflow: scroll;
+}
+
+/* XXX: tabs **************************************** */
+
+.tabs-container {
+  height: 100%;
+  width: 100%;
+  max-height: 700px;
+  max-width: 900px;
+
+  padding-left: 25px;
+}
+
+.tabs {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  margin-bottom: -1px;
+}
+.tab {
+  padding: 5px 10px;
+  background: #ddd;
+  border: 1px solid #bbb;
+  width: fit-content;
+  display: inline-block;
+}
+.tab.active {
+  background: #fff;
+  border-bottom-color: white !important;
+}
+
+.tab-pane {
+  height: 100%;
+  width: 100%;
+  max-height: 700px;
+  max-width: 900px;
+
+  position: relative;
+  /* padding-left: 25px; */
+
+  display: none;
+  border: 1px solid #bbb;
+}
+.tab-pane.active {
+  display: block;
+}
+
+/* ********* */
 
 span.cm-region-end {
   font-family: "IBM Plex Sans", sans-serif, bold;

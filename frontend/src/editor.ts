@@ -20,7 +20,7 @@ import { vim } from "@replit/codemirror-vim";
 import { basicSetup } from "./setup";
 import {
   BackendError,
-  PermissionsInfo,
+  PermissionsBoundary,
   PermissionsOutput,
   RefinementRegion,
 } from "./types";
@@ -112,6 +112,10 @@ export class Editor {
   public constructor(
     dom: HTMLElement,
     supportedFields: Array<StateField<DecorationSet>>,
+    readonly reportStdErr: (err: BackendError) => void = function (err) {
+      console.log("An error occurred: ");
+      console.log(err);
+    },
     initialCode: string = defaultCodeExample,
     readonly serverHost: string = DEFAULT_SERVER_HOST,
     readonly serverPort: string = DEFAULT_SERVER_PORT,
@@ -191,25 +195,19 @@ export class Editor {
 
     let serverResponse: ServerResponse = await serverResponseRaw.json();
 
-    // TODO: on errors we should have a side panel where the Rustc output is
-    // placed. It would be /ideal/ to have something like Rust analyzer display
-    // errors with parsing / function type errors but that is out-of-scope for now.
-    let handleErrors = (e: BackendError) => {
-      console.log(e);
-      alert("An error occurred, check your logs");
-      return;
-    };
-
     if (serverResponse.success) {
       let out: Result<PermissionsOutput> = JSON.parse(serverResponse.stdout);
       if ("Ok" in out) {
-        console.log(`Stderr: ${serverResponse.stderr}`);
+        this.reportStdErr({
+          type: "BuildError",
+          error: serverResponse.stderr,
+        });
         return this.addCallTypesField(receiverPermissionsField, out.Ok);
       } else {
-        return handleErrors(out.Err);
+        return this.reportStdErr(out.Err);
       }
     } else {
-      return handleErrors({
+      return this.reportStdErr({
         type: "BuildError",
         error: serverResponse.stderr,
       });
@@ -456,7 +454,7 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
 }
 
 let call_types_to_permissions = (
-  perm_info: PermissionsInfo
+  perm_info: PermissionsBoundary
 ): PermissionPoint<TextIco> => {
   const read_ico = new TextIco(
     "R",
@@ -533,7 +531,7 @@ let make_decoration_with_text_ico = <I extends TextIco>(
 };
 
 export let receiverPermissionsField: IconField<
-  PermissionsInfo,
+  PermissionsBoundary,
   TextIco,
   PermissionPoint<TextIco>
 > = {

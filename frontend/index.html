@@ -31,18 +31,29 @@
       <ul>
         <li class="nav-item">
           <label for="vimKeybindings"
-            ><input type="checkbox" id="vimKeybindings" checked/>VIM
+                 ><input type="checkbox" id="vimKeybindings" checked/>VIM
             Keybindings</label
-          >
+                         >
         </li>
       </ul>
     </nav>
 
-    <div class="static-editor">
-      <div class="top-right">
-        <button class="cm-button" id="showReceiverTypes">Compute Permissions</button>
+    <div class="tabs-container">
+
+      <ul class="tabs">
+        <li class="tab active" data-tab="0">Code</li>
+        <li class="tab" data-tab="1">Stderr</li>
+      </ul>
+
+      <div class="static-editor tab-pane active" data-pane="0">
+        <div class="top-right">
+          <button class="cm-button" id="showReceiverTypes">Compute Permissions</button>
+        </div>
       </div>
+
+      <div class="tab-pane aquascope-stderr" data-pane="1"></div>
     </div>
+
 
   </body>
 </html>

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use aquascope::analysis::{self, PermissionsInfo};
+use aquascope::analysis::{self, PermissionsBoundary};
 use flowistry::{
   mir::borrowck_facts::get_body_with_borrowck_facts, source_map,
 };
@@ -11,7 +11,7 @@ use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
-pub struct PermissionsOutput(Vec<PermissionsInfo>);
+pub struct PermissionsOutput(Vec<PermissionsBoundary>);
 
 impl super::plugin::Join for PermissionsOutput {
   fn join(self, other: Self) -> Self {

@@ -1,0 +1,1 @@
+../../../crates/aquascope/bindings/PermissionsBoundary.ts
