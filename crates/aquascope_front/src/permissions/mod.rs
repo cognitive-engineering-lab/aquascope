@@ -20,7 +20,7 @@ impl super::plugin::Join for PermissionsOutput {
         .0
         .join(other.0)
         .into_iter()
-        .unique_by(|pi| pi.range.clone())
+        .unique_by(|pi| pi.location)
         .collect::<Vec<_>>(),
     )
   }

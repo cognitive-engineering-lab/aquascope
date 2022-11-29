@@ -108,11 +108,33 @@ impl<'tcx> From<Ty<'tcx>> for Permissions {
 #[derive(Debug, Clone, Serialize, PartialEq, TS)]
 #[ts(export)]
 pub struct PermissionsBoundary {
-  pub range: Range,
+  // instead of giving the range, the backend should supply the exact location. this will
+  // be especially usefull when we have permissions on more than just method calls.
+  pub location: usize,
   pub expected: Permissions,
   pub actual: Permissions,
   pub was_copied: bool,
-  pub refined_by: Option<RefinementInfo>,
+  pub explanations: MissingPermsInfo,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, TS)]
+#[ts(export)]
+pub struct MissingPermsInfo {
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub read: Option<MissingPermReason>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub write: Option<MissingPermReason>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub drop: Option<MissingPermReason>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, TS)]
+#[serde(tag = "type")]
+#[ts(export)]
+pub enum MissingPermReason {
+  // TODO store information to visually build the explanation
+  InsufficientType,
+  Refined(RefinementRegion),
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, TS)]
@@ -128,16 +150,9 @@ pub enum Refiner {
 pub struct RefinementRegion {
   pub refiner_point: Refiner,
   pub refined_ranges: Vec<Range>,
+  // NOTE: the start and end only cary meaning in a linear scope.
   pub start: Range,
   pub end: Range,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, TS)]
-#[ts(export)]
-pub struct RefinementInfo {
-  pub read: Option<RefinementRegion>,
-  pub write: Option<RefinementRegion>,
-  pub drop: Option<RefinementRegion>,
 }
 
 pub fn pair_permissions_to_calls(
@@ -270,191 +285,177 @@ pub fn pair_permissions_to_calls(
       actual.drop |= was_copied;
       let expected = fn_sig.inputs()[0].into();
 
-      let refined_by =
-        find_refinements_at_point(ctxt, path, point, span_to_range);
+      let explanations =
+        build_missing_perms_explainers(ctxt, path, point, span_to_range);
+
+      // FIXME HACK: we assume that the `.` is one character to the left of the method call.
+      // this is of course not *strictly* true and should be fixed.
+      let location = span_to_range(fn_span).char_start - 1;
 
       Some(PermissionsBoundary {
-        range: span_to_range(fn_span),
+        location,
         actual,
         expected,
         was_copied,
-        refined_by,
+        explanations,
       })
     })
     .collect()
 }
 
-pub fn find_refinements_at_point(
+///
+fn build_missing_perms_explainers(
   ctxt: &PermissionsCtxt,
   path: Path,
   point: Point,
-  span_to_range: impl Fn(Span) -> Range,
-) -> Option<RefinementInfo> {
-  let path = &path;
-  let point = &point;
+  span_to_range: impl (Fn(Span) -> Range) + std::marker::Copy,
+) -> MissingPermsInfo {
   let empty_hash = &HashMap::default();
 
-  let loan_regions = ctxt.loan_regions.as_ref().unwrap();
-
   // Determine if the max permissions for this path would even allow W/D.
-  let never_write = ctxt.permissions_output.never_write.contains(path);
-  let never_drop = ctxt.permissions_output.never_drop.contains(path);
+  let never_write = &ctxt.permissions_output.never_write;
+  let never_drop = &ctxt.permissions_output.never_drop;
 
   let cannot_read = ctxt
     .permissions_output
     .cannot_read
-    .get(point)
+    .get(&point)
     .unwrap_or(empty_hash);
   let cannot_write = ctxt
     .permissions_output
     .cannot_write
-    .get(point)
+    .get(&point)
     .unwrap_or(empty_hash);
   let cannot_drop = ctxt
     .permissions_output
     .cannot_drop
-    .get(point)
+    .get(&point)
     .unwrap_or(empty_hash);
 
-  let find_refinement = |hshr: &HashMap<Path, Loan>| {
-    // TODO: the permissions_output only keeps one loan per path, however, there could
-    // theoretically be several which are refining. When this is fixed, the analysis
-    // here should pick the loan which lasts the longest.
-    hshr.get(path).map(|loan| {
-      let (p_0, p_e) = loan_regions.get(loan).unwrap();
-      // TODO: using `reserve_location` is not exactly accurate because this
-      // could be a two-phase borrow. This needs to use the `activation_location`.
-      let loan_loc = ctxt.borrow_set[*loan].reserve_location;
-      let start_loc = ctxt.point_to_location(*p_0);
-      let end_loc = ctxt.point_to_location(*p_e);
+  // To determine missing permissions we determine them in order of severity
+  // 3. insufficient type
+  // 1. refinement due to move
+  // 2. refinement due to loan
+  use rustc_data_structures::fx::FxHashSet as HashSet;
 
-      let loan_span = ctxt.location_to_span(loan_loc);
-      let start_span = ctxt.location_to_span(start_loc);
-      let end_span = ctxt.location_to_span(end_loc);
-
-      // XXX: currently trying out using the initial loan location as the activation
-      // location. The reason for this can be demonstrated by a simple let.
-      // ```
-      // let s = String::from("hi");
-      // let b = &mut s;
-      //
-      // == Pseudo MIR ==>
-      //
-      // s = String::from("hi");
-      // _t = &mut s;   <-- loan location
-      // b = move _t    <-- initial activation
-      // ```
-      //
-      // The weird thing, is that the actual initial activation occurs at
-      // assignment, which is reversed from the source code representation.
-      // Therefore, to try and hack my way out of this, just take the "start_span"
-      // to be the thing which is first (at the source-level) after the loan issue.
-      let start_span = if start_span.lo() < loan_span.lo() {
-        loan_span
-      } else {
-        start_span
-      };
-
-      let loan_location = span_to_range(loan_span);
-      let start = span_to_range(start_span);
-      let end = span_to_range(end_span);
-
-      let active_nodes = loan_to_hir_spans(ctxt, *loan, start_span, end_span)
-        .into_iter()
-        .map(|span| span_to_range(span))
-        .collect::<Vec<_>>();
-
-      RefinementRegion {
-        refiner_point: Refiner::Loan(loan_location),
-        refined_ranges: active_nodes,
-        start,
-        end,
-      }
-    })
+  let find_insufficient_type = |hshr: &HashSet<Path>| {
+    hshr
+      .contains(&path)
+      .then_some(MissingPermReason::InsufficientType)
   };
 
-  let read = find_refinement(cannot_read);
-  // If the path couldn't ever be written / dropped, calling this point
-  // a refinement would be inaccurate.
-  let write = (!never_write)
-    .then(|| find_refinement(cannot_write))
-    .flatten();
-  let drop = (!never_drop)
-    .then(|| find_refinement(cannot_drop))
-    .flatten();
+  macro_rules! is_loan_refined {
+    ($hsh:expr) => {
+      find_loan_refinement(ctxt, path, $hsh, span_to_range)
+        .map(MissingPermReason::Refined)
+    };
+  }
 
-  Some(RefinementInfo { read, write, drop })
+  let read = is_loan_refined!(cannot_read);
+
+  let write = find_insufficient_type(never_write)
+    .or_else(|| is_loan_refined!(cannot_write));
+
+  let drop = find_insufficient_type(never_drop)
+    .or_else(|| is_loan_refined!(cannot_drop));
+
+  MissingPermsInfo { read, write, drop }
 }
 
-#[cfg(not(feature = "rustc-hir-origins"))]
-pub fn loan_to_hir_spans(
+pub fn find_loan_refinement(
+  ctxt: &PermissionsCtxt,
+  path: Path,
+  refined_by: &HashMap<Path, Loan>,
+  span_to_range: impl Fn(Span) -> Range,
+) -> Option<RefinementRegion> {
+  let loan_regions = ctxt.loan_regions.as_ref().unwrap();
+
+  // TODO: the permissions_output only keeps one loan per path, however, there could
+  // theoretically be several which are refining. When this is fixed, the analysis
+  // here should pick the loan which lasts the longest.
+  refined_by.get(&path).map(|loan| {
+    let (p_0, p_e) = loan_regions.get(loan).unwrap();
+
+    // TODO: using `reserve_location` is not exactly accurate because this
+    // could be a two-phase borrow. This needs to use the `activation_location`.
+    let loan_loc = ctxt.borrow_set[*loan].reserve_location;
+    let start_loc = ctxt.point_to_location(*p_0);
+    let end_loc = ctxt.point_to_location(*p_e);
+
+    let loan_span = ctxt.location_to_span(loan_loc);
+    let start_span = ctxt.location_to_span(start_loc);
+    let end_span = ctxt.location_to_span(end_loc);
+
+    // XXX: currently trying out using the initial loan location as the activation
+    // location. The reason for this can be demonstrated by a simple let.
+    // ```
+    // let s = String::from("hi");
+    // let b = &mut s;
+    //
+    // == Pseudo MIR ==>
+    //
+    // s = String::from("hi");
+    // _t = &mut s;   <-- loan location
+    // b = move _t    <-- initial activation
+    // ```
+    //
+    // The weird thing, is that the actual initial activation occurs at
+    // assignment, which is reversed from the source code representation.
+    // Therefore, to try and hack my way out of this, just take the "start_span"
+    // to be the thing which is first (at the source-level) after the loan issue.
+    let start_span = if start_span.lo() < loan_span.lo() {
+      loan_span
+    } else {
+      start_span
+    };
+
+    let loan_location = span_to_range(loan_span);
+    let start = span_to_range(start_span);
+    let end = span_to_range(end_span);
+
+    let active_nodes = loan_to_spans(ctxt, *loan, start_span, end_span)
+      .into_iter()
+      .map(span_to_range)
+      .collect::<Vec<_>>();
+
+    RefinementRegion {
+      refiner_point: Refiner::Loan(loan_location),
+      refined_ranges: active_nodes,
+      start,
+      end,
+    }
+  })
+}
+
+pub fn loan_to_spans(
   ctxt: &PermissionsCtxt,
   loan: Loan,
   min_span: Span,
   max_span: Span,
 ) -> Vec<Span> {
-  let tcx = ctxt.tcx;
-  let hir = tcx.hir();
-  let body = &ctxt.body_with_facts.body;
-  let spanner = Spanner::new(ctxt.tcx, ctxt.body_id, body);
-  let mut loan_spans = vec![min_span, max_span];
-
-  ctxt
+  let points = ctxt
     .polonius_output
     .loan_live_at
     .iter()
-    .for_each(|(point, loans)| {
-      if loans.contains(&loan) {
-        let loc = ctxt.point_to_location(*point);
+    .filter_map(|(point, loans)| loans.contains(&loan).then_some(*point));
 
-        macro_rules! insert_if_valid {
-          ($sp:expr) => {
-            if !$sp.is_empty()
-              && min_span.lo() <= $sp.lo()
-              && $sp.hi() <= max_span.hi()
-            {
-              loan_spans.push($sp);
-            }
-          };
-        }
+  let mut loan_spans = points_to_spans(ctxt, points);
 
-        macro_rules! span_diff {
-          ($outer:expr, $inner:expr) => {
-            (($inner.lo() - $outer.lo()) + ($outer.hi() - $inner.hi()))
-          };
-        }
+  loan_spans.push(min_span);
+  loan_spans.push(max_span);
 
-        let mir_span = body.source_info(loc).span;
-
-        let mut hir_spans = spanner
-          .location_to_spans(
-            LocationOrArg::Location(loc),
-            body,
-            EnclosingHirSpans::Full,
-          )
-          .into_iter()
-          // Remove spans that do not fully contain the MIR span
-          .filter(|sp| mir_span.contains(*sp))
-          .collect::<Vec<_>>();
-
-        // Order them by the amount of source code outside of the MIR span.
-        hir_spans.sort_by(|a, b| {
-          span_diff!(a, mir_span).cmp(&span_diff!(b, mir_span))
-        });
-
-        // Only take the span that fully incloses the mir_span and also
-        // has minimal extraneous source information.
-        if let Some(span) = hir_spans.first() {
-          insert_if_valid!(*span)
-        }
-      }
-    });
+  // HACK: ideally we don't need to use the min / max spans to
+  // filter the others.
+  let loan_spans = loan_spans
+    .into_iter()
+    .filter(|span| min_span.lo() <= span.lo() && span.hi() <= max_span.hi())
+    .collect::<Vec<_>>();
 
   smooth_spans(loan_spans)
 }
 
 #[cfg(feature = "rustc-hir-origins")]
-pub fn loan_to_hir_spans(
+pub fn loan_to_spans(
   ctxt: &PermissionsCtxt,
   loan: Loan,
   min_span: Span,
@@ -470,42 +471,104 @@ pub fn loan_to_hir_spans(
     .polonius_output
     .loan_live_at
     .iter()
-    .for_each(|(point, loans)| {
-      if loans.contains(&loan) {
-        let loc = ctxt.point_to_location(*point);
-
-        macro_rules! insert_if_valid {
-          ($sp:expr) => {
-            if !$sp.is_empty()
-              && min_span.lo() <= $sp.lo()
-              && $sp.hi() <= max_span.hi()
-            {
-              loan_spans.push($sp);
-            }
-          };
-        }
-
-        let source_info = body.source_info(loc);
-
-        match source_info.origin {
-          HirOrigin::Untracked => {
-            log::warn!("Mir at point {point:?} has untracked origins")
-          }
-          HirOrigin::FromHir(local_id) => {
-            let hir_id = HirId {
-              owner: OwnerId {
-                def_id: ctxt.def_id.expect_local(),
-              },
-              local_id,
-            };
-            let span = hir.span(hir_id);
-            insert_if_valid!(span);
-          }
-        }
-      }
-    });
+    .for_each(|(point, loans)| if loans.contains(&loan) {});
 
   smooth_spans(loan_spans)
+}
+
+#[cfg(not(feature = "rustc-hir-origins"))]
+fn points_to_spans(
+  ctxt: &PermissionsCtxt,
+  points: impl Iterator<Item = Point>,
+) -> Vec<Span> {
+  let body = &ctxt.body_with_facts.body;
+  let spanner = Spanner::new(ctxt.tcx, ctxt.body_id, body);
+  let mut spans = Vec::default();
+
+  points.for_each(|point| {
+    let loc = ctxt.point_to_location(point);
+
+    macro_rules! insert_if_valid {
+      ($sp:expr) => {
+        if !$sp.is_empty() {
+          spans.push($sp);
+        }
+      };
+    }
+
+    macro_rules! span_diff {
+      ($outer:expr, $inner:expr) => {
+        (($inner.lo() - $outer.lo()) + ($outer.hi() - $inner.hi()))
+      };
+    }
+
+    let mir_span = body.source_info(loc).span;
+
+    let mut hir_spans = spanner
+      .location_to_spans(
+        LocationOrArg::Location(loc),
+        body,
+        EnclosingHirSpans::Full,
+      )
+      .into_iter()
+      // Remove spans that do not fully contain the MIR span
+      .filter(|sp| mir_span.contains(*sp))
+      .collect::<Vec<_>>();
+
+    // Order them by the amount of source code outside of the MIR span.
+    hir_spans
+      .sort_by(|a, b| span_diff!(a, mir_span).cmp(&span_diff!(b, mir_span)));
+
+    // Only take the span that fully incloses the mir_span and also
+    // has minimal extraneous source information.
+    if let Some(span) = hir_spans.first() {
+      insert_if_valid!(*span)
+    }
+  });
+
+  spans
+}
+
+// DEPRECATED! remove
+#[cfg(feature = "rustc-hir-origins")]
+fn points_to_spans(
+  ctxt: &PermissionsCtxt,
+  points: impl Iterator<Item = Point>,
+) -> Vec<Span> {
+  let body = &ctxt.body_with_facts.body;
+  let mut spans = Vec::default();
+
+  points.for_each(|point| {
+    let loc = ctxt.point_to_location(*point);
+
+    macro_rules! insert_if_valid {
+      ($sp:expr) => {
+        if !$sp.is_empty() {
+          loan_spans.push($sp);
+        }
+      };
+    }
+
+    let source_info = body.source_info(loc);
+
+    match source_info.origin {
+      HirOrigin::Untracked => {
+        log::warn!("Mir at point {point:?} has untracked origins")
+      }
+      HirOrigin::FromHir(local_id) => {
+        let hir_id = HirId {
+          owner: OwnerId {
+            def_id: ctxt.def_id.expect_local(),
+          },
+          local_id,
+        };
+        let span = hir.span(hir_id);
+        insert_if_valid!(span);
+      }
+    }
+  });
+
+  spans
 }
 
 fn smooth_spans(mut spans: Vec<Span>) -> Vec<Span> {
@@ -514,7 +577,7 @@ fn smooth_spans(mut spans: Vec<Span>) -> Vec<Span> {
   }
 
   // First, sort the spans by starting value.
-  spans.sort_by(|a, b| a.lo().cmp(&b.lo()));
+  spans.sort_by_key(|a| a.lo());
 
   let mut smoothed_spans = Vec::default();
   let mut acc = *spans.first().unwrap();
@@ -533,5 +596,3 @@ fn smooth_spans(mut spans: Vec<Span>) -> Vec<Span> {
 
   smoothed_spans
 }
-
-fn generate_max_permission_info() {}

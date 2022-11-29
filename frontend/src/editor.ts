@@ -20,6 +20,7 @@ import { vim } from "@replit/codemirror-vim";
 import { basicSetup } from "./setup";
 import {
   BackendError,
+  MissingPermReason,
   PermissionsBoundary,
   PermissionsOutput,
   RefinementRegion,
@@ -168,11 +169,10 @@ export class Editor {
     T,
     Ico extends Icon,
     F extends IconField<B, Ico, T>
-  >(f: F, method_call_points: Array<B>) {
-    let new_effects = method_call_points.map(f.fromOutput);
-    console.log(new_effects);
+  >(f: F, methodCallPoints: Array<B>) {
+    let newEffects = methodCallPoints.map(f.fromOutput);
     this.view.dispatch({
-      effects: [f.effectType.of(new_effects)],
+      effects: [f.effectType.of(newEffects)],
     });
   }
 
@@ -263,7 +263,7 @@ let writeColor: RGB = new RGB(78, 190, 239); // blue
 
 let whiteColor: RGB = new RGB(255, 255, 255);
 
-let permission_state_ico_type =
+let permissionStateIcoType =
   StateEffect.define<Array<PermissionPoint<TextIco>>>();
 
 type PermissionPoint<I extends Icon> = [I, I, I, number];
@@ -304,7 +304,7 @@ class TextIco implements Icon {
     readonly expected: boolean,
     readonly actual: boolean,
     readonly color: Color,
-    readonly on_hover: RefinementRegion | null
+    readonly onHover: MissingPermReason | undefined
   ) {
     this.display = expected;
     this.start = makeBraceElem("{ ", color);
@@ -314,44 +314,50 @@ class TextIco implements Icon {
   }
 
   getAuxiliary(): Array<Range<Decoration>> {
-    if (this.on_hover == null || !this.display) {
+    if (this.onHover == undefined || !this.display) {
       return [];
     }
+
+    const variant: string = this.onHover.type;
+
+    if ("InsufficientType" === variant) {
+      console.log("TODO: display explanation for insufficient types");
+      return [];
+    }
+
+    const refinedRegion = this.onHover as RefinementRegion;
 
     let loanDeco = Decoration.mark({
       class: "aquascope-loan",
       tagName: this.loanTag,
     }).range(
-      this.on_hover.refiner_point.byte_start,
-      this.on_hover.refiner_point.byte_end
+      refinedRegion.refiner_point.char_start,
+      refinedRegion.refiner_point.char_end
     );
 
-    let regionDecos = this.on_hover.refined_ranges.map(range => {
+    let regionDecos = refinedRegion.refined_ranges.map(range => {
       let highlightedRange = Decoration.mark({
         class: "aquascope-live-region",
         tagName: this.regionTag,
-      }).range(range.byte_start, range.byte_end);
+      }).range(range.char_start, range.char_end);
       return highlightedRange;
     });
 
+    // TODO: you can probably get rid of the start / end as
+    // soon as you feel confident enough about the spans
+    // being generated.
+
     let start = this.start;
-    let byteStart = this.on_hover.start.byte_start;
+    let byteStart = refinedRegion.start.byte_start;
     let startDeco = Decoration.widget({
       widget: new RegionEnd(start),
     }).range(byteStart);
 
     let end = this.end;
-    let byteEnd = this.on_hover.end.byte_end;
+    let byteEnd = refinedRegion.end.byte_end;
     let endDeco = Decoration.widget({
       widget: new RegionEnd(end),
     }).range(byteEnd);
-
-    console.log(
-      `Loan Region ${this.on_hover.start.byte_start} ${this.on_hover.end.byte_end}`
-    );
-    console.log(startDeco);
-    console.log(endDeco);
-    console.log(`Loan Region ${byteStart} ${byteEnd}`);
 
     let extraDecos = [loanDeco, startDeco, endDeco, ...regionDecos];
 
@@ -453,41 +459,35 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
   }
 }
 
-let call_types_to_permissions = (
-  perm_info: PermissionsBoundary
+let callTypesToPermissions = (
+  permInfo: PermissionsBoundary
 ): PermissionPoint<TextIco> => {
-  const read_ico = new TextIco(
+  const expl = permInfo.explanations;
+  const readIco = new TextIco(
     "R",
-    perm_info.expected.read,
-    perm_info.actual.read,
+    permInfo.expected.read,
+    permInfo.actual.read,
     readColor,
-    perm_info.refined_by == null ? null : perm_info.refined_by.read
+    expl?.read
   );
-  const write_ico = new TextIco(
+  const writeIco = new TextIco(
     "W",
-    perm_info.expected.write,
-    perm_info.actual.write,
+    permInfo.expected.write,
+    permInfo.actual.write,
     writeColor,
-    perm_info.refined_by == null ? null : perm_info.refined_by.write
+    expl?.write
   );
-  const drop_ico = new TextIco(
-    "D",
-    perm_info.expected.drop,
-    perm_info.actual.drop,
+  const dropIco = new TextIco(
+    "O",
+    permInfo.expected.drop,
+    permInfo.actual.drop,
     dropColor,
-    perm_info.refined_by == null ? null : perm_info.refined_by.drop
+    expl?.drop
   );
-
-  // HACK the ending character of the actual type
-  // might not actually be right before the dereference
-  // operator `.`, do some testing and then we can probably
-  // use the character preceding the expected `char_start`.
-  let loc = perm_info.range.char_start - 1;
-
-  return [read_ico, write_ico, drop_ico, loc];
+  return [readIco, writeIco, dropIco, permInfo.location];
 };
 
-let make_text_state_field_with_icon = <I extends TextIco>(
+let makeTextStateFieldWithIcon = <I extends TextIco>(
   ty: StateEffectType<Array<PermissionPoint<I>>>,
   makePermStack: (icos: Array<I>) => Decoration
 ) => {
@@ -498,13 +498,13 @@ let make_text_state_field_with_icon = <I extends TextIco>(
       for (let e of transactions.effects) {
         if (e.is(ty)) {
           return RangeSet.of(
-            e.value.flatMap(([ico_l, ico_m, ico_r, from]) => {
-              let main_deco = makePermStack([ico_l, ico_m, ico_r]).range(from);
+            e.value.flatMap(([icoL, icoM, icoR, from]) => {
+              let main_deco = makePermStack([icoL, icoM, icoR]).range(from);
               return [
                 main_deco,
-                ...ico_l.getAuxiliary(),
-                ...ico_m.getAuxiliary(),
-                ...ico_r.getAuxiliary(),
+                ...icoL.getAuxiliary(),
+                ...icoM.getAuxiliary(),
+                ...icoR.getAuxiliary(),
               ].sort((r1, r2) => r1.from - r2.from);
             }),
             true
@@ -518,7 +518,7 @@ let make_text_state_field_with_icon = <I extends TextIco>(
   });
 };
 
-let make_decoration_with_text_ico = <I extends TextIco>(
+let makeDecorationWithTextIco = <I extends TextIco>(
   icos: Array<I>
 ): Decoration => {
   let fst = icos[0];
@@ -535,11 +535,11 @@ export let receiverPermissionsField: IconField<
   TextIco,
   PermissionPoint<TextIco>
 > = {
-  effectType: permission_state_ico_type,
-  stateField: make_text_state_field_with_icon(
-    permission_state_ico_type,
-    make_decoration_with_text_ico<TextIco>
+  effectType: permissionStateIcoType,
+  stateField: makeTextStateFieldWithIcon(
+    permissionStateIcoType,
+    makeDecorationWithTextIco<TextIco>
   ),
-  makeDecoration: make_decoration_with_text_ico<TextIco>,
-  fromOutput: call_types_to_permissions,
+  makeDecoration: makeDecorationWithTextIco<TextIco>,
+  fromOutput: callTypesToPermissions,
 };

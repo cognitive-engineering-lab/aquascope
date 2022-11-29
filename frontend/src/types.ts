@@ -1,7 +1,7 @@
 // Re-export auto-generated types
 
 export { AquascopeError } from "./bindings/AquascopeError";
-export { CallTypes } from "./bindings/CallTypes";
+// export { CallTypes } from "./bindings/CallTypes";
 export { Range } from "./bindings/Range";
 
 export { Permissions } from "./bindings/Permissions";
@@ -11,6 +11,9 @@ export { PermissionsOutput } from "./bindings/PermissionsOutput";
 export { Refiner } from "./bindings/Refiner";
 export { RefinementInfo } from "./bindings/RefinementInfo";
 export { RefinementRegion } from "./bindings/RefinementRegion";
+
+export { MissingPermsInfo } from "./bindings/MissingPermsInfo";
+export { MissingPermReason } from "./bindings/MissingPermReason";
 
 interface BuildError {
   type: "BuildError";
