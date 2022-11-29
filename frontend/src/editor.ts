@@ -348,16 +348,16 @@ class TextIco implements Icon {
     // being generated.
 
     let start = this.start;
-    let byteStart = refinedRegion.start.byte_start;
+    let charStart = refinedRegion.start.char_start;
     let startDeco = Decoration.widget({
       widget: new RegionEnd(start),
-    }).range(byteStart);
+    }).range(charStart);
 
     let end = this.end;
-    let byteEnd = refinedRegion.end.byte_end;
+    let charEnd = refinedRegion.end.char_end;
     let endDeco = Decoration.widget({
       widget: new RegionEnd(end),
-    }).range(byteEnd);
+    }).range(charEnd);
 
     let extraDecos = [loanDeco, startDeco, endDeco, ...regionDecos];
 
