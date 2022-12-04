@@ -53,12 +53,12 @@ impl Config {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct ReceiverTypesRequest {
+struct SingleFileRequest {
     code: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct ReceiverTypesResponse {
+struct ServerResponse {
     success: bool,
     stdout: String,
     stderr: String,
@@ -69,16 +69,16 @@ struct ReceiverTypesResponse {
 // currently it is overkill.
 // FIXME probably simpify this when you have a ground zero version running.
 
-impl TryFrom<ReceiverTypesRequest> for container::ReceiverTypesRequest {
+impl TryFrom<SingleFileRequest> for container::SingleFileRequest {
     type Error = Error;
-    fn try_from(this: ReceiverTypesRequest) -> Result<Self> {
-        Ok(container::ReceiverTypesRequest { code: this.code })
+    fn try_from(this: SingleFileRequest) -> Result<Self> {
+        Ok(container::SingleFileRequest { code: this.code })
     }
 }
 
-impl From<container::ReceiverTypesResponse> for ReceiverTypesResponse {
-    fn from(this: container::ReceiverTypesResponse) -> Self {
-        ReceiverTypesResponse {
+impl From<container::ServerResponse> for ServerResponse {
+    fn from(this: container::ServerResponse) -> Self {
+        ServerResponse {
             success: this.success,
             stdout: this.stdout,
             stderr: this.stderr,
@@ -92,6 +92,8 @@ pub enum Error {
     ContainerCreation { source: container::Error },
     #[snafu(display("Visualizing receiver types failed {source}"))]
     ReceiverTypes { source: container::Error },
+    #[snafu(display("Generating permission flow steps fail {source}"))]
+    PermissionSteps { source: container::Error },
     #[snafu(display("An Unknown error occurred: {msg}"))]
     Unknown { msg: String },
 }

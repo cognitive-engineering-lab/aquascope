@@ -5,7 +5,8 @@
   min_specialization,
   type_alias_impl_trait,
   trait_alias,
-  let_chains
+  let_chains,
+  unboxed_closures
 )]
 
 #[macro_use]

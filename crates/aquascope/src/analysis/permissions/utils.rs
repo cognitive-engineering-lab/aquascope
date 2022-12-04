@@ -8,12 +8,13 @@ use flowistry::mir::utils::{dump_results, PlaceExt};
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_middle::mir::{Location, Place};
 use rustc_mir_dataflow::{
-  fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice,
+  fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice, Results,
 };
+use rustc_span::def_id::LocalDefId;
 
 use super::{context::PermissionsCtxt, Permissions};
 
-pub fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
+pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
   // XXX: Unfortunately, the only way I know how to do this is to do a MIR
   // dataflow analysis and simply take the information from the context.
   // This mean there will only be a single pass but :shrug:
@@ -27,11 +28,7 @@ pub fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
     return;
   }
 
-  let analysis = PAnalysis { ctxt };
-
-  let results = analysis
-    .into_engine(ctxt.tcx, &ctxt.body_with_facts.body)
-    .iterate_to_fixpoint();
+  let results = flow_mir_permissions(ctxt);
 
   log::debug!("Dumping results for {:?}", name.as_str());
 
@@ -43,6 +40,15 @@ pub fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
   ) {
     log::warn!("{:?}", e);
   }
+}
+
+pub(crate) fn flow_mir_permissions<'a, 'tcx>(
+  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+) -> Results<'tcx, PAnalysis<'a, 'tcx>> {
+  let analysis = PAnalysis { ctxt };
+  analysis
+    .into_engine(ctxt.tcx, &ctxt.body_with_facts.body)
+    .iterate_to_fixpoint()
 }
 
 // --------------------------------------------------
@@ -77,7 +83,7 @@ impl JoinSemiLattice for Permissions {
 }
 
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
-pub struct PDomain<'tcx>(HashMap<Place<'tcx>, Permissions>);
+pub(crate) struct PDomain<'tcx>(HashMap<Place<'tcx>, Permissions>);
 
 impl JoinSemiLattice for PDomain<'_> {
   fn join(&mut self, other: &Self) -> bool {
@@ -94,6 +100,12 @@ impl JoinSemiLattice for PDomain<'_> {
       }
     }
     changed
+  }
+}
+
+impl<'tcx> From<HashMap<Place<'tcx>, Permissions>> for PDomain<'tcx> {
+  fn from(m: HashMap<Place<'tcx>, Permissions>) -> Self {
+    PDomain(m)
   }
 }
 
@@ -203,19 +215,14 @@ impl<C> DebugWithContext<C> for PDomain<'_> {
 // --------------------------------------------------
 // Analysis
 
-struct PAnalysis<'a, 'tcx> {
+pub(crate) struct PAnalysis<'a, 'tcx> {
   ctxt: &'a PermissionsCtxt<'a, 'tcx>,
 }
 
 impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
   pub fn max_permissions(&self, place: Place<'tcx>) -> Permissions {
     let path = self.ctxt.place_to_path(&place);
-
-    Permissions {
-      write: !self.ctxt.permissions_output.never_write.contains(&path),
-      read: true,
-      drop: !self.ctxt.permissions_output.never_drop.contains(&path),
-    }
+    self.ctxt.max_permissions(path)
   }
 
   fn check_location(&self, state: &mut PDomain<'tcx>, location: Location) {
@@ -224,10 +231,7 @@ impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
       // Reset permissions to their max
       *perms = self.max_permissions(*place);
       let path = self.ctxt.place_to_path(place);
-      let perm = self
-        .ctxt
-        .permissions_output
-        .permissions_at_point(path, point);
+      let perm = self.ctxt.permissions_at_point(path, point);
       perms.join(&perm);
     }
   }
@@ -237,19 +241,11 @@ impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
   type Domain = PDomain<'tcx>;
   const NAME: &'static str = "PermissionsAnalysisDatalog";
 
-  fn bottom_value(&self, body: &rustc_middle::mir::Body<'tcx>) -> Self::Domain {
-    let mut domain = PDomain::default();
-    let places = body.local_decls.indices().flat_map(|local| {
-      Place::from_local(local, self.ctxt.tcx).interior_paths(
-        self.ctxt.tcx,
-        body,
-        self.ctxt.def_id,
-      )
-    });
-    for place in places {
-      domain.insert(place, self.max_permissions(place));
-    }
-    domain
+  fn bottom_value(
+    &self,
+    _body: &rustc_middle::mir::Body<'tcx>,
+  ) -> Self::Domain {
+    self.ctxt.initial_body_permissions().into()
   }
 
   fn initialize_start_block(

@@ -4,7 +4,7 @@ use rustc_borrowck::{
   borrow_set::{BorrowData, BorrowSet},
   consumers::{BodyWithBorrowckFacts, RichLocation, RustcFacts},
 };
-use rustc_data_structures::fx::FxHashMap as HashMap;
+use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{def_id::DefId, BodyId, Mutability};
 use rustc_index::vec::IndexVec;
 use rustc_middle::{
@@ -14,7 +14,7 @@ use rustc_middle::{
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
 
-use super::{AquascopeFacts, Loan, Output, Path, Point};
+use super::{AquascopeFacts, Loan, Output, Path, Permissions, Point, Variable};
 
 type MoveablePath = <RustcFacts as FactTypes>::Path;
 
@@ -97,10 +97,92 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       != Mutability::Mut
   }
 
+  pub fn path_to_variable(&self, path: Path) -> Variable {
+    self.path_to_place(path).local
+  }
+
+  pub fn is_path_live_at(&self, path: Path, point: Point) -> bool {
+    let var = self.path_to_variable(path);
+    self
+      .polonius_output
+      .var_live_on_entry
+      .get(&point)
+      .map_or(false, |live_vars| live_vars.contains(&var))
+  }
+
   pub fn location_to_span(&self, l: Location) -> Span {
     self.body_with_facts.body.source_info(l).span
   }
 
+  pub fn max_permissions(&self, path: Path) -> Permissions {
+    let write = !self.permissions_output.never_write.contains(&path);
+    let drop = !self.permissions_output.never_drop.contains(&path);
+    Permissions {
+      write,
+      // There is no way in the type system to have a non-readable type.
+      read: true,
+      drop,
+    }
+  }
+
+  pub fn permissions_at_point(&self, path: Path, point: Point) -> Permissions {
+    let path = path;
+    let point = point;
+    let empty_hash = &HashMap::default();
+    let empty_set = &HashSet::default();
+
+    // If the underlying variable is not live at a given point we should
+    // report it as not having permissions.
+    if !self.is_path_live_at(path, point) {
+      return Permissions::bottom();
+    }
+
+    let pms = &self.permissions_output;
+    let path = &path;
+    let point = &point;
+
+    // Get point-specific information
+    let path_moved_at = pms.path_moved_at.get(point).unwrap_or(empty_set);
+    let cannot_read = pms.cannot_read.get(point).unwrap_or(empty_hash);
+    let cannot_write = pms.cannot_write.get(point).unwrap_or(empty_hash);
+    let cannot_drop = pms.cannot_drop.get(point).unwrap_or(empty_hash);
+
+    let read =
+      !(cannot_read.contains_key(path) || path_moved_at.contains(path));
+    let write = !(pms.never_write.contains(path)
+      || cannot_write.contains_key(path)
+      || path_moved_at.contains(path));
+    let drop = !(pms.never_drop.contains(path)
+      || cannot_drop.contains_key(path)
+      || path_moved_at.contains(path));
+
+    Permissions { read, write, drop }
+  }
+
+  pub fn initial_body_permissions(&self) -> HashMap<Place<'tcx>, Permissions> {
+    let def_id = self.def_id;
+    let tcx = self.tcx;
+    let body = &self.body_with_facts.body;
+    body
+      .local_decls
+      .indices()
+      .flat_map(|local| {
+        Place::from_local(local, tcx).interior_paths(tcx, body, def_id)
+      })
+      .fold(HashMap::default(), |mut acc, place| {
+        // let p = self.place_to_path(&place);
+        // acc.insert(place, self.max_permissions(p));
+
+        // XXX(gavinleroy) EXPERIMENT: start the places off with *no permissions*
+        // instead of using their max permissions. This in theory should not change anything.
+        acc.insert(place, Permissions::bottom());
+        acc
+      })
+  }
+
+  /// Compute the beginning and end of the live loan region
+  /// using source code location for comparison. We want to get
+  /// rid of this method as it is more of a HACK.
   pub fn construct_loan_regions(&mut self) {
     if self.loan_regions.is_some() {
       // XXX: disallow reconstrucution of loan regions.
@@ -121,17 +203,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
         let curr_earliest = ctxt.point_to_location(self.0);
         let curr_latest = ctxt.point_to_location(self.1);
         let candidate = ctxt.point_to_location(p);
-        // let body = &ctxt.body_with_facts.body;
-
-        // TODO: think more about why the CFG predecessor relationship
-        // is insufficient for finding the min / max.
-        // if candidate.is_predecessor_of(curr_earliest, body) {
-        //   self.0 = p;
-        // }
-        // if curr_latest.is_predecessor_of(candidate, body) {
-        //   self.1 = p;
-        // }
-
         let curr_earliest = ctxt.location_to_span(curr_earliest);
         let curr_latest = ctxt.location_to_span(curr_latest);
         let candidate = ctxt.location_to_span(candidate);

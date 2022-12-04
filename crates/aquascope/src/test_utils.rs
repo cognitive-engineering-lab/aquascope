@@ -18,7 +18,7 @@ use rustc_middle::{
 };
 use rustc_span::source_map::FileLoader;
 
-use crate::analysis::{self, Permissions};
+use crate::analysis::{self, permissions::Permissions};
 
 struct StringLoader(String);
 impl FileLoader for StringLoader {
@@ -196,8 +196,7 @@ pub fn test_file(path: &Path) {
           };
 
           let point = ctxt.location_to_point(loc);
-          let computed_perms =
-            ctxt.permissions_output.permissions_at_point(path, point);
+          let computed_perms = ctxt.permissions_at_point(path, point);
 
           if *expected_perms != computed_perms {
             panic!(

@@ -1,30 +1,21 @@
 import { rust } from "@codemirror/lang-rust";
 import { indentUnit } from "@codemirror/language";
-import {
-  Compartment,
-  EditorState,
-  Range,
-  RangeSet,
-  StateEffect,
-  StateEffectType,
-  StateField,
-} from "@codemirror/state";
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  WidgetType,
-} from "@codemirror/view";
+import { Compartment, EditorState, StateField } from "@codemirror/state";
+import { DecorationSet, EditorView } from "@codemirror/view";
 import { vim } from "@replit/codemirror-vim";
 
+import { Icon, IconField } from "./editor-utils/misc";
+import { receiverPermissionsField } from "./editor-utils/permission-boundaries";
+import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 import { basicSetup } from "./setup";
 import {
   BackendError,
-  MissingPermReason,
-  PermissionsBoundary,
-  PermissionsOutput,
-  RefinementRegion,
+  PermissionsBoundaryOutput,
+  PermissionsDiffOutput,
 } from "./types";
+
+export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
+export { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 
 const DEFAULT_SERVER_HOST = "127.0.0.1";
 const DEFAULT_SERVER_PORT = "8008";
@@ -41,71 +32,76 @@ type ServerResponse = {
   stderr: string;
 };
 
-export const defaultCodeExample: string = `// Please, start typing :)
+// export const defaultCodeExample: string = `
+// #[derive(Debug, Default)]
+// struct Box {
+//     value: i32,
+// }
 
-#[derive(Debug, Default)]
-struct Box {
-    value: i32,
+// impl Box {
+//     fn inc(&mut self) {
+//         self.value += 1;
+//     }
+
+//     fn destroy(mut self) {}
+// }
+
+// fn bar() {
+//     let b = Box::default();
+//     let refine_all = &mut b.value;
+//     b.inc();
+//     println!("{refine_all}");
+//     b.inc();
+// }
+
+// fn foo(v: &mut Vec<i32>) {
+//   for (i, t) in v.iter().enumerate().rev() {
+//     if *t == 0 {
+//       v.remove(i);
+//     }
+//   }
+// }
+
+// fn main() {
+
+//     let v1 = vec![1, 2, 3];
+//     v1.push(0);
+
+//     let v2 = &mut vec![1, 2, 3];
+//     v2.push(0);
+
+//     let b1 = &Box::default();
+//     b1.inc();
+
+//     let mut b2 = Box::default();
+//     b2.inc();
+
+//     Box::default().destroy();
+
+//     println!("Gruëzi, Weltli");
+// }
+// `;
+
+export const defaultCodeExample: string = `
+fn dummy_use(_n: &i32) {}
+
+fn dump_me() {
+  let mut x: i32 = 0;
+
+  let mut y: i32 = 0;
+
+  let z = &mut x;
+
+  *z = y;
+
+  dummy_use(&z);
 }
 
-impl Box {
-    fn inc(&mut self) {
-        self.value += 1;
-    }
-
-    fn destroy(mut self) {}
-}
-
-fn bar() {
-    let b = Box::default();
-    let refine_all = &mut b.value;
-    b.inc();
-    println!("{refine_all}");
-    b.inc();
-}
-
-fn foo(v: &mut Vec<i32>) {
-  for (i, t) in v.iter().enumerate().rev() {
-    if *t == 0 {
-      v.remove(i);
-    }
-  }
-}
-
-fn main() {
-
-    let v1 = vec![1, 2, 3];
-    v1.push(0);
-
-    let v2 = &mut vec![1, 2, 3];
-    v2.push(0);
-
-    let b1 = &Box::default();
-    b1.inc();
-
-    let mut b2 = Box::default();
-    b2.inc();
-
-    Box::default().destroy();
-
-    println!("Gruëzi, Weltli");
-}
+fn main() {}
 `;
 
 let readOnly = new Compartment();
 let mainKeybinding = new Compartment();
-
-export interface Icon {
-  readonly display: boolean;
-  toDom(): HTMLElement;
-}
-
-interface IconField<C, Ico extends Icon, T> {
-  effectType: StateEffectType<Array<T>>;
-  stateField: StateField<DecorationSet>;
-  makeDecoration(icos: Array<Ico>): Decoration;
-  fromOutput(callTypes: C): T;
-}
 
 export class Editor {
   private view: EditorView;
@@ -129,7 +125,7 @@ export class Editor {
         readOnly.of(EditorState.readOnly.of(noInteract)),
         basicSetup,
         rust(),
-        indentUnit.of("    "),
+        indentUnit.of("  "),
         ...supportedFields,
       ],
     });
@@ -164,13 +160,14 @@ export class Editor {
     });
   }
 
-  public addCallTypesField<
+  public addPermissionsField<
     B,
     T,
     Ico extends Icon,
     F extends IconField<B, Ico, T>
   >(f: F, methodCallPoints: Array<B>) {
     let newEffects = methodCallPoints.map(f.fromOutput);
+    console.log(newEffects);
     this.view.dispatch({
       effects: [f.effectType.of(newEffects)],
     });
@@ -178,10 +175,10 @@ export class Editor {
 
   // Actions to communicate with the aquascope server
 
-  async computeReceiverPermissions() {
+  async callBackendWithCode(endpoint: string): Promise<ServerResponse> {
     let inEditor = this.getCurrentCode();
     let serverResponseRaw = await fetch(
-      `http://${this.serverHost}:${this.serverPort}/receiver-types`,
+      `http://${this.serverHost}:${this.serverPort}/${endpoint}`,
       {
         method: "POST",
         headers: {
@@ -192,17 +189,45 @@ export class Editor {
         }),
       }
     );
-
     let serverResponse: ServerResponse = await serverResponseRaw.json();
+    return serverResponse;
+  }
 
+  async computePermissionSteps() {
+    let serverResponse = await this.callBackendWithCode("permission-diffs");
     if (serverResponse.success) {
-      let out: Result<PermissionsOutput> = JSON.parse(serverResponse.stdout);
+      let out: Result<PermissionsDiffOutput> = JSON.parse(
+        serverResponse.stdout
+      );
       if ("Ok" in out) {
         this.reportStdErr({
           type: "BuildError",
           error: serverResponse.stderr,
         });
-        return this.addCallTypesField(receiverPermissionsField, out.Ok);
+        return this.addPermissionsField(coarsePermissionDiffs, out.Ok);
+      } else {
+        return this.reportStdErr(out.Err);
+      }
+    } else {
+      return this.reportStdErr({
+        type: "BuildError",
+        error: serverResponse.stderr,
+      });
+    }
+  }
+
+  async computeReceiverPermissions() {
+    let serverResponse = await this.callBackendWithCode("receiver-types");
+    if (serverResponse.success) {
+      let out: Result<PermissionsBoundaryOutput> = JSON.parse(
+        serverResponse.stdout
+      );
+      if ("Ok" in out) {
+        this.reportStdErr({
+          type: "BuildError",
+          error: serverResponse.stderr,
+        });
+        return this.addPermissionsField(receiverPermissionsField, out.Ok);
       } else {
         return this.reportStdErr(out.Err);
       }
@@ -214,332 +239,3 @@ export class Editor {
     }
   }
 }
-
-// ----------------------------------------
-// Types to use in an Icon Field
-
-let makeTag = (length: number) => {
-  var result = "";
-  var characters =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  var charactersLength = characters.length;
-  for (var i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
-  return "tag" + result;
-};
-
-class RGB {
-  constructor(readonly r: number, readonly g: number, readonly b: number) {}
-  toString(): string {
-    return `rgb(${this.r},${this.g},${this.b})`;
-  }
-  withAlpha(a: number): RGBA {
-    return new RGBA(this.r, this.g, this.b, a);
-  }
-}
-
-class RGBA {
-  constructor(
-    readonly r: number,
-    readonly g: number,
-    readonly b: number,
-    readonly a: number
-  ) {}
-  toString(): string {
-    return `rgba(${this.r},${this.g},${this.b},${this.a})`;
-  }
-  withAlpha(newA: number): RGBA {
-    return new RGBA(this.r, this.g, this.b, newA);
-  }
-}
-
-type Color = RGB | RGBA;
-
-// Default colors
-let dropColor: RGB = new RGB(255, 66, 68); // red
-let readColor: RGB = new RGB(93, 202, 54); // green
-let writeColor: RGB = new RGB(78, 190, 239); // blue
-
-let whiteColor: RGB = new RGB(255, 255, 255);
-
-let permissionStateIcoType =
-  StateEffect.define<Array<PermissionPoint<TextIco>>>();
-
-type PermissionPoint<I extends Icon> = [I, I, I, number];
-
-let glyphWidth = 12;
-
-class RegionEnd extends WidgetType {
-  constructor(readonly elem: HTMLElement) {
-    super();
-  }
-
-  eq(_other: RegionEnd) {
-    return false;
-  }
-
-  toDOM() {
-    return this.elem;
-  }
-}
-
-let makeBraceElem = (content: string, color: Color) => {
-  let wrap = document.createElement("span");
-  wrap.classList.add("cm-region-end");
-  wrap.textContent = content;
-  wrap.style.color = color.toString();
-  wrap.style.fontSize = `${glyphWidth * 2}`;
-  return wrap;
-};
-
-class TextIco implements Icon {
-  readonly display: boolean;
-  readonly start: HTMLElement;
-  readonly end: HTMLElement;
-  readonly loanTag: string;
-  readonly regionTag: string;
-  constructor(
-    readonly contents: string,
-    readonly expected: boolean,
-    readonly actual: boolean,
-    readonly color: Color,
-    readonly onHover: MissingPermReason | undefined
-  ) {
-    this.display = expected;
-    this.start = makeBraceElem("{ ", color);
-    this.end = makeBraceElem(" }", color);
-    this.loanTag = makeTag(20);
-    this.regionTag = makeTag(25);
-  }
-
-  getAuxiliary(): Array<Range<Decoration>> {
-    if (this.onHover == undefined || !this.display) {
-      return [];
-    }
-
-    const variant: string = this.onHover.type;
-
-    if ("InsufficientType" === variant) {
-      console.log("TODO: display explanation for insufficient types");
-      return [];
-    }
-
-    const refinedRegion = this.onHover as RefinementRegion;
-
-    let loanDeco = Decoration.mark({
-      class: "aquascope-loan",
-      tagName: this.loanTag,
-    }).range(
-      refinedRegion.refiner_point.char_start,
-      refinedRegion.refiner_point.char_end
-    );
-
-    let regionDecos = refinedRegion.refined_ranges.map(range => {
-      let highlightedRange = Decoration.mark({
-        class: "aquascope-live-region",
-        tagName: this.regionTag,
-      }).range(range.char_start, range.char_end);
-      return highlightedRange;
-    });
-
-    // TODO: you can probably get rid of the start / end as
-    // soon as you feel confident enough about the spans
-    // being generated.
-
-    let start = this.start;
-    let charStart = refinedRegion.start.char_start;
-    let startDeco = Decoration.widget({
-      widget: new RegionEnd(start),
-    }).range(charStart);
-
-    let end = this.end;
-    let charEnd = refinedRegion.end.char_end;
-    let endDeco = Decoration.widget({
-      widget: new RegionEnd(end),
-    }).range(charEnd);
-
-    let extraDecos = [loanDeco, startDeco, endDeco, ...regionDecos];
-
-    return extraDecos;
-  }
-
-  toDom(): HTMLElement {
-    let tt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    tt.classList.add("permission");
-    tt.setAttribute("font-family", "IBM Plex Sans");
-    tt.setAttribute("font-size", `${glyphWidth}px`);
-    tt.setAttribute("font-weight", "bold");
-    tt.setAttribute("stroke-width", this.actual == this.expected ? "1" : "2");
-    tt.setAttribute("paint-order", "stroke");
-    tt.textContent = this.contents;
-
-    let myColor = this.color;
-    let transparent = whiteColor.withAlpha(0.0);
-
-    let forCustomTag = (tag: string, callback: (e: HTMLElement) => void) => {
-      Array.from(
-        document.getElementsByTagName(tag) as HTMLCollectionOf<HTMLElement>
-      ).forEach(callback);
-    };
-
-    tt.addEventListener("mouseenter", _ => {
-      this.start.style.width = "15px";
-      this.end.style.width = "15px";
-
-      forCustomTag(this.loanTag, elem => {
-        elem.style.textDecoration = `underline 3px ${myColor.toString()}`;
-      });
-
-      forCustomTag(this.regionTag, elem => {
-        elem.style.backgroundColor = myColor.withAlpha(0.2).toString();
-      });
-    });
-
-    tt.addEventListener("mouseleave", _ => {
-      this.start.style.width = "0px";
-      this.end.style.width = "0px";
-
-      forCustomTag(this.loanTag, elem => {
-        elem.style.textDecoration = `underline 3px ${transparent.toString()}`;
-      });
-
-      forCustomTag(this.regionTag, elem => {
-        elem.style.backgroundColor = whiteColor.withAlpha(0).toString();
-      });
-    });
-
-    return tt as HTMLElement & SVGTextElement;
-  }
-}
-
-class RWDPermissions<I extends TextIco> extends WidgetType {
-  constructor(readonly read: I, readonly write: I, readonly drop: I) {
-    super();
-  }
-
-  eq(other: RWDPermissions<I>) {
-    return (
-      other.read == this.read &&
-      other.write == this.write &&
-      other.drop == this.drop
-    );
-  }
-
-  toDOM() {
-    let all: Array<I> = [this.read, this.write, this.drop];
-    let icons: Array<I> = all.filter(t => t.display);
-
-    let wrap = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    wrap.classList.add("svg-perm");
-    let myHeight = icons.length * glyphWidth;
-    let myWidth = glyphWidth;
-    wrap.setAttribute("width", `${myWidth + 10}px`);
-    wrap.setAttribute("height", `${myHeight}px`);
-    wrap.style.position = "relative";
-    wrap.style.top = `${(icons.length - 1) * 4}px`;
-
-    icons.forEach((icoI: I, idx: number) => {
-      let ico: HTMLElement = icoI.toDom();
-      let y = (idx / icons.length) * 100 + 100 / icons.length - 5;
-      ico.setAttribute("text-anchor", "middle");
-      ico.setAttribute("x", "50%");
-      ico.setAttribute("y", `${y}%`);
-      let fillColor: Color = icoI.actual ? icoI.color : whiteColor;
-      ico.setAttribute("fill", fillColor.toString());
-      ico.setAttribute("stroke", icoI.color.toString());
-      wrap.appendChild(ico);
-    });
-
-    return wrap as HTMLElement & SVGSVGElement;
-  }
-
-  ignoreEvent() {
-    return false;
-  }
-}
-
-let callTypesToPermissions = (
-  permInfo: PermissionsBoundary
-): PermissionPoint<TextIco> => {
-  const expl = permInfo.explanations;
-  const readIco = new TextIco(
-    "R",
-    permInfo.expected.read,
-    permInfo.actual.read,
-    readColor,
-    expl?.read
-  );
-  const writeIco = new TextIco(
-    "W",
-    permInfo.expected.write,
-    permInfo.actual.write,
-    writeColor,
-    expl?.write
-  );
-  const dropIco = new TextIco(
-    "O",
-    permInfo.expected.drop,
-    permInfo.actual.drop,
-    dropColor,
-    expl?.drop
-  );
-  return [readIco, writeIco, dropIco, permInfo.location];
-};
-
-let makeTextStateFieldWithIcon = <I extends TextIco>(
-  ty: StateEffectType<Array<PermissionPoint<I>>>,
-  makePermStack: (icos: Array<I>) => Decoration
-) => {
-  return StateField.define<DecorationSet>({
-    create: () => Decoration.none,
-    update(points, transactions) {
-      console.log(transactions);
-      for (let e of transactions.effects) {
-        if (e.is(ty)) {
-          return RangeSet.of(
-            e.value.flatMap(([icoL, icoM, icoR, from]) => {
-              let main_deco = makePermStack([icoL, icoM, icoR]).range(from);
-              return [
-                main_deco,
-                ...icoL.getAuxiliary(),
-                ...icoM.getAuxiliary(),
-                ...icoR.getAuxiliary(),
-              ].sort((r1, r2) => r1.from - r2.from);
-            }),
-            true
-          );
-        }
-      }
-
-      return transactions.docChanged ? RangeSet.of([]) : points;
-    },
-    provide: f => EditorView.decorations.from(f),
-  });
-};
-
-let makeDecorationWithTextIco = <I extends TextIco>(
-  icos: Array<I>
-): Decoration => {
-  let fst = icos[0];
-  let snd = icos[1];
-  let trd = icos[2];
-  return Decoration.widget({
-    widget: new RWDPermissions<I>(fst, snd, trd),
-    side: 0,
-  });
-};
-
-export let receiverPermissionsField: IconField<
-  PermissionsBoundary,
-  TextIco,
-  PermissionPoint<TextIco>
-> = {
-  effectType: permissionStateIcoType,
-  stateField: makeTextStateFieldWithIcon(
-    permissionStateIcoType,
-    makeDecorationWithTextIco<TextIco>
-  ),
-  makeDecoration: makeDecorationWithTextIco<TextIco>,
-  fromOutput: callTypesToPermissions,
-};

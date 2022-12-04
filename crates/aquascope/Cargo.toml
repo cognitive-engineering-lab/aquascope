@@ -13,7 +13,8 @@ rustc_private=true
 anyhow = "1.0.0"
 log = "0.4"
 itertools = "0.10.5"
-flowistry = "0.5.31"
+flowistry = { path = "../../../flowistry/crates/flowistry" }
+# flowistry = "0.5.31"
 datafrog = "2.0.0"
 # polonius-engine = { path = "../polonius-engine" }
 serde = "1.0"

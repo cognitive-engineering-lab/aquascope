@@ -1,7 +1,7 @@
 use crate::{
     container::{self, Container},
-    Config, ContainerCreationSnafu, Error, ErrorJson, ReceiverTypesRequest, ReceiverTypesResponse,
-    ReceiverTypesSnafu, Result,
+    Config, ContainerCreationSnafu, Error, ErrorJson, PermissionStepsSnafu, ReceiverTypesSnafu,
+    Result, ServerResponse, SingleFileRequest,
 };
 use async_trait::async_trait;
 use axum::{
@@ -27,7 +27,8 @@ pub(crate) async fn serve(cfg: Config) {
                 "HELLO!"
             }),
         )
-        .route("/receiver-types", post(receiver_types));
+        .route("/receiver-types", post(receiver_types))
+        .route("/permission-diffs", post(permission_diffs));
 
     app = app.layer({
         CorsLayer::new()
@@ -51,9 +52,7 @@ pub(crate) async fn serve(cfg: Config) {
 
 // TODO get rid of the `AquascopeResult` from the return type
 // this can be coerced into our Server types here (build error, etc).
-async fn receiver_types(
-    Json(req): Json<ReceiverTypesRequest>,
-) -> Result<Json<ReceiverTypesResponse>> {
+async fn receiver_types(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
     log::trace!("Received request for receiver types");
 
     let json = with_container(
@@ -69,6 +68,31 @@ async fn receiver_types(
             .boxed()
         },
         ReceiverTypesSnafu,
+    )
+    .await
+    .map(Json);
+
+    log::debug!("returning JSON {:?}", json);
+
+    json
+}
+
+async fn permission_diffs(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
+    log::trace!("Received requeset for permission differences");
+
+    let json = with_container(
+        req,
+        |knt, req| {
+            async move {
+                let v = knt.permission_differences(req).await;
+                if let Err(e) = knt.cleanup().await {
+                    log::warn!("Error cleaning up container: {:?}", e);
+                }
+                v
+            }
+            .boxed()
+        },
+        PermissionStepsSnafu,
     )
     .await
     .map(Json);

@@ -30,6 +30,12 @@ enum AquascopeCommand {
     #[clap(last = true)]
     flags: Vec<String>,
   },
+
+  CoarsePermSteps {
+    #[clap(last = true)]
+    flags: Vec<String>,
+  },
+
   Preload,
   RustcVersion,
 }
@@ -38,6 +44,7 @@ pub struct AquascopePlugin;
 impl RustcPlugin for AquascopePlugin {
   type Args = AquascopePluginArgs;
 
+  #[cfg(not(test))]
   fn version() -> &'static str {
     "0.0.0"
   }
@@ -81,6 +88,7 @@ impl RustcPlugin for AquascopePlugin {
 
     let flags = match &args.command {
       VisMethodCalls { flags } => flags,
+      CoarsePermSteps { flags } => flags,
       _ => unreachable!(),
     };
 
@@ -100,8 +108,12 @@ impl RustcPlugin for AquascopePlugin {
     match plugin_args.command {
       // TODO rename the command because it will eventually show *all* permissions
       // and not just those for method calls.
-      VisMethodCalls { .. } => {
-        postprocess(run(crate::permissions::permissions, &compiler_args))
+      VisMethodCalls { .. } => postprocess(run(
+        crate::permissions::permission_boundaries,
+        &compiler_args,
+      )),
+      CoarsePermSteps { .. } => {
+        postprocess(run(crate::permissions::permission_diffs, &compiler_args))
       }
       _ => unreachable!(),
     }

@@ -36,7 +36,10 @@ window.addEventListener("load", () => {
   globals = {
     editor: new Ed.Editor(
       editorElement,
-      [Ed.receiverPermissionsField.stateField],
+      [
+        Ed.receiverPermissionsField.stateField,
+        Ed.coarsePermissionDiffs.stateField,
+      ],
       (err: BackendError) => {
         if (err.type === "FileNotFound") {
           alert("A backend problem occurred!");
@@ -57,6 +60,7 @@ window.addEventListener("load", () => {
   vimKeybindingToggle.addEventListener("click", toggleVim);
 
   showRcvrTypesButton.addEventListener("click", _ => {
-    return globals.editor.computeReceiverPermissions();
+    // return globals.editor.computeReceiverPermissions();
+    return globals.editor.computePermissionSteps();
   });
 });

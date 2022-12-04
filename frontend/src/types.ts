@@ -6,7 +6,9 @@ export { Range } from "./bindings/Range";
 
 export { Permissions } from "./bindings/Permissions";
 export { PermissionsBoundary } from "./bindings/PermissionsBoundary";
-export { PermissionsOutput } from "./bindings/PermissionsOutput";
+
+export { PermissionsBoundaryOutput } from "./bindings/PermissionsBoundaryOutput";
+export { PermissionsDiffOutput } from "./bindings/PermissionsDiffOutput";
 
 export { Refiner } from "./bindings/Refiner";
 export { RefinementInfo } from "./bindings/RefinementInfo";
@@ -14,6 +16,10 @@ export { RefinementRegion } from "./bindings/RefinementRegion";
 
 export { MissingPermsInfo } from "./bindings/MissingPermsInfo";
 export { MissingPermReason } from "./bindings/MissingPermReason";
+
+export { PermissionsStateStep } from "./bindings/PermissionsStateStep";
+export { PermsDiff } from "./bindings/PermsDiff";
+export { PermDiff } from "./bindings/PermDiff";
 
 interface BuildError {
   type: "BuildError";

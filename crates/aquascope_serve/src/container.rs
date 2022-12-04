@@ -334,17 +334,14 @@ impl Container {
             .context(BollardSnafu)
     }
 
-    pub async fn receiver_types(
-        &self,
-        req: &ReceiverTypesRequest,
-    ) -> Result<ReceiverTypesResponse> {
+    pub async fn receiver_types(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
         self.write_source_code(&req.code).await?;
 
         let mut cmd = self.receiver_types_command();
 
         let (stdout, stderr) = self.exec_output(&mut cmd).await?;
 
-        Ok(ReceiverTypesResponse {
+        Ok(ServerResponse {
             // XXX: we'll assume that if there was anything on `stdout`
             // then there's something successful to report. Thid does not
             // mean that `stderr` was empty and all things there shouldn't
@@ -355,11 +352,46 @@ impl Container {
         })
     }
 
+    pub async fn permission_differences(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
+        self.write_source_code(&req.code).await?;
+
+        let mut cmd = self.permission_differences_command();
+
+        let (stdout, stderr) = self.exec_output(&mut cmd).await?;
+
+        Ok(ServerResponse {
+            // XXX: we'll assume that if there was anything on `stdout`
+            // then there's something successful to report. Thid does not
+            // mean that `stderr` was empty and all things there shouldn't
+            // go unreported.
+            success: !stdout.trim().is_empty(),
+            stdout,
+            stderr,
+        })
+    }
+
+    // -------------
+    // Commands
+
     fn receiver_types_command(&self) -> Command {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
         cmd.args(["--quiet", "aquascope", "vis-method-calls"])
+            .current_dir(cwd);
+
+        if cfg!(feature = "no-docker") {
+            let _ = cmd.env("RUST_LOG", "debug").env("RUST_BACKTRACE", "1");
+        }
+
+        cmd
+    }
+
+    fn permission_differences_command(&self) -> Command {
+        let cwd = self.cwd();
+
+        let mut cmd = Command::new("cargo");
+        cmd.args(["--quiet", "aquascope", "coarse-perm-steps"])
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {
@@ -415,12 +447,12 @@ impl From<bollard::errors::Error> for Error {
 }
 
 #[derive(Debug, Clone)]
-pub struct ReceiverTypesRequest {
+pub struct SingleFileRequest {
     pub code: String,
 }
 
 #[derive(Debug, Clone)]
-pub struct ReceiverTypesResponse {
+pub struct ServerResponse {
     pub success: bool,
     pub stdout: String,
     pub stderr: String,
