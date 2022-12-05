@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use datafrog::{Iteration, Relation, RelationLeaper, ValueFilter};
+use datafrog::{Relation, RelationLeaper, ValueFilter};
 use flowistry::mir::utils::PlaceExt;
 use polonius_engine::{Algorithm, FactTypes, Output as PEOutput};
 use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
@@ -18,7 +18,7 @@ use rustc_mir_dataflow::move_paths::MoveData;
 use super::{
   context::PermissionsCtxt,
   places_conflict::{AccessDepth, PlaceConflictBias},
-  AquascopeFacts, Loan, Path, Permissions, Point,
+  AquascopeFacts, Loan, Path, Point,
 };
 
 // FIXME the HashMap should map to multiple loans, because at a
@@ -29,80 +29,65 @@ pub struct Output<T>
 where
   T: FactTypes + std::fmt::Debug,
 {
-  pub cannot_read: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
-  pub cannot_write: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
-  pub cannot_drop: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
-  pub path_moved_at: HashMap<T::Point, HashSet<T::Path>>,
+  // TODO(gavinleroy): I really want to rename cannot_XXX to
+  // path_XXX_loan_refined_at which is more explicit that these
+  // only hold data referring to a live Loan regions.
+  /// .decl never_write(Path)
+  ///
+  /// never_write(Path) :-
+  ///    is_direct(Path),
+  ///    declared_readonly(Path).
+  ///
+  /// never_write(Path) :-
+  ///    !is_direct(Path),
+  ///    prefix_of(Prefix, Path),
+  ///    is_immut_ref(Prefix).
+  ///
   pub never_write: HashSet<T::Path>,
-  pub never_drop: HashSet<T::Path>,
-}
 
-/*
- ****
- *
- * .decl never_write(Path)
- *
- * never_write(Path) :-
- *    is_direct(Path),
- *    declared_readonly(Path).
- *
- * never_write(Path) :-
- *    !is_direct(Path),
- *    prefix_of(Prefix, Path),
- *    is_immut_ref(Prefix).
- *
- ****
- *
- * .decl never_drop(Path)
- *
- * never_drop(Path) :-
- *    !is_direct(Path).
- *
- ****
- *
- * XXX: new to handle moves. If this indeed is what we want,
- * it would be better to compute `loan_live_at` ouselves and avoid
- * running polonius altogether.
- *
- * .decl path_moved_at(Path, Point)
- *
- * path_moved_at(Path, Point) :-
- *    path_moved_at_base(Path, Point)
- *
- * path_moved_at(Path, Point1) :-
- *    path_moved_at(Path, Point0),
- *    cfg_edge(Point0, Point1),
- *    !path_assigned_at_base(Path, Point1).
- *
- ****
- *
- * .decl cannot_read(Path:path, Point:point)
- *
- * cannot_read(Path, Loan, Point) :-
- *    path_moved_at(Path, Point);
- *    loan_conflicts_with(Loan, Path),
- *    loan_live_at(Loan, Point),
- *    loan_mutable(Loan).
- *
- ****
- *
- * .decl cannot_write(Path:path, Point:point)
- *
- * cannot_write(Path, Loan, Point) :-
- *    path_moved_at(Path, Point);
- *    loan_conflicts_with(Loan, Path),
- *    loan_live_at(Loan, Point).
- *
- ****
- *
- * .decl cannot_drop(Path, Loan, Point)
- *
- * cannot_drop(Path, Loan, Point)
- *    path_moved_at(Path, Point);
- *    loan_conflicts_with(Loan, Path),
- *    loan_live_at(Loan, Point).
- *
- */
+  /// .decl never_drop(Path)
+  ///
+  /// never_drop(Path) :-
+  ///    !is_direct(Path).
+  ///
+  pub never_drop: HashSet<T::Path>,
+
+  /// .decl cannot_read(Path:path, Point:point)
+  ///
+  /// cannot_read(Path, Loan, Point) :-
+  ///    path_moved_at(Path, Point);
+  ///    loan_conflicts_with(Loan, Path),
+  ///    loan_live_at(Loan, Point),
+  ///    loan_mutable(Loan).
+  ///
+  pub cannot_read: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
+
+  /// .decl cannot_write(Path:path, Point:point)
+  ///
+  /// cannot_write(Path, Loan, Point) :-
+  ///    path_moved_at(Path, Point);
+  ///    loan_conflicts_with(Loan, Path),
+  ///    loan_live_at(Loan, Point).
+  ///
+  pub cannot_write: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
+
+  /// .decl cannot_drop(Path, Loan, Point)
+  ///
+  /// cannot_drop(Path, Loan, Point)
+  ///    path_moved_at(Path, Point);
+  ///    loan_conflicts_with(Loan, Path),
+  ///    loan_live_at(Loan, Point).
+  ///
+  pub cannot_drop: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
+
+  /// .decl path_maybe_uninitialized_on_entry(Point, Path)
+  ///
+  /// path_maybe_uninitialized_on_entry(Point1, Path) :-
+  ///    path_maybe_uninitialized_on_exit(Point0, Path)
+  ///    cfg_edge(Point0, Point1)
+  ///
+  pub path_maybe_uninitialized_on_entry: HashMap<T::Point, HashSet<T::Path>>,
+}
 
 impl Default for Output<AquascopeFacts> {
   fn default() -> Self {
@@ -110,20 +95,23 @@ impl Default for Output<AquascopeFacts> {
       cannot_read: HashMap::default(),
       cannot_write: HashMap::default(),
       cannot_drop: HashMap::default(),
-      path_moved_at: HashMap::default(),
+      path_maybe_uninitialized_on_entry: HashMap::default(),
+      // path_moved_at: HashMap::default(),
       never_write: HashSet::default(),
       never_drop: HashSet::default(),
     }
   }
 }
 
-pub fn compute_permission_facts<'a, 'tcx>(
-  ctxt: &mut PermissionsCtxt<'a, 'tcx>,
-) {
+pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
   let body = &ctxt.body_with_facts.body;
   let tcx = ctxt.tcx;
-  let places: Vec<Place<'tcx>> = body
+
+  // We consider all place that are either:
+  // 1. Internal to a local declaration.
+  // 2. A path considered moveable by rustc.
+  let places = body
     .local_decls
     .indices()
     .flat_map(|local| {
@@ -133,10 +121,17 @@ pub fn compute_permission_facts<'a, 'tcx>(
         def_id.to_def_id(),
       )
     })
-    .collect();
+    .chain(ctxt.move_data.move_paths.iter().map(|v| v.place))
+    .collect::<Vec<_>>();
 
-  let paths: Vec<Path> =
-    places.iter().map(|place| ctxt.new_path(*place)).collect();
+  // Normalize all places and get the associated AquascopeFacts::Point,
+  // any MIR place that is not initialized here could cause a panic later
+  // in the pipeline if a transformation (path -> [point|moveable_path,...])
+  // happens.
+  let paths = places
+    .iter()
+    .map(|place| ctxt.new_path(*place))
+    .collect::<Vec<_>>();
 
   let loan_to_borrow = |l: Loan| &ctxt.borrow_set[l];
 
@@ -212,25 +207,18 @@ pub fn compute_permission_facts<'a, 'tcx>(
     |&loan, &path, &point| (path, loan, point),
   );
 
-  // We don't need to use these relations in the rules so write
-  // them directly to the output.
-
   let never_write = paths
     .iter()
     .filter_map(|path| is_never_write(*path).then_some(*path))
-    .collect();
+    .collect::<HashSet<_>>();
 
   let never_drop = paths
     .iter()
     .filter_map(|path| is_never_drop(*path).then_some(*path))
-    .collect();
+    .collect::<HashSet<_>>();
 
   ctxt.permissions_output.never_write = never_write;
   ctxt.permissions_output.never_drop = never_drop;
-
-  // XXX: new dynamic things to handle (basic) moves
-
-  let mut iteration = Iteration::new();
 
   let cfg_edge: Relation<(Point, Point)> = Relation::from_iter(
     ctxt
@@ -240,62 +228,31 @@ pub fn compute_permission_facts<'a, 'tcx>(
       .map(|&(p1, p2)| (p1, p2)),
   );
 
-  let path_assigned_at_base = Relation::from_iter(
-    ctxt
-      .polonius_input_facts
-      .path_assigned_at_base
-      .iter()
-      .map(|&(mp, point)| (ctxt.moveable_path_to_path(mp), point)),
-  );
-
-  let path_moved_at = iteration.variable::<(Path, Point)>("path_moved_at");
-
-  let path_moved_at_base = Relation::from_iter(
-    ctxt
-      .polonius_input_facts
-      .path_moved_at_base
-      .iter()
-      .map(|&(mp, point)| (ctxt.moveable_path_to_path(mp), point)),
-  );
-
-  // path_moved_at(Path, Point) :-
-  //    path_moved_at_base(Path, Point)
-  path_moved_at.extend(path_moved_at_base.iter());
-
-  let mut iterations = 0;
-
-  while iteration.changed() {
-    iterations += 1;
-
-    // path_moved_at(Path, Point1) :-
-    //    path_moved_at(Path, Point0),
-    //    cfg_edge(Point0, Point1),
-    //    !path_assigned_at_base(Path, Point1).
-    path_moved_at.from_leapjoin(
-      &path_moved_at,
-      (
-        cfg_edge.extend_with(|&(_path, point1)| point1),
-        path_assigned_at_base.extend_anti(|&(path, _point1)| path),
-      ),
-      |&(path, _point1), &point2| (path, point2),
+  let path_maybe_uninitialized_on_exit: Relation<(Point, Path)> =
+    Relation::from_iter(
+      ctxt
+        .polonius_output
+        .path_maybe_uninitialized_on_exit
+        .iter()
+        .flat_map(|(point, paths)| {
+          paths.iter().map(|path| {
+            let path = ctxt.moveable_path_to_path(*path);
+            (*point, path)
+          })
+        }),
     );
-  }
 
-  log::debug!("finished in {} iterations", iterations);
+  let path_maybe_uninitialized_on_entry: Relation<(Point, Path)> =
+    Relation::from_join(
+      &path_maybe_uninitialized_on_exit,
+      &cfg_edge,
+      |&_point1, &path, &point2| (point2, path),
+    );
 
-  let path_moved_at = path_moved_at.complete();
-
-  for &(path, point) in path_moved_at.iter() {
-    // HACK: to be removed anyways when a local fork
-    // of polonius-engine is used. We do not want to consider
-    // the actual move points as moved, only the points following.
-    if path_moved_at_base.contains(&(path, point)) {
-      continue;
-    }
-
+  for &(point, path) in path_maybe_uninitialized_on_entry.iter() {
     ctxt
       .permissions_output
-      .path_moved_at
+      .path_maybe_uninitialized_on_entry
       .entry(point)
       .or_default()
       .insert(path);
@@ -373,7 +330,7 @@ pub fn compute<'a, 'tcx>(
     rev_lookup: HashMap::default(),
   };
 
-  compute_permission_facts(&mut ctxt);
+  derive_permission_facts(&mut ctxt);
 
   ctxt.construct_loan_regions();
 

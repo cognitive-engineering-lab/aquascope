@@ -44,7 +44,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       .find(|path| self.path_to_place(**path) == p)
       .unwrap_or_else(|| {
         panic!(
-          "Could not find path for place: {p:?}. Acceptable places are: {:#?}",
+          "Could not find path for place {p:?}\n Acceptable places are: {:#?}",
           self.place_data.iter().collect::<Vec<_>>()
         )
       })
@@ -52,6 +52,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
   pub fn new_path(&mut self, place: Place<'tcx>) -> Path {
     let place = place.normalize(self.tcx, self.def_id);
+    log::debug!("Creating normalized place {place:?}");
     let new_path = self.place_data.push(place);
     let local = place.local;
     self.rev_lookup.entry(local).or_default().push(new_path);
@@ -142,7 +143,10 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let point = &point;
 
     // Get point-specific information
-    let path_moved_at = pms.path_moved_at.get(point).unwrap_or(empty_set);
+    let path_moved_at = pms
+      .path_maybe_uninitialized_on_entry
+      .get(point)
+      .unwrap_or(empty_set);
     let cannot_read = pms.cannot_read.get(point).unwrap_or(empty_hash);
     let cannot_write = pms.cannot_write.get(point).unwrap_or(empty_hash);
     let cannot_drop = pms.cannot_drop.get(point).unwrap_or(empty_hash);
