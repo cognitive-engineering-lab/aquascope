@@ -1,6 +1,10 @@
 use std::collections::{hash_map::Entry, HashMap};
 
-use flowistry::{indexed::impls::LocationOrArg, source_map::Spanner};
+use flowistry::{
+  indexed::impls::LocationOrArg,
+  mir::utils::PlaceExt,
+  source_map::{self, Spanner},
+};
 use rustc_hir::{
   self as hir,
   intravisit::{self, Visitor as HirVisitor},
@@ -12,10 +16,14 @@ use rustc_middle::{
   ty::TyCtxt,
 };
 use rustc_mir_dataflow::{Analysis, JoinSemiLattice, ResultsVisitor};
+use rustc_span::Span;
 
-use crate::analysis::permissions::{
-  utils::{flow_mir_permissions, PAnalysis, PDomain},
-  PermissionsCtxt, PermsDiff,
+use crate::{
+  analysis::permissions::{
+    utils::{flow_mir_permissions, PAnalysis, PDomain},
+    PermissionsCtxt, PermissionsStateStep, PermsDiff,
+  },
+  Range,
 };
 
 pub fn compute_permission_steps<'tcx>(
@@ -49,11 +57,10 @@ pub fn compute_permission_steps<'tcx>(
 
   hir_visitor.visit_nested_body(ctxt.body_id);
 
-  // TODO: filter the Places by what is actually visible as a user variable.
   hir_visitor
     .diff
     .into_iter()
-    .map(|(id, places_to_perms)| {
+    .filter_map(|(id, places_to_perms)| {
       let filtered = places_to_perms
         .into_iter()
         .filter(|(place, diff)| {
@@ -62,9 +69,41 @@ pub fn compute_permission_steps<'tcx>(
           local_info.is_user_variable() && !diff.is_empty()
         })
         .collect::<HashMap<_, _>>();
-      (id, filtered)
+
+      (!filtered.is_empty()).then_some((id, filtered))
     })
     .collect::<HashMap<_, _>>()
+}
+
+pub fn prettify_permission_steps<'tcx>(
+  ctxt: &PermissionsCtxt<'_, 'tcx>,
+  perm_steps: HashMap<HirId, HashMap<Place<'tcx>, PermsDiff>>,
+  span_to_range: impl Fn(Span) -> Range,
+) -> Vec<PermissionsStateStep> {
+  let tcx = ctxt.tcx;
+  let hir = tcx.hir();
+  let body = &ctxt.body_with_facts.body;
+  perm_steps
+    .into_iter()
+    .map(|(id, place_to_diffs)| {
+      let span = hir.span(id);
+      let range = span_to_range(span);
+      let state = place_to_diffs
+        .into_iter()
+        .map(|(place, diff)| {
+          let s = place
+            .to_string(tcx, body)
+            .unwrap_or_else(|| String::from("<var>"));
+          (s, diff)
+        })
+        .collect::<Vec<_>>();
+
+      PermissionsStateStep {
+        location: range,
+        state,
+      }
+    })
+    .collect::<Vec<_>>()
 }
 
 fn node_to_id(node: hir::Node) -> HirId {

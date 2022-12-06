@@ -1,16 +1,5 @@
-import {
-  Range,
-  RangeSet,
-  StateEffect,
-  StateEffectType,
-  StateField,
-} from "@codemirror/state";
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  WidgetType,
-} from "@codemirror/view";
+import { Range, StateEffect } from "@codemirror/state";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 
 import {
   MissingPermReason,
@@ -23,6 +12,7 @@ import {
   IconField,
   dropChar,
   dropColor,
+  genStateField,
   glyphWidth,
   makeTag,
   readChar,
@@ -32,10 +22,11 @@ import {
   writeColor,
 } from "./misc";
 
-let permissionStateIcoType =
-  StateEffect.define<Array<PermissionPoint<TextIco>>>();
+let permissionStateIcoType = StateEffect.define<Array<BoundaryPoint>>();
 
-type PermissionPoint<I extends Icon> = [I, I, I, number];
+// A boundary point is the permissions stack which will
+// be palced at a specific point in the editor.
+type BoundaryPoint = [SinglePermIcon, SinglePermIcon, SinglePermIcon, number];
 
 class RegionEnd extends WidgetType {
   constructor(readonly elem: HTMLElement) {
@@ -61,7 +52,7 @@ let makeBraceElem = (content: string, color: Color) => {
 };
 
 // Icon for displaying a single permission field, e.g. "R" in "RWO".
-class TextIco implements Icon {
+class SinglePermIcon implements Icon {
   readonly display: boolean;
   readonly start: HTMLElement;
   readonly end: HTMLElement;
@@ -132,7 +123,7 @@ class TextIco implements Icon {
       widget: new RegionEnd(end),
     }).range(charEnd);
 
-    let extraDecos = [loanDeco, startDeco, endDeco, ...regionDecos];
+    let extraDecos = [loanDeco, /* startDeco, endDeco, */ ...regionDecos];
 
     return extraDecos;
   }
@@ -186,12 +177,17 @@ class TextIco implements Icon {
   }
 }
 
-class RWDPermissions<I extends TextIco> extends WidgetType {
-  constructor(readonly read: I, readonly write: I, readonly drop: I) {
+// The widget which holds the internal SinglePermIcons
+class BoundaryPointWidget extends WidgetType {
+  constructor(
+    readonly read: SinglePermIcon,
+    readonly write: SinglePermIcon,
+    readonly drop: SinglePermIcon
+  ) {
     super();
   }
 
-  eq(other: RWDPermissions<I>): boolean {
+  eq(other: BoundaryPointWidget): boolean {
     return (
       other.read == this.read &&
       other.write == this.write &&
@@ -200,8 +196,8 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
   }
 
   toDOM(_view: EditorView): HTMLElement {
-    let all: Array<I> = [this.read, this.write, this.drop];
-    let icons: Array<I> = all.filter(t => t.display);
+    let all = [this.read, this.write, this.drop];
+    let icons = all.filter(t => t.display);
 
     let wrap = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     wrap.classList.add("svg-perm");
@@ -212,7 +208,7 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
     wrap.style.position = "relative";
     wrap.style.top = `${(icons.length - 1) * 4}px`;
 
-    icons.forEach((icoI: I, idx: number) => {
+    icons.forEach((icoI: SinglePermIcon, idx: number) => {
       let ico: HTMLElement = icoI.toDom();
       let y = (idx / icons.length) * 100 + 100 / icons.length - 5;
       ico.setAttribute("text-anchor", "middle");
@@ -232,25 +228,23 @@ class RWDPermissions<I extends TextIco> extends WidgetType {
   }
 }
 
-let callTypesToPermissions = (
-  permInfo: PermissionsBoundary
-): PermissionPoint<TextIco> => {
+let callTypesToPermissions = (permInfo: PermissionsBoundary): BoundaryPoint => {
   const expl = permInfo.explanations;
-  const readIco = new TextIco(
+  const readIco = new SinglePermIcon(
     readChar,
     permInfo.expected.read,
     permInfo.actual.read,
     readColor,
     expl?.read
   );
-  const writeIco = new TextIco(
+  const writeIco = new SinglePermIcon(
     writeChar,
     permInfo.expected.write,
     permInfo.actual.write,
     writeColor,
     expl?.write
   );
-  const dropIco = new TextIco(
+  const dropIco = new SinglePermIcon(
     dropChar,
     permInfo.expected.drop,
     permInfo.actual.drop,
@@ -260,58 +254,38 @@ let callTypesToPermissions = (
   return [readIco, writeIco, dropIco, permInfo.location];
 };
 
-let makeTextStateFieldWithIcon = <I extends TextIco>(
-  ty: StateEffectType<Array<PermissionPoint<I>>>,
-  makePermStack: (icos: Array<I>) => Decoration
-) => {
-  return StateField.define<DecorationSet>({
-    create: () => Decoration.none,
-    update(points, transactions) {
-      for (let e of transactions.effects) {
-        if (e.is(ty)) {
-          return RangeSet.of(
-            e.value.flatMap(([icoL, icoM, icoR, from]) => {
-              let main_deco = makePermStack([icoL, icoM, icoR]).range(from);
-              return [
-                main_deco,
-                ...icoL.getAuxiliary(),
-                ...icoM.getAuxiliary(),
-                ...icoR.getAuxiliary(),
-              ];
-            }),
-            true
-          );
-        }
-      }
-
-      return transactions.docChanged ? RangeSet.of([]) : points;
-    },
-    provide: f => EditorView.decorations.from(f),
-  });
-};
-
-let makeDecorationWithTextIco = <I extends TextIco>(
-  icos: Array<I>
-): Decoration => {
+let makeDecorationFromIcon = (icos: Array<SinglePermIcon>): Decoration => {
   let fst = icos[0];
   let snd = icos[1];
   let trd = icos[2];
   return Decoration.widget({
-    widget: new RWDPermissions<I>(fst, snd, trd),
+    widget: new BoundaryPointWidget(fst, snd, trd),
     side: 0,
   });
 };
 
+let boundaryStateField = genStateField<Array<BoundaryPoint>>(
+  permissionStateIcoType,
+  (ts: Array<BoundaryPoint>): Array<Range<Decoration>> => {
+    return ts.flatMap(([icoL, icoM, icoR, from]) => {
+      let main_deco = makeDecorationFromIcon([icoL, icoM, icoR]).range(from);
+      return [
+        main_deco,
+        ...icoL.getAuxiliary(),
+        ...icoM.getAuxiliary(),
+        ...icoR.getAuxiliary(),
+      ];
+    });
+  }
+);
+
 export let receiverPermissionsField: IconField<
   PermissionsBoundary,
-  TextIco,
-  PermissionPoint<TextIco>
+  SinglePermIcon,
+  BoundaryPoint
 > = {
   effectType: permissionStateIcoType,
-  stateField: makeTextStateFieldWithIcon(
-    permissionStateIcoType,
-    makeDecorationWithTextIco<TextIco>
-  ),
-  makeDecoration: makeDecorationWithTextIco<TextIco>,
+  stateField: boundaryStateField,
+  makeDecoration: makeDecorationFromIcon,
   fromOutput: callTypesToPermissions,
 };

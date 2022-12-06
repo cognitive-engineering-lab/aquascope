@@ -79,30 +79,18 @@ pub fn permission_diffs(
   let permissions_ctxt = gen_permission_ctxt!(tcx, body_id);
   let steps = analysis::compute_permission_steps(permissions_ctxt);
   let source_map = tcx.sess.source_map();
-  let hir = tcx.hir();
 
-  let info = steps
-    .into_iter()
-    .map(|(id, place_to_diffs)| {
-      let span = hir.span(id);
-      let range = source_map::Range::from_span(span, source_map)
-        .ok()
-        .unwrap_or_default()
-        .into();
-      let state = place_to_diffs
-        .into_iter()
-        .map(|(place, diff)| {
-          let s = format!("{:?}", place);
-          (s, diff)
-        })
-        .collect::<Vec<_>>();
-
-      PermissionsStateStep {
-        location: range,
-        state,
-      }
-    })
-    .collect::<Vec<_>>();
+  let info =
+    analysis::permissions::permission_stepper::prettify_permission_steps(
+      permissions_ctxt,
+      steps,
+      |span| {
+        source_map::Range::from_span(span, source_map)
+          .ok()
+          .unwrap_or_default()
+          .into()
+      },
+    );
 
   Ok(PermissionsDiffOutput(info))
 }

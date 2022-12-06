@@ -1,5 +1,10 @@
-import { StateEffectType, StateField } from "@codemirror/state";
-import { Decoration, DecorationSet } from "@codemirror/view";
+import {
+  Range,
+  RangeSet,
+  StateEffectType,
+  StateField,
+} from "@codemirror/state";
+import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 
 // ---------
 // Constants
@@ -17,11 +22,11 @@ export interface Icon {
   toDom(): HTMLElement;
 }
 
-export interface IconField<C, Ico extends Icon, T> {
+export interface IconField<C, I extends Icon, T> {
   effectType: StateEffectType<Array<T>>;
   stateField: StateField<DecorationSet>;
-  makeDecoration(icos: Array<Ico>): Decoration;
-  fromOutput(callTypes: C): T;
+  makeDecoration(icos: Array<I>): Decoration;
+  fromOutput(o: C): T;
 }
 
 // ------------
@@ -57,6 +62,8 @@ export type Color = RGB | RGBA;
 export const softRed: RGB = new RGB(255, 66, 68);
 export const softGreen: RGB = new RGB(93, 202, 54);
 export const softBlue: RGB = new RGB(78, 190, 239);
+export const softYellow: RGB = new RGB(238, 238, 155);
+export const softOrange: RGB = new RGB(245, 202, 123);
 export const whiteColor: RGB = new RGB(255, 255, 255);
 
 export const dropColor = softRed;
@@ -75,4 +82,25 @@ export let makeTag = (length: number) => {
     result += characters.charAt(Math.floor(Math.random() * charactersLength));
   }
   return "tag" + result;
+};
+
+export let genStateField = <T>(
+  ty: StateEffectType<T>,
+  transform: (t: T) => Array<Range<Decoration>>
+): StateField<DecorationSet> => {
+  return StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+
+    update(points, transactions) {
+      for (let e of transactions.effects) {
+        if (e.is(ty)) {
+          // Sort the values by default          vvvv
+          return RangeSet.of(transform(e.value), true);
+        }
+      }
+
+      return transactions.docChanged ? RangeSet.of([]) : points;
+    },
+    provide: f => EditorView.decorations.from(f),
+  });
 };

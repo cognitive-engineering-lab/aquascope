@@ -153,31 +153,44 @@ span.cm-region-end {
 
 /* Permission Steps */
 
-div.perm-step-stack {
+.perm-step-table {
+  background-color: whitesmoke;
   display: inline-block;
-  background-color: gainsboro;
-  border: 3px #bbb;
+
+  border: 2px solid;
+  border-color: gainsboro;
   border-radius: 4px;
+}
+
+/* XXX not working :( */
+table.perm-step-table {
+  vertical-align: top;
+  border-collapse: collapse;
+}
+
+.perm-step-table tr td {
+  border: 1px dotted;
+  border-color: gainsboro;
 }
 
 span.perm-step-path {
   display: inline-block;
-  width: 60px;
+  padding-right: 12px;
 }
 
 span.perm-diff-add {
-  display: inline-block;
-  color: green;
+  /* display: inline-block; */
+  color: rgb(93, 202, 54);
 }
 
 spen.perm-diff-none {
-  display: inline-block;
+  /* display: inline-block; */
   color: lightgray;
 }
 
 span.perm-diff-sub {
-  display: inline-block;
-  color: red;
+  /* display: inline-block; */
+  color: rgb(255, 66, 68);
 }
 
 /* **************** */

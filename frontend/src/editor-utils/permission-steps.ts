@@ -1,30 +1,36 @@
-import { Range, RangeSet, StateEffect, StateField } from "@codemirror/state";
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  WidgetType,
-} from "@codemirror/view";
+import { Range, StateEffect } from "@codemirror/state";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 
 import { PermDiff, PermissionsStateStep, PermsDiff } from "../types";
-import { Icon, IconField, dropChar, readChar, writeChar } from "./misc";
+import {
+  Icon,
+  IconField,
+  dropChar,
+  genStateField,
+  readChar,
+  writeChar,
+} from "./misc";
 
-let permissionsDiffIcoType =
-  StateEffect.define<Array<ExtendedPermissionStack<PermDiffIco>>>();
+let permissionsDiffIcoType = StateEffect.define<Array<PermissionStepTable>>();
 
-type ExtendedPermissionStack<I extends Icon> = [Array<I>, number];
-class PermDiffIco implements Icon {
+// For each permission step table we need a
+// list of rows and the editor location where it will be placed.
+type PermissionStepTable = [Array<PermDiffRowIcon>, number];
+
+class PermDiffRowIcon implements Icon {
   readonly display: boolean = true;
   constructor(readonly path: string, readonly diffs: PermsDiff) {}
 
   getAuxiliary(): Array<Range<Decoration>> {
-    // TODO
     return [];
   }
 
-  // TODO
+  // A single permission step <path: changes> is represented as a single table row.
   toDom(): HTMLElement {
-    let wrap = document.createElement("div");
+    let row = document.createElement("tr");
+    let pathC = document.createElement("td");
+    let permC = document.createElement("td");
+
     let pathSpan = document.createElement("span");
     let rSpan = document.createElement("span");
     let wSpan = document.createElement("span");
@@ -37,10 +43,8 @@ class PermDiffIco implements Icon {
       } else if (diff.type === "Sub") {
         span.textContent = "-" + content;
         span.classList.add("perm-diff-sub");
-      } else {
-        span.textContent = diff.value ? content : "-";
-        span.classList.add("perm-diff-none");
       }
+      // Currently we only display the *differences* so we'll skip the None case.
     };
 
     pathSpan.classList.add("perm-step-path");
@@ -50,36 +54,37 @@ class PermDiffIco implements Icon {
     stylePerm(wSpan, this.diffs.write, writeChar);
     stylePerm(dSpan, this.diffs.drop, dropChar);
 
-    wrap.appendChild(pathSpan);
-    wrap.appendChild(rSpan);
-    wrap.appendChild(wSpan);
-    wrap.appendChild(dSpan);
+    pathC.appendChild(pathSpan);
 
-    return wrap;
+    permC.appendChild(rSpan);
+    permC.appendChild(wSpan);
+    permC.appendChild(dSpan);
+
+    row.appendChild(pathC);
+    row.appendChild(permC);
+
+    return row;
   }
 }
 
-class StepPermissions<I extends PermDiffIco> extends WidgetType {
-  constructor(readonly diffs: Array<I>) {
+class PermissionStepTableWidget extends WidgetType {
+  constructor(readonly diffs: Array<PermDiffRowIcon>) {
     super();
   }
 
-  eq(_other: StepPermissions<I>): boolean {
+  eq(_other: PermissionStepTableWidget): boolean {
     // TODO
     return false;
   }
 
-  // TODO: rewrite this to use a table instead of the hacky divs
   toDOM(_view: EditorView): HTMLElement {
-    let wrap = document.createElement("div");
-    let bufferDiv = document.createElement("div");
-    wrap.appendChild(bufferDiv);
+    let table = document.createElement("table");
     this.diffs.forEach(diff => {
       let ico = diff.toDom();
-      wrap.appendChild(ico);
+      table.appendChild(ico);
     });
-    wrap.classList.add("perm-step-stack");
-    return wrap;
+    table.classList.add("perm-step-table");
+    return table;
   }
 
   ignoreEvent(): boolean {
@@ -89,54 +94,37 @@ class StepPermissions<I extends PermDiffIco> extends WidgetType {
 
 let stateStepToPermissions = (
   stateStep: PermissionsStateStep
-): ExtendedPermissionStack<PermDiffIco> => {
+): PermissionStepTable => {
   let icos = stateStep.state.map(([path, diff]) => {
-    return new PermDiffIco(path, diff);
+    return new PermDiffRowIcon(path, diff);
   });
   let loc = stateStep.location.char_end;
   return [icos, loc];
 };
 
-// TODO FIXME: collapse this into a simpler more generic function
-let permDiffStateField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-  update(points, transactions) {
-    console.log(transactions);
-    for (let e of transactions.effects) {
-      if (e.is(permissionsDiffIcoType)) {
-        return RangeSet.of(
-          // TODO if we need auxiliary then they should be expanded
-          // here and flattened.
-          e.value.map(([diffs, from]) => {
-            return makeDecorationWithDiffs(diffs).range(from);
-          }),
-          true
-        );
-      }
-    }
+let permDiffStateField = genStateField(
+  permissionsDiffIcoType,
+  (ts: Array<PermissionStepTable>) => {
+    return ts.map(([diffs, from]) => {
+      return makeDecorationWithDiffs(diffs).range(from);
+    });
+  }
+);
 
-    return transactions.docChanged ? RangeSet.of([]) : points;
-  },
-  provide: f => EditorView.decorations.from(f),
-});
-
-let makeDecorationWithDiffs = <I extends PermDiffIco>(
-  icos: Array<I>
-): Decoration => {
+let makeDecorationWithDiffs = (icos: Array<PermDiffRowIcon>): Decoration => {
   return Decoration.widget({
-    widget: new StepPermissions(icos),
+    widget: new PermissionStepTableWidget(icos),
     side: 1,
   });
 };
 
-// TODO
 export let coarsePermissionDiffs: IconField<
   PermissionsStateStep,
-  PermDiffIco,
-  ExtendedPermissionStack<PermDiffIco>
+  PermDiffRowIcon,
+  PermissionStepTable
 > = {
   effectType: permissionsDiffIcoType,
   stateField: permDiffStateField,
-  makeDecoration: makeDecorationWithDiffs<PermDiffIco>,
+  makeDecoration: makeDecorationWithDiffs,
   fromOutput: stateStepToPermissions,
 };

@@ -9,6 +9,10 @@ window.addEventListener("load", () => {
   const showRcvrTypesButton = document.getElementById(
     "showReceiverTypes"
   ) as HTMLInputElement;
+  const permStepsButton = document.getElementById(
+    "showPermSteps"
+  ) as HTMLInputElement;
+
   const vimKeybindingToggle = document.getElementById(
     "vimKeybindings"
   ) as HTMLInputElement;
@@ -60,6 +64,10 @@ window.addEventListener("load", () => {
   vimKeybindingToggle.addEventListener("click", toggleVim);
 
   showRcvrTypesButton.addEventListener("click", _ => {
+    return globals.editor.computeReceiverPermissions();
+  });
+
+  permStepsButton.addEventListener("click", _ => {
     // return globals.editor.computeReceiverPermissions();
     return globals.editor.computePermissionSteps();
   });
