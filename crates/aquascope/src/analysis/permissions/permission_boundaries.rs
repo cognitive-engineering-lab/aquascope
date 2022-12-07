@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use flowistry::{
   indexed::impls::LocationOrArg,
-  mir::utils::OperandExt,
+  mir::utils::{BodyExt, OperandExt},
   source_map::{EnclosingHirSpans, Spanner},
 };
 use rustc_data_structures::fx::FxHashMap as HashMap;
@@ -318,11 +318,34 @@ pub fn loan_to_spans(
 
   let mut loan_spans = points_to_spans(ctxt, points);
 
+  // Pushing the `min_span` and `max_span` is also a HACK I should
+  // get rid of. Only after there are unit tests to make sure the change
+  // doesn't break any necessary examples.
   loan_spans.push(min_span);
   loan_spans.push(max_span);
 
   // HACK: ideally we don't need to use the min / max spans to
-  // filter the others.
+  // filter the others. This is needed when you have a HIR span
+  // whose outer values come before when we would like them to be shown.
+  // ```
+  // let x = if true {
+  //   `[ &mut y ]`
+  // } else {
+  //     &mut z
+  // }
+  //
+  // `[ y.abs(); ]` // error
+  //
+  // `[ use(x); ]`
+  //
+  // y.abs(); // fine if `x` no longer used
+  // ```
+  //
+  // In the above example, the lines surrounded by `[ ... ]` should be highlighted
+  // in the editor. What this means, is that only the "then" child branch of the "if"
+  // HIR node should be included in this span. However, if we don't constrain these
+  // values it can happen that the entire `[ let x = if true { ... } else { ... }  ]`
+  // is included in the returned ranges.
   let loan_spans = loan_spans
     .into_iter()
     .filter(|span| min_span.lo() <= span.lo() && span.hi() <= max_span.hi())
@@ -335,8 +358,8 @@ fn points_to_spans(
   ctxt: &PermissionsCtxt,
   points: impl Iterator<Item = Point>,
 ) -> Vec<Span> {
+  let hir = ctxt.tcx.hir();
   let body = &ctxt.body_with_facts.body;
-  let spanner = Spanner::new(ctxt.tcx, ctxt.body_id, body);
   let mut spans = Vec::default();
 
   points.for_each(|point| {
@@ -349,77 +372,9 @@ fn points_to_spans(
         }
       };
     }
-
-    macro_rules! span_diff {
-      ($outer:expr, $inner:expr) => {
-        (($inner.lo() - $outer.lo()) + ($outer.hi() - $inner.hi()))
-      };
-    }
-
-    let mir_span = body.source_info(loc).span;
-
-    let mut hir_spans = spanner
-      .location_to_spans(
-        LocationOrArg::Location(loc),
-        body,
-        EnclosingHirSpans::Full,
-      )
-      .into_iter()
-      // Remove spans that do not fully contain the MIR span
-      .filter(|sp| mir_span.contains(*sp))
-      .collect::<Vec<_>>();
-
-    // Order them by the amount of source code outside of the MIR span.
-    hir_spans
-      .sort_by(|a, b| span_diff!(a, mir_span).cmp(&span_diff!(b, mir_span)));
-
-    // Only take the span that fully incloses the mir_span and also
-    // has minimal extraneous source information.
-    if let Some(span) = hir_spans.first() {
-      insert_if_valid!(*span)
-    }
-  });
-
-  spans
-}
-
-// DEPRECATED! remove
-#[cfg(feature = "rustc-hir-origins")]
-fn points_to_spans(
-  ctxt: &PermissionsCtxt,
-  points: impl Iterator<Item = Point>,
-) -> Vec<Span> {
-  let body = &ctxt.body_with_facts.body;
-  let mut spans = Vec::default();
-
-  points.for_each(|point| {
-    let loc = ctxt.point_to_location(*point);
-
-    macro_rules! insert_if_valid {
-      ($sp:expr) => {
-        if !$sp.is_empty() {
-          loan_spans.push($sp);
-        }
-      };
-    }
-
-    let source_info = body.source_info(loc);
-
-    match source_info.origin {
-      HirOrigin::Untracked => {
-        log::warn!("Mir at point {point:?} has untracked origins")
-      }
-      HirOrigin::FromHir(local_id) => {
-        let hir_id = HirId {
-          owner: OwnerId {
-            def_id: ctxt.def_id.expect_local(),
-          },
-          local_id,
-        };
-        let span = hir.span(hir_id);
-        insert_if_valid!(span);
-      }
-    }
+    let hir_id = body.location_to_hir_id(loc);
+    let span = hir.span(hir_id);
+    insert_if_valid!(span);
   });
 
   spans

@@ -79,7 +79,7 @@ impl RustcPlugin for AquascopePlugin {
       }
       RustcVersion => {
         let commit_hash =
-          rustc_interface::util::commit_hash_str().unwrap_or("unknown");
+          rustc_interface::util::rustc_version_str().unwrap_or("unknown");
         println!("{commit_hash}");
         exit(0);
       }
@@ -151,7 +151,7 @@ pub fn run_with_callbacks(
 ) -> AquascopeResult<()> {
   let mut args = args.to_vec();
   args.extend(
-    "-Z identify-regions -Z mir-opt-level=0 -A warnings"
+    "-Z identify-regions -Z mir-opt-level=0 -Z maximal-hir-to-mir-coverage -A warnings"
       .split(' ')
       .map(|s| s.to_owned()),
   );

@@ -292,7 +292,7 @@ pub fn compile(
     callback: Some(callback),
   };
   let args = format!(
-    "rustc dummy.rs --crate-type lib --edition=2021 -Z identify-regions -Z mir-opt-level=0 --allow warnings --sysroot {}",
+    "rustc dummy.rs --crate-type lib --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z maximal-hir-to-mir-coverage --allow warnings --sysroot {}",
     &*SYSROOT
   );
   let args = args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();

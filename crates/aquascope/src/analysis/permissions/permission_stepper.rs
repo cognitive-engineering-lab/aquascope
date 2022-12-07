@@ -2,8 +2,8 @@ use std::collections::{hash_map::Entry, HashMap};
 
 use flowistry::{
   indexed::impls::LocationOrArg,
-  mir::utils::PlaceExt,
-  source_map::{self, Spanner},
+  mir::utils::{BodyExt, PlaceExt, SpanExt},
+  source_map,
 };
 use rustc_hir::{
   self as hir,
@@ -34,12 +34,8 @@ pub fn compute_permission_steps<'tcx>(
   let body = &ctxt.body_with_facts.body;
   let basic_blocks = body.basic_blocks.indices();
 
-  let spanner =
-    Spanner::new(ctxt.tcx, ctxt.body_id, &ctxt.body_with_facts.body);
-
   let mut mir_visitor = MirAnalysisLifter::<'_, 'tcx, PAnalysis<'_, 'tcx>> {
     tcx,
-    spanner,
     body,
     map: HashMap::default(),
   };
@@ -106,37 +102,6 @@ pub fn prettify_permission_steps<'tcx>(
     .collect::<Vec<_>>()
 }
 
-fn node_to_id(node: hir::Node) -> HirId {
-  match node {
-    hir::Node::Stmt(hir::Stmt { hir_id, .. }) => *hir_id,
-    hir::Node::Expr(hir::Expr { hir_id, .. }) => *hir_id,
-    hir::Node::Param(hir::Param { hir_id, .. }) => *hir_id,
-    hir::Node::Local(hir::Local { hir_id, .. }) => *hir_id,
-    hir::Node::Item(item) => item.hir_id(),
-    hir::Node::ExprField(hir::ExprField { hir_id, .. }) => *hir_id,
-    hir::Node::PathSegment(hir::PathSegment { hir_id, .. }) => *hir_id,
-
-    hir::Node::ForeignItem(_) => unimplemented!(),
-    hir::Node::TraitItem(_) => unimplemented!(),
-    hir::Node::ImplItem(_) => unimplemented!(),
-    hir::Node::Variant(_) => unimplemented!(),
-    hir::Node::Field(_) => unimplemented!(),
-    hir::Node::AnonConst(_) => unimplemented!(),
-    hir::Node::Ty(_) => unimplemented!(),
-    hir::Node::TypeBinding(_) => unimplemented!(),
-    hir::Node::TraitRef(_) => unimplemented!(),
-    hir::Node::Pat(_) => unimplemented!(),
-    hir::Node::PatField(_) => unimplemented!(),
-    hir::Node::Arm(_) => unimplemented!(),
-    hir::Node::Block(_) => unimplemented!(),
-    hir::Node::Ctor(_) => unimplemented!(),
-    hir::Node::Lifetime(_) => unimplemented!(),
-    hir::Node::GenericParam(_) => unimplemented!(),
-    hir::Node::Crate(_) => unimplemented!(),
-    hir::Node::Infer(_) => unimplemented!(),
-  }
-}
-
 struct HirPermDiffFlow<'tcx> {
   tcx: TyCtxt<'tcx>,
   map: HashMap<HirId, PDomain<'tcx>>,
@@ -196,7 +161,6 @@ where
   A: Analysis<'tcx>,
 {
   tcx: TyCtxt<'tcx>,
-  spanner: Spanner<'a, 'tcx>,
   body: &'a Body<'tcx>,
   map: HashMap<HirId, A::Domain>,
 }
@@ -215,15 +179,9 @@ where
   }
 
   fn location_to_stmt(&self, loc: Location) -> Option<HirId> {
-    let loc_oa = LocationOrArg::Location(loc);
+    let body = &self.body;
     let hir = self.tcx.hir();
-
-    let hir_spanned = self
-      .spanner
-      .location_to_hir_spanned_node(loc_oa, self.body)?;
-
-    let start_node = hir_spanned.node;
-    let mut hir_id = node_to_id(start_node);
+    let mut hir_id = body.location_to_hir_id(loc);
 
     loop {
       let curr = hir.get(hir_id);
