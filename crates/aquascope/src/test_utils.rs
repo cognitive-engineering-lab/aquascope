@@ -284,6 +284,7 @@ pub fn compile_bodies(
   })
 }
 
+#[allow(unused_must_use)]
 pub fn compile(
   input: impl Into<String>,
   callback: impl FnOnce(TyCtxt<'_>) + Send,

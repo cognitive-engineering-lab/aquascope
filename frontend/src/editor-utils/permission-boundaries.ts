@@ -98,14 +98,16 @@ class SinglePermIcon implements Icon {
       refinedRegion.refiner_point.char_end
     );
 
-    let regionDecos = refinedRegion.refined_ranges.map(range => {
-      console.log(range);
-      let highlightedRange = Decoration.mark({
-        class: "aquascope-live-region",
-        tagName: this.regionTag,
-      }).range(range.char_start, range.char_end);
-      return highlightedRange;
-    });
+    let regionDecos = refinedRegion.refined_ranges
+      .filter(range => range.char_start != range.char_end)
+      .map(range => {
+        console.log(range);
+        let highlightedRange = Decoration.mark({
+          class: "aquascope-live-region",
+          tagName: this.regionTag,
+        }).range(range.char_start, range.char_end);
+        return highlightedRange;
+      });
 
     // TODO: you can probably get rid of the start / end as
     // soon as you feel confident enough about the spans

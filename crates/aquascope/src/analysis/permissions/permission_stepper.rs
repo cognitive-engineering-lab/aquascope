@@ -1,4 +1,7 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+  cmp::Ordering,
+  collections::{hash_map::Entry, HashMap},
+};
 
 use flowistry::{
   indexed::impls::LocationOrArg,
@@ -37,21 +40,27 @@ pub fn compute_permission_steps<'tcx>(
   let mut mir_visitor = MirAnalysisLifter::<'_, 'tcx, PAnalysis<'_, 'tcx>> {
     tcx,
     body,
-    map: HashMap::default(),
+    before_effect: HashMap::default(),
+    after_effect: HashMap::default(),
   };
 
   results.visit_with(body, basic_blocks, &mut mir_visitor);
 
-  let mir_map = mir_visitor.map;
+  let before_states = mir_visitor.before_effect;
+  let after_states = mir_visitor.after_effect;
 
   let mut hir_visitor = HirPermDiffFlow {
     tcx,
-    map: mir_map,
+    body,
+    before_states,
+    after_states,
     diff: HashMap::default(),
     last_stmt_perms: ctxt.initial_body_permissions().into(),
   };
 
   hir_visitor.visit_nested_body(ctxt.body_id);
+
+  log::debug!("returning DIFFS: {:#?}", hir_visitor.diff);
 
   hir_visitor
     .diff
@@ -102,9 +111,14 @@ pub fn prettify_permission_steps<'tcx>(
     .collect::<Vec<_>>()
 }
 
-struct HirPermDiffFlow<'tcx> {
+type DomainAtHir<'tcx, A: Analysis<'tcx>> =
+  HashMap<HirId, HashMap<Location, A::Domain>>;
+
+struct HirPermDiffFlow<'a, 'tcx> {
   tcx: TyCtxt<'tcx>,
-  map: HashMap<HirId, PDomain<'tcx>>,
+  body: &'a Body<'tcx>,
+  before_states: DomainAtHir<'tcx, PAnalysis<'a, 'tcx>>,
+  after_states: DomainAtHir<'tcx, PAnalysis<'a, 'tcx>>,
   diff: HashMap<HirId, HashMap<Place<'tcx>, PermsDiff>>,
   last_stmt_perms: PDomain<'tcx>,
 }
@@ -132,7 +146,7 @@ fn domain_step<'tcx>(
     })
 }
 
-impl<'tcx> HirVisitor<'tcx> for HirPermDiffFlow<'tcx> {
+impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
   type NestedFilter = OnlyBodies;
 
   fn nested_visit_map(&mut self) -> Self::Map {
@@ -141,13 +155,70 @@ impl<'tcx> HirVisitor<'tcx> for HirPermDiffFlow<'tcx> {
 
   fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt) {
     let id = stmt.hir_id;
+    let body = &self.body;
 
-    let dmn = self.map.get(&id).unwrap();
+    if let Some(after_states) = self.after_states.get(&id) {
+      let before_states = self.before_states.get(&id).unwrap();
+      // The child locations represent all of the MIR Points which came from this HIR Stmt.
+      // We now want to collapse all of them into a single permissions step for this specific HIR.
+      // For debugging, we want to check that in the ordered locations, the after state is the before
+      // state of the next location. If this is not the case, then some action could happen
+      // between them which does not correspond to this HIR Stmt.
+      let mut child_locations = after_states.keys().collect::<Vec<_>>();
 
-    let dmn_diff = domain_step(&self.last_stmt_perms, dmn);
+      child_locations.sort_by(|l1, l2| {
+        let l1_p = l1.is_predecessor_of(**l2, body);
+        let l2_p = l2.is_predecessor_of(**l1, body);
+        if l1_p && l2_p {
+          log::error!("The MIR Locations for a HIR Stmt did not form a total order {l1:?} {l2:?}");
+          Ordering::Equal
+        } else if l1_p {
+          Ordering::Less
+        } else if l2_p {
+          Ordering::Greater
+        } else {
+          log::error!("The MIR Locations for a HIR Stmt are unordered, you really missed something");
+          Ordering::Equal
+        }
+      });
 
-    self.diff.insert(id, dmn_diff);
-    self.last_stmt_perms = dmn.clone();
+      let entry_state = &self.last_stmt_perms;
+
+      let mut previous = entry_state;
+      let mut found_diffs = false;
+
+      // XXX: debugging only.
+      for loc in child_locations.iter() {
+        let pre_state = before_states.get(loc).unwrap();
+        let post_state = after_states.get(loc).unwrap();
+
+        if previous != pre_state {
+          log::error!("The previous Domain state does not match the current locations previous");
+          log::error!("{previous:#?}\n {pre_state:#?} {post_state:#?}");
+        }
+
+        if pre_state != post_state {
+          log::error!("PRE AND POST STATES ARE NOT THE SAME");
+          found_diffs = true;
+        }
+
+        previous = post_state;
+      }
+
+      if !found_diffs {
+        panic!("The permissions state flow was uneven");
+      }
+
+      // `previous` at this point is the output state of the entire
+      let output_state = previous;
+
+      let stmt_perm_step = domain_step(entry_state, output_state);
+
+      self.diff.insert(id, stmt_perm_step);
+      self.last_stmt_perms = output_state.clone();
+    } else {
+      log::warn!("No PDomain found for HIR::Stmt: {id:?}");
+    }
 
     intravisit::walk_stmt(self, stmt);
   }
@@ -156,13 +227,11 @@ impl<'tcx> HirVisitor<'tcx> for HirPermDiffFlow<'tcx> {
 // ------------------------------------------------
 // Binning the MIR locations to HIR statements
 
-struct MirAnalysisLifter<'a, 'tcx: 'a, A>
-where
-  A: Analysis<'tcx>,
-{
+struct MirAnalysisLifter<'a, 'tcx: 'a, A: Analysis<'tcx>> {
   tcx: TyCtxt<'tcx>,
   body: &'a Body<'tcx>,
-  map: HashMap<HirId, A::Domain>,
+  before_effect: DomainAtHir<'tcx, A>,
+  after_effect: DomainAtHir<'tcx, A>,
 }
 
 impl<'a, 'tcx: 'a, A> MirAnalysisLifter<'a, 'tcx, A>
@@ -209,12 +278,48 @@ where
   }
 }
 
-impl<'a, 'tcx: 'a, A> ResultsVisitor<'_, 'tcx>
-  for MirAnalysisLifter<'a, 'tcx, A>
-where
-  A: Analysis<'tcx>,
+impl<'a, 'tcx: 'a> ResultsVisitor<'_, 'tcx>
+  for MirAnalysisLifter<'a, 'tcx, PAnalysis<'a, 'tcx>>
 {
-  type FlowState = A::Domain;
+  type FlowState = PDomain<'tcx>;
+
+  // before effect
+
+  fn visit_statement_before_primary_effect(
+    &mut self,
+    state: &Self::FlowState,
+    _statement: &mir::Statement<'tcx>,
+    location: Location,
+  ) {
+    if !self.is_on_unwind_path(location) {
+      if let Some(id) = self.location_to_stmt(location) {
+        self
+          .before_effect
+          .entry(id)
+          .or_default()
+          .insert(location, state.clone());
+      }
+    }
+  }
+
+  fn visit_terminator_before_primary_effect(
+    &mut self,
+    state: &Self::FlowState,
+    _terminator: &mir::Terminator<'tcx>,
+    location: Location,
+  ) {
+    if !self.is_on_unwind_path(location) {
+      if let Some(id) = self.location_to_stmt(location) {
+        self
+          .before_effect
+          .entry(id)
+          .or_default()
+          .insert(location, state.clone());
+      }
+    }
+  }
+
+  // after effect
 
   fn visit_statement_after_primary_effect(
     &mut self,
@@ -224,14 +329,11 @@ where
   ) {
     if !self.is_on_unwind_path(location) {
       if let Some(id) = self.location_to_stmt(location) {
-        match self.map.entry(id) {
-          Entry::Occupied(mut entry) => {
-            entry.get_mut().join(state);
-          }
-          Entry::Vacant(entry) => {
-            entry.insert(state.clone());
-          }
-        }
+        self
+          .after_effect
+          .entry(id)
+          .or_default()
+          .insert(location, state.clone());
       }
     }
   }
@@ -244,14 +346,11 @@ where
   ) {
     if !self.is_on_unwind_path(location) {
       if let Some(id) = self.location_to_stmt(location) {
-        match self.map.entry(id) {
-          Entry::Occupied(mut entry) => {
-            entry.get_mut().join(state);
-          }
-          Entry::Vacant(entry) => {
-            entry.insert(state.clone());
-          }
-        }
+        self
+          .after_effect
+          .entry(id)
+          .or_default()
+          .insert(location, state.clone());
       }
     }
   }

@@ -22,6 +22,3 @@ itertools = "0.10.5"
 # For binaries
 env_logger = {version = "0.9", default-features = false}
 clap = {version = "3.1", default-features = false, features = ["std", "derive"]}
-
-[unstable]
-maximal-hir-to-mir-coverage = true
