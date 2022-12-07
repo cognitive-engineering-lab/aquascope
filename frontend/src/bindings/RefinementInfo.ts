@@ -1,1 +1,0 @@
-../../../crates/aquascope/bindings/RefinementInfo.ts

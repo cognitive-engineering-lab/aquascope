@@ -1,0 +1,196 @@
+/* span configuration */
+
+html,
+body {
+  height: 100%;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 18px;
+  background-color: lightgray;
+}
+
+nav {
+  width: 100%;
+  background-color: firebrick;
+  padding-left: 30px;
+  padding-right: 10px;
+}
+
+.nav-item {
+  display: inline-block;
+  padding: 10px 15px;
+  font-weight: bold;
+  color: white;
+}
+
+.nav-item:hover {
+  color: whitesmoke;
+}
+
+.static-editor {
+  height: 100%;
+  width: 100%;
+  max-height: 700px;
+  max-width: 900px;
+
+  /* position: relative; */
+  /* padding-left: 25px; */
+}
+
+.aquascope-loan {
+  text-decoration: underline 3px rgba(255, 255, 255, 0);
+  transition: 1s all;
+}
+
+.aquascope-live-region {
+  background-color: rgba(255, 255, 255, 0);
+  border-radius: 5px;
+  transition: 1s all;
+}
+
+.aquascope-stderr {
+  padding: 15px;
+  background-color: #f9ffff;
+  font-family: "Source Code Pro", monospace;
+  font-size: 0.9em;
+  overflow: scroll;
+}
+
+/* XXX: tabs **************************************** */
+
+.tabs-container {
+  height: 100%;
+  width: 100%;
+  max-height: 700px;
+  max-width: 900px;
+
+  padding-left: 25px;
+}
+
+.tabs {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  margin-bottom: -1px;
+}
+.tab {
+  padding: 5px 10px;
+  background: #ddd;
+  border: 1px solid #bbb;
+  width: fit-content;
+  display: inline-block;
+}
+.tab.active {
+  background: #fff;
+  border-bottom-color: white !important;
+}
+
+.tab-pane {
+  height: 100%;
+  width: 100%;
+  max-height: 700px;
+  max-width: 900px;
+
+  position: relative;
+  /* padding-left: 25px; */
+
+  display: none;
+  border: 1px solid #bbb;
+}
+.tab-pane.active {
+  display: block;
+}
+
+/* ********* */
+
+span.cm-region-end {
+  font-family: "IBM Plex Sans", sans-serif, bold;
+  text-align: center;
+  vertical-align: bottom;
+  padding: 0;
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  transition: 1s all;
+}
+
+.aquascope {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.top-right {
+  z-index: 10;
+  position: absolute;
+  top: 25px;
+  right: 25px;
+}
+
+.cm-button {
+  background-color: #a42;
+  border-color: #b75636;
+  border-width: 3px;
+  border-radius: 8px;
+  color: white;
+  font-family: "IBM Plex Sans", sans-serif, 18px;
+  font-weight: bold;
+}
+
+.cm-editor {
+  height: 100%;
+  width: 100%;
+
+  border-style: solid;
+  border-width: 5px;
+  border-radius: 5px;
+  border-color: #bbb;
+
+  background-color: white;
+}
+.cm-scroller {
+  overflow: auto;
+}
+
+/* Permission Steps */
+
+.perm-step-table {
+  background-color: whitesmoke;
+  display: inline-block;
+
+  border: 2px solid;
+  border-color: gainsboro;
+  border-radius: 4px;
+}
+
+/* XXX not working :( */
+table.perm-step-table {
+  vertical-align: top;
+  border-collapse: collapse;
+}
+
+.perm-step-table tr td {
+  border: 1px dotted;
+  border-color: gainsboro;
+}
+
+span.perm-step-path {
+  display: inline-block;
+  padding-right: 12px;
+}
+
+span.perm-diff-add {
+  /* display: inline-block; */
+  color: rgb(93, 202, 54);
+}
+
+spen.perm-diff-none {
+  /* display: inline-block; */
+  color: lightgray;
+}
+
+span.perm-diff-sub {
+  /* display: inline-block; */
+  color: rgb(255, 66, 68);
+}
+
+/* **************** */

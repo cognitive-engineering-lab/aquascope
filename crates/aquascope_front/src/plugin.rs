@@ -44,7 +44,6 @@ pub struct AquascopePlugin;
 impl RustcPlugin for AquascopePlugin {
   type Args = AquascopePluginArgs;
 
-  #[cfg(not(test))]
   fn version() -> &'static str {
     "0.0.0"
   }
