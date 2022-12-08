@@ -117,28 +117,18 @@ let stateStepToPermissions = (
 
 let permDiffStateField = genStateField(
   permissionsDiffIcoType,
-  (ts: Array<PermissionStepTable>) => {
-    // let maxLineLen = 0;
-    // for (let line of _view.state.doc.iterLines()) {
-    //   maxLineLen = Math.max(maxLineLen, line.length);
-    // }
-    // let padding = this
-
-    return ts.map(([diffs, from]) => {
-      return makeDecorationWithDiffs(diffs, from).range(from);
-    });
-  }
+  (ts: Array<PermissionStepTable>) =>
+    ts.map(([diffs, from]) => makeDecorationWithDiffs(diffs, from).range(from))
 );
 
 let makeDecorationWithDiffs = (
   icos: Array<PermDiffRowIcon>,
   pos: number
-): Decoration => {
-  return Decoration.widget({
+): Decoration =>
+  Decoration.widget({
     widget: new PermissionStepTableWidget(icos, pos),
     side: 1,
   });
-};
 
 export let coarsePermissionDiffs: IconField<
   PermissionsStateStep,

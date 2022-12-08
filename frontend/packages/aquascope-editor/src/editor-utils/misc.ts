@@ -87,8 +87,8 @@ export let makeTag = (length: number) => {
 export let genStateField = <T>(
   ty: StateEffectType<T>,
   transform: (t: T) => Array<Range<Decoration>>
-): StateField<DecorationSet> => {
-  return StateField.define<DecorationSet>({
+): StateField<DecorationSet> =>
+  StateField.define<DecorationSet>({
     create: () => Decoration.none,
 
     update(points, transactions) {
@@ -101,6 +101,6 @@ export let genStateField = <T>(
 
       return transactions.docChanged ? RangeSet.of([]) : points;
     },
+
     provide: f => EditorView.decorations.from(f),
   });
-};
