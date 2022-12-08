@@ -1,0 +1,62 @@
+@import "aquascope-editor/dist/lib.css";
+
+.light, .rust {
+  --code-bg: #f6f7f6;
+}
+
+.coal, .navy {
+  --code-bg: #1d1f21;
+}
+
+.ayu {
+  --code-bg: #191f26;
+}
+
+.aquascope {
+  .cm-editor {
+    background-color: var(--code-bg); 
+  }
+
+  .cm-scroller {
+    line-height: inherit;
+  }
+
+  .cm-content {
+    // Same as `pre > code` and `code` rules
+    padding: 1rem;
+    font-family: "Source Code Pro", Consolas, "Ubuntu Mono", Menlo, 
+      "DejaVu Sans Mono", monospace, monospace;    
+    font-size: 0.875em;
+  }
+
+  .cm-line {
+    padding: 0; 
+  }
+
+  .cm-button {
+    // Same as `pre > .buttons button`
+    border-color: var(--icons);
+    background-color: var(--theme-popup-bg);
+    color: var(--icons);
+
+    &:hover {
+      color: var(--sidebar-active);
+      border-color: var(--icons-hover);
+      background-color: var(--theme-hover);
+    }
+  }
+
+  .perm-step-widget {
+    color: var(--table-header-bg);
+  }
+
+  .perm-step-table {
+    color: var(--sidebar-fg);
+    background-color: var(--sidebar-bg);
+    border-color: var(--table-header-bg);
+    
+    td {
+      padding: 1px 4px;
+    }
+  }
+}

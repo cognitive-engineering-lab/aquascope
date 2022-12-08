@@ -1,1 +1,0 @@
-../../../crates/aquascope_front/bindings/PermissionsDiffOutput.ts

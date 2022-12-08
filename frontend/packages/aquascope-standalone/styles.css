@@ -1,0 +1,98 @@
+@import "aquascope-editor/dist/lib.css";
+
+/* span configuration */
+
+html,
+body {
+  height: 100%;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 18px;
+  background-color: lightgray;
+}
+
+nav {
+  width: 100%;
+  background-color: firebrick;
+  padding-left: 30px;
+  padding-right: 10px;
+}
+
+.nav-item {
+  display: inline-block;
+  padding: 10px 15px;
+  font-weight: bold;
+  color: white;
+}
+
+.nav-item:hover {
+  color: whitesmoke;
+}
+
+.static-editor {
+  height: 100%;
+  width: 100%;
+  max-height: 700px;
+  max-width: 900px;
+
+  /* position: relative; */
+  /* padding-left: 25px; */
+}
+
+/* XXX: tabs **************************************** */
+
+.tabs-container {
+  height: 100%;
+  width: 100%;
+  max-height: 700px;
+  max-width: 900px;
+
+  padding-left: 25px;
+}
+
+.tabs {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  margin-bottom: -1px;
+}
+.tab {
+  padding: 5px 10px;
+  background: #ddd;
+  border: 1px solid #bbb;
+  width: fit-content;
+  display: inline-block;
+}
+.tab.active {
+  background: #fff;
+  border-bottom-color: white !important;
+}
+
+.tab-pane {
+  height: 100%;
+  width: 100%;
+  max-height: 700px;
+  max-width: 900px;
+
+  position: relative;
+  /* padding-left: 25px; */
+
+  display: none;
+  border: 1px solid #bbb;
+}
+.tab-pane.active {
+  display: block;
+}
+
+/* XXX: editor **************************************** */
+
+.cm-editor {
+  height: 100%;
+  width: 100%;
+
+  border-style: solid;
+  border-width: 5px;
+  border-radius: 5px;
+  border-color: #bbb;
+
+  background-color: white;
+}

@@ -1,1 +1,0 @@
-../../../crates/aquascope_front/bindings/AquascopeError.ts

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;1,600&display=swap"
+      rel="stylesheet"
+    />
+
+    <link
+      rel="stylesheet"
+      href="https://www.w3schools.com/w3css/4/w3.css"
+      type="text/css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://use.fontawesome.com/releases/v6.2.0/css/all.css"
+      type="text/css"
+    />
+    <link rel="stylesheet" type="text/css" href="./styles.css" />
+    <title>Gavin Attempting Something</title>
+  </head>
+  <body>
+    <script src="./src/index.ts" type="module"></script>
+
+    <nav>
+      <ul>
+        <li class="nav-item">
+          <label for="vimKeybindings"
+                 ><input type="checkbox" id="vimKeybindings" checked/>VIM
+            Keybindings</label
+                         >
+        </li>
+      </ul>
+    </nav>
+
+    <div class="tabs-container">
+
+      <ul class="tabs">
+        <li class="tab active" data-tab="0">Code</li>
+        <li class="tab" data-tab="1">Stderr</li>
+      </ul>
+
+      <div class="aquascope static-editor tab-pane active" data-pane="0">
+        <div class="top-right">
+          <button class="cm-button" id="showReceiverTypes">Compute Permissions</button>
+          <button class="cm-button" id="showPermSteps">Permission Diffs</button>
+        </div>
+      </div>
+
+      <div class="tab-pane aquascope-stderr" data-pane="1"></div>
+    </div>
+
+
+  </body>
+</html>

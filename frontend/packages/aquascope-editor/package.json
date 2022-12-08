@@ -1,0 +1,13 @@
+{
+  "name": "aquascope-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/lib.js",
+  "dependencies": {
+    "@codemirror/lang-rust": "^6.0.1",
+    "@codemirror/language": "^6.3.0",
+    "@codemirror/state": "^6.1.2",
+    "@codemirror/view": "^6.4.0"
+  }
+}

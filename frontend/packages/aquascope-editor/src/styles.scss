@@ -1,0 +1,107 @@
+.aquascope {
+  position: relative;
+  height: 100%;
+  width: 100%;
+
+  .aquascope-loan {
+    text-decoration: underline 3px rgba(255, 255, 255, 0);
+    transition: 1s all;
+  }
+  
+  .aquascope-live-region {
+    background-color: rgba(255, 255, 255, 0);
+    border-radius: 5px;
+    transition: 1s all;
+  }
+ 
+  .aquascope-stderr {
+    padding: 15px;
+    background-color: #f9ffff;
+    font-family: "Source Code Pro", monospace;
+    font-size: 0.9em;
+    overflow: scroll;
+  }
+
+  span.cm-region-end {
+    font-family: "Verdana", sans-serif, bold;
+    text-align: center;
+    vertical-align: bottom;
+    padding: 0;
+    display: inline-block;
+    width: 0;
+    overflow: hidden;
+    transition: 1s all;
+  }
+
+  .top-right {
+    z-index: 10;
+    position: absolute;
+    top: 8px;
+    right: 2px;
+  }
+
+  .cm-button {
+    opacity: 0;
+    font-size: 14px;
+    border-style: solid;
+    border-width: 1px;
+    border-radius: 4px;
+    padding: 3px 5px;
+    margin: 0px 5px;
+    transition: 100ms;
+    transition-property: color,border-color,background-color,opacity;
+    cursor: pointer;
+  }
+
+  &:hover .cm-button {
+    opacity: 1;
+  }
+
+  .cm-scroller {
+    overflow: auto;
+  }
+
+  /* Permission Steps */
+  .perm-step-widget {
+    display: inline-block;
+    color: #ccc;
+  }
+
+  .perm-step-table {
+    background-color: whitesmoke;
+    display: inline-block;
+
+    border: 2px solid;
+    border-color: gainsboro;
+    border-radius: 4px;
+    color: black;
+  }
+
+  /* XXX not working :( */
+  table.perm-step-table {
+    vertical-align: top;
+    border-collapse: collapse;
+  }
+
+  .perm-step-table tr td {
+    border: 1px dotted;
+    border-color: gainsboro;
+  }
+
+  span.perm-diff-add {
+    /* display: inline-block; */
+    color: rgb(93, 202, 54);
+  }
+
+  spen.perm-diff-none {
+    /* display: inline-block; */
+    color: lightgray;
+  }
+
+  span.perm-diff-sub {
+    /* display: inline-block; */
+    color: rgb(255, 66, 68);
+  }
+
+  /* **************** */
+}
