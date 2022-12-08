@@ -93,7 +93,9 @@ pub fn prettify_permission_steps<'tcx>(
     .map(|(id, place_to_diffs)| {
       let span = hir.span(id);
       let range = span_to_range(span);
-      let state = place_to_diffs
+      let mut entries = place_to_diffs.into_iter().collect::<Vec<_>>();
+      entries.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
+      let state = entries
         .into_iter()
         .map(|(place, diff)| {
           let s = place

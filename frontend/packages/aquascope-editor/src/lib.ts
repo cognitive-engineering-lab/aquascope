@@ -1,13 +1,17 @@
 import { rust } from "@codemirror/lang-rust";
 import { indentUnit } from "@codemirror/language";
-import { Compartment, EditorState, StateField } from "@codemirror/state";
+import {
+  Compartment,
+  EditorState,
+  Extension,
+  StateField,
+} from "@codemirror/state";
 import { DecorationSet, EditorView } from "@codemirror/view";
-import { vim } from "@replit/codemirror-vim";
 
 import { Icon, IconField } from "./editor-utils/misc";
 import { receiverPermissionsField } from "./editor-utils/permission-boundaries";
 import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
-import { basicSetup } from "./setup";
+import "./styles.scss";
 import {
   BackendError,
   PermissionsBoundaryOutput,
@@ -16,7 +20,6 @@ import {
 
 export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
 export { coarsePermissionDiffs } from "./editor-utils/permission-steps";
-
 export * as types from "./types";
 
 const DEFAULT_SERVER_HOST = "127.0.0.1";
@@ -110,6 +113,7 @@ export class Editor {
 
   public constructor(
     dom: HTMLElement,
+    readonly setup: Extension,
     supportedFields: Array<StateField<DecorationSet>>,
     readonly reportStdErr: (err: BackendError) => void = function (err) {
       console.log("An error occurred: ");
@@ -123,9 +127,9 @@ export class Editor {
     let initialState = EditorState.create({
       doc: initialCode,
       extensions: [
-        mainKeybinding.of(basicSetup),
+        mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
-        basicSetup,
+        setup,
         rust(),
         indentUnit.of("  "),
         ...supportedFields,
@@ -144,10 +148,9 @@ export class Editor {
     return this.view.state.doc.toString();
   }
 
-  public toggleVim(b: boolean): void {
-    let t = b ? [vim(), basicSetup] : [basicSetup];
+  public reconfigure(extensions: Extension[]): void {
     this.view.dispatch({
-      effects: [mainKeybinding.reconfigure(t)],
+      effects: [mainKeybinding.reconfigure([...extensions, this.setup])],
     });
   }
 

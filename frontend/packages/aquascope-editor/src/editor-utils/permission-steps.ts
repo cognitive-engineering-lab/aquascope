@@ -68,7 +68,7 @@ class PermDiffRowIcon implements Icon {
 }
 
 class PermissionStepTableWidget extends WidgetType {
-  constructor(readonly diffs: Array<PermDiffRowIcon>) {
+  constructor(readonly diffs: Array<PermDiffRowIcon>, readonly pos: number) {
     super();
   }
 
@@ -77,14 +77,27 @@ class PermissionStepTableWidget extends WidgetType {
     return false;
   }
 
-  toDOM(_view: EditorView): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
+    let div = document.createElement("div");
+    div.className = "perm-step-widget";
+
+    let doc = view.state.doc;
+    let maxLineLen = 0;
+    for (let line of doc.iterLines()) {
+      maxLineLen = Math.max(maxLineLen, line.length);
+    }
+    let padding = 2 + maxLineLen - doc.lineAt(this.pos).length;
+    div.append(" " + "―".repeat(padding));
+
     let table = document.createElement("table");
     this.diffs.forEach(diff => {
       let ico = diff.toDom();
       table.appendChild(ico);
     });
     table.classList.add("perm-step-table");
-    return table;
+    div.appendChild(table);
+
+    return div;
   }
 
   ignoreEvent(): boolean {
@@ -105,15 +118,24 @@ let stateStepToPermissions = (
 let permDiffStateField = genStateField(
   permissionsDiffIcoType,
   (ts: Array<PermissionStepTable>) => {
+    // let maxLineLen = 0;
+    // for (let line of _view.state.doc.iterLines()) {
+    //   maxLineLen = Math.max(maxLineLen, line.length);
+    // }
+    // let padding = this
+
     return ts.map(([diffs, from]) => {
-      return makeDecorationWithDiffs(diffs).range(from);
+      return makeDecorationWithDiffs(diffs, from).range(from);
     });
   }
 );
 
-let makeDecorationWithDiffs = (icos: Array<PermDiffRowIcon>): Decoration => {
+let makeDecorationWithDiffs = (
+  icos: Array<PermDiffRowIcon>,
+  pos: number
+): Decoration => {
   return Decoration.widget({
-    widget: new PermissionStepTableWidget(icos),
+    widget: new PermissionStepTableWidget(icos, pos),
     side: 1,
   });
 };

@@ -2,4 +2,10 @@
 import type { MissingPermsInfo } from "./MissingPermsInfo";
 import type { Permissions } from "./Permissions";
 
-export interface PermissionsBoundary { location: number, expected: Permissions, actual: Permissions, was_copied: boolean, explanations: MissingPermsInfo, }
+export interface PermissionsBoundary {
+  location: number;
+  expected: Permissions;
+  actual: Permissions;
+  was_copied: boolean;
+  explanations: MissingPermsInfo;
+}

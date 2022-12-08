@@ -1,5 +1,13 @@
-{  
-  "dependencies": {
+{
+  "devDependencies": {
+    "@codemirror/commands": "^6.1.2",
+    "@codemirror/language": "^6.3.0",
+    "@codemirror/state": "^6.1.2",
+    "@codemirror/view": "^6.4.0",
+    "@lezer/highlight": "^1.1.3",
     "aquascope-editor": "workspace:^"
+  },
+  "graco": {
+    "format": "iife"
   }
 }

@@ -133,7 +133,7 @@ class SinglePermIcon implements Icon {
   toDom(): HTMLElement {
     let tt = document.createElementNS("http://www.w3.org/2000/svg", "text");
     tt.classList.add("permission");
-    tt.setAttribute("font-family", "IBM Plex Sans");
+    tt.setAttribute("font-family", "Verdana");
     tt.setAttribute("font-size", `${glyphWidth}px`);
     tt.setAttribute("font-weight", "bold");
     tt.setAttribute("stroke-width", this.actual == this.expected ? "1" : "2");

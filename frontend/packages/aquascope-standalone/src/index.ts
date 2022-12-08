@@ -1,4 +1,7 @@
+import { vim } from "@replit/codemirror-vim";
 import * as Ed from "aquascope-editor";
+
+import { basicSetup } from "./setup";
 
 export let globals: {
   editor: Ed.Editor;
@@ -39,6 +42,7 @@ window.addEventListener("load", () => {
   globals = {
     editor: new Ed.Editor(
       editorElement,
+      basicSetup,
       [
         Ed.receiverPermissionsField.stateField,
         Ed.coarsePermissionDiffs.stateField,
@@ -54,7 +58,8 @@ window.addEventListener("load", () => {
   };
 
   let toggleVim = (_: any) => {
-    globals.editor.toggleVim(vimKeybindingToggle?.checked);
+    let extensions = vimKeybindingToggle?.checked ? [vim()] : [];
+    globals.editor.reconfigure(extensions);
   };
 
   // Set the initial state of the VIM bindings

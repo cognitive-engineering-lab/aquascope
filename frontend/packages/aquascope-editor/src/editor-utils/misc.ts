@@ -25,7 +25,7 @@ export interface Icon {
 export interface IconField<C, I extends Icon, T> {
   effectType: StateEffectType<Array<T>>;
   stateField: StateField<DecorationSet>;
-  makeDecoration(icos: Array<I>): Decoration;
+  makeDecoration(icos: Array<I>, pos: number): Decoration;
   fromOutput(o: C): T;
 }
 

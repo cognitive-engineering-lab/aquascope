@@ -3,4 +3,9 @@ import type { Permissions } from "./Permissions";
 import type { Range } from "./Range";
 import type { RefinementInfo } from "./RefinementInfo";
 
-export interface PermissionsInfo { range: Range, expected: Permissions, actual: Permissions, refined_by: RefinementInfo | null, }
+export interface PermissionsInfo {
+  range: Range;
+  expected: Permissions;
+  actual: Permissions;
+  refined_by: RefinementInfo | null;
+}

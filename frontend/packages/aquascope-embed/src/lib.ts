@@ -1,4 +1,11 @@
-import { Editor, receiverPermissionsField } from "aquascope-editor";
+import {
+  Editor,
+  coarsePermissionDiffs,
+  receiverPermissionsField,
+} from "aquascope-editor";
+
+import { setup } from "./setup";
+import "./styles.scss";
 
 // What Gavin thinks the example usage of this is:
 //
@@ -27,14 +34,13 @@ let initEditors = () => {
 
     // button for computing the receiver permissions
     let computePermBtn = document.createElement("button");
-    computePermBtn.classList.add("cm-button");
+    computePermBtn.className = "fa fa-refresh cm-button";
 
-    let initialCode = pre.textContent!;
+    let initialCode = pre.textContent!.trim();
     pre.textContent = "";
 
     btnWrap.appendChild(computePermBtn);
     pre.appendChild(btnWrap);
-    computePermBtn.textContent = "Compute Permissions";
 
     let serverHost = pre.dataset.serverHost!;
     let serverPort = pre.dataset.serverPort!;
@@ -42,9 +48,12 @@ let initEditors = () => {
 
     let ed = new Editor(
       pre,
-      [receiverPermissionsField.stateField],
-      _ => {
-        alert("You aren't handling errors!");
+      setup,
+      [receiverPermissionsField.stateField, coarsePermissionDiffs.stateField],
+      err => {
+        if (err.type == "BuildError") console.error(err.error);
+        else if (err.type == "AnalysisError") console.error(err.error);
+        else console.error(err);
       },
       initialCode,
       serverHost,
@@ -54,10 +63,12 @@ let initEditors = () => {
 
     computePermBtn.addEventListener("click", _ => {
       ed.computeReceiverPermissions();
+      ed.computePermissionSteps();
     });
 
     // start loading the permissions
     ed.computeReceiverPermissions();
+    ed.computePermissionSteps();
   });
 };
 
