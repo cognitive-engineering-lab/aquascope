@@ -13,8 +13,7 @@ rustc_private=true
 anyhow = "1.0.0"
 log = "0.4"
 itertools = "0.10.5"
-flowistry = { path = "../../../flowistry/crates/flowistry" }
-# flowistry = "0.5.34"
+flowistry = "0.5.34"
 datafrog = "2.0.0"
 serde = "1.0"
 ts-rs = "6.1"

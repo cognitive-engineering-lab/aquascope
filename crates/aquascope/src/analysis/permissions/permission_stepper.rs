@@ -60,8 +60,6 @@ pub fn compute_permission_steps<'tcx>(
 
   hir_visitor.visit_nested_body(ctxt.body_id);
 
-  log::debug!("returning DIFFS: {:#?}", hir_visitor.diff);
-
   hir_visitor
     .diff
     .into_iter()
@@ -94,7 +92,8 @@ pub fn prettify_permission_steps<'tcx>(
       let span = hir.span(id);
       let range = span_to_range(span);
       let mut entries = place_to_diffs.into_iter().collect::<Vec<_>>();
-      entries.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
+      entries
+        .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
       let state = entries
         .into_iter()
         .map(|(place, diff)| {
@@ -168,6 +167,8 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
       // between them which does not correspond to this HIR Stmt.
       let mut child_locations = after_states.keys().collect::<Vec<_>>();
 
+      // TODO(gavinleroy): a naive sorting by predecessor relationship will not be sufficient
+      // for programs of even mild complexity. Take the following example.
       child_locations.sort_by(|l1, l2| {
         let l1_p = l1.is_predecessor_of(**l2, body);
         let l2_p = l2.is_predecessor_of(**l1, body);
@@ -179,7 +180,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
         } else if l2_p {
           Ordering::Greater
         } else {
-          log::error!("The MIR Locations for a HIR Stmt are unordered, you really missed something");
+          log::error!("The MIR Locations for a HIR Stmt are unrelated {l1:?} {l2:?}");
           Ordering::Equal
         }
       });
@@ -187,28 +188,22 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
       let entry_state = &self.last_stmt_perms;
 
       let mut previous = entry_state;
-      let mut found_diffs = false;
 
       // XXX: debugging only.
+      // From what I've (gavin) observed is that the pre/post_state for a given
+      // MIR Location are identical. I need to look into how the analysis computes
+      // these because from my POV they should reflect the actions taken, but the actions
+      // seem to have taken effect before the pre_state.
       for loc in child_locations.iter() {
         let pre_state = before_states.get(loc).unwrap();
         let post_state = after_states.get(loc).unwrap();
 
-        if previous != pre_state {
-          log::error!("The previous Domain state does not match the current locations previous");
-          log::error!("{previous:#?}\n {pre_state:#?} {post_state:#?}");
-        }
-
-        if pre_state != post_state {
-          log::error!("PRE AND POST STATES ARE NOT THE SAME");
-          found_diffs = true;
-        }
+        // if previous != pre_state {
+        //   log::error!("The previous Domain state does not match the current locations previous");
+        //   log::error!("Previous: {previous:#?}\n Pre-State: {pre_state:#?}");
+        // }
 
         previous = post_state;
-      }
-
-      if !found_diffs {
-        panic!("The permissions state flow was uneven");
       }
 
       // `previous` at this point is the output state of the entire

@@ -1,3 +1,6 @@
 [workspace]
 members = [ "crates/*" ]
 exclude = [ "files" ]
+
+[patch.crates-io]
+flowistry = { git = "https://github.com/willcrichton/flowistry" }
