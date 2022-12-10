@@ -14,11 +14,10 @@ fn get_default<'r, K: Hash + Eq + Copy, V: Default>(
     match map.get_mut(&key) {
         Some(value) => value,
         None => {
+            let _a = &`[map R-D]`;
             let _a = &`[*map RW-]`;
             map.insert(key, V::default());
             map.get_mut(&key).unwrap()
         }
     }
 }
-
-fn main() {}

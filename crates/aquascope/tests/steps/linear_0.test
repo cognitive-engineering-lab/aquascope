@@ -1,0 +1,13 @@
+fn dummy_use(_n: &i32) {}
+
+fn dump_me() {
+  let mut x: i32 = 0;
+
+  let mut y: i32 = 0;
+
+  let z = &mut x;
+
+  *z = y;
+
+  dummy_use(&z);
+}

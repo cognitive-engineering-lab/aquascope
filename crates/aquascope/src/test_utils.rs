@@ -1,13 +1,13 @@
 use std::{collections::HashMap, fs, io, panic, path::Path, process::Command};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use flowistry::{
   indexed::impls::LocationOrArg,
   mir::{
     borrowck_facts::{self, NO_SIMPLIFY},
     utils::{BodyExt, OperandExt},
   },
-  source_map::{find_bodies, GraphemeIndices, Range, Spanner, ToSpan},
+  source_map::{self, GraphemeIndices, Range, Spanner, ToSpan},
 };
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
@@ -16,9 +16,12 @@ use rustc_middle::{
   mir::{Rvalue, StatementKind},
   ty::TyCtxt,
 };
-use rustc_span::source_map::FileLoader;
+use rustc_span::{source_map::FileLoader, BytePos};
 
-use crate::analysis::{self, permissions::Permissions};
+use crate::analysis::{
+  self,
+  permissions::{Permissions, PermsDiff},
+};
 
 struct StringLoader(String);
 impl FileLoader for StringLoader {
@@ -98,6 +101,7 @@ fn split_test_source(
       let start_idx = stack.pop().unwrap();
       let use_with_perms =
         std::str::from_utf8(&bytes[start_idx .. source_idx])?;
+
       let (var, perms_str) =
         use_with_perms.split_whitespace().next_tuple().unwrap();
 
@@ -144,10 +148,20 @@ fn parse_test_source(
   Ok((clean, map))
 }
 
-pub fn test_file(path: &Path) {
+pub fn load_test_from_file(path: &Path) -> Result<String> {
+  log::info!(
+    "Loading test from {}",
+    path.file_name().unwrap().to_string_lossy()
+  );
+  let c = fs::read(path)
+    .with_context(|| format!("failed to load test from {path:?}"))?;
+  String::from_utf8(c)
+    .with_context(|| format!("UTF8 parse error in file: {path:?}"))
+}
+
+pub fn test_refinements_in_file(path: &Path) {
   let inner = || -> Result<()> {
-    log::info!("Testing {}", path.file_name().unwrap().to_string_lossy());
-    let input = String::from_utf8(fs::read(path)?)?;
+    let input = load_test_from_file(path)?;
 
     let (clean_input, expected_permissions) =
       parse_test_source(&input, ("`[", "]`"))?;
@@ -207,6 +221,63 @@ pub fn test_file(path: &Path) {
             );
           }
         });
+    });
+
+    Ok(())
+  };
+
+  inner().unwrap()
+}
+
+pub fn test_steps_in_file(
+  path: &Path,
+  assert_snap: impl Fn(String, Vec<(usize, Vec<(String, PermsDiff)>)>)
+    + Send
+    + Sync
+    + Copy,
+) {
+  let inner = || -> Result<()> {
+    let source = load_test_from_file(path)?;
+    compile_bodies(source, move |tcx, body_id, body_with_facts| {
+      let ctxt = &analysis::compute_permissions(tcx, body_id, body_with_facts);
+      // Required to give the snapshot a more specific internal name.
+      let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
+      let tag = ctxt
+        .tcx
+        .hir()
+        .opt_name(owner)
+        .map(|n| String::from(n.as_str()))
+        .unwrap_or_else(|| String::from("<anon body>"));
+
+      let steps = analysis::compute_permission_steps(ctxt);
+      let source_map = tcx.sess.source_map();
+      let body_steps =
+        analysis::permissions::permission_stepper::prettify_permission_steps(
+          ctxt,
+          steps,
+          |span| {
+            source_map::Range::from_span(span, source_map)
+              .ok()
+              .unwrap_or_default()
+              .into()
+          },
+        );
+
+      // NOTE: we normalize the permission steps to be
+      // - usize: the line number of the corresponding statement.
+      // - String: the the path (place) of the permissions.
+      // - PermsDiff: obviously the actual permission diffs.
+      let normalized = body_steps
+        .into_iter()
+        .map(|pss| {
+          let bp = BytePos(pss.location.byte_end as u32);
+          let line_num = source_map.lookup_line(bp).unwrap().line;
+          let inner_info = pss.state;
+          (line_num, inner_info)
+        })
+        .collect::<Vec<_>>();
+
+      assert_snap(tag, normalized);
     });
 
     Ok(())
@@ -298,6 +369,8 @@ pub fn compile(
   );
   let args = args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
 
+  // Explicitly ignore the unused return value. Many test cases are intended
+  // to fail compilation, but the analysis results should still be sound.
   rustc_driver::catch_fatal_errors(|| {
     let mut compiler = rustc_driver::RunCompiler::new(&args, &mut callbacks);
     compiler.set_file_loader(Some(Box::new(StringLoader(input.into()))));

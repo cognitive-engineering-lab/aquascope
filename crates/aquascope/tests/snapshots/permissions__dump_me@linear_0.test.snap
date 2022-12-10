@@ -1,0 +1,70 @@
+---
+source: crates/aquascope/tests/permissions.rs
+description: dump_me@linear_0.test
+---
+- - 3
+  - - - x
+      - read:
+          type: Add
+        write:
+          type: Add
+        drop:
+          type: Add
+- - 5
+  - - - y
+      - read:
+          type: Add
+        write:
+          type: Add
+        drop:
+          type: Add
+- - 7
+  - - - "*z"
+      - read:
+          type: Add
+        write:
+          type: Add
+        drop:
+          type: None
+          value: false
+    - - x
+      - read:
+          type: Sub
+        write:
+          type: Sub
+        drop:
+          type: Sub
+    - - z
+      - read:
+          type: Add
+        write:
+          type: None
+          value: false
+        drop:
+          type: Add
+- - 9
+  - - - y
+      - read:
+          type: Sub
+        write:
+          type: Sub
+        drop:
+          type: Sub
+- - 11
+  - - - "*z"
+      - read:
+          type: Sub
+        write:
+          type: Sub
+        drop:
+          type: None
+          value: false
+    - - z
+      - read:
+          type: Sub
+        write:
+          type: None
+          value: false
+        drop:
+          type: Sub
+

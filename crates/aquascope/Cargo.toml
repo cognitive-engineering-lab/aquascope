@@ -7,7 +7,7 @@ repository = "https://github.com/gavinleroy/aquascope"
 license = "MIT"
 
 [package.metadata.rust-analyzer]
-rustc_private=true
+rustc_private = true
 
 [dependencies]
 anyhow = "1.0.0"
@@ -23,4 +23,12 @@ lazy_static = "1.4"
 
 [dev-dependencies]
 env_logger = "0.9.3"
+insta = { version = "1.22.0", features = ["json", "yaml", "redactions"] }
 test-log = "0.2.11"
+
+# Make snapshot testing faster
+[profile.dev.package.insta]
+opt-level = 3
+
+[profile.dev.package.similar]
+opt-level = 3

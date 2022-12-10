@@ -52,7 +52,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
   pub fn new_path(&mut self, place: Place<'tcx>) -> Path {
     let place = place.normalize(self.tcx, self.def_id);
-    log::debug!("Creating normalized place {place:?}");
     let new_path = self.place_data.push(place);
     let local = place.local;
     self.rev_lookup.entry(local).or_default().push(new_path);
