@@ -5,7 +5,7 @@ use std::{
 
 use flowistry::{
   indexed::impls::LocationOrArg,
-  mir::utils::{BodyExt, PlaceExt, SpanExt},
+  mir::utils::{BodyExt, PlaceExt as FlowistryPlaceExt},
   source_map,
 };
 use rustc_hir::{
@@ -18,7 +18,7 @@ use rustc_middle::{
   mir::{self, Body, Location, Place},
   ty::TyCtxt,
 };
-use rustc_mir_dataflow::{Analysis, JoinSemiLattice, ResultsVisitor};
+use rustc_mir_dataflow::{Analysis, ResultsVisitor};
 use rustc_span::Span;
 
 use crate::{
@@ -26,6 +26,7 @@ use crate::{
     utils::{flow_mir_permissions, PAnalysis, PDomain},
     PermissionsCtxt, PermissionsStateStep, PermsDiff,
   },
+  mir::utils::PlaceExt as AquascopePlaceExt,
   Range,
 };
 
@@ -67,9 +68,7 @@ pub fn compute_permission_steps<'tcx>(
       let filtered = places_to_perms
         .into_iter()
         .filter(|(place, diff)| {
-          let local = place.local;
-          let local_info = &body.local_decls[local];
-          local_info.is_user_variable() && !diff.is_empty()
+          place.is_source_visible(tcx, body) && !diff.is_empty()
         })
         .collect::<HashMap<_, _>>();
 

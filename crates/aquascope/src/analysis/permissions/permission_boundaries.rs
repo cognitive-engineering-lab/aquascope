@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 
 use flowistry::{
-  indexed::impls::LocationOrArg,
   mir::utils::{BodyExt, OperandExt},
   source_map::{EnclosingHirSpans, Spanner},
 };
