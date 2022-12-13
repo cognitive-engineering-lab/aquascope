@@ -2,9 +2,4 @@
 import type { Range } from "./Range";
 import type { Refiner } from "./Refiner";
 
-export interface RefinementRegion {
-  refiner_point: Refiner;
-  refined_ranges: Array<Range>;
-  start: Range;
-  end: Range;
-}
+export interface RefinementRegion { refiner_point: Refiner, refined_ranges: Array<Range>, start: Range, end: Range, }

@@ -2,7 +2,4 @@
 import type { PermsDiff } from "./PermsDiff";
 import type { Range } from "./Range";
 
-export interface PermissionsStateStep {
-  location: Range;
-  state: Array<[string, PermsDiff]>;
-}
+export interface PermissionsStateStep { location: Range, state: Array<[string, PermsDiff]>, }
