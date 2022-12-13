@@ -8,8 +8,11 @@ import {
 } from "@codemirror/state";
 import { DecorationSet, EditorView } from "@codemirror/view";
 
-import { Icon, IconField } from "./editor-utils/misc";
-import { receiverPermissionsField } from "./editor-utils/permission-boundaries";
+import { IconField } from "./editor-utils/misc";
+import {
+  copiedValueHover,
+  receiverPermissionsField,
+} from "./editor-utils/permission-boundaries";
 import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 import "./styles.scss";
 import {
@@ -132,6 +135,7 @@ export class Editor {
         setup,
         rust(),
         indentUnit.of("  "),
+        copiedValueHover,
         ...supportedFields,
       ],
     });
@@ -154,23 +158,16 @@ export class Editor {
     });
   }
 
-  public removeIconField<
-    B,
-    T,
-    Ico extends Icon,
-    F extends IconField<B, Ico, T>
-  >(f: F) {
+  public removeIconField<B, T, F extends IconField<B, T>>(f: F) {
     this.view.dispatch({
       effects: [f.effectType.of([])],
     });
   }
 
-  public addPermissionsField<
-    B,
-    T,
-    Ico extends Icon,
-    F extends IconField<B, Ico, T>
-  >(f: F, methodCallPoints: Array<B>) {
+  public addPermissionsField<B, T, F extends IconField<B, T>>(
+    f: F,
+    methodCallPoints: Array<B>
+  ) {
     let newEffects = methodCallPoints.map(f.fromOutput);
     console.log(newEffects);
     this.view.dispatch({

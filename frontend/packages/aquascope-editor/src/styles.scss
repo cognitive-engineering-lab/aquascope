@@ -7,13 +7,13 @@
     text-decoration: underline 3px rgba(255, 255, 255, 0);
     transition: 1s all;
   }
-  
+
   .aquascope-live-region {
     background-color: rgba(255, 255, 255, 0);
     border-radius: 5px;
     transition: 1s all;
   }
- 
+
   .aquascope-stderr {
     padding: 15px;
     background-color: #f9ffff;
@@ -49,7 +49,7 @@
     padding: 3px 5px;
     margin: 0px 5px;
     transition: 100ms;
-    transition-property: color,border-color,background-color,opacity;
+    transition-property: color, border-color, background-color, opacity;
     cursor: pointer;
   }
 
@@ -57,11 +57,34 @@
     opacity: 1;
   }
 
+  cm-tooltip-cursor {
+    font-size: 0.8em;
+    background-color: whitesmoke;
+    border-color: gainsboro;
+    border: 2px;
+    padding: 2px 7px 2px 2px;
+    border-radius: 4px;
+
+    &.cm-tooltip-arrow ::before {
+      border-top-color: whitesmoke;
+    }
+    & .cm-tooltip-arrow ::after {
+      border-top-color: transparent;
+    }
+  }
+
   .cm-scroller {
     overflow: auto;
   }
 
   /* Permission Steps */
+  .aquascope-kill-indicator {
+    color: var(--icons);
+    border-color: var(--icons);
+    font-size: 0.6em;
+    // vertical-align: bottom;
+  }
+
   .perm-step-widget {
     display: inline-block;
     color: #ccc;
@@ -77,7 +100,6 @@
     color: black;
   }
 
-  /* XXX not working :( */
   table.perm-step-table {
     vertical-align: top;
     border-collapse: collapse;

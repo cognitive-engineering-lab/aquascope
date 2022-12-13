@@ -22,10 +22,9 @@ export interface Icon {
   toDom(): HTMLElement;
 }
 
-export interface IconField<C, I extends Icon, T> {
+export interface IconField<C, T> {
   effectType: StateEffectType<Array<T>>;
   stateField: StateField<DecorationSet>;
-  makeDecoration(icos: Array<I>, pos: number): Decoration;
   fromOutput(o: C): T;
 }
 

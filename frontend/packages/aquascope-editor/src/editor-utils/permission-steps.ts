@@ -1,5 +1,10 @@
 import { Range, StateEffect } from "@codemirror/state";
-import { Decoration, EditorView, WidgetType } from "@codemirror/view";
+import {
+  Decoration,
+  EditorView,
+  WidgetType,
+  hoverTooltip,
+} from "@codemirror/view";
 
 import { PermDiff, PermissionsStateStep, PermsDiff } from "../types";
 import {
@@ -130,13 +135,37 @@ let makeDecorationWithDiffs = (
     side: 1,
   });
 
-export let coarsePermissionDiffs: IconField<
+// export const killedVarsHover = hoverTooltip((view, pos, side) => {
+//   let activeSkulls = Array.from(
+//     document.querySelectorAll<HTMLElement>(".aquascope-kill-indicator")
+//   );
+
+//   let sPos = pos.toString();
+//   let hovered = activeSkulls.find(s => s.dataset.bufferPos == sPos);
+//   if (hovered == undefined || hovered == null) {
+//     return null;
+//   }
+
+//   let killedList = JSON.parse(hovered.dataset.killedVars!);
+//   console.log("Kill list includes", killedList);
+//   return {
+//     pos: pos,
+//     above: true,
+//     arrow: true,
+//     create(view) {
+//       let dom = document.createElement("div");
+//       dom.textContent = killedList;
+//       dom.classList.add("cm-tooltip-cursor");
+//       return { dom };
+//     },
+//   };
+// });
+
+export const coarsePermissionDiffs: IconField<
   PermissionsStateStep,
-  PermDiffRowIcon,
   PermissionStepTable
 > = {
   effectType: permissionsDiffIcoType,
   stateField: permDiffStateField,
-  makeDecoration: makeDecorationWithDiffs,
   fromOutput: stateStepToPermissions,
 };

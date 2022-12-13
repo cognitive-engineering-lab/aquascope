@@ -1,5 +1,10 @@
 import { Range, StateEffect } from "@codemirror/state";
-import { Decoration, EditorView, WidgetType } from "@codemirror/view";
+import {
+  Decoration,
+  EditorView,
+  WidgetType,
+  hoverTooltip,
+} from "@codemirror/view";
 
 import {
   MissingPermReason,
@@ -63,7 +68,8 @@ class SinglePermIcon implements Icon {
     readonly expected: boolean,
     readonly actual: boolean,
     readonly color: Color,
-    readonly onHover: MissingPermReason | undefined
+    readonly onHover: MissingPermReason | undefined,
+    readonly wasCopied: boolean = false
   ) {
     this.display = expected;
     this.start = makeBraceElem("{ ", color);
@@ -184,7 +190,8 @@ class BoundaryPointWidget extends WidgetType {
   constructor(
     readonly read: SinglePermIcon,
     readonly write: SinglePermIcon,
-    readonly drop: SinglePermIcon
+    readonly drop: SinglePermIcon,
+    readonly pos: number
   ) {
     super();
   }
@@ -219,6 +226,10 @@ class BoundaryPointWidget extends WidgetType {
       let fillColor: Color = icoI.actual ? icoI.color : whiteColor;
       ico.setAttribute("fill", fillColor.toString());
       ico.setAttribute("stroke", icoI.color.toString());
+      if (icoI.wasCopied) {
+        ico.classList.add("copied-permission");
+        ico.dataset.bufferPos = this.pos.toString();
+      }
       wrap.appendChild(ico);
     });
 
@@ -251,17 +262,22 @@ let callTypesToPermissions = (permInfo: PermissionsBoundary): BoundaryPoint => {
     permInfo.expected.drop,
     permInfo.actual.drop,
     dropColor,
-    expl?.drop
+    expl?.drop,
+    permInfo.was_copied
+    // expl.was_copied
   );
   return [readIco, writeIco, dropIco, permInfo.location];
 };
 
-let makeDecorationFromIcon = (icos: Array<SinglePermIcon>): Decoration => {
+let makeDecorationFromIcon = (
+  icos: Array<SinglePermIcon>,
+  pos: number
+): Decoration => {
   let fst = icos[0];
   let snd = icos[1];
   let trd = icos[2];
   return Decoration.widget({
-    widget: new BoundaryPointWidget(fst, snd, trd),
+    widget: new BoundaryPointWidget(fst, snd, trd, pos),
     side: 0,
   });
 };
@@ -269,8 +285,10 @@ let makeDecorationFromIcon = (icos: Array<SinglePermIcon>): Decoration => {
 let boundaryStateField = genStateField<Array<BoundaryPoint>>(
   permissionStateIcoType,
   (ts: Array<BoundaryPoint>): Array<Range<Decoration>> => {
-    return ts.flatMap(([icoL, icoM, icoR, from]) => {
-      let main_deco = makeDecorationFromIcon([icoL, icoM, icoR]).range(from);
+    return ts.flatMap(([icoL, icoM, icoR, pos]) => {
+      let main_deco = makeDecorationFromIcon([icoL, icoM, icoR], pos).range(
+        pos
+      );
       return [
         main_deco,
         ...icoL.getAuxiliary(),
@@ -281,13 +299,38 @@ let boundaryStateField = genStateField<Array<BoundaryPoint>>(
   }
 );
 
-export let receiverPermissionsField: IconField<
+export const copiedValueHover = hoverTooltip(
+  (_view, pos: number, side: number) => {
+    let copyPoints = Array.from(
+      document.querySelectorAll<HTMLElement>(".copied-permission")
+    );
+
+    let sPos = pos.toString();
+    let hovered = copyPoints.find(s => s.dataset.bufferPos == sPos);
+    if (hovered == undefined || hovered == null || side >= 0) {
+      return null;
+    }
+
+    let copiedPerm = hovered.textContent!;
+    return {
+      pos: pos,
+      above: true,
+      arrow: true,
+      create(_view) {
+        let dom = document.createElement("div");
+        dom.textContent = "Value was copied: creating 'Own' permission";
+        dom.classList.add("cm-tooltip-cursor");
+        return { dom };
+      },
+    };
+  }
+);
+
+export const receiverPermissionsField: IconField<
   PermissionsBoundary,
-  SinglePermIcon,
   BoundaryPoint
 > = {
   effectType: permissionStateIcoType,
   stateField: boundaryStateField,
-  makeDecoration: makeDecorationFromIcon,
   fromOutput: callTypesToPermissions,
 };
