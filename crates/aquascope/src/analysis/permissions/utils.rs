@@ -4,15 +4,14 @@ use std::{
   ops::{Deref, DerefMut},
 };
 
-use flowistry::mir::utils::{dump_results, PlaceExt};
+use flowistry::mir::utils::dump_results;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_middle::mir::{Location, Place};
 use rustc_mir_dataflow::{
   fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice, Results,
 };
-use rustc_span::def_id::LocalDefId;
 
-use super::{context::PermissionsCtxt, Permissions};
+use super::{context::PermissionsCtxt, Permissions, PermissionsDomain};
 
 pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
   // XXX: Unfortunately, the only way I know how to do this is to do a MIR
@@ -82,10 +81,7 @@ impl JoinSemiLattice for Permissions {
   }
 }
 
-#[derive(Clone, PartialEq, Eq, Default, Debug)]
-pub(crate) struct PDomain<'tcx>(HashMap<Place<'tcx>, Permissions>);
-
-impl JoinSemiLattice for PDomain<'_> {
+impl JoinSemiLattice for PermissionsDomain<'_> {
   fn join(&mut self, other: &Self) -> bool {
     let mut changed = false;
     for (place, perms) in other.0.iter() {
@@ -100,26 +96,6 @@ impl JoinSemiLattice for PDomain<'_> {
       }
     }
     changed
-  }
-}
-
-impl<'tcx> From<HashMap<Place<'tcx>, Permissions>> for PDomain<'tcx> {
-  fn from(m: HashMap<Place<'tcx>, Permissions>) -> Self {
-    PDomain(m)
-  }
-}
-
-impl<'tcx> Deref for PDomain<'tcx> {
-  type Target = HashMap<Place<'tcx>, Permissions>;
-
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-impl DerefMut for PDomain<'_> {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
   }
 }
 
@@ -152,7 +128,7 @@ impl<C> DebugWithContext<C> for Permissions {
   }
 }
 
-impl<C> DebugWithContext<C> for PDomain<'_> {
+impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
   fn fmt_with(
     &self,
     _ctxt: &C,
@@ -225,7 +201,11 @@ impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
     self.ctxt.max_permissions(path)
   }
 
-  fn check_location(&self, state: &mut PDomain<'tcx>, location: Location) {
+  fn check_location(
+    &self,
+    state: &mut PermissionsDomain<'tcx>,
+    location: Location,
+  ) {
     let point = self.ctxt.location_to_point(location);
     for (place, perms) in state.iter_mut() {
       // Reset permissions to their max
@@ -238,7 +218,7 @@ impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
 }
 
 impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
-  type Domain = PDomain<'tcx>;
+  type Domain = PermissionsDomain<'tcx>;
   const NAME: &'static str = "PermissionsAnalysisDatalog";
 
   fn bottom_value(

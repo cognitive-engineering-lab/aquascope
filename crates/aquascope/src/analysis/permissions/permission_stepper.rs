@@ -1,67 +1,76 @@
 use std::{
   cmp::Ordering,
-  collections::{hash_map::Entry, HashMap},
+  collections::hash_map::Entry,
+  ops::{Deref, DerefMut},
 };
 
-use flowistry::{
-  indexed::impls::LocationOrArg,
-  mir::utils::{BodyExt, PlaceExt as FlowistryPlaceExt},
-  source_map,
-};
+use flowistry::mir::utils::{BodyExt, PlaceExt as FlowistryPlaceExt};
+use itertools::Itertools;
+use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::{
   self as hir,
   intravisit::{self, Visitor as HirVisitor},
   HirId,
 };
 use rustc_middle::{
-  hir::nested_filter::OnlyBodies,
-  mir::{self, Body, Location, Place},
+  hir::nested_filter,
+  mir::{self, Body, Local, Location, Place},
   ty::TyCtxt,
 };
-use rustc_mir_dataflow::{Analysis, ResultsVisitor};
+use rustc_mir_dataflow::{Analysis, JoinSemiLattice, ResultsVisitor};
 use rustc_span::Span;
 
 use crate::{
-  analysis::permissions::{
-    utils::{flow_mir_permissions, PAnalysis, PDomain},
-    PermissionsCtxt, PermissionsStateStep, PermsDiff,
+  analysis::{
+    ir_mapper::{GatherMode, IRMapper},
+    permissions::{
+      utils::{flow_mir_permissions, PAnalysis},
+      Difference, PermissionsCtxt, PermissionsDomain, PermissionsStateStep,
+      PermsDiff,
+    },
   },
   mir::utils::PlaceExt as AquascopePlaceExt,
   Range,
 };
 
-pub fn compute_permission_steps<'tcx>(
-  ctxt: &PermissionsCtxt<'_, 'tcx>,
-) -> HashMap<HirId, HashMap<Place<'tcx>, PermsDiff>> {
+pub fn compute_permission_steps<'a, 'tcx>(
+  ctxt: &PermissionsCtxt<'a, 'tcx>,
+  span_to_range: impl Fn(Span) -> Range,
+) -> Vec<PermissionsStateStep>
+where
+  'tcx: 'a,
+{
   let results = flow_mir_permissions(ctxt);
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
   let basic_blocks = body.basic_blocks.indices();
 
-  let mut mir_visitor = MirAnalysisLifter::<'_, 'tcx, PAnalysis<'_, 'tcx>> {
+  // FIXME REMOVE
+  let mut stderr = std::io::stderr();
+  rustc_middle::mir::pretty::write_mir_fn(
     tcx,
     body,
-    before_effect: HashMap::default(),
-    after_effect: HashMap::default(),
-  };
+    &mut |_, _| Ok(()),
+    &mut stderr,
+  );
 
-  results.visit_with(body, basic_blocks, &mut mir_visitor);
-
-  let before_states = mir_visitor.before_effect;
-  let after_states = mir_visitor.after_effect;
+  let ir_mapper =
+    &IRMapper::new(tcx, body, ctxt.body_id, GatherMode::IgnoreCleanup);
 
   let mut hir_visitor = HirPermDiffFlow {
-    tcx,
-    body,
-    before_states,
-    after_states,
+    ctxt,
+    ir_mapper,
+    mode: SaveDiffs::Yes,
     diff: HashMap::default(),
-    last_stmt_perms: ctxt.initial_body_permissions().into(),
+    entry_state: ctxt.initial_body_permissions().into(),
   };
+
+  log::debug!("HIR IDS:");
 
   hir_visitor.visit_nested_body(ctxt.body_id);
 
-  hir_visitor
+  // TODO: this is not correct!
+  let interim = hir_visitor
     .diff
     .into_iter()
     .filter_map(|(id, places_to_perms)| {
@@ -74,10 +83,12 @@ pub fn compute_permission_steps<'tcx>(
 
       (!filtered.is_empty()).then_some((id, filtered))
     })
-    .collect::<HashMap<_, _>>()
+    .collect::<HashMap<_, _>>();
+
+  prettify_permission_steps(ctxt, interim, span_to_range)
 }
 
-pub fn prettify_permission_steps<'tcx>(
+fn prettify_permission_steps<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
   perm_steps: HashMap<HirId, HashMap<Place<'tcx>, PermsDiff>>,
   span_to_range: impl Fn(Span) -> Range,
@@ -85,10 +96,19 @@ pub fn prettify_permission_steps<'tcx>(
   let tcx = ctxt.tcx;
   let hir = tcx.hir();
   let body = &ctxt.body_with_facts.body;
+
+  macro_rules! place_to_string {
+    ($p:expr) => {
+      $p.to_string(tcx, body)
+        .unwrap_or_else(|| String::from("<var>"))
+    };
+  }
+
   perm_steps
     .into_iter()
     .map(|(id, place_to_diffs)| {
       let span = hir.span(id);
+
       let range = span_to_range(span);
       let mut entries = place_to_diffs.into_iter().collect::<Vec<_>>();
       entries
@@ -96,9 +116,7 @@ pub fn prettify_permission_steps<'tcx>(
       let state = entries
         .into_iter()
         .map(|(place, diff)| {
-          let s = place
-            .to_string(tcx, body)
-            .unwrap_or_else(|| String::from("<var>"));
+          let s = place_to_string!(place);
           (s, diff)
         })
         .collect::<Vec<_>>();
@@ -111,242 +129,224 @@ pub fn prettify_permission_steps<'tcx>(
     .collect::<Vec<_>>()
 }
 
+#[allow(type_alias_bounds)]
 type DomainAtHir<'tcx, A: Analysis<'tcx>> =
   HashMap<HirId, HashMap<Location, A::Domain>>;
 
-struct HirPermDiffFlow<'a, 'tcx> {
-  tcx: TyCtxt<'tcx>,
-  body: &'a Body<'tcx>,
-  before_states: DomainAtHir<'tcx, PAnalysis<'a, 'tcx>>,
-  after_states: DomainAtHir<'tcx, PAnalysis<'a, 'tcx>>,
-  diff: HashMap<HirId, HashMap<Place<'tcx>, PermsDiff>>,
-  last_stmt_perms: PDomain<'tcx>,
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum SaveDiffs {
+  No,
+  Yes,
 }
 
-fn domain_step<'tcx>(
-  before: &PDomain<'tcx>,
-  after: &PDomain<'tcx>,
-) -> HashMap<Place<'tcx>, PermsDiff> {
-  before
-    .iter()
-    .fold(HashMap::default(), |mut acc, (place, p1)| {
-      let p2 = after.get(place).unwrap();
-      let diff = p1.step(p2);
-
-      match acc.entry(*place) {
-        Entry::Occupied(_) => {
-          panic!("Permissions step already in output for {place:?}");
-        }
-        Entry::Vacant(entry) => {
-          entry.insert(diff);
-        }
-      }
-
-      acc
-    })
+struct HirPermDiffFlow<'a, 'tcx> {
+  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  ir_mapper: &'a IRMapper<'a, 'tcx>,
+  mode: SaveDiffs,
+  diff: HashMap<HirId, HashMap<Place<'tcx>, PermsDiff>>,
+  entry_state: PermissionsDomain<'tcx>,
 }
 
 impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
-  type NestedFilter = OnlyBodies;
+  type NestedFilter = nested_filter::All;
 
   fn nested_visit_map(&mut self) -> Self::Map {
-    self.tcx.hir()
+    self.ctxt.tcx.hir()
   }
 
-  fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt) {
-    let id = stmt.hir_id;
-    let body = &self.body;
+  // fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
+  //   use hir::{ExprKind as EK, LoopSource, MatchSource, StmtKind as SK};
 
-    if let Some(after_states) = self.after_states.get(&id) {
-      let before_states = self.before_states.get(&id).unwrap();
-      // The child locations represent all of the MIR Points which came from this HIR Stmt.
-      // We now want to collapse all of them into a single permissions step for this specific HIR.
-      // For debugging, we want to check that in the ordered locations, the after state is the before
-      // state of the next location. If this is not the case, then some action could happen
-      // between them which does not correspond to this HIR Stmt.
-      let mut child_locations = after_states.keys().collect::<Vec<_>>();
+  //   let id = expr.hir_id;
+  //   let body = &self.body;
 
-      // TODO(gavinleroy): a naive sorting by predecessor relationship will not be sufficient
-      // for programs of even mild complexity. Take the following example.
-      child_locations.sort_by(|l1, l2| {
-        let l1_p = l1.is_predecessor_of(**l2, body);
-        let l2_p = l2.is_predecessor_of(**l1, body);
-        if l1_p && l2_p {
-          log::error!("The MIR Locations for a HIR Stmt did not form a total order {l1:?} {l2:?}");
-          Ordering::Equal
-        } else if l1_p {
-          Ordering::Less
-        } else if l2_p {
-          Ordering::Greater
-        } else {
-          log::error!("The MIR Locations for a HIR Stmt are unrelated {l1:?} {l2:?}");
-          Ordering::Equal
-        }
-      });
+  //   macro_rules! walk_and_add_pending {
+  //     ($e:expr, $id:expr) => {
+  //       intravisit::walk_expr(self, $e);
+  //       self.stage_bundle($id);
+  //       self.commit_bundle($id);
+  //     };
+  //   }
 
-      let entry_state = &self.last_stmt_perms;
+  //   match expr.kind {
+  //     // EK::If(cnd, then, else_opt) => {
+  //     //   self.visit_expr(cnd);
+  //     //   let branch_before = self.entry_perm_state.clone();
+  //     //   self.visit_expr(then);
+  //     //   let mut after_if_state = self.entry_perm_state.clone();
 
-      let mut previous = entry_state;
+  //     //   if let Some(els) = else_opt {
+  //     //     self.entry_perm_state = branch_before;
+  //     //     self.visit_expr(els);
+  //     //     let after_else_state = self.entry_perm_state.clone();
+  //     //     after_if_state.join(&after_else_state);
+  //     //   }
 
-      // XXX: debugging only.
-      // From what I've (gavin) observed is that the pre/post_state for a given
-      // MIR Location are identical. I need to look into how the analysis computes
-      // these because from my POV they should reflect the actions taken, but the actions
-      // seem to have taken effect before the pre_state.
-      for loc in child_locations.iter() {
-        let pre_state = before_states.get(loc).unwrap();
-        let post_state = after_states.get(loc).unwrap();
+  //     //   self.entry_perm_state = after_if_state;
+  //     //   self.save_for_later(expr.hir_id);
+  //     // }
 
-        // if previous != pre_state {
-        //   log::error!("The previous Domain state does not match the current locations previous");
-        //   log::error!("Previous: {previous:#?}\n Pre-State: {pre_state:#?}");
-        // }
+  //     // TODO: special variants to handle control flow
+  //     // Match(&'hir Expr<'hir>, &'hir [Arm<'hir>], MatchSource),
 
-        previous = post_state;
-      }
+  //     // In the AST -> HIR desugaring step, for/while loops get desugared
+  //     // into a plain `loop` + `match` construct. Fundamentally, we want to
+  //     // break this up into:
+  //     // - loop prelude, setting up the iterator.
+  //     // - block prelude, setting up variables visible inside the loop body.
+  //     // - block postlude, destroying the block visible variables.
+  //     // - loop postlude, destroying the loop iterator variables.
+  //     //
+  //     // We match loops at the expression level because they
+  //     // may not ever appear in a Stmt.
 
-      // `previous` at this point is the output state of the entire
-      let output_state = previous;
+  //     //   EK::Loop(
+  //     //     hir::Block {
+  //     //       stmts: &[],
+  //     //       expr:
+  //     //         Some(hir::Expr {
+  //     //           kind: EK::If(_, _, _),
+  //     //           ..
+  //     //         }),
+  //     //       ..
+  //     //     },
+  //     //     _,
+  //     //     LoopSource::While,
+  //     //     _,
+  //     //   ) => log::debug!("WHILE LOOP:"),
 
-      let stmt_perm_step = domain_step(entry_state, output_state);
+  //     // EK::Loop(
+  //     //   hir::Block {
+  //     //     stmts:
+  //     //       &[hir::Stmt {
+  //     //         kind:
+  //     //           SK::Expr(hir::Expr {
+  //     //             kind:
+  //     //               EK::Match(
+  //     //                 switch_expr,
+  //     //                 &[hir::Arm {
+  //     //                   body: none_expr, ..
+  //     //                 }, hir::Arm {
+  //     //                   body: some_expr, ..
+  //     //                 }],
+  //     //                 MatchSource::ForLoopDesugar,
+  //     //               ),
+  //     //             ..
+  //     //           }),
+  //     //         ..
+  //     //       }],
+  //     //     expr: None,
+  //     //     ..
+  //     //   },
+  //     //   _,
+  //     //   LoopSource::ForLoop,
+  //     //   _,
+  //     // ) => {
+  //     //   log::debug!("FOR LOOP:");
+  //     //   let previous_lift_mode = self.lift_mode;
 
-      self.diff.insert(id, stmt_perm_step);
-      self.last_stmt_perms = output_state.clone();
-    } else {
-      log::warn!("No PDomain found for HIR::Stmt: {id:?}");
+  //     //   self.visit_expr(switch_expr);
+
+  //     //   let before_arms = self.entry_perm_state.clone();
+
+  //     //   self.lift_mode = LiftBound::Expr;
+
+  //     //   self.visit_expr(some_expr);
+  //     //   let after_body = self.entry_perm_state.clone();
+
+  //     //   self.visit_expr(none_expr);
+  //     //   let after_break = self.entry_perm_state.clone();
+
+  //     //   self.insert_with_id(switch_expr.hir_id);
+  //     //   self.insert_with_id(some_expr.hir_id);
+  //     //   self.insert_with_id(none_expr.hir_id);
+
+  //     //   self.lift_mode = previous_lift_mode;
+  //     //   self.save_for_later(expr.hir_id);
+  //     // }
+
+  //     //   EK::Loop(_, _, LoopSource::Loop, _) => {
+  //     //     unimplemented!("implement plain loop desugaring")
+  //     //   }
+  //     //   EK::Loop(_, _, _, _) => {
+  //     //     unimplemented!("Loop desugaring uncovered {expr:#?}")
+  //     //   }
+
+  //     //
+  //     // - Variants I'd need to think more about.
+  //     //
+  //     // Closure(&'hir Closure<'hir>),
+  //     // Call(&'hir Expr<'hir>, &'hir [Expr<'hir>]),
+  //     // MethodCall(&'hir PathSegment<'hir>, &'hir Expr<'hir>, &'hir [Expr<'hir>], Span),
+  //     // Struct(&'hir QPath<'hir>, &'hir [ExprField<'hir>], Option<&'hir Expr<'hir>>),
+  //     //
+  //     // TODO: I'd be surprised if someone were using inline asm but
+  //     // we should at least  crash with a "feature not supported" or something.
+  //     // InlineAsm(&'hir InlineAsm<'hir>),
+  //     _ => {
+  //       walk_and_add_pending!(expr, expr.hir_id);
+  //     }
+  //   }
+  // }
+
+  // fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
+  //   use hir::{ExprKind as EK, StmtKind as SK};
+  //   let id = expr.hir_id;
+  //   let body = &self.ctxt.body_with_facts.body;
+
+  //   let nls = self.ir_mapper.get_mir_locations(id).unwrap();
+
+  //   match nls.outer.last() {
+  //     Some(loc) => {
+  //       let point = self.ctxt.location_to_point(*loc);
+  //       let dmn: PermissionsDomain<'tcx> =
+  //         self.ctxt.permissions_domain_at_point(point);
+  //       let entry_state: &PermissionsDomain<'tcx> = &self.entry_state;
+  //       let diff = entry_state.diff(&dmn);
+  //       self.diff.insert(id, diff);
+  //       self.entry_state = dmn;
+  //     }
+  //     None => {
+  //       intravisit::walk_expr(self, expr);
+  //     }
+  //   }
+  // }
+
+  // The strategy for Locals of the form:
+  //
+  // Δ: the current permissions context
+  // S: represents the set of permission changes.
+  //
+  // Δ;S :- <init>  : S'   => Δ'
+  // Δ;S :- <block> : S''  => Δ''
+  // unify(S', S'') : S'''
+  // join(Δ', Δ'') : Δ'''
+  // -------------------
+  // Δ;S :- let <path> = <init> else { <block> } : S''' => Δ'''
+  fn visit_local(&mut self, local: &'tcx hir::Local) {
+    if local.els.is_some() {
+      unimplemented!("TODO: hir::Local with else");
     }
+    let id = local.hir_id;
+    let body = &self.ctxt.body_with_facts.body;
+    let hir = self.ctxt.tcx.hir();
 
-    intravisit::walk_stmt(self, stmt);
-  }
-}
+    let nls = self.ir_mapper.get_mir_locations(id).unwrap();
 
-// ------------------------------------------------
-// Binning the MIR locations to HIR statements
+    log::debug!("Visiting: {}", hir.node_to_string(id));
 
-struct MirAnalysisLifter<'a, 'tcx: 'a, A: Analysis<'tcx>> {
-  tcx: TyCtxt<'tcx>,
-  body: &'a Body<'tcx>,
-  before_effect: DomainAtHir<'tcx, A>,
-  after_effect: DomainAtHir<'tcx, A>,
-}
-
-impl<'a, 'tcx: 'a, A> MirAnalysisLifter<'a, 'tcx, A>
-where
-  A: Analysis<'tcx>,
-{
-  // We want to be able to ignore location which lie in an unwind.
-  // If the statements there happen to bin to the same HIR stmt this can
-  // really mess up the permissions.
-  fn is_on_unwind_path(&self, loc: Location) -> bool {
-    let bb = loc.block;
-    let bbd = &self.body.basic_blocks[bb];
-    bbd.is_cleanup
-  }
-
-  fn location_to_stmt(&self, loc: Location) -> Option<HirId> {
-    let body = &self.body;
-    let hir = self.tcx.hir();
-    let mut hir_id = body.location_to_hir_id(loc);
-
-    loop {
-      let curr = hir.get(hir_id);
-
-      if let hir::Node::Stmt(_) = curr {
-        break;
-      }
-
-      let next = hir.get_parent_node(hir_id);
-
-      if next == hir_id {
-        log::warn!("reached crate root without finding a Statement");
-        return None;
-      }
-
-      hir_id = next;
-    }
-
-    log::debug!(
-      "Location {loc:?}, matched with LocalId: {:?}",
-      hir_id.local_id
-    );
-
-    Some(hir_id)
-  }
-}
-
-impl<'a, 'tcx: 'a> ResultsVisitor<'_, 'tcx>
-  for MirAnalysisLifter<'a, 'tcx, PAnalysis<'a, 'tcx>>
-{
-  type FlowState = PDomain<'tcx>;
-
-  // before effect
-
-  fn visit_statement_before_primary_effect(
-    &mut self,
-    state: &Self::FlowState,
-    _statement: &mir::Statement<'tcx>,
-    location: Location,
-  ) {
-    if !self.is_on_unwind_path(location) {
-      if let Some(id) = self.location_to_stmt(location) {
-        self
-          .before_effect
-          .entry(id)
-          .or_default()
-          .insert(location, state.clone());
-      }
-    }
-  }
-
-  fn visit_terminator_before_primary_effect(
-    &mut self,
-    state: &Self::FlowState,
-    _terminator: &mir::Terminator<'tcx>,
-    location: Location,
-  ) {
-    if !self.is_on_unwind_path(location) {
-      if let Some(id) = self.location_to_stmt(location) {
-        self
-          .before_effect
-          .entry(id)
-          .or_default()
-          .insert(location, state.clone());
-      }
-    }
-  }
-
-  // after effect
-
-  fn visit_statement_after_primary_effect(
-    &mut self,
-    state: &Self::FlowState,
-    _statement: &mir::Statement<'tcx>,
-    location: Location,
-  ) {
-    if !self.is_on_unwind_path(location) {
-      if let Some(id) = self.location_to_stmt(location) {
-        self
-          .after_effect
-          .entry(id)
-          .or_default()
-          .insert(location, state.clone());
-      }
-    }
-  }
-
-  fn visit_terminator_after_primary_effect(
-    &mut self,
-    state: &Self::FlowState,
-    _terminator: &mir::Terminator<'tcx>,
-    location: Location,
-  ) {
-    if !self.is_on_unwind_path(location) {
-      if let Some(id) = self.location_to_stmt(location) {
-        self
-          .after_effect
-          .entry(id)
-          .or_default()
-          .insert(location, state.clone());
+    if let Some(init) = local.init {
+      log::debug!("Outer nodes {:?}", nls.outer);
+      if let Some(loc) = nls.outer.last() {
+        let point = self.ctxt.location_to_point(*loc);
+        let dmn = self
+          .ctxt
+          .permissions_domain_after_point_effect(point)
+          .unwrap_or_else(|| self.ctxt.permissions_domain_at_point(point));
+        let entry_state = &self.entry_state;
+        let diff = entry_state.diff(&dmn);
+        self.diff.insert(id, diff);
+        self.entry_state = dmn;
       }
     }
   }

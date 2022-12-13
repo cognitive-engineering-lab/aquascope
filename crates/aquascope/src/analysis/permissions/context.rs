@@ -14,7 +14,10 @@ use rustc_middle::{
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
 
-use super::{AquascopeFacts, Loan, Output, Path, Permissions, Point, Variable};
+use super::{
+  AquascopeFacts, Loan, Output, Path, Permissions, PermissionsDomain, Point,
+  Variable,
+};
 
 type MoveablePath = <RustcFacts as FactTypes>::Path;
 
@@ -34,6 +37,16 @@ pub struct PermissionsCtxt<'a, 'tcx> {
 }
 
 impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
+  pub fn new_path(&mut self, place: Place<'tcx>) -> Path {
+    let place = place.normalize(self.tcx, self.def_id);
+    let new_path = self.place_data.push(place);
+    let local = place.local;
+    self.rev_lookup.entry(local).or_default().push(new_path);
+    new_path
+  }
+
+  // Conversion helpers
+
   pub fn place_to_path(&self, p: &Place<'tcx>) -> Path {
     let p = p.normalize(self.tcx, self.def_id);
     *self
@@ -48,14 +61,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
           self.place_data.iter().collect::<Vec<_>>()
         )
       })
-  }
-
-  pub fn new_path(&mut self, place: Place<'tcx>) -> Path {
-    let place = place.normalize(self.tcx, self.def_id);
-    let new_path = self.place_data.push(place);
-    let local = place.local;
-    self.rev_lookup.entry(local).or_default().push(new_path);
-    new_path
   }
 
   pub fn path_to_place(&self, p: Path) -> Place<'tcx> {
@@ -73,12 +78,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     }
   }
 
-  pub fn is_mutable_borrow(&self, brw: &BorrowData<'tcx>) -> bool {
-    matches!(brw.kind, BorrowKind::Mut {
-      allow_two_phase_borrow: _,
-    })
-  }
-
   pub fn path_to_moveable_path(&self, p: Path) -> MoveablePath {
     let place = self.path_to_place(p);
     self.move_data.rev_lookup.find_local(place.local)
@@ -86,6 +85,22 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
   pub fn moveable_path_to_path(&self, mp: MoveablePath) -> Path {
     self.place_to_path(&self.move_data.move_paths[mp].place)
+  }
+
+  pub fn path_to_variable(&self, path: Path) -> Variable {
+    self.path_to_place(path).local
+  }
+
+  pub fn location_to_span(&self, l: Location) -> Span {
+    self.body_with_facts.body.source_info(l).span
+  }
+
+  // Predicates
+
+  pub fn is_mutable_borrow(&self, brw: &BorrowData<'tcx>) -> bool {
+    matches!(brw.kind, BorrowKind::Mut {
+      allow_two_phase_borrow: _,
+    })
   }
 
   pub fn is_mutable_loan(&self, loan: Loan) -> bool {
@@ -97,10 +112,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       != Mutability::Mut
   }
 
-  pub fn path_to_variable(&self, path: Path) -> Variable {
-    self.path_to_place(path).local
-  }
-
   pub fn is_path_live_at(&self, path: Path, point: Point) -> bool {
     let var = self.path_to_variable(path);
     self
@@ -110,9 +121,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       .map_or(false, |live_vars| live_vars.contains(&var))
   }
 
-  pub fn location_to_span(&self, l: Location) -> Span {
-    self.body_with_facts.body.source_info(l).span
-  }
+  // Permission utilities
 
   pub fn max_permissions(&self, path: Path) -> Permissions {
     let write = !self.permissions_output.never_write.contains(&path);
@@ -125,6 +134,8 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     }
   }
 
+  // TODO: expand the data stored format to include all of the factors which
+  // can modify a given set. (gavin read only). REMOVE
   pub fn permissions_at_point(&self, path: Path, point: Point) -> Permissions {
     let path = path;
     let point = point;
@@ -162,7 +173,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     Permissions { read, write, drop }
   }
 
-  pub fn initial_body_permissions(&self) -> HashMap<Place<'tcx>, Permissions> {
+  pub fn initial_body_permissions(&self) -> PermissionsDomain<'tcx> {
     let def_id = self.def_id;
     let tcx = self.tcx;
     let body = &self.body_with_facts.body;
@@ -173,14 +184,68 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
         Place::from_local(local, tcx).interior_paths(tcx, body, def_id)
       })
       .fold(HashMap::default(), |mut acc, place| {
-        // let p = self.place_to_path(&place);
-        // acc.insert(place, self.max_permissions(p));
-
-        // XXX(gavinleroy) EXPERIMENT: start the places off with *no permissions*
-        // instead of using their max permissions. This in theory should not change anything.
         acc.insert(place, Permissions::bottom());
         acc
       })
+      .into()
+  }
+
+  pub fn permissions_domain_at_point(
+    &self,
+    point: Point,
+  ) -> PermissionsDomain<'tcx> {
+    // Use the base to get the full domain (e.g. possible places)
+    let mut state = self.initial_body_permissions();
+
+    state.iter_mut().for_each(|(place, perms)| {
+      let path = self.place_to_path(place);
+      *perms = self.permissions_at_point(path, point);
+      log::debug!("Setting {path:?} to {:?}", perms);
+    });
+
+    state
+  }
+
+  /// HACK: this method should be called with extreme caution, please prefer `permissions_domain_at_point`.
+  ///
+  /// This method currently exists to provide a quick fix for the following problem. At a given MIR Location,
+  /// a statement could cause some permissions change. For example:
+  ///
+  /// ```
+  /// let s = String::from("hi!");
+  /// ```
+  ///
+  /// The HIR node for this Local will have a few MIR locations associated with it, simplified these are:
+  ///
+  /// ```
+  /// StorageLive(s);
+  /// FakeRead(ForLet(None), _1);
+  /// ```
+  ///
+  /// When finding the permission steps throughout a program, we need to talk about the before, and after
+  /// effects of a node. For the above Local assignment, we want to reason about the before and after state,
+  /// which includes any trailing affect the assignment might have.
+  ///
+  /// TODO: a much better way to handle this is to include a notion of Before / After for our permissions
+  /// analysis. This would give us a more principled way to look at it rather than manipulating the
+  /// location.
+  pub fn permissions_domain_after_point_effect(
+    &self,
+    point: Point,
+  ) -> Option<PermissionsDomain<'tcx>> {
+    let location = self.point_to_location(point);
+    let next_location = location.successor_within_block();
+    let block = next_location.block;
+    let idx = next_location.statement_index;
+    let body = &self.body_with_facts.body;
+    // If the point passed in was a Terminator, then we cannot move the location forward.
+    let block_data = &body.basic_blocks[block];
+    if idx < block_data.statements.len() {
+      let point = self.location_to_point(next_location);
+      Some(self.permissions_domain_at_point(point))
+    } else {
+      None
+    }
   }
 
   /// Compute the beginning and end of the live loan region
@@ -188,7 +253,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   /// rid of this method as it is more of a HACK.
   pub fn construct_loan_regions(&mut self) {
     if self.loan_regions.is_some() {
-      // XXX: disallow reconstrucution of loan regions.
+      // disallow reconstrucution of loan regions.
       return;
     }
 

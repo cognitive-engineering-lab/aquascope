@@ -55,7 +55,12 @@ pub fn permission_boundaries(
     analysis::pair_permissions_to_calls(permissions_ctxt, |span| {
       source_map::Range::from_span(span, source_map)
         .ok()
-        .unwrap_or_default()
+        .unwrap_or_else(|| {
+          log::error!(
+            "The span {span:?} could not be turned into a valid Range"
+          );
+          source_map::Range::default()
+        })
         .into()
     });
 
@@ -77,20 +82,17 @@ pub fn permission_diffs(
   body_id: BodyId,
 ) -> Result<PermissionsDiffOutput> {
   let permissions_ctxt = gen_permission_ctxt!(tcx, body_id);
-  let steps = analysis::compute_permission_steps(permissions_ctxt);
   let source_map = tcx.sess.source_map();
 
-  let info =
-    analysis::permissions::permission_stepper::prettify_permission_steps(
-      permissions_ctxt,
-      steps,
-      |span| {
-        source_map::Range::from_span(span, source_map)
-          .ok()
-          .unwrap_or_default()
-          .into()
-      },
-    );
+  let steps = analysis::compute_permission_steps(permissions_ctxt, |span| {
+    source_map::Range::from_span(span, source_map)
+      .ok()
+      .unwrap_or_else(|| {
+        log::error!("The span {span:?} could not be turned into a valid Range");
+        source_map::Range::default()
+      })
+      .into()
+  });
 
-  Ok(PermissionsDiffOutput(info))
+  Ok(PermissionsDiffOutput(steps))
 }

@@ -7,11 +7,20 @@ mod permissions_datalog;
 mod places_conflict;
 pub mod utils;
 
+use std::{
+  collections::hash_map::Entry,
+  ops::{Deref, DerefMut},
+};
+
 pub use context::PermissionsCtxt;
 pub use permissions_datalog::{compute, Output};
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::RustcFacts;
-use rustc_middle::{mir::Mutability, ty::Ty};
+use rustc_data_structures::fx::FxHashMap as HashMap;
+use rustc_middle::{
+  mir::{Mutability, Place},
+  ty::Ty,
+};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -54,62 +63,6 @@ pub struct Permissions {
   pub read: bool,
   pub write: bool,
   pub drop: bool,
-}
-
-impl Permissions {
-  fn step(&self, new_state: &Permissions) -> PermsDiff {
-    PermsDiff {
-      read: PermDiff::new(self.read, new_state.read),
-      write: PermDiff::new(self.write, new_state.write),
-      drop: PermDiff::new(self.drop, new_state.drop),
-    }
-  }
-
-  // No "Top" value exists for permissions as this is on a per-place basis.
-  // That is, the top value depends on a places type declaration.
-  fn bottom() -> Self {
-    Permissions {
-      read: false,
-      write: false,
-      drop: false,
-    }
-  }
-}
-
-///// Debugging traits, just for visualization purposes
-impl std::fmt::Debug for Permissions {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    if !self.read && !self.write && !self.drop {
-      write!(f, "∅")
-    } else {
-      if self.read {
-        write!(f, "R")?;
-      }
-      if self.write {
-        write!(f, "W")?;
-      }
-      if self.drop {
-        write!(f, "D")?;
-      }
-      Ok(())
-    }
-  }
-}
-
-// XXX: this is only valid when the Ty is an *expected* type.
-// This is because expected types do not rely on the mutability of
-// the binding, e.g. `let mut x = ...` and all of the expected information
-// is really just in the type.
-impl<'tcx> From<Ty<'tcx>> for Permissions {
-  fn from(ty: Ty<'tcx>) -> Self {
-    let read = true;
-    let (write, drop) = match ty.ref_mutability() {
-      None => (false, true),
-      Some(Mutability::Not) => (false, false),
-      Some(Mutability::Mut) => (true, false),
-    };
-    Self { read, write, drop }
-  }
 }
 
 /// A point where the permissions reality are checked against their expectations.
@@ -187,22 +140,6 @@ pub enum PermDiff {
   },
 }
 
-impl PermDiff {
-  fn new(old_state: bool, new_state: bool) -> Self {
-    if old_state && !new_state {
-      Self::Sub
-    } else if !old_state && new_state {
-      Self::Add
-    } else {
-      Self::None { value: old_state }
-    }
-  }
-
-  fn is_none(&self) -> bool {
-    matches!(self, Self::None { .. })
-  }
-}
-
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
 pub struct PermsDiff {
@@ -211,9 +148,149 @@ pub struct PermsDiff {
   pub drop: PermDiff,
 }
 
+// -----------------
+// Permission Domain
+
+#[derive(Clone, PartialEq, Eq, Default, Debug)]
+/// A representation of the permissions *forall* places in the body under analysis.
+pub struct PermissionsDomain<'tcx>(HashMap<Place<'tcx>, Permissions>);
+
+pub trait Difference {
+  type Diff;
+
+  fn diff(&self, rhs: Self) -> Self::Diff;
+}
+
+// ---------------------
+// Impls for above types
+
+impl Difference for Permissions {
+  type Diff = PermsDiff;
+
+  fn diff(&self, rhs: Permissions) -> PermsDiff {
+    PermsDiff {
+      read: self.read.diff(rhs.read),
+      write: self.write.diff(rhs.write),
+      drop: self.drop.diff(rhs.drop),
+    }
+  }
+}
+
+impl Difference for bool {
+  type Diff = PermDiff;
+  fn diff(&self, rhs: bool) -> PermDiff {
+    if *self && !rhs {
+      PermDiff::Sub
+    } else if !*self && rhs {
+      PermDiff::Add
+    } else {
+      PermDiff::None { value: *self }
+    }
+  }
+}
+
+impl Permissions {
+  // No "Top" value exists for permissions as this is on a per-place basis.
+  // That is, the top value depends on a places type declaration.
+  fn bottom() -> Permissions {
+    Permissions {
+      read: false,
+      write: false,
+      drop: false,
+    }
+  }
+}
+
+impl std::fmt::Debug for Permissions {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    if !self.read && !self.write && !self.drop {
+      write!(f, "∅")
+    } else {
+      if self.read {
+        write!(f, "R")?;
+      }
+      if self.write {
+        write!(f, "W")?;
+      }
+      if self.drop {
+        write!(f, "D")?;
+      }
+      Ok(())
+    }
+  }
+}
+
+// XXX: this is only valid when the Ty is an *expected* type.
+// This is because expected types do not rely on the mutability of
+// the binding, e.g. `let mut x = ...` and all of the expected information
+// is really just in the type.
+impl<'tcx> From<Ty<'tcx>> for Permissions {
+  fn from(ty: Ty<'tcx>) -> Self {
+    let read = true;
+    let (write, drop) = match ty.ref_mutability() {
+      None => (false, true),
+      Some(Mutability::Not) => (false, false),
+      Some(Mutability::Mut) => (true, false),
+    };
+    Self { read, write, drop }
+  }
+}
+
+impl PermDiff {
+  fn is_none(&self) -> bool {
+    matches!(self, Self::None { .. })
+  }
+}
+
 impl PermsDiff {
   /// An empty value indicates that no permission was changed.
   fn is_empty(&self) -> bool {
     self.read.is_none() && self.write.is_none() && self.drop.is_none()
+  }
+}
+
+impl<'tcx> From<HashMap<Place<'tcx>, Permissions>> for PermissionsDomain<'tcx> {
+  fn from(m: HashMap<Place<'tcx>, Permissions>) -> Self {
+    PermissionsDomain(m)
+  }
+}
+
+impl<'tcx> Deref for PermissionsDomain<'tcx> {
+  type Target = HashMap<Place<'tcx>, Permissions>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl DerefMut for PermissionsDomain<'_> {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
+  }
+}
+
+impl<'tcx> Difference for &PermissionsDomain<'tcx> {
+  type Diff = HashMap<Place<'tcx>, PermsDiff>;
+  fn diff(
+    &self,
+    rhs: &PermissionsDomain<'tcx>,
+  ) -> HashMap<Place<'tcx>, PermsDiff> {
+    self
+      .iter()
+      .fold(HashMap::default(), |mut acc, (place, p1)| {
+        let p2 = rhs.get(place).unwrap();
+        let diff = p1.diff(*p2);
+
+        match acc.entry(*place) {
+          Entry::Occupied(_) => {
+            panic!("Permissions step already in output for {place:?}");
+          }
+          Entry::Vacant(entry) => {
+            entry.insert(diff);
+          }
+        }
+
+        acc
+      })
   }
 }

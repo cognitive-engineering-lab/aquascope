@@ -4,6 +4,7 @@
 pub mod find_bindings;
 mod find_hir_calls;
 pub mod find_mir_calls;
+pub mod ir_mapper;
 pub mod permissions;
 
 use std::cell::RefCell;

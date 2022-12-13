@@ -1,9 +1,6 @@
 use std::cmp::Ordering;
 
-use flowistry::{
-  mir::utils::{BodyExt, OperandExt},
-  source_map::{EnclosingHirSpans, Spanner},
-};
+use flowistry::mir::utils::{BodyExt, OperandExt};
 use rustc_data_structures::fx::FxHashMap as HashMap;
 #[cfg(feature = "rustc-hir-origins")]
 use rustc_middle::mir::HirOrigin;
@@ -148,6 +145,7 @@ pub fn pair_permissions_to_calls(
       //     x.abs();          // (copy x).abs(); // (copy x): R-D
       // }
       // ```
+      was_copied &= was_copied != actual.drop;
       actual.drop |= was_copied;
       let expected = fn_sig.inputs()[0].into();
 

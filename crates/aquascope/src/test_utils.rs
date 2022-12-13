@@ -249,19 +249,13 @@ pub fn test_steps_in_file(
         .map(|n| String::from(n.as_str()))
         .unwrap_or_else(|| String::from("<anon body>"));
 
-      let steps = analysis::compute_permission_steps(ctxt);
       let source_map = tcx.sess.source_map();
-      let body_steps =
-        analysis::permissions::permission_stepper::prettify_permission_steps(
-          ctxt,
-          steps,
-          |span| {
-            source_map::Range::from_span(span, source_map)
-              .ok()
-              .unwrap_or_default()
-              .into()
-          },
-        );
+      let body_steps = analysis::compute_permission_steps(ctxt, |span| {
+        source_map::Range::from_span(span, source_map)
+          .ok()
+          .unwrap_or_default()
+          .into()
+      });
 
       // NOTE: we normalize the permission steps to be
       // - usize: the line number of the corresponding statement.
