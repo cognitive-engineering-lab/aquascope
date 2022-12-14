@@ -65,6 +65,27 @@ pub struct Permissions {
   pub drop: bool,
 }
 
+// In contrast to Permissions, the PermissionsData stores all relevant
+// information about what factors into the permissions. Things like
+// declared type information, loan refinements, move refinements, etc.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct PermissionsData {
+  // Type declaration information
+  pub type_droppable: bool,
+  pub type_writeable: bool,
+
+  // Liveness information
+  pub is_live: bool,
+
+  // Initialization information
+  pub path_moved: bool,
+
+  // Refinement information
+  pub loan_read_refined: bool,
+  pub loan_write_refined: bool,
+  pub loan_drop_refined: bool,
+}
+
 /// A point where the permissions reality are checked against their expectations.
 /// Currently, the only boundary supported is method calls on a receiver, however,
 /// these boundaries could be drawn in any program location.
@@ -125,27 +146,19 @@ pub struct RefinementRegion {
 #[ts(export)]
 pub struct PermissionsStateStep {
   pub location: Range,
-  pub state: Vec<(String, PermsDiff)>,
+  pub state: Vec<(String, PermissionsDiff)>,
 }
 
 #[derive(Clone, Debug, Serialize, TS)]
 #[serde(tag = "type")]
 #[ts(export)]
-pub enum PermDiff {
-  Add,
-  Sub,
+pub enum BoolStep {
+  High,
+  Low,
   /// value indicates whether or not the permission is held.
   None {
     value: bool,
   },
-}
-
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(export)]
-pub struct PermsDiff {
-  pub read: PermDiff,
-  pub write: PermDiff,
-  pub drop: PermDiff,
 }
 
 // -----------------
@@ -153,7 +166,7 @@ pub struct PermsDiff {
 
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
 /// A representation of the permissions *forall* places in the body under analysis.
-pub struct PermissionsDomain<'tcx>(HashMap<Place<'tcx>, Permissions>);
+pub struct PermissionsDomain<'tcx>(HashMap<Place<'tcx>, PermissionsData>);
 
 pub trait Difference {
   type Diff;
@@ -161,14 +174,96 @@ pub trait Difference {
   fn diff(&self, rhs: Self) -> Self::Diff;
 }
 
+// A handy macro for making difference types with only BoolStep fields
+// TODO(gavinleroy): a diff type should be automatically generated if all the fields
+// in a macro can ge diffed, but I'll save that for later. Below is mostly a syntactic
+// macro to simplify things for the time being.
+
+macro_rules! make_diff {
+  ($name:ident, $($i:ident),*) => {
+    #[derive(Clone, Debug, Serialize, TS)]
+    #[ts(export)]
+    pub struct $name {
+      $( pub $i: BoolStep, )*
+    }
+
+    impl $name {
+      fn is_empty(&self) -> bool {
+        $( self.$i.is_empty() && )* true
+      }
+    }
+  }
+}
+
+make_diff!(PermissionsDiff, read, write, drop);
+make_diff!(
+  PermissionsDataDiff,
+  is_live,
+  type_droppable,
+  type_writeable,
+  loan_read_refined,
+  loan_write_refined,
+  loan_drop_refined,
+  path_moved
+);
+
+macro_rules! impl_split {
+  ($from:ident, $to:ident, $($i:ident),*) => {
+    impl $from {
+      fn split(&self) -> ($to, $to) {
+        (
+          $to {
+            $(
+              $i: self.$i.split().0,
+            )*
+          },
+          $to {
+            $(
+              $i: self.$i.split().1,
+            )*
+          }
+        )
+      }
+    }
+  }
+}
+
+impl_split!(PermissionsDiff, Permissions, read, write, drop);
+impl_split!(
+  PermissionsDataDiff,
+  PermissionsData,
+  is_live,
+  type_droppable,
+  type_writeable,
+  loan_read_refined,
+  loan_write_refined,
+  loan_drop_refined,
+  path_moved
+);
+
 // ---------------------
 // Impls for above types
 
-impl Difference for Permissions {
-  type Diff = PermsDiff;
+// Again these should all be generated, very pattern oriented.
 
-  fn diff(&self, rhs: Permissions) -> PermsDiff {
-    PermsDiff {
+impl Difference for bool {
+  type Diff = BoolStep;
+  fn diff(&self, rhs: bool) -> Self::Diff {
+    if *self && !rhs {
+      BoolStep::Low
+    } else if !*self && rhs {
+      BoolStep::High
+    } else {
+      BoolStep::None { value: *self }
+    }
+  }
+}
+
+impl Difference for Permissions {
+  type Diff = PermissionsDiff;
+
+  fn diff(&self, rhs: Permissions) -> Self::Diff {
+    PermissionsDiff {
       read: self.read.diff(rhs.read),
       write: self.write.diff(rhs.write),
       drop: self.drop.diff(rhs.drop),
@@ -176,15 +271,18 @@ impl Difference for Permissions {
   }
 }
 
-impl Difference for bool {
-  type Diff = PermDiff;
-  fn diff(&self, rhs: bool) -> PermDiff {
-    if *self && !rhs {
-      PermDiff::Sub
-    } else if !*self && rhs {
-      PermDiff::Add
-    } else {
-      PermDiff::None { value: *self }
+impl Difference for PermissionsData {
+  type Diff = PermissionsDataDiff;
+
+  fn diff(&self, rhs: PermissionsData) -> Self::Diff {
+    PermissionsDataDiff {
+      is_live: self.is_live.diff(rhs.is_live),
+      type_droppable: self.type_droppable.diff(rhs.type_droppable),
+      type_writeable: self.type_writeable.diff(rhs.type_writeable),
+      loan_read_refined: self.loan_read_refined.diff(rhs.loan_read_refined),
+      loan_write_refined: self.loan_write_refined.diff(rhs.loan_write_refined),
+      loan_drop_refined: self.loan_drop_refined.diff(rhs.loan_drop_refined),
+      path_moved: self.path_moved.diff(rhs.path_moved),
     }
   }
 }
@@ -220,6 +318,24 @@ impl std::fmt::Debug for Permissions {
   }
 }
 
+impl From<PermissionsData> for Permissions {
+  fn from(data: PermissionsData) -> Permissions {
+    if !data.is_live {
+      Permissions::bottom()
+    } else {
+      Permissions {
+        read: !data.path_moved && !data.loan_read_refined,
+        write: data.type_writeable
+          && !data.path_moved
+          && !data.loan_write_refined,
+        drop: data.type_droppable
+          && !data.path_moved
+          && !data.loan_drop_refined,
+      }
+    }
+  }
+}
+
 // XXX: this is only valid when the Ty is an *expected* type.
 // This is because expected types do not rely on the mutability of
 // the binding, e.g. `let mut x = ...` and all of the expected information
@@ -236,27 +352,30 @@ impl<'tcx> From<Ty<'tcx>> for Permissions {
   }
 }
 
-impl PermDiff {
-  fn is_none(&self) -> bool {
+impl BoolStep {
+  fn is_empty(&self) -> bool {
     matches!(self, Self::None { .. })
   }
-}
 
-impl PermsDiff {
-  /// An empty value indicates that no permission was changed.
-  fn is_empty(&self) -> bool {
-    self.read.is_none() && self.write.is_none() && self.drop.is_none()
+  fn split(&self) -> (bool, bool) {
+    match self {
+      Self::High => (false, true),
+      Self::Low => (true, false),
+      Self::None { value } => (*value, *value),
+    }
   }
 }
 
-impl<'tcx> From<HashMap<Place<'tcx>, Permissions>> for PermissionsDomain<'tcx> {
-  fn from(m: HashMap<Place<'tcx>, Permissions>) -> Self {
+impl<'tcx> From<HashMap<Place<'tcx>, PermissionsData>>
+  for PermissionsDomain<'tcx>
+{
+  fn from(m: HashMap<Place<'tcx>, PermissionsData>) -> Self {
     PermissionsDomain(m)
   }
 }
 
 impl<'tcx> Deref for PermissionsDomain<'tcx> {
-  type Target = HashMap<Place<'tcx>, Permissions>;
+  type Target = HashMap<Place<'tcx>, PermissionsData>;
 
   fn deref(&self) -> &Self::Target {
     &self.0
@@ -270,11 +389,8 @@ impl DerefMut for PermissionsDomain<'_> {
 }
 
 impl<'tcx> Difference for &PermissionsDomain<'tcx> {
-  type Diff = HashMap<Place<'tcx>, PermsDiff>;
-  fn diff(
-    &self,
-    rhs: &PermissionsDomain<'tcx>,
-  ) -> HashMap<Place<'tcx>, PermsDiff> {
+  type Diff = HashMap<Place<'tcx>, PermissionsDataDiff>;
+  fn diff(&self, rhs: &PermissionsDomain<'tcx>) -> Self::Diff {
     self
       .iter()
       .fold(HashMap::default(), |mut acc, (place, p1)| {

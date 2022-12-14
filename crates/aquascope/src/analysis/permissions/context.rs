@@ -15,8 +15,8 @@ use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
 
 use super::{
-  AquascopeFacts, Loan, Output, Path, Permissions, PermissionsDomain, Point,
-  Variable,
+  AquascopeFacts, Loan, Output, Path, Permissions, PermissionsData,
+  PermissionsDomain, Point, Variable,
 };
 
 type MoveablePath = <RustcFacts as FactTypes>::Path;
@@ -134,20 +134,20 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     }
   }
 
+  pub fn permissions_at_point(&self, path: Path, point: Point) -> Permissions {
+    self.permissions_data_at_point(path, point).into()
+  }
+
   // TODO: expand the data stored format to include all of the factors which
   // can modify a given set. (gavin read only). REMOVE
-  pub fn permissions_at_point(&self, path: Path, point: Point) -> Permissions {
-    let path = path;
-    let point = point;
+  pub fn permissions_data_at_point(
+    &self,
+    path: Path,
+    point: Point,
+  ) -> PermissionsData {
     let empty_hash = &HashMap::default();
     let empty_set = &HashSet::default();
-
-    // If the underlying variable is not live at a given point we should
-    // report it as not having permissions.
-    if !self.is_path_live_at(path, point) {
-      return Permissions::bottom();
-    }
-
+    let is_live = self.is_path_live_at(path, point);
     let pms = &self.permissions_output;
     let path = &path;
     let point = &point;
@@ -161,19 +161,21 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let cannot_write = pms.cannot_write.get(point).unwrap_or(empty_hash);
     let cannot_drop = pms.cannot_drop.get(point).unwrap_or(empty_hash);
 
-    let read =
-      !(cannot_read.contains_key(path) || path_moved_at.contains(path));
-    let write = !(pms.never_write.contains(path)
-      || cannot_write.contains_key(path)
-      || path_moved_at.contains(path));
-    let drop = !(pms.never_drop.contains(path)
-      || cannot_drop.contains_key(path)
-      || path_moved_at.contains(path));
+    let never_write = self.permissions_output.never_write.contains(&path);
+    let never_drop = self.permissions_output.never_drop.contains(&path);
 
-    Permissions { read, write, drop }
+    PermissionsData {
+      is_live,
+      type_droppable: !never_drop,
+      type_writeable: !never_write,
+      path_moved: path_moved_at.contains(path),
+      loan_read_refined: cannot_read.contains_key(path),
+      loan_write_refined: cannot_write.contains_key(path),
+      loan_drop_refined: cannot_drop.contains_key(path),
+    }
   }
 
-  pub fn initial_body_permissions(&self) -> PermissionsDomain<'tcx> {
+  pub fn domain_places(&self) -> HashSet<Place<'tcx>> {
     let def_id = self.def_id;
     let tcx = self.tcx;
     let body = &self.body_with_facts.body;
@@ -183,11 +185,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       .flat_map(|local| {
         Place::from_local(local, tcx).interior_paths(tcx, body, def_id)
       })
-      .fold(HashMap::default(), |mut acc, place| {
-        acc.insert(place, Permissions::bottom());
-        acc
-      })
-      .into()
+      .collect::<HashSet<_>>()
   }
 
   pub fn permissions_domain_at_point(
@@ -195,15 +193,16 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     point: Point,
   ) -> PermissionsDomain<'tcx> {
     // Use the base to get the full domain (e.g. possible places)
-    let mut state = self.initial_body_permissions();
-
-    state.iter_mut().for_each(|(place, perms)| {
-      let path = self.place_to_path(place);
-      *perms = self.permissions_at_point(path, point);
-      log::debug!("Setting {path:?} to {:?}", perms);
-    });
-
-    state
+    let places = self.domain_places();
+    places
+      .into_iter()
+      .fold(HashMap::default(), |mut acc, place| {
+        let path = self.place_to_path(&place);
+        let perms = self.permissions_data_at_point(path, point);
+        acc.insert(place, perms);
+        acc
+      })
+      .into()
   }
 
   /// HACK: this method should be called with extreme caution, please prefer `permissions_domain_at_point`.
@@ -219,7 +218,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   ///
   /// ```
   /// StorageLive(s);
-  /// FakeRead(ForLet(None), _1);
+  /// FakeRead(ForLet(None), s);
   /// ```
   ///
   /// When finding the permission steps throughout a program, we need to talk about the before, and after

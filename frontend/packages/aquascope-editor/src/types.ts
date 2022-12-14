@@ -1,7 +1,6 @@
 // Re-export auto-generated types
 
 export { AquascopeError } from "./bindings/AquascopeError";
-// export { CallTypes } from "./bindings/CallTypes";
 export { Range } from "./bindings/Range";
 
 export { Permissions } from "./bindings/Permissions";
@@ -18,8 +17,9 @@ export { MissingPermsInfo } from "./bindings/MissingPermsInfo";
 export { MissingPermReason } from "./bindings/MissingPermReason";
 
 export { PermissionsStateStep } from "./bindings/PermissionsStateStep";
-export { PermsDiff } from "./bindings/PermsDiff";
-export { PermDiff } from "./bindings/PermDiff";
+export { PermissionsDiff } from "./bindings/PermissionsDiff";
+export { PermissionsDataDiff } from "./bindings/PermissionsDataDiff";
+export { BoolStep } from "./bindings/BoolStep";
 
 interface BuildError {
   type: "BuildError";

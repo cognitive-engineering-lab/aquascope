@@ -6,7 +6,7 @@ import {
   hoverTooltip,
 } from "@codemirror/view";
 
-import { PermDiff, PermissionsStateStep, PermsDiff } from "../types";
+import { BoolStep, PermissionsDiff, PermissionsStateStep } from "../types";
 import {
   Icon,
   IconField,
@@ -22,9 +22,16 @@ let permissionsDiffIcoType = StateEffect.define<Array<PermissionStepTable>>();
 // list of rows and the editor location where it will be placed.
 type PermissionStepTable = [Array<PermDiffRowIcon>, number];
 
+// TODO(gavinleroy): the frontend is currently receiving more data than initially designed.
+// That is, it receives additional data about how the influencers of a permission are chaning.
+// This of course is so that we can display cute icons for specific changes (the received data needs
+// to be expanded a little more), but this has introduced the unsavory problem of the
+// frontend having logic to compute the permissions changes based on the factors changes.
+// The frontend should *not* have to do this and the backend should additionally send
+// that information so it can be simply read.
 class PermDiffRowIcon implements Icon {
   readonly display: boolean = true;
-  constructor(readonly path: string, readonly diffs: PermsDiff) {}
+  constructor(readonly path: string, readonly diffs: PermissionsDiff) {}
 
   getAuxiliary(): Array<Range<Decoration>> {
     return [];
@@ -41,11 +48,11 @@ class PermDiffRowIcon implements Icon {
     let wSpan = document.createElement("span");
     let dSpan = document.createElement("span");
 
-    let stylePerm = (span: HTMLElement, diff: PermDiff, content: string) => {
-      if (diff.type === "Add") {
+    let stylePerm = (span: HTMLElement, diff: BoolStep, content: string) => {
+      if (diff.type === "High") {
         span.textContent = "+" + content;
         span.classList.add("perm-diff-add");
-      } else if (diff.type === "Sub") {
+      } else if (diff.type === "Low") {
         span.textContent = "-" + content;
         span.classList.add("perm-diff-sub");
       }

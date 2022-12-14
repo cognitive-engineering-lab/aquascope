@@ -1,20 +1,24 @@
 //! Main data structure for mapping HIR to MIR and vice-versa.
-use std::{
-  cmp::Ordering,
-  collections::{hash_map::Entry, HashMap},
-};
+use std::{cmp::Ordering, collections::hash_map::Entry, fmt};
 
 use flowistry::mir::utils::{BodyExt, PlaceExt as FlowistryPlaceExt};
 use itertools::Itertools;
-use rustc_data_structures::fx::FxHashSet as HashSet;
+use rustc_data_structures::{
+  fx::{FxHashMap as HashMap, FxHashSet as HashSet},
+  graph::{dominators::Dominators, vec_graph::VecGraph, *},
+};
 use rustc_hir::{
   self as hir,
   intravisit::{self, Visitor as HirVisitor},
   HirId,
 };
+use rustc_index::bit_set::{BitSet, HybridBitSet, SparseBitMatrix};
 use rustc_middle::{
   hir::nested_filter,
-  mir::{self, visit::Visitor as MirVisitor, Body, Local, Location, Place},
+  mir::{
+    self, visit::Visitor as MirVisitor, BasicBlock, Body, Local, Location,
+    Place,
+  },
   ty::TyCtxt,
 };
 use rustc_mir_dataflow::{Analysis, JoinSemiLattice, ResultsVisitor};
@@ -29,6 +33,8 @@ pub struct IRMapper<'a, 'tcx> {
   body_id: hir::BodyId,
   hir_to_mir: HashMap<HirId, HashSet<Location>>,
   gather_mode: GatherMode,
+  dominators: Dominators<BasicBlock>,
+  post_dominators: PostDominators,
 }
 
 // TODO: I want to decompose this into more specific regions.
@@ -53,8 +59,6 @@ pub struct IRMapper<'a, 'tcx> {
 // advacned structures like loops and matches.
 pub struct HirNodeLocations {
   pub outer: Vec<Location>,
-  // pub nested: Vec<Location>,
-  // pub node: hir::Node<'hir>,
 }
 
 struct NestedLocations<'tcx> {
@@ -69,6 +73,49 @@ pub enum GatherMode {
   All,
 }
 
+pub struct MirOrderedLocations {
+  entry_block: BasicBlock,
+  exit_block: BasicBlock,
+  // associated indices must remain sorted
+  locations: HashMap<BasicBlock, Vec<usize>>,
+}
+
+impl MirOrderedLocations {
+  fn minimum(&self) -> Location {
+    let block = self.entry_block;
+    let statement_index = *self
+      .locations
+      .get(&block)
+      .expect("Block with no associated locations")
+      .first()
+      .unwrap();
+    Location {
+      block,
+      statement_index,
+    }
+  }
+
+  fn maximum(&self) -> Location {
+    let block = self.exit_block;
+    let statement_index = *self
+      .locations
+      .get(&block)
+      .expect("Block with no associated locations")
+      .last()
+      .unwrap();
+    Location {
+      block,
+      statement_index,
+    }
+  }
+
+  pub fn get_entry_exit_locations(&self) -> (Location, Location) {
+    let m = self.minimum();
+    let mx = self.maximum();
+    (m, mx)
+  }
+}
+
 impl<'a, 'tcx> IRMapper<'a, 'tcx>
 where
   'tcx: 'a,
@@ -79,10 +126,14 @@ where
     body_id: hir::BodyId,
     gather_mode: GatherMode,
   ) -> Self {
+    let dominators = body.basic_blocks.dominators();
+    let control_dependencies = PostDominators::build(body);
     let mut ir_map = IRMapper {
       tcx,
       body,
       body_id,
+      dominators,
+      post_dominators: control_dependencies,
       hir_to_mir: HashMap::default(),
       gather_mode,
     };
@@ -101,45 +152,66 @@ where
     ir_map
   }
 
-  // Given a HIR node, get the corresponding nodes for:
-  // - Itself, and it's nested children.
-  // - QUESTION: in which case would the caller be interested in the children?
-  //   it seems that this isn't information I want to actually give back here.
-  pub fn get_mir_locations(&self, hir_id: HirId) -> Option<HirNodeLocations> {
+  /// Produces a MirOrderedLocations which is defined as follows.
+  /// The `entry_block` represents the `BasicBlock` which post-dominates all
+  /// blocks in the given set of locations and conversely the `exit_block`
+  /// dominates all blocks in the set.
+  ///
+  /// This works under the assumption that there exists a global
+  /// maximum in the (post-)dominator lattice.
+  ///
+  /// See: https://en.wikipedia.org/wiki/Dominator_(graph_theory)
+  pub fn get_mir_locations(
+    &self,
+    hir_id: HirId,
+  ) -> Option<MirOrderedLocations> {
     let empty_set = &HashSet::default();
     let outer = self.hir_to_mir.get(&hir_id).unwrap_or(empty_set);
 
-    // let mut nested_ids = NestedLocations {
-    //   tcx: self.tcx,
-    //   target: hir_id,
-    //   locs: Vec::default(),
-    // };
+    if outer.is_empty() {
+      return None;
+    }
 
-    // nested_ids.visit_nested_body(self.body_id);
+    log::debug!("Gathering outer nodes {:#?}", outer);
 
-    // let unioned = nested_ids
-    //   .locs
-    //   .into_iter()
-    //   .flat_map(|id| self.hir_to_mir.get(&id).unwrap_or(empty_set).iter())
-    //   .copied()
-    //   .collect::<HashSet<_>>();
+    let mut total_location_map: HashMap<BasicBlock, Vec<usize>> =
+      outer.into_iter().fold(HashMap::default(), |mut acc, loc| {
+        let bb = loc.block;
+        let idx = loc.statement_index;
+        acc.entry(bb).or_default().push(idx);
+        acc
+      });
 
-    // let mut inner = unioned.difference(&outer).copied().collect::<Vec<_>>();
+    for idxs in total_location_map.values_mut() {
+      idxs.sort_unstable();
+    }
 
-    // let node = self.tcx.hir().find(hir_id).unwrap();
+    let basic_blocks = total_location_map.keys().collect::<Vec<_>>();
 
-    let mut outer = outer.into_iter().copied().collect::<Vec<_>>();
+    let entry_block = basic_blocks
+      .iter()
+      .find(|&&&b1| {
+        basic_blocks
+          .iter()
+          .all(|&&b2| b1 == b2 || self.dominators.is_dominated_by(b2, b1))
+      })
+      .unwrap();
 
-    outer.mir_order_sort(self.body);
+    let exit_block = basic_blocks
+      .iter()
+      .find(|&&&b1| {
+        basic_blocks.iter().all(|&&b2| {
+          b1 == b2 || self.post_dominators.is_postdominated_by(b1, b2)
+        })
+      })
+      .unwrap();
 
-    Some(HirNodeLocations {
-      outer,
-      // nested: inner,
-      // node,
+    Some(MirOrderedLocations {
+      entry_block: **entry_block,
+      exit_block: **exit_block,
+      locations: total_location_map,
     })
   }
-
-  // TODO: Also queries about the given node's span.
 
   // Check the given invariants that I am assuming hold about this data structure.
   // This method should be extremely slow, inefficient, exhaustive, and only
@@ -163,49 +235,166 @@ where
   }
 }
 
-trait MirOrder {
-  fn mir_order_sort(&mut self, body: &mir::Body);
+// -------------------------------------------
+// Graph for post-dominator set.
+// HACK: copied from flowistry, see if you can
+// reuse bits.
+
+struct BodyReversed<'a, 'tcx> {
+  body: &'a Body<'tcx>,
+  ret: BasicBlock,
+  unreachable: BitSet<BasicBlock>,
 }
 
-impl MirOrder for Vec<Location> {
-  // TODO: in general, it isn't always possible to just take
-  // a vector of locations and put them in some sensible order.
-  // This function should either:
-  // - have some serious preconditions
-  // - (more likely) not sort in place, but return several
-  //   resulting vectors which do have a sensible order.
-  //
-  // XXX: This implementation was taken at face value from
-  // the previous permission_steps impl.
-  fn mir_order_sort(&mut self, body: &mir::Body) {
-    let mut exists_cycle = false;
+impl DirectedGraph for BodyReversed<'_, '_> {
+  type Node = BasicBlock;
+}
 
-    self.sort_by(|&l1, &l2| {
+impl WithStartNode for BodyReversed<'_, '_> {
+  fn start_node(&self) -> Self::Node {
+    self.ret
+  }
+}
 
-        if l1.block == l2.block {
-          return l1.statement_index.cmp(&l2.statement_index);
+impl WithNumNodes for BodyReversed<'_, '_> {
+  fn num_nodes(&self) -> usize {
+    self.body.basic_blocks.len()
+  }
+}
+
+impl<'graph> GraphSuccessors<'graph> for BodyReversed<'_, '_> {
+  type Item = BasicBlock;
+  type Iter = Box<dyn Iterator<Item = BasicBlock> + 'graph>;
+}
+
+impl WithSuccessors for BodyReversed<'_, '_> {
+  fn successors(
+    &self,
+    node: Self::Node,
+  ) -> <Self as GraphSuccessors<'_>>::Iter {
+    Box::new(
+      self.body.basic_blocks.predecessors()[node]
+        .iter()
+        .filter(|bb| !self.unreachable.contains(**bb))
+        .copied(),
+    )
+  }
+}
+
+impl<'graph> GraphPredecessors<'graph> for BodyReversed<'_, '_> {
+  type Item = BasicBlock;
+  type Iter = Box<dyn Iterator<Item = BasicBlock> + 'graph>;
+}
+
+impl WithPredecessors for BodyReversed<'_, '_> {
+  fn predecessors(
+    &self,
+    node: Self::Node,
+  ) -> <Self as GraphPredecessors<'_>>::Iter {
+    Box::new(
+      self.body.basic_blocks[node]
+        .terminator()
+        .successors()
+        .filter(|bb| !self.unreachable.contains(*bb)),
+    )
+  }
+}
+
+fn compute_post_dominators(
+  body: &Body,
+  ret: BasicBlock,
+) -> HashMap<BasicBlock, HashSet<BasicBlock>> {
+  let nblocks = body.basic_blocks.len();
+  let mut graph = BodyReversed {
+    body,
+    ret,
+    unreachable: BitSet::new_empty(nblocks),
+  };
+
+  let reachable = iterate::post_order_from(&graph, ret);
+  graph.unreachable.insert_all();
+  for n in &reachable {
+    graph.unreachable.remove(*n);
+  }
+
+  let dominators = dominators::dominators(graph);
+  reachable
+    .into_iter()
+    .map(|n| (n, dominators.dominators(n).collect()))
+    .collect()
+}
+
+pub struct PostDominators(SparseBitMatrix<BasicBlock, BasicBlock>);
+
+impl fmt::Debug for PostDominators {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    for (i, (bb, bbs)) in self
+      .0
+      .rows()
+      .enumerate()
+      .filter_map(|(i, bb)| self.0.row(bb).map(move |bbs| (i, (bb, bbs))))
+    {
+      if i > 0 {
+        write!(f, ", ")?;
+      }
+      write!(f, "{bb:?}: {{")?;
+      for (j, bb2) in bbs.iter().enumerate() {
+        if j > 0 {
+          write!(f, ", ")?;
         }
-
-        let l1_p = l1.is_predecessor_of(l2, body);
-        let l2_p = l2.is_predecessor_of(l1, body);
-        if l1_p && l2_p {
-          log::error!("The MIR Locations for a HIR Stmt did not form a total order {l1:?} {l2:?}");
-          exists_cycle = true;
-          Ordering::Equal
-        } else if l1_p {
-          Ordering::Less
-        } else if l2_p {
-          Ordering::Greater
-        } else {
-          log::error!("The MIR Locations for a HIR Stmt are unrelated {l1:?} {l2:?}");
-          exists_cycle = true;
-          Ordering::Equal
-        }
-      });
-
-    if exists_cycle {
-      log::error!("These locations contains a cycle: {self:#?}");
+        write!(f, "{bb2:?}")?;
+      }
+      write!(f, "}}")?;
     }
+    Ok(())
+  }
+}
+
+impl PostDominators {
+  pub fn build(body: &Body) -> Self {
+    PostDominators(
+      body
+        .all_returns()
+        .map(|loc| {
+          let block = loc.block;
+          assert!(!body.basic_blocks[block].is_cleanup);
+          PostDominators::build_for_return(body, loc.block)
+        })
+        .fold(
+          SparseBitMatrix::new(body.basic_blocks.len()),
+          |mut deps1, deps2| {
+            for block in deps2.rows() {
+              if let Some(set) = deps2.row(block) {
+                deps1.union_row(block, set);
+              }
+            }
+            deps1
+          },
+        ),
+    )
+  }
+
+  fn build_for_return(
+    body: &Body,
+    ret: BasicBlock,
+  ) -> SparseBitMatrix<BasicBlock, BasicBlock> {
+    let doms = compute_post_dominators(body, ret);
+    log::debug!("doms={doms:?}");
+
+    let n = body.basic_blocks.len();
+    let mut domsp = SparseBitMatrix::<BasicBlock, BasicBlock>::new(n);
+
+    for (b1, doms) in doms.iter() {
+      for b2 in doms.iter() {
+        domsp.insert(*b1, *b2);
+      }
+    }
+
+    domsp
+  }
+
+  pub fn is_postdominated_by(&self, b1: BasicBlock, pdom: BasicBlock) -> bool {
+    self.0.row(pdom).map_or(false, |row| row.contains(b1))
   }
 }
 

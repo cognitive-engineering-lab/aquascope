@@ -17,16 +17,16 @@ use rustc_middle::{
   mir::{self, Body, Local, Location, Place},
   ty::TyCtxt,
 };
-use rustc_mir_dataflow::{Analysis, JoinSemiLattice, ResultsVisitor};
+use rustc_mir_dataflow::{Analysis, JoinSemiLattice};
 use rustc_span::Span;
 
 use crate::{
   analysis::{
     ir_mapper::{GatherMode, IRMapper},
     permissions::{
-      utils::{flow_mir_permissions, PAnalysis},
-      Difference, PermissionsCtxt, PermissionsDomain, PermissionsStateStep,
-      PermsDiff,
+      Difference, Permissions, PermissionsCtxt, PermissionsData,
+      PermissionsDataDiff, PermissionsDiff, PermissionsDomain,
+      PermissionsStateStep,
     },
   },
   mir::utils::PlaceExt as AquascopePlaceExt,
@@ -40,7 +40,6 @@ pub fn compute_permission_steps<'a, 'tcx>(
 where
   'tcx: 'a,
 {
-  let results = flow_mir_permissions(ctxt);
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
   let basic_blocks = body.basic_blocks.indices();
@@ -60,9 +59,7 @@ where
   let mut hir_visitor = HirPermDiffFlow {
     ctxt,
     ir_mapper,
-    mode: SaveDiffs::Yes,
     diff: HashMap::default(),
-    entry_state: ctxt.initial_body_permissions().into(),
   };
 
   log::debug!("HIR IDS:");
@@ -90,7 +87,7 @@ where
 
 fn prettify_permission_steps<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
-  perm_steps: HashMap<HirId, HashMap<Place<'tcx>, PermsDiff>>,
+  perm_steps: HashMap<HirId, HashMap<Place<'tcx>, PermissionsDataDiff>>,
   span_to_range: impl Fn(Span) -> Range,
 ) -> Vec<PermissionsStateStep> {
   let tcx = ctxt.tcx;
@@ -106,11 +103,25 @@ fn prettify_permission_steps<'tcx>(
 
   perm_steps
     .into_iter()
-    .map(|(id, place_to_diffs)| {
+    .filter_map(|(id, place_to_diffs)| {
       let span = hir.span(id);
 
       let range = span_to_range(span);
-      let mut entries = place_to_diffs.into_iter().collect::<Vec<_>>();
+      let mut entries = place_to_diffs
+        .into_iter()
+        .filter_map(|(plc, data_diff)| {
+          let (pd1, pd2) = data_diff.split();
+          let p1: Permissions = pd1.into();
+          let p2: Permissions = pd2.into();
+          let pd = p1.diff(p2);
+          (!pd.is_empty()).then_some((plc, pd))
+        })
+        .collect::<Vec<_>>();
+
+      if entries.is_empty() {
+        return None;
+      }
+
       entries
         .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
       let state = entries
@@ -121,10 +132,10 @@ fn prettify_permission_steps<'tcx>(
         })
         .collect::<Vec<_>>();
 
-      PermissionsStateStep {
+      Some(PermissionsStateStep {
         location: range,
         state,
-      }
+      })
     })
     .collect::<Vec<_>>()
 }
@@ -133,18 +144,28 @@ fn prettify_permission_steps<'tcx>(
 type DomainAtHir<'tcx, A: Analysis<'tcx>> =
   HashMap<HirId, HashMap<Location, A::Domain>>;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum SaveDiffs {
-  No,
-  Yes,
-}
-
 struct HirPermDiffFlow<'a, 'tcx> {
   ctxt: &'a PermissionsCtxt<'a, 'tcx>,
   ir_mapper: &'a IRMapper<'a, 'tcx>,
-  mode: SaveDiffs,
-  diff: HashMap<HirId, HashMap<Place<'tcx>, PermsDiff>>,
-  entry_state: PermissionsDomain<'tcx>,
+  diff: HashMap<HirId, HashMap<Place<'tcx>, PermissionsDataDiff>>,
+}
+
+macro_rules! insert_linear_range_diff {
+  ($this:ident, $id:expr) => {
+    if let Some(mir_order) = $this.ir_mapper.get_mir_locations($id) {
+      let (loc1, loc2) = mir_order.get_entry_exit_locations();
+      log::debug!("BEFORE {loc1:?} AFTER {loc2:?}");
+      let before_point = $this.ctxt.location_to_point(loc1);
+      let after_point = $this.ctxt.location_to_point(loc2);
+      let dmn_before = &$this.ctxt.permissions_domain_at_point(before_point);
+      let dmn_after = &$this
+        .ctxt
+        .permissions_domain_after_point_effect(after_point)
+        .unwrap_or_else(|| $this.ctxt.permissions_domain_at_point(after_point));
+      let diff = dmn_before.diff(dmn_after);
+      $this.diff.insert($id, diff);
+    }
+  };
 }
 
 impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
@@ -154,163 +175,37 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
     self.ctxt.tcx.hir()
   }
 
-  // fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
-  //   use hir::{ExprKind as EK, LoopSource, MatchSource, StmtKind as SK};
+  fn visit_body(&mut self, body: &'tcx hir::Body) {
+    if body.generator_kind.is_some() {
+      unimplemented!("generators unimplemented");
+    }
+    log::debug!("Visiting Body");
+    self.visit_expr(body.value);
+  }
 
-  //   let id = expr.hir_id;
-  //   let body = &self.body;
+  fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt) {
+    use hir::StmtKind as SK;
+    let id = stmt.hir_id;
+    let hir = self.ctxt.tcx.hir();
+    log::debug!("Visiting Stmt: {}", hir.node_to_string(id));
 
-  //   macro_rules! walk_and_add_pending {
-  //     ($e:expr, $id:expr) => {
-  //       intravisit::walk_expr(self, $e);
-  //       self.stage_bundle($id);
-  //       self.commit_bundle($id);
-  //     };
-  //   }
-
-  //   match expr.kind {
-  //     // EK::If(cnd, then, else_opt) => {
-  //     //   self.visit_expr(cnd);
-  //     //   let branch_before = self.entry_perm_state.clone();
-  //     //   self.visit_expr(then);
-  //     //   let mut after_if_state = self.entry_perm_state.clone();
-
-  //     //   if let Some(els) = else_opt {
-  //     //     self.entry_perm_state = branch_before;
-  //     //     self.visit_expr(els);
-  //     //     let after_else_state = self.entry_perm_state.clone();
-  //     //     after_if_state.join(&after_else_state);
-  //     //   }
-
-  //     //   self.entry_perm_state = after_if_state;
-  //     //   self.save_for_later(expr.hir_id);
-  //     // }
-
-  //     // TODO: special variants to handle control flow
-  //     // Match(&'hir Expr<'hir>, &'hir [Arm<'hir>], MatchSource),
-
-  //     // In the AST -> HIR desugaring step, for/while loops get desugared
-  //     // into a plain `loop` + `match` construct. Fundamentally, we want to
-  //     // break this up into:
-  //     // - loop prelude, setting up the iterator.
-  //     // - block prelude, setting up variables visible inside the loop body.
-  //     // - block postlude, destroying the block visible variables.
-  //     // - loop postlude, destroying the loop iterator variables.
-  //     //
-  //     // We match loops at the expression level because they
-  //     // may not ever appear in a Stmt.
-
-  //     //   EK::Loop(
-  //     //     hir::Block {
-  //     //       stmts: &[],
-  //     //       expr:
-  //     //         Some(hir::Expr {
-  //     //           kind: EK::If(_, _, _),
-  //     //           ..
-  //     //         }),
-  //     //       ..
-  //     //     },
-  //     //     _,
-  //     //     LoopSource::While,
-  //     //     _,
-  //     //   ) => log::debug!("WHILE LOOP:"),
-
-  //     // EK::Loop(
-  //     //   hir::Block {
-  //     //     stmts:
-  //     //       &[hir::Stmt {
-  //     //         kind:
-  //     //           SK::Expr(hir::Expr {
-  //     //             kind:
-  //     //               EK::Match(
-  //     //                 switch_expr,
-  //     //                 &[hir::Arm {
-  //     //                   body: none_expr, ..
-  //     //                 }, hir::Arm {
-  //     //                   body: some_expr, ..
-  //     //                 }],
-  //     //                 MatchSource::ForLoopDesugar,
-  //     //               ),
-  //     //             ..
-  //     //           }),
-  //     //         ..
-  //     //       }],
-  //     //     expr: None,
-  //     //     ..
-  //     //   },
-  //     //   _,
-  //     //   LoopSource::ForLoop,
-  //     //   _,
-  //     // ) => {
-  //     //   log::debug!("FOR LOOP:");
-  //     //   let previous_lift_mode = self.lift_mode;
-
-  //     //   self.visit_expr(switch_expr);
-
-  //     //   let before_arms = self.entry_perm_state.clone();
-
-  //     //   self.lift_mode = LiftBound::Expr;
-
-  //     //   self.visit_expr(some_expr);
-  //     //   let after_body = self.entry_perm_state.clone();
-
-  //     //   self.visit_expr(none_expr);
-  //     //   let after_break = self.entry_perm_state.clone();
-
-  //     //   self.insert_with_id(switch_expr.hir_id);
-  //     //   self.insert_with_id(some_expr.hir_id);
-  //     //   self.insert_with_id(none_expr.hir_id);
-
-  //     //   self.lift_mode = previous_lift_mode;
-  //     //   self.save_for_later(expr.hir_id);
-  //     // }
-
-  //     //   EK::Loop(_, _, LoopSource::Loop, _) => {
-  //     //     unimplemented!("implement plain loop desugaring")
-  //     //   }
-  //     //   EK::Loop(_, _, _, _) => {
-  //     //     unimplemented!("Loop desugaring uncovered {expr:#?}")
-  //     //   }
-
-  //     //
-  //     // - Variants I'd need to think more about.
-  //     //
-  //     // Closure(&'hir Closure<'hir>),
-  //     // Call(&'hir Expr<'hir>, &'hir [Expr<'hir>]),
-  //     // MethodCall(&'hir PathSegment<'hir>, &'hir Expr<'hir>, &'hir [Expr<'hir>], Span),
-  //     // Struct(&'hir QPath<'hir>, &'hir [ExprField<'hir>], Option<&'hir Expr<'hir>>),
-  //     //
-  //     // TODO: I'd be surprised if someone were using inline asm but
-  //     // we should at least  crash with a "feature not supported" or something.
-  //     // InlineAsm(&'hir InlineAsm<'hir>),
-  //     _ => {
-  //       walk_and_add_pending!(expr, expr.hir_id);
-  //     }
-  //   }
-  // }
-
-  // fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
-  //   use hir::{ExprKind as EK, StmtKind as SK};
-  //   let id = expr.hir_id;
-  //   let body = &self.ctxt.body_with_facts.body;
-
-  //   let nls = self.ir_mapper.get_mir_locations(id).unwrap();
-
-  //   match nls.outer.last() {
-  //     Some(loc) => {
-  //       let point = self.ctxt.location_to_point(*loc);
-  //       let dmn: PermissionsDomain<'tcx> =
-  //         self.ctxt.permissions_domain_at_point(point);
-  //       let entry_state: &PermissionsDomain<'tcx> = &self.entry_state;
-  //       let diff = entry_state.diff(&dmn);
-  //       self.diff.insert(id, diff);
-  //       self.entry_state = dmn;
-  //     }
-  //     None => {
-  //       intravisit::walk_expr(self, expr);
-  //     }
-  //   }
-  // }
+    match stmt.kind {
+      SK::Item(_) => {
+        unimplemented!("we shouldn't need to do anything for hir::Stmt::Item")
+      }
+      SK::Local(local) => {
+        self.visit_local(local);
+      }
+      SK::Expr(expr) => {
+        self.visit_expr(expr);
+        insert_linear_range_diff!(self, id);
+      }
+      SK::Semi(expr) => {
+        self.visit_expr(expr);
+        insert_linear_range_diff!(self, id);
+      }
+    }
+  }
 
   // The strategy for Locals of the form:
   //
@@ -330,24 +225,200 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
     let id = local.hir_id;
     let body = &self.ctxt.body_with_facts.body;
     let hir = self.ctxt.tcx.hir();
-
-    let nls = self.ir_mapper.get_mir_locations(id).unwrap();
-
-    log::debug!("Visiting: {}", hir.node_to_string(id));
-
+    log::debug!("Visiting Local: {}", hir.node_to_string(id));
     if let Some(init) = local.init {
-      log::debug!("Outer nodes {:?}", nls.outer);
-      if let Some(loc) = nls.outer.last() {
-        let point = self.ctxt.location_to_point(*loc);
-        let dmn = self
+      self.visit_expr(init);
+    }
+    insert_linear_range_diff!(self, id);
+  }
+
+  fn visit_block(&mut self, block: &'tcx hir::Block) {
+    let id = block.hir_id;
+    let hir = self.ctxt.tcx.hir();
+    log::debug!("Visiting Block: {}", hir.node_to_string(id));
+
+    let mut last_id = id;
+    block.stmts.iter().for_each(|stmt| {
+      last_id = stmt.hir_id;
+      self.visit_stmt(stmt);
+    });
+
+    if let Some(expr) = block.expr {
+      last_id = expr.hir_id;
+      self.visit_expr(expr);
+    }
+    // Instead of taking the starting / ending positions of the entire block,
+    // we'll take the difference between the ending position of the last
+    // executed Node, and the end of the block.
+    if let Some(block_mir_order) = self.ir_mapper.get_mir_locations(id) {
+      if let Some(last_mir_order) = self.ir_mapper.get_mir_locations(id) {
+        let (_, loc2) = block_mir_order.get_entry_exit_locations();
+        let (_, loc1) = last_mir_order.get_entry_exit_locations();
+        let before_point = self.ctxt.location_to_point(loc1);
+        let after_point = self.ctxt.location_to_point(loc2);
+        let dmn_before = &self
           .ctxt
-          .permissions_domain_after_point_effect(point)
-          .unwrap_or_else(|| self.ctxt.permissions_domain_at_point(point));
-        let entry_state = &self.entry_state;
-        let diff = entry_state.diff(&dmn);
+          .permissions_domain_after_point_effect(before_point)
+          .unwrap_or_else(|| {
+            self.ctxt.permissions_domain_at_point(before_point)
+          });
+        let dmn_after = &self
+          .ctxt
+          .permissions_domain_after_point_effect(after_point)
+          .unwrap_or_else(|| {
+            self.ctxt.permissions_domain_at_point(after_point)
+          });
+        let diff = dmn_before.diff(dmn_after);
         self.diff.insert(id, diff);
-        self.entry_state = dmn;
       }
+    }
+  }
+
+  fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
+    use hir::{ExprKind as EK, LoopSource, MatchSource, StmtKind as SK};
+
+    let id = expr.hir_id;
+    let hir = self.ctxt.tcx.hir();
+    log::debug!("Visiting Expr: {}", hir.node_to_string(id));
+
+    match expr.kind {
+      EK::Path(_) | EK::Lit(_) => (),
+
+      EK::DropTemps(expr) => {
+        self.visit_expr(expr);
+        // insert_linear_range_diff!(self, id);
+      }
+
+      EK::Binary(_, lhs, rhs) => {
+        self.visit_expr(lhs);
+        self.visit_expr(rhs);
+        // insert_linear_range_diff!(self, id);
+      }
+
+      EK::Assign(lhs, rhs, _) => {
+        self.visit_expr(rhs);
+        self.visit_expr(lhs);
+        insert_linear_range_diff!(self, id);
+      }
+
+      //
+      EK::Block(block, _) => {
+        self.visit_block(block);
+        // insert_linear_range_diff!(self, id);
+      }
+
+      EK::AddrOf(_, _, expr) => {
+        self.visit_expr(expr);
+        insert_linear_range_diff!(self, id);
+      }
+
+      //
+      EK::Call(func, args) => {
+        args.iter().for_each(|p| {
+          self.visit_expr(p);
+        });
+        self.visit_expr(func);
+        insert_linear_range_diff!(self, id);
+      }
+
+      EK::MethodCall(_, rcv, args, _) => {
+        args.iter().for_each(|p| {
+          self.visit_expr(p);
+        });
+        self.visit_expr(rcv);
+        // insert_linear_range_diff!(self, id);
+      }
+
+      //
+      EK::Ret(expr_opt) => {
+        if let Some(expr) = expr_opt {
+          self.visit_expr(expr);
+        }
+        insert_linear_range_diff!(self, id);
+      }
+
+      EK::If(cnd, then, else_opt) => {
+        self.visit_expr(cnd);
+        self.visit_expr(then);
+        if let Some(els) = else_opt {
+          self.visit_expr(els);
+        }
+      }
+
+      // TODO: special variants to handle control flow
+      // Match(&'hir Expr<'hir>, &'hir [Arm<'hir>], MatchSource),
+
+      // In the AST -> HIR desugaring step, for/while loops get desugared
+      // into a plain `loop` + `match` construct. Fundamentally, we want to
+      // break this up into:
+      // - loop prelude, setting up the iterator.
+      // - block prelude, setting up variables visible inside the loop body.
+      // - block postlude, destroying the block visible variables.
+      // - loop postlude, destroying the loop iterator variables.
+      //
+      // We match loops at the expression level because they
+      // may not ever appear in a Stmt.
+
+      //   EK::Loop(
+      //     hir::Block {
+      //       stmts: &[],
+      //       expr:
+      //         Some(hir::Expr {
+      //           kind: EK::If(_, _, _),
+      //           ..
+      //         }),
+      //       ..
+      //     },
+      //     _,
+      //     LoopSource::While,
+      //     _,
+      //   ) => log::debug!("WHILE LOOP:"),
+
+      // EK::Loop(
+      //   hir::Block {
+      //     stmts:
+      //       &[hir::Stmt {
+      //         kind:
+      //           SK::Expr(hir::Expr {
+      //             kind:
+      //               EK::Match(
+      //                 switch_expr,
+      //                 &[hir::Arm {
+      //                   body: none_expr, ..
+      //                 }, hir::Arm {
+      //                   body: some_expr, ..
+      //                 }],
+      //                 MatchSource::ForLoopDesugar,
+      //               ),
+      //             ..
+      //           }),
+      //         ..
+      //       }],
+      //     expr: None,
+      //     ..
+      //   },
+      //   _,
+      //   LoopSource::ForLoop,
+      //   _,
+      // ) => unimplemented!(),
+
+      //   EK::Loop(_, _, LoopSource::Loop, _) => {
+      //     unimplemented!("implement plain loop desugaring")
+      //   }
+      //   EK::Loop(_, _, _, _) => {
+      //     unimplemented!("Loop desugaring uncovered {expr:#?}")
+      //   }
+
+      //
+      // - Variants I'd need to think more about.
+      //
+      // Closure(&'hir Closure<'hir>),
+      // Call(&'hir Expr<'hir>, &'hir [Expr<'hir>]),
+      // MethodCall(&'hir PathSegment<'hir>, &'hir Expr<'hir>, &'hir [Expr<'hir>], Span),
+      // Struct(&'hir QPath<'hir>, &'hir [ExprField<'hir>], Option<&'hir Expr<'hir>>),
+      //
+      // InlineAsm(&'hir InlineAsm<'hir>),
+      _ => unimplemented!("expr {expr:?} unimplemented"),
     }
   }
 }

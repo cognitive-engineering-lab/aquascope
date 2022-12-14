@@ -20,7 +20,7 @@ use rustc_span::{source_map::FileLoader, BytePos};
 
 use crate::analysis::{
   self,
-  permissions::{Permissions, PermsDiff},
+  permissions::{Permissions, PermissionsDiff},
 };
 
 struct StringLoader(String);
@@ -231,7 +231,7 @@ pub fn test_refinements_in_file(path: &Path) {
 
 pub fn test_steps_in_file(
   path: &Path,
-  assert_snap: impl Fn(String, Vec<(usize, Vec<(String, PermsDiff)>)>)
+  assert_snap: impl Fn(String, Vec<(usize, Vec<(String, PermissionsDiff)>)>)
     + Send
     + Sync
     + Copy,
