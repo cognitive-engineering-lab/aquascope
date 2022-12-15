@@ -107,20 +107,7 @@ fn prettify_permission_steps<'tcx>(
       let span = hir.span(id);
 
       let range = span_to_range(span);
-      let mut entries = place_to_diffs
-        .into_iter()
-        .filter_map(|(plc, data_diff)| {
-          let (pd1, pd2) = data_diff.split();
-          let p1: Permissions = pd1.into();
-          let p2: Permissions = pd2.into();
-          let pd = p1.diff(p2);
-          (!pd.is_empty()).then_some((plc, pd))
-        })
-        .collect::<Vec<_>>();
-
-      if entries.is_empty() {
-        return None;
-      }
+      let mut entries = place_to_diffs.into_iter().collect::<Vec<_>>();
 
       entries
         .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
@@ -150,11 +137,11 @@ struct HirPermDiffFlow<'a, 'tcx> {
   diff: HashMap<HirId, HashMap<Place<'tcx>, PermissionsDataDiff>>,
 }
 
-macro_rules! insert_linear_range_diff {
+// FIXME: you can simplify this and you know if.
+macro_rules! insert_from_to {
   ($this:ident, $id:expr) => {
     if let Some(mir_order) = $this.ir_mapper.get_mir_locations($id) {
       let (loc1, loc2) = mir_order.get_entry_exit_locations();
-      log::debug!("BEFORE {loc1:?} AFTER {loc2:?}");
       let before_point = $this.ctxt.location_to_point(loc1);
       let after_point = $this.ctxt.location_to_point(loc2);
       let dmn_before = &$this.ctxt.permissions_domain_at_point(before_point);
@@ -164,6 +151,49 @@ macro_rules! insert_linear_range_diff {
         .unwrap_or_else(|| $this.ctxt.permissions_domain_at_point(after_point));
       let diff = dmn_before.diff(dmn_after);
       $this.diff.insert($id, diff);
+    }
+  };
+  ($this:ident, before $id1:expr, after $id2:expr) => {
+    if let Some(first_order) = $this.ir_mapper.get_mir_locations($id1) {
+      if let Some(second_order) = $this.ir_mapper.get_mir_locations($id2) {
+        let (loc1, _) = first_order.get_entry_exit_locations();
+        let (_, loc2) = second_order.get_entry_exit_locations();
+        let before_point = $this.ctxt.location_to_point(loc1);
+        let after_point = $this.ctxt.location_to_point(loc2);
+        let dmn_before = &$this.ctxt.permissions_domain_at_point(before_point);
+        let dmn_after = &$this
+          .ctxt
+          .permissions_domain_after_point_effect(after_point)
+          .unwrap_or_else(|| {
+            $this.ctxt.permissions_domain_at_point(after_point)
+          });
+        let diff = dmn_before.diff(dmn_after);
+        $this.diff.insert($id2, diff);
+      }
+    }
+  };
+  ($this:ident, after $id1:expr, after $id2:expr) => {
+    if let Some(first_order) = $this.ir_mapper.get_mir_locations($id1) {
+      if let Some(second_order) = $this.ir_mapper.get_mir_locations($id2) {
+        let (_, loc1) = first_order.get_entry_exit_locations();
+        let (_, loc2) = second_order.get_entry_exit_locations();
+        let before_point = $this.ctxt.location_to_point(loc1);
+        let after_point = $this.ctxt.location_to_point(loc2);
+        let dmn_before = &$this
+          .ctxt
+          .permissions_domain_after_point_effect(before_point)
+          .unwrap_or_else(|| {
+            $this.ctxt.permissions_domain_at_point(before_point)
+          });
+        let dmn_after = &$this
+          .ctxt
+          .permissions_domain_after_point_effect(after_point)
+          .unwrap_or_else(|| {
+            $this.ctxt.permissions_domain_at_point(after_point)
+          });
+        let diff = dmn_before.diff(dmn_after);
+        $this.diff.insert($id2, diff);
+      }
     }
   };
 }
@@ -195,14 +225,15 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
       }
       SK::Local(local) => {
         self.visit_local(local);
+        insert_from_to!(self, id);
       }
       SK::Expr(expr) => {
         self.visit_expr(expr);
-        insert_linear_range_diff!(self, id);
+        insert_from_to!(self, id);
       }
       SK::Semi(expr) => {
         self.visit_expr(expr);
-        insert_linear_range_diff!(self, id);
+        insert_from_to!(self, id);
       }
     }
   }
@@ -229,7 +260,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
     if let Some(init) = local.init {
       self.visit_expr(init);
     }
-    insert_linear_range_diff!(self, id);
+    insert_from_to!(self, id);
   }
 
   fn visit_block(&mut self, block: &'tcx hir::Block) {
@@ -274,6 +305,11 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
     }
   }
 
+  // TODO: permission differences are added randomly to make some
+  // small examples I have work, but we need a principled way to talk
+  // about the different changes for a given HIR Node.
+  // I (gavin) think this should include some notion of "all the
+  // MIR statements nested under".
   fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
     use hir::{ExprKind as EK, LoopSource, MatchSource, StmtKind as SK};
 
@@ -286,30 +322,30 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
 
       EK::DropTemps(expr) => {
         self.visit_expr(expr);
-        // insert_linear_range_diff!(self, id);
       }
 
       EK::Binary(_, lhs, rhs) => {
         self.visit_expr(lhs);
         self.visit_expr(rhs);
-        // insert_linear_range_diff!(self, id);
+      }
+
+      EK::Unary(_, expr) => {
+        self.visit_expr(expr);
       }
 
       EK::Assign(lhs, rhs, _) => {
         self.visit_expr(rhs);
         self.visit_expr(lhs);
-        insert_linear_range_diff!(self, id);
+        insert_from_to!(self, id);
       }
 
       //
       EK::Block(block, _) => {
         self.visit_block(block);
-        // insert_linear_range_diff!(self, id);
       }
 
       EK::AddrOf(_, _, expr) => {
         self.visit_expr(expr);
-        insert_linear_range_diff!(self, id);
       }
 
       //
@@ -318,7 +354,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
           self.visit_expr(p);
         });
         self.visit_expr(func);
-        insert_linear_range_diff!(self, id);
+        insert_from_to!(self, id);
       }
 
       EK::MethodCall(_, rcv, args, _) => {
@@ -326,7 +362,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
           self.visit_expr(p);
         });
         self.visit_expr(rcv);
-        // insert_linear_range_diff!(self, id);
+        insert_from_to!(self, id);
       }
 
       //
@@ -334,7 +370,6 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
         if let Some(expr) = expr_opt {
           self.visit_expr(expr);
         }
-        insert_linear_range_diff!(self, id);
       }
 
       EK::If(cnd, then, else_opt) => {

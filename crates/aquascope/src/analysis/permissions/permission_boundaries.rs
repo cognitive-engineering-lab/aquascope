@@ -135,7 +135,7 @@ pub fn pair_permissions_to_calls(
       };
 
       let path = ctxt.place_to_path(&place_1);
-      let mut actual = ctxt.permissions_at_point(path, point);
+      let mut actual = ctxt.permissions_data_at_point(path, point).permissions;
 
       // If an operand is copied, that means that they "gain" drop permissions.
       // An example of this would be the following:

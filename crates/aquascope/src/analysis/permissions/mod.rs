@@ -84,6 +84,11 @@ pub struct PermissionsData {
   pub loan_read_refined: bool,
   pub loan_write_refined: bool,
   pub loan_drop_refined: bool,
+
+  // Even though these are derivable from the
+  // above information, we'll keep it explicitly so
+  // others don't have to compute permissions.
+  pub permissions: Permissions,
 }
 
 /// A point where the permissions reality are checked against their expectations.
@@ -146,7 +151,7 @@ pub struct RefinementRegion {
 #[ts(export)]
 pub struct PermissionsStateStep {
   pub location: Range,
-  pub state: Vec<(String, PermissionsDiff)>,
+  pub state: Vec<(String, PermissionsDataDiff)>,
 }
 
 #[derive(Clone, Debug, Serialize, TS)]
@@ -174,50 +179,61 @@ pub trait Difference {
   fn diff(&self, rhs: Self) -> Self::Diff;
 }
 
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export)]
+pub struct PermissionsDataDiff {
+  pub is_live: BoolStep,
+  pub type_droppable: BoolStep,
+  pub type_writeable: BoolStep,
+  pub loan_read_refined: BoolStep,
+  pub loan_write_refined: BoolStep,
+  pub loan_drop_refined: BoolStep,
+  pub path_moved: BoolStep,
+  pub permissions: PermissionsDiff,
+}
+
+impl PermissionsDataDiff {
+  fn is_empty(&self) -> bool {
+    // self.is_live.is_empty()
+    //   && self.type_droppable.is_empty()
+    //   && self.type_writeable.is_empty()
+    //   && self.loan_read_refined.is_empty()
+    //   && self.loan_write_refined.is_empty()
+    //   && self.loan_drop_refined.is_empty()
+    //   && self.path_moved.is_empty()
+    //   &&
+    self.permissions.is_empty()
+  }
+}
+
 // A handy macro for making difference types with only BoolStep fields
 // TODO(gavinleroy): a diff type should be automatically generated if all the fields
 // in a macro can ge diffed, but I'll save that for later. Below is mostly a syntactic
 // macro to simplify things for the time being.
-
+// FIXME: no longer sufficient *rewrite*. Shouldn't need to pass the name $diff
+// and fields should be able to have a specified type, if not provided then
+// the default BoolStep can be taken.
 macro_rules! make_diff {
-  ($name:ident, $($i:ident),*) => {
+  ($base:ident => $diff:ident { $($i:ident),* }) => {
     #[derive(Clone, Debug, Serialize, TS)]
     #[ts(export)]
-    pub struct $name {
+    pub struct $diff {
       $( pub $i: BoolStep, )*
     }
 
-    impl $name {
+    impl $diff {
       fn is_empty(&self) -> bool {
         $( self.$i.is_empty() && )* true
       }
-    }
-  }
-}
 
-make_diff!(PermissionsDiff, read, write, drop);
-make_diff!(
-  PermissionsDataDiff,
-  is_live,
-  type_droppable,
-  type_writeable,
-  loan_read_refined,
-  loan_write_refined,
-  loan_drop_refined,
-  path_moved
-);
-
-macro_rules! impl_split {
-  ($from:ident, $to:ident, $($i:ident),*) => {
-    impl $from {
-      fn split(&self) -> ($to, $to) {
+      fn split(&self) -> ($base, $base) {
         (
-          $to {
+          $base {
             $(
               $i: self.$i.split().0,
             )*
           },
-          $to {
+          $base {
             $(
               $i: self.$i.split().1,
             )*
@@ -228,18 +244,9 @@ macro_rules! impl_split {
   }
 }
 
-impl_split!(PermissionsDiff, Permissions, read, write, drop);
-impl_split!(
-  PermissionsDataDiff,
-  PermissionsData,
-  is_live,
-  type_droppable,
-  type_writeable,
-  loan_read_refined,
-  loan_write_refined,
-  loan_drop_refined,
-  path_moved
-);
+make_diff!(Permissions => PermissionsDiff {
+   read, write, drop
+});
 
 // ---------------------
 // Impls for above types
@@ -283,6 +290,7 @@ impl Difference for PermissionsData {
       loan_write_refined: self.loan_write_refined.diff(rhs.loan_write_refined),
       loan_drop_refined: self.loan_drop_refined.diff(rhs.loan_drop_refined),
       path_moved: self.path_moved.diff(rhs.path_moved),
+      permissions: self.permissions.diff(rhs.permissions),
     }
   }
 }
@@ -314,24 +322,6 @@ impl std::fmt::Debug for Permissions {
         write!(f, "D")?;
       }
       Ok(())
-    }
-  }
-}
-
-impl From<PermissionsData> for Permissions {
-  fn from(data: PermissionsData) -> Permissions {
-    if !data.is_live {
-      Permissions::bottom()
-    } else {
-      Permissions {
-        read: !data.path_moved && !data.loan_read_refined,
-        write: data.type_writeable
-          && !data.path_moved
-          && !data.loan_write_refined,
-        drop: data.type_droppable
-          && !data.path_moved
-          && !data.loan_drop_refined,
-      }
     }
   }
 }

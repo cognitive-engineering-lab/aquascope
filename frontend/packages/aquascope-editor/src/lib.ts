@@ -91,22 +91,26 @@ type ServerResponse = {
 // `;
 
 export const defaultCodeExample: string = `
-fn dummy_use(_n: &i32) {}
+fn kill(s: String) {}
 
-fn dump_me() {
-  let mut x: i32 = 0;
+fn main() {
+  let mut s1 = String::from("hi");
 
-  let mut y: i32 = 0;
+  let mut s3 = String::from("hello");
 
-  let z = &mut x;
+  let s2 = s1;
 
-  *z = y;
+  let s4 = &mut s3;
 
-  dummy_use(&z);
-}
+  s3.push_str("i can't get pushed :(");
+  s4.push_str("i can!");
 
-fn main() {}
-`;
+  s1 = String::from("here we go again...");
+
+  kill(s3);
+  kill(s2);
+  kill(s1);
+}`;
 
 let readOnly = new Compartment();
 let mainKeybinding = new Compartment();

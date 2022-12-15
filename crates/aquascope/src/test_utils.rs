@@ -20,7 +20,7 @@ use rustc_span::{source_map::FileLoader, BytePos};
 
 use crate::analysis::{
   self,
-  permissions::{Permissions, PermissionsDiff},
+  permissions::{Permissions, PermissionsDataDiff},
 };
 
 struct StringLoader(String);
@@ -210,7 +210,8 @@ pub fn test_refinements_in_file(path: &Path) {
           };
 
           let point = ctxt.location_to_point(loc);
-          let computed_perms = ctxt.permissions_at_point(path, point);
+          let computed_perms =
+            ctxt.permissions_data_at_point(path, point).permissions;
 
           if *expected_perms != computed_perms {
             panic!(
@@ -231,7 +232,7 @@ pub fn test_refinements_in_file(path: &Path) {
 
 pub fn test_steps_in_file(
   path: &Path,
-  assert_snap: impl Fn(String, Vec<(usize, Vec<(String, PermissionsDiff)>)>)
+  assert_snap: impl Fn(String, Vec<(usize, Vec<(String, PermissionsDataDiff)>)>)
     + Send
     + Sync
     + Copy,

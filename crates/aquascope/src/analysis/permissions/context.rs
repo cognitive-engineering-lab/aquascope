@@ -134,10 +134,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     }
   }
 
-  pub fn permissions_at_point(&self, path: Path, point: Point) -> Permissions {
-    self.permissions_data_at_point(path, point).into()
-  }
-
   // TODO: expand the data stored format to include all of the factors which
   // can modify a given set. (gavin read only). REMOVE
   pub fn permissions_data_at_point(
@@ -164,14 +160,32 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let never_write = self.permissions_output.never_write.contains(&path);
     let never_drop = self.permissions_output.never_drop.contains(&path);
 
+    let type_droppable = !never_drop;
+    let type_writeable = !never_write;
+    let path_moved = path_moved_at.contains(path);
+    let loan_read_refined = cannot_read.contains_key(path);
+    let loan_write_refined = cannot_write.contains_key(path);
+    let loan_drop_refined = cannot_drop.contains_key(path);
+
+    let permissions = if !is_live {
+      Permissions::bottom()
+    } else {
+      Permissions {
+        read: !path_moved && !loan_read_refined,
+        write: type_writeable && !path_moved && !loan_write_refined,
+        drop: type_droppable && !path_moved && !loan_drop_refined,
+      }
+    };
+
     PermissionsData {
       is_live,
-      type_droppable: !never_drop,
-      type_writeable: !never_write,
-      path_moved: path_moved_at.contains(path),
-      loan_read_refined: cannot_read.contains_key(path),
-      loan_write_refined: cannot_write.contains_key(path),
-      loan_drop_refined: cannot_drop.contains_key(path),
+      type_droppable,
+      type_writeable,
+      path_moved,
+      loan_read_refined,
+      loan_write_refined,
+      loan_drop_refined,
+      permissions,
     }
   }
 

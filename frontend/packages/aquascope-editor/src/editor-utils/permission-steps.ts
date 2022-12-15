@@ -6,7 +6,7 @@ import {
   hoverTooltip,
 } from "@codemirror/view";
 
-import { BoolStep, PermissionsDiff, PermissionsStateStep } from "../types";
+import { BoolStep, PermissionsDataDiff, PermissionsStateStep } from "../types";
 import {
   Icon,
   IconField,
@@ -31,7 +31,7 @@ type PermissionStepTable = [Array<PermDiffRowIcon>, number];
 // that information so it can be simply read.
 class PermDiffRowIcon implements Icon {
   readonly display: boolean = true;
-  constructor(readonly path: string, readonly diffs: PermissionsDiff) {}
+  constructor(readonly path: string, readonly diffs: PermissionsDataDiff) {}
 
   getAuxiliary(): Array<Range<Decoration>> {
     return [];
@@ -44,6 +44,7 @@ class PermDiffRowIcon implements Icon {
     let permC = document.createElement("td");
 
     let pathSpan = document.createElement("span");
+    let actionIcos = document.createElement("div");
     let rSpan = document.createElement("span");
     let wSpan = document.createElement("span");
     let dSpan = document.createElement("span");
@@ -59,14 +60,54 @@ class PermDiffRowIcon implements Icon {
       // Currently we only display the *differences* so we'll skip the None case.
     };
 
+    let addActionIcons = (div: HTMLElement, data: PermissionsDataDiff) => {
+      let pushIcon = (name: string) => {
+        let icon = document.createElement("i");
+        icon.classList.add("fa-solid");
+        icon.classList.add(name);
+        icon.classList.add("aquascope-action-indicator");
+        div.appendChild(icon);
+      };
+      // There is a sort of hierarchy to the changing permissions:
+      // 1. path liveness is most important. If it changes, this radically
+      //    has an affect on everything.
+      // 2. A path getting moved is the second highest. Again, a moved path
+      //    cannot be borrowed so it sort of trumps any loan refinements.
+      // 3. At the bottom, loan refinement changes which can only have an
+      //    affect if the prior two didn't change anything.
+      if (data.is_live.type === "Low") {
+        pushIcon("fa-skull");
+      } else if (data.is_live.type === "High") {
+        pushIcon("fa-cake-candles");
+      } else if (data.path_moved.type === "High") {
+        pushIcon("fa-bicycle");
+      } else if (data.path_moved.type === "Low") {
+        pushIcon("fa-recycle");
+      } else if (data.loan_write_refined.type === "High") {
+        pushIcon("fa-share");
+      } else if (data.loan_read_refined.type === "High") {
+        pushIcon("fa-share");
+      } else if (data.loan_write_refined.type === "Low") {
+        // I wanted to use share-all and reply-all for mutable
+        // loans but share-all is a pro icon :(
+        // pushIcon("fa-reply-all");
+        pushIcon("fa-reply");
+      } else if (data.loan_read_refined.type === "Low") {
+        pushIcon("fa-reply");
+      }
+    };
+
     pathSpan.classList.add("perm-step-path");
     pathSpan.textContent = this.path;
 
-    stylePerm(rSpan, this.diffs.read, readChar);
-    stylePerm(wSpan, this.diffs.write, writeChar);
-    stylePerm(dSpan, this.diffs.drop, dropChar);
+    stylePerm(rSpan, this.diffs.permissions.read, readChar);
+    stylePerm(wSpan, this.diffs.permissions.write, writeChar);
+    stylePerm(dSpan, this.diffs.permissions.drop, dropChar);
+
+    addActionIcons(actionIcos, this.diffs);
 
     pathC.appendChild(pathSpan);
+    pathC.appendChild(actionIcos);
 
     permC.appendChild(rSpan);
     permC.appendChild(wSpan);

@@ -78,13 +78,6 @@
   }
 
   /* Permission Steps */
-  .aquascope-kill-indicator {
-    color: var(--icons);
-    border-color: var(--icons);
-    font-size: 0.6em;
-    // vertical-align: bottom;
-  }
-
   .perm-step-widget {
     display: inline-block;
     color: #ccc;
@@ -123,6 +116,12 @@
   span.perm-diff-sub {
     /* display: inline-block; */
     color: rgb(255, 66, 68);
+  }
+
+  .aquascope-action-indicator {
+    // color: var(--icons);
+    // border-color: var(--icons);
+    font-size: 0.6em;
   }
 
   /* **************** */
