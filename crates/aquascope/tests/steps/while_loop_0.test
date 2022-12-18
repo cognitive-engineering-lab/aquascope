@@ -1,0 +1,10 @@
+fn main() {
+  let mut s1 = String::from("");
+  let b = &mut s1;
+
+  while true {
+    b.push_str("yay!");
+  }
+
+  s1.push_str("done");
+}

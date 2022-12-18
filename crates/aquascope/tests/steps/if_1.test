@@ -1,0 +1,17 @@
+fn main() {
+  let mut s1 = String::from("");
+  let mut s2 = String::from("");
+
+  let b;
+
+  if true {
+    b = &mut s1;
+  } else {
+    b = &mut s2;
+  }
+
+  b.push_str("ok");
+
+  s1.push_str("done");
+  s2.push_str("done");
+}

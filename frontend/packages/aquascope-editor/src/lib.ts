@@ -91,25 +91,22 @@ type ServerResponse = {
 // `;
 
 export const defaultCodeExample: string = `
-fn kill(s: String) {}
+trait Kill {
+  fn kill(self);
+}
+
+impl Kill for String {
+  fn kill(self) {}
+}
 
 fn main() {
   let mut s1 = String::from("hi");
+  let mut s2 = String::from("hello");
 
-  let mut s3 = String::from("hello");
+  // something here
 
-  let s2 = s1;
-
-  let s4 = &mut s3;
-
-  s3.push_str("i can't get pushed :(");
-  s4.push_str("i can!");
-
-  s1 = String::from("here we go again...");
-
-  kill(s3);
-  kill(s2);
-  kill(s1);
+  s2.kill();
+  s1.kill();
 }`;
 
 let readOnly = new Compartment();

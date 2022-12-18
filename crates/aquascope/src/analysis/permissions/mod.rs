@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod context;
+mod graphviz;
 pub mod permission_boundaries;
 pub mod permission_stepper;
 mod permissions_datalog;

@@ -1,0 +1,12 @@
+fn main() {
+  let mut s1 = String::from("");
+  let b = &mut s1;
+  let mut v = vec![0, 1, 2, 3];
+
+  for _ in v.iter() {
+    b.push_str("yay!");
+  }
+
+  v.push(4);
+  s1.push_str("done");
+}

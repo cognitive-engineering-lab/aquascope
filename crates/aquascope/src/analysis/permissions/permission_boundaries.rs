@@ -127,7 +127,28 @@ pub fn pair_permissions_to_calls(
               };
               op.to_place().unwrap()
             }
-            _ => unimplemented!(),
+            Rvalue::CopyForDeref(place) => *place,
+
+            // TODO: revisit the rest of these which are sure to come up in the wild.
+            Rvalue::Aggregate(..) => place_0,
+
+            Rvalue::Repeat(..) => unimplemented!("Rvalue::repeat"),
+            Rvalue::ThreadLocalRef(..) => {
+              unimplemented!("Rvalue::thread-local-ref")
+            }
+            Rvalue::AddressOf(..) => unimplemented!("Rvalue::address-of"),
+            Rvalue::Len(..) => unimplemented!("Rvalue::len"),
+            Rvalue::Cast(..) => unimplemented!("Rvalue::cast"),
+            Rvalue::BinaryOp(..) => unimplemented!("Rvalue::binop"),
+            Rvalue::CheckedBinaryOp(..) => {
+              unimplemented!("Rvalue::checkedbinop")
+            }
+            Rvalue::NullaryOp(..) => unimplemented!("Rvalue::nullaryop"),
+            Rvalue::UnaryOp(..) => unimplemented!("Rvalue::unaryop"),
+            Rvalue::Discriminant(..) => unimplemented!("Rvalue::discriminatn"),
+            Rvalue::ShallowInitBox(..) => {
+              unimplemented!("Rvalue::shallow-init-box")
+            }
           };
           (place, *point_assign)
         }

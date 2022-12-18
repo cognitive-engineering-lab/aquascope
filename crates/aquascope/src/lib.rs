@@ -6,7 +6,9 @@
   type_alias_impl_trait,
   trait_alias,
   let_chains,
-  unboxed_closures
+  unboxed_closures,
+  once_cell,
+  exact_size_is_empty
 )]
 
 #[macro_use]

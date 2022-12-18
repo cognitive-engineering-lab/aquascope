@@ -1,5 +1,5 @@
 use aquascope::test_utils;
-use insta::{self, Settings};
+use insta::{self};
 
 fn permissions(dir: &str) {
   test_utils::run_in_dir(dir, |path| {

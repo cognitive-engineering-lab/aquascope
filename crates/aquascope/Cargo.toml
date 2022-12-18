@@ -20,6 +20,7 @@ ts-rs = "6.1"
 
 # testing
 lazy_static = "1.4"
+regex = "1"
 
 [dev-dependencies]
 env_logger = "0.9.3"

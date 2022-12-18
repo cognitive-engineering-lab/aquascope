@@ -8,7 +8,7 @@ use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{def_id::DefId, BodyId, Mutability};
 use rustc_index::vec::IndexVec;
 use rustc_middle::{
-  mir::{BorrowKind, Local, Location, Place},
+  mir::{BorrowKind, Local, Location, Place, TerminatorKind},
   ty::TyCtxt,
 };
 use rustc_mir_dataflow::move_paths::MoveData;
@@ -219,45 +219,53 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       .into()
   }
 
-  /// HACK: this method should be called with extreme caution, please prefer `permissions_domain_at_point`.
-  ///
-  /// This method currently exists to provide a quick fix for the following problem. At a given MIR Location,
-  /// a statement could cause some permissions change. For example:
-  ///
-  /// ```
-  /// let s = String::from("hi!");
-  /// ```
-  ///
-  /// The HIR node for this Local will have a few MIR locations associated with it, simplified these are:
-  ///
-  /// ```
-  /// StorageLive(s);
-  /// FakeRead(ForLet(None), s);
-  /// ```
-  ///
-  /// When finding the permission steps throughout a program, we need to talk about the before, and after
-  /// effects of a node. For the above Local assignment, we want to reason about the before and after state,
-  /// which includes any trailing affect the assignment might have.
-  ///
-  /// TODO: a much better way to handle this is to include a notion of Before / After for our permissions
-  /// analysis. This would give us a more principled way to look at it rather than manipulating the
-  /// location.
+  // HACK: this method should be called with extreme caution, please prefer `permissions_domain_at_point`.
+  //
+  // This method currently exists to provide a quick fix for the following problem. At a given MIR Location,
+  // a statement could cause some permissions change. For example:
+  //
+  // ```
+  // let s = String::from("hi!");
+  // ```
+  //
+  // The HIR node for this Local will have a few MIR locations associated with it, simplified these are:
+  //
+  // ```
+  // StorageLive(s);
+  // FakeRead(ForLet(None), s);
+  // ```
+  //
+  // When finding the permission steps throughout a program, we need to talk about the before, and after
+  // effects of a node. For the above Local assignment, we want to reason about the before and after state,
+  // which includes any trailing affect the assignment might have.
+  //
+  // TODO: a much better way to handle this is to include a notion of Before / After for our permissions
+  // analysis. This would give us a more principled way to look at it rather than manipulating the
+  // location.
   pub fn permissions_domain_after_point_effect(
     &self,
     point: Point,
   ) -> Option<PermissionsDomain<'tcx>> {
     let location = self.point_to_location(point);
-    let next_location = location.successor_within_block();
-    let block = next_location.block;
-    let idx = next_location.statement_index;
     let body = &self.body_with_facts.body;
-    // If the point passed in was a Terminator, then we cannot move the location forward.
-    let block_data = &body.basic_blocks[block];
-    if idx < block_data.statements.len() {
+    let block_data = &body.basic_blocks[location.block];
+    if block_data.statements.len() == location.statement_index {
+      let terminator = block_data.terminator();
+      match terminator.kind {
+        TerminatorKind::Goto { target } => {
+          let loc = Location {
+            block: target,
+            statement_index: 0,
+          };
+          let point = self.location_to_point(loc);
+          Some(self.permissions_domain_at_point(point))
+        }
+        _ => None,
+      }
+    } else {
+      let next_location = location.successor_within_block();
       let point = self.location_to_point(next_location);
       Some(self.permissions_domain_at_point(point))
-    } else {
-      None
     }
   }
 

@@ -1,36 +1,25 @@
 //! Main data structure for mapping HIR to MIR and vice-versa.
-use std::{cmp::Ordering, collections::hash_map::Entry, fmt};
+use std::fmt;
 
-use flowistry::mir::utils::{BodyExt, PlaceExt as FlowistryPlaceExt};
-use itertools::Itertools;
+use flowistry::mir::utils::BodyExt;
 use rustc_data_structures::{
+  captures::Captures,
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
-  graph::{dominators::Dominators, vec_graph::VecGraph, *},
+  graph::{dominators::Dominators, *},
 };
-use rustc_hir::{
-  self as hir,
-  intravisit::{self, Visitor as HirVisitor},
-  HirId,
-};
-use rustc_index::bit_set::{BitSet, HybridBitSet, SparseBitMatrix};
+use rustc_hir::{self as hir, HirId};
+use rustc_index::bit_set::{BitSet, SparseBitMatrix};
 use rustc_middle::{
-  hir::nested_filter,
   mir::{
-    self, visit::Visitor as MirVisitor, BasicBlock, Body, Local, Location,
-    Place,
+    self, visit::Visitor as MirVisitor, BasicBlock, Body, Location, Place,
   },
   ty::TyCtxt,
 };
-use rustc_mir_dataflow::{Analysis, JoinSemiLattice, ResultsVisitor};
-use rustc_span::Span;
-
-use crate::{mir::utils::PlaceExt as AquascopePlaceExt, Range};
 
 pub struct IRMapper<'a, 'tcx> {
   // flowistry::Spanner
   tcx: TyCtxt<'tcx>,
   body: &'a Body<'tcx>,
-  body_id: hir::BodyId,
   hir_to_mir: HashMap<HirId, HashSet<Location>>,
   gather_mode: GatherMode,
   dominators: Dominators<BasicBlock>,
@@ -61,18 +50,19 @@ pub struct HirNodeLocations {
   pub outer: Vec<Location>,
 }
 
-struct NestedLocations<'tcx> {
-  tcx: TyCtxt<'tcx>,
-  target: HirId,
-  locs: Vec<HirId>,
-}
-
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum GatherMode {
   IgnoreCleanup,
   All,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum GatherDepth {
+  Outer,
+  Nested,
+}
+
+#[derive(Debug)]
 pub struct MirOrderedLocations {
   entry_block: BasicBlock,
   exit_block: BasicBlock,
@@ -114,6 +104,15 @@ impl MirOrderedLocations {
     let mx = self.maximum();
     (m, mx)
   }
+
+  fn values(&self) -> impl Iterator<Item = Location> + Captures<'_> {
+    self.locations.iter().flat_map(|(bb, idxs)| {
+      idxs.iter().map(|idx| Location {
+        block: *bb,
+        statement_index: *idx,
+      })
+    })
+  }
 }
 
 impl<'a, 'tcx> IRMapper<'a, 'tcx>
@@ -123,7 +122,6 @@ where
   pub fn new(
     tcx: TyCtxt<'tcx>,
     body: &'a Body<'tcx>,
-    body_id: hir::BodyId,
     gather_mode: GatherMode,
   ) -> Self {
     let dominators = body.basic_blocks.dominators();
@@ -131,7 +129,6 @@ where
     let mut ir_map = IRMapper {
       tcx,
       body,
-      body_id,
       dominators,
       post_dominators: control_dependencies,
       hir_to_mir: HashMap::default(),
@@ -141,15 +138,35 @@ where
     ir_map.visit_body(body);
 
     let hir = tcx.hir();
-    for (id, locs) in ir_map.hir_to_mir.iter() {
-      let hirs = hir.node_to_string(*id);
-      log::debug!("Associated: {hirs} {locs:#?}");
+    for (id, _locs) in ir_map.hir_to_mir.iter() {
+      let _hirs = hir.node_to_string(*id);
     }
 
     #[cfg(debug_assertions)]
     ir_map.check_invariants();
 
     ir_map
+  }
+
+  pub fn local_assigned_place(
+    &self,
+    local: &hir::Local,
+  ) -> Option<Place<'tcx>> {
+    use either::Either;
+    use mir::{FakeReadCause as FRC, StatementKind as SK};
+    let id = local.hir_id;
+    if let Some(mol) = self.get_mir_locations(id, GatherDepth::Outer) {
+      for loc in mol.values() {
+        match self.body.stmt_at(loc) {
+          Either::Left(mir::Statement {
+            kind: SK::FakeRead(box (FRC::ForLet(_), place)),
+            ..
+          }) => return Some(*place),
+          _ => continue,
+        }
+      }
+    }
+    None
   }
 
   /// Produces a MirOrderedLocations which is defined as follows.
@@ -164,27 +181,48 @@ where
   pub fn get_mir_locations(
     &self,
     hir_id: HirId,
+    depth: GatherDepth,
   ) -> Option<MirOrderedLocations> {
     let empty_set = &HashSet::default();
     let outer = self.hir_to_mir.get(&hir_id).unwrap_or(empty_set);
 
-    if outer.is_empty() {
+    let mut locations = outer.clone();
+
+    match depth {
+      GatherDepth::Outer => (),
+      // Gather all the mir locations for every HirId nested under this one.
+      GatherDepth::Nested => {
+        let hir = self.tcx.hir();
+        self.hir_to_mir.iter().for_each(|(child_id, locs)| {
+          if hir.parent_id_iter(*child_id).any(|id| id == hir_id) {
+            locs.iter().for_each(|l| {
+              locations.insert(*l);
+            });
+          }
+        });
+      }
+    };
+
+    if locations.is_empty() {
       return None;
     }
 
-    log::debug!("Gathering outer nodes {:#?}", outer);
-
-    let mut total_location_map: HashMap<BasicBlock, Vec<usize>> =
-      outer.into_iter().fold(HashMap::default(), |mut acc, loc| {
+    let mut total_location_map: HashMap<BasicBlock, Vec<usize>> = locations
+      .into_iter()
+      .fold(HashMap::default(), |mut acc, loc| {
         let bb = loc.block;
         let idx = loc.statement_index;
-        acc.entry(bb).or_default().push(idx);
+        if !self.is_block_unreachable(bb) {
+          acc.entry(bb).or_default().push(idx);
+        }
         acc
       });
 
     for idxs in total_location_map.values_mut() {
       idxs.sort_unstable();
     }
+
+    log::debug!("Found locations: {total_location_map:#?}");
 
     let basic_blocks = total_location_map.keys().collect::<Vec<_>>();
 
@@ -206,11 +244,19 @@ where
       })
       .unwrap();
 
+    log::debug!("Entry: {entry_block:?} Exit {exit_block:?}");
+
     Some(MirOrderedLocations {
       entry_block: **entry_block,
       exit_block: **exit_block,
       locations: total_location_map,
     })
+  }
+
+  fn is_block_unreachable(&self, block: BasicBlock) -> bool {
+    let block_data = &self.body.basic_blocks[block];
+    let term = block_data.terminator();
+    matches!(term.kind, mir::TerminatorKind::Unreachable)
   }
 
   // Check the given invariants that I am assuming hold about this data structure.
@@ -237,8 +283,11 @@ where
 
 // -------------------------------------------
 // Graph for post-dominator set.
-// HACK: copied from flowistry, see if you can
-// reuse bits.
+// HACK: a majority of the functionality was copied from Flowistry's
+// ControlDependencies. You should be able to reuse bits.
+//
+// See:
+// https://github.com/willcrichton/flowistry/blob/5eb8f457e953c1b009e0b197adf1769b7dded590/crates/flowistry/src/mir/control_dependencies.rs#L98
 
 struct BodyReversed<'a, 'tcx> {
   body: &'a Body<'tcx>,
@@ -379,7 +428,7 @@ impl PostDominators {
     ret: BasicBlock,
   ) -> SparseBitMatrix<BasicBlock, BasicBlock> {
     let doms = compute_post_dominators(body, ret);
-    log::debug!("doms={doms:?}");
+    log::debug!("post-doms={doms:#?}");
 
     let n = body.basic_blocks.len();
     let mut domsp = SparseBitMatrix::<BasicBlock, BasicBlock>::new(n);
@@ -395,60 +444,6 @@ impl PostDominators {
 
   pub fn is_postdominated_by(&self, b1: BasicBlock, pdom: BasicBlock) -> bool {
     self.0.row(pdom).map_or(false, |row| row.contains(b1))
-  }
-}
-
-// ---------------------------------------------------------
-// Gather all nested HirIds under the NestedLocations.target
-
-macro_rules! remember_nested {
-  ($me:ident, $with_id:expr) => {
-    if $me
-      .tcx
-      .hir()
-      .parent_id_iter($me.target)
-      .any(|e| e == $me.target)
-    {
-      $me.locs.push($with_id.hir_id);
-    }
-  };
-}
-
-impl<'tcx> HirVisitor<'tcx> for NestedLocations<'tcx> {
-  type NestedFilter = nested_filter::All;
-
-  fn nested_visit_map(&mut self) -> Self::Map {
-    self.tcx.hir()
-  }
-
-  fn visit_block(&mut self, v: &'tcx hir::Block<'tcx>) {
-    remember_nested!(self, v);
-    intravisit::walk_block(self, v);
-  }
-
-  fn visit_local(&mut self, v: &'tcx hir::Local<'tcx>) {
-    remember_nested!(self, v);
-    intravisit::walk_local(self, v);
-  }
-
-  fn visit_stmt(&mut self, v: &'tcx hir::Stmt<'tcx>) {
-    remember_nested!(self, v);
-    intravisit::walk_stmt(self, v);
-  }
-
-  fn visit_arm(&mut self, v: &'tcx hir::Arm<'tcx>) {
-    remember_nested!(self, v);
-    intravisit::walk_arm(self, v);
-  }
-
-  fn visit_expr(&mut self, v: &'tcx hir::Expr<'tcx>) {
-    remember_nested!(self, v);
-    intravisit::walk_expr(self, v);
-  }
-
-  fn visit_let_expr(&mut self, v: &'tcx hir::Let<'tcx>) {
-    remember_nested!(self, v);
-    intravisit::walk_let_expr(self, v);
   }
 }
 
@@ -474,7 +469,7 @@ impl<'tcx> MirVisitor<'tcx> for IRMapper<'_, 'tcx> {
 
   fn visit_statement(
     &mut self,
-    terminator: &mir::Statement<'tcx>,
+    _terminator: &mir::Statement<'tcx>,
     location: Location,
   ) {
     let hir_id = self.body.location_to_hir_id(location);
@@ -483,7 +478,7 @@ impl<'tcx> MirVisitor<'tcx> for IRMapper<'_, 'tcx> {
 
   fn visit_terminator(
     &mut self,
-    terminator: &mir::Terminator<'tcx>,
+    _terminator: &mir::Terminator<'tcx>,
     location: Location,
   ) {
     let hir_id = self.body.location_to_hir_id(location);
