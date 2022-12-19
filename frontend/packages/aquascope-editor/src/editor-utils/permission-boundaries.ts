@@ -92,10 +92,6 @@ class SinglePermIcon implements Icon {
 
     const refinedRegion = this.onHover as RefinementRegion;
 
-    console.log(
-      `${refinedRegion.refiner_point.char_start} -- ${refinedRegion.refiner_point.char_end}`
-    );
-
     let loanDeco = Decoration.mark({
       class: "aquascope-loan",
       tagName: this.loanTag,
@@ -115,23 +111,23 @@ class SinglePermIcon implements Icon {
         return highlightedRange;
       });
 
-    // TODO: you can probably get rid of the start / end as
-    // soon as you feel confident enough about the spans
-    // being generated.
-
+    // The start and end are the colored braces which used
+    // to indicate the start and end of a refinement region.
+    // We aren't using them currently but who knows if they'll
+    // be wanted in the future for anything.
     let start = this.start;
     let charStart = refinedRegion.start.char_start;
-    let startDeco = Decoration.widget({
+    let _startDeco = Decoration.widget({
       widget: new RegionEnd(start),
     }).range(charStart);
 
     let end = this.end;
     let charEnd = refinedRegion.end.char_end;
-    let endDeco = Decoration.widget({
+    let _endDeco = Decoration.widget({
       widget: new RegionEnd(end),
     }).range(charEnd);
 
-    let extraDecos = [loanDeco, /* startDeco, endDeco, */ ...regionDecos];
+    let extraDecos = [loanDeco, ...regionDecos];
 
     return extraDecos;
   }
@@ -226,10 +222,13 @@ class BoundaryPointWidget extends WidgetType {
       let fillColor: Color = icoI.actual ? icoI.color : whiteColor;
       ico.setAttribute("fill", fillColor.toString());
       ico.setAttribute("stroke", icoI.color.toString());
+      ico.dataset.bufferPos = this.pos.toString();
       if (icoI.wasCopied) {
-        ico.classList.add("copied-permission");
-        ico.dataset.bufferPos = this.pos.toString();
+        ico.classList.add("copied-tip");
+      } else if (icoI.onHover?.type === "InsufficientType") {
+        ico.classList.add("insufficient-type-tip");
       }
+      // TODO: we also need to include a tooltip for moves.
       wrap.appendChild(ico);
     });
 
@@ -302,7 +301,7 @@ let boundaryStateField = genStateField<Array<BoundaryPoint>>(
 export const copiedValueHover = hoverTooltip(
   (_view, pos: number, side: number) => {
     let copyPoints = Array.from(
-      document.querySelectorAll<HTMLElement>(".copied-permission")
+      document.querySelectorAll<HTMLElement>(".copied-tip")
     );
 
     let sPos = pos.toString();
@@ -318,7 +317,34 @@ export const copiedValueHover = hoverTooltip(
       arrow: true,
       create(_view) {
         let dom = document.createElement("div");
-        dom.textContent = "Value was copied: creating 'Own' permission";
+        dom.textContent = "Value was copied: creating 'O' permission";
+        dom.classList.add("cm-tooltip-cursor");
+        return { dom };
+      },
+    };
+  }
+);
+
+export const insufficientTypeHover = hoverTooltip(
+  (_view, pos: number, side: number) => {
+    let copyPoints = Array.from(
+      document.querySelectorAll<HTMLElement>(".insufficient-type-tip")
+    );
+
+    let sPos = pos.toString();
+    let hovered = copyPoints.find(s => s.dataset.bufferPos == sPos);
+    if (hovered == undefined || hovered == null || side >= 0) {
+      return null;
+    }
+
+    let perm = hovered.textContent!;
+    return {
+      pos: pos,
+      above: true,
+      arrow: true,
+      create(_view) {
+        let dom = document.createElement("div");
+        dom.textContent = `Declared type does not allow for permission '${perm}'`;
         dom.classList.add("cm-tooltip-cursor");
         return { dom };
       },

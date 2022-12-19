@@ -1,4 +1,4 @@
-use flowistry::mir::utils::PlaceExt as FlowistryPlaceExt;
+use flowistry::mir::utils::{PlaceExt as FlowistryPlaceExt, SpanExt};
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::{
   self as hir,
@@ -97,6 +97,10 @@ fn prettify_permission_steps<'tcx>(
     .filter_map(|(id, place_to_diffs)| {
       let span = hir.span(id);
 
+      let span = span
+        .as_local(ctxt.body_with_facts.body.span)
+        .unwrap_or(span);
+
       let range = span_to_range(span);
       let mut entries = place_to_diffs.into_iter().collect::<Vec<_>>();
 
@@ -165,16 +169,17 @@ macro_rules! in_visibility_scope_context {
     // represents all the places where a permissions change was visible. Specifically,
     // this is the difference in PermissionsDomain @ (after_point - before_point).
     let mut visibility_here =
-      $this.ir_mapper.get_mir_locations($id, GatherDepth::Nested).map(|mir_order| {
-        let (loc1, loc2) = mir_order.get_entry_exit_locations();
-        let before_point = $this.ctxt.location_to_point(loc1);
-        let after_point = $this.ctxt.location_to_point(loc2);
-        let dmn_before = &$this.ctxt.permissions_domain_at_point(before_point);
-        let dmn_after = &$this
-          .ctxt
-          .permissions_domain_after_point_effect(after_point)
-          .unwrap_or_else(|| $this.ctxt.permissions_domain_at_point(after_point));
-        dmn_before.diff(dmn_after)
+      $this.ir_mapper.get_mir_locations($id, GatherDepth::Nested).and_then(|mir_order| {
+        mir_order.get_entry_exit_locations().map(|(loc1, loc2)| {
+          let before_point = $this.ctxt.location_to_point(loc1);
+          let after_point = $this.ctxt.location_to_point(loc2);
+          let dmn_before = &$this.ctxt.permissions_domain_at_point(before_point);
+          let dmn_after = &$this
+            .ctxt
+            .permissions_domain_after_point_effect(after_point)
+            .unwrap_or_else(|| $this.ctxt.permissions_domain_at_point(after_point));
+          dmn_before.diff(dmn_after)
+        })
       }).unwrap_or_else(|| HashMap::default());
     filter_exec_commit!($this, $id, visibility_here, $inner);
   };
@@ -183,21 +188,21 @@ macro_rules! in_visibility_scope_context {
 macro_rules! with_seamless_branching {
   ($this:tt, $k:ident, $targets:expr, $branch_cnd:expr) => {
     let id = $branch_cnd.hir_id;
+    let hir = $this.ctxt.tcx.hir();
+    log::debug!("Visiting EXPR CND: {}",  hir.node_to_string(id));
     // From the beginning to the point *after* the end location of `id`, `visibility_here`
     // represents all the places where a permissions change was visible. Specifically,
     // this is the difference in PermissionsDomain @ (after_point - before_point).
-    let (mut visibility_here, after_branch_point) =
-      $this.ir_mapper.get_mir_locations(id, GatherDepth::Nested).map(|mir_order| {
-        let (loc1, loc2) = mir_order.get_entry_exit_locations();
-        let before_point = $this.ctxt.location_to_point(loc1);
-        let after_point = $this.ctxt.location_to_point(loc2);
-        let dmn_before = &$this.ctxt.permissions_domain_at_point(before_point);
-        let dmn_after = &$this.ctxt.permissions_domain_at_point(after_point);
-        (dmn_before.diff(dmn_after), after_point)
-      }).unwrap_or_else(|| {
-        // FIXME
-        panic!("this shouldn't ever ever ever happen")
-      });
+    let (mut visibility_here, after_branch_point_opt) =
+      $this.ir_mapper.get_mir_locations(id, GatherDepth::Nested).and_then(|mir_order| {
+        mir_order.get_entry_exit_locations().map(|(loc1, loc2)| {
+          let before_point = $this.ctxt.location_to_point(loc1);
+          let after_point = $this.ctxt.location_to_point(loc2);
+          let dmn_before = &$this.ctxt.permissions_domain_at_point(before_point);
+          let dmn_after = &$this.ctxt.permissions_domain_at_point(after_point);
+          (dmn_before.diff(dmn_after), Some(after_point))
+        })
+      }).unwrap_or_else(|| (HashMap::default(), None));
     filter_exec_commit!($this, id, visibility_here, {
       intravisit::walk_expr($this, $branch_cnd);
     });
@@ -210,19 +215,22 @@ macro_rules! with_seamless_branching {
       // represents all the places where a permissions change was visible. Specifically,
       // this is the difference in PermissionsDomain @ (after_point - before_point).
       let mut visibility_here =
-        $this.ir_mapper.get_mir_locations(id, GatherDepth::Nested).map(|mir_order| {
-          let (_, loc2) = mir_order.get_entry_exit_locations();
-          let before_point = after_branch_point;
-          let after_point = $this.ctxt.location_to_point(loc2);
-          let dmn_before = &$this.ctxt.permissions_domain_at_point(before_point);
-          let dmn_after = &$this
-            .ctxt
-            .permissions_domain_after_point_effect(after_point)
-            .unwrap_or_else(|| $this.ctxt.permissions_domain_at_point(after_point));
-          dmn_before.diff(dmn_after)
+        $this.ir_mapper.get_mir_locations(id, GatherDepth::Nested).and_then(|mir_order| {
+          mir_order.get_entry_exit_locations().map(|(loc1, loc2)| {
+            let before_point = after_branch_point_opt.unwrap_or_else(|| {
+              $this.ctxt.location_to_point(loc1)
+            });
+            let after_point = $this.ctxt.location_to_point(loc2);
+            let dmn_before = &$this.ctxt.permissions_domain_at_point(before_point);
+            let dmn_after = &$this
+              .ctxt
+              .permissions_domain_after_point_effect(after_point)
+              .unwrap_or_else(|| $this.ctxt.permissions_domain_at_point(after_point));
+            dmn_before.diff(dmn_after)
+          })
         }).unwrap_or_else(|| {
           // FIXME
-          panic!("this shouldn't ever ever ever happen")
+          panic!("this should not happen!")
         });
       filter_exec_commit!($this, id, visibility_here, {
         intravisit::$k($this, target);
@@ -257,6 +265,18 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
   }
 
   fn visit_body(&mut self, body: &'tcx hir::Body) {
+    // TODO: I can see a version of this analysis that maps
+    // permission differences to Spans, instead of HirIds. This
+    // has a few advantages, but this case here is a good example.
+    // For a function which takes parameters, there's nowhere in
+    // the pointwise analysis that says "HERE is where that is live",
+    // they are just live coming in.
+    // Therefore, currently, there isn't a HirId we can attach this liveness to.
+    // What we could do, is split the body up into different spans, one of the
+    // spans being the entry `fn foo(...) {` and we can attach these differences
+    // there explicitly. This could also make conditionals slightly more accurate
+    // because the current version attaches differences to the expression itself,
+    // which isn't really what we want visually.
     intravisit::walk_body(self, body);
   }
 
@@ -385,8 +405,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
       }
 
       // - Variants I'd need to think more about.
-      EK::Closure(..) => unimplemented!("CLOSURES"),
-
+      // EK::Closure(..) => unimplemented!("CLOSURES"),
       _ => {
         intravisit::walk_expr(self, expr);
       }

@@ -11,6 +11,7 @@ import { DecorationSet, EditorView } from "@codemirror/view";
 import { IconField } from "./editor-utils/misc";
 import {
   copiedValueHover,
+  insufficientTypeHover,
   receiverPermissionsField,
 } from "./editor-utils/permission-boundaries";
 import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
@@ -137,6 +138,7 @@ export class Editor {
         rust(),
         indentUnit.of("  "),
         copiedValueHover,
+        insufficientTypeHover,
         ...supportedFields,
       ],
     });

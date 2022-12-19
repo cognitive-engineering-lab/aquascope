@@ -65,7 +65,7 @@ pub enum GatherDepth {
 #[derive(Debug)]
 pub struct MirOrderedLocations {
   entry_block: BasicBlock,
-  exit_block: BasicBlock,
+  exit_block: Option<BasicBlock>,
   // associated indices must remain sorted
   locations: HashMap<BasicBlock, Vec<usize>>,
 }
@@ -85,24 +85,26 @@ impl MirOrderedLocations {
     }
   }
 
-  fn maximum(&self) -> Location {
-    let block = self.exit_block;
-    let statement_index = *self
-      .locations
-      .get(&block)
-      .expect("Block with no associated locations")
-      .last()
-      .unwrap();
-    Location {
-      block,
-      statement_index,
-    }
+  fn maximum(&self) -> Option<Location> {
+    self.exit_block.map(|block| {
+      let statement_index = *self
+        .locations
+        .get(&block)
+        .expect("Block with no associated locations")
+        .last()
+        .unwrap();
+      Location {
+        block,
+        statement_index,
+      }
+    })
   }
 
-  pub fn get_entry_exit_locations(&self) -> (Location, Location) {
-    let m = self.minimum();
-    let mx = self.maximum();
-    (m, mx)
+  pub fn get_entry_exit_locations(&self) -> Option<(Location, Location)> {
+    self.maximum().map(|mx| {
+      let m = self.minimum();
+      (m, mx)
+    })
   }
 
   fn values(&self) -> impl Iterator<Item = Location> + Captures<'_> {
@@ -235,20 +237,17 @@ where
       })
       .unwrap();
 
-    let exit_block = basic_blocks
-      .iter()
-      .find(|&&&b1| {
-        basic_blocks.iter().all(|&&b2| {
-          b1 == b2 || self.post_dominators.is_postdominated_by(b1, b2)
-        })
+    let exit_block = basic_blocks.iter().find(|&&&b1| {
+      basic_blocks.iter().all(|&&b2| {
+        b1 == b2 || self.post_dominators.is_postdominated_by(b1, b2)
       })
-      .unwrap();
+    });
 
     log::debug!("Entry: {entry_block:?} Exit {exit_block:?}");
 
     Some(MirOrderedLocations {
       entry_block: **entry_block,
-      exit_block: **exit_block,
+      exit_block: exit_block.map(|b| **b),
       locations: total_location_map,
     })
   }

@@ -171,7 +171,7 @@ let stateStepToPermissions = (
 let permDiffStateField = genStateField(
   permissionsDiffIcoType,
   (ts: Array<PermissionStepTable>) =>
-    ts.map(([diffs, from]) => makeDecorationWithDiffs(diffs, from).range(from))
+    ts.map(([diffs, pos]) => makeDecorationWithDiffs(diffs, pos).range(pos))
 );
 
 let makeDecorationWithDiffs = (

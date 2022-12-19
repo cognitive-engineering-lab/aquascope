@@ -12,6 +12,7 @@ node_modules/
 /org/meeting*
 /org/*.png
 /org/media/
+sample-book/
 
 # Rust things
 target/
