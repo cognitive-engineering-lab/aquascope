@@ -5,6 +5,7 @@ import {
   WidgetType,
   hoverTooltip,
 } from "@codemirror/view";
+import _ from "lodash";
 
 import { BoolStep, PermissionsDataDiff, PermissionsStateStep } from "../types";
 import {
@@ -41,10 +42,10 @@ class PermDiffRowIcon implements Icon {
   toDom(): HTMLElement {
     let row = document.createElement("tr");
     let pathC = document.createElement("td");
+    let icoC = document.createElement("td");
     let permC = document.createElement("td");
 
     let pathSpan = document.createElement("span");
-    let actionIcos = document.createElement("div");
     let rSpan = document.createElement("span");
     let wSpan = document.createElement("span");
     let dSpan = document.createElement("span");
@@ -60,14 +61,36 @@ class PermDiffRowIcon implements Icon {
       // Currently we only display the *differences* so we'll skip the None case.
     };
 
-    let addActionIcons = (div: HTMLElement, data: PermissionsDataDiff) => {
-      let pushIcon = (name: string) => {
+    let addActionIcons = (
+      container: HTMLElement,
+      data: PermissionsDataDiff
+    ) => {
+      let pushIcon = (name: string, desc: string) => {
         let icon = document.createElement("i");
-        icon.classList.add("fa-solid");
+        icon.classList.add("fa");
         icon.classList.add(name);
         icon.classList.add("aquascope-action-indicator");
-        div.appendChild(icon);
+        icon.title = desc;
+        container.appendChild(icon);
       };
+
+      interface VisualFact<K extends keyof PermissionsDataDiff> {
+        fact: K;
+        states: VisualFactState<K>[];
+      }
+
+      interface VisualFactState<K extends keyof PermissionsDataDiff> {
+        value: PermissionsDataDiff[K];
+        icon: string;
+        desc: string;
+      }
+
+      type Facts =
+        | "is_live"
+        | "path_moved"
+        | "loan_write_refined"
+        | "loan_read_refined";
+
       // There is a sort of hierarchy to the changing permissions:
       // 1. path liveness is most important. If it changes, this radically
       //    has an affect on everything.
@@ -75,25 +98,77 @@ class PermDiffRowIcon implements Icon {
       //    cannot be borrowed so it sort of trumps any loan refinements.
       // 3. At the bottom, loan refinement changes which can only have an
       //    affect if the prior two didn't change anything.
-      if (data.is_live.type === "Low") {
-        pushIcon("fa-skull");
-      } else if (data.is_live.type === "High") {
-        pushIcon("fa-cake-candles");
-      } else if (data.path_moved.type === "High") {
-        pushIcon("fa-bicycle");
-      } else if (data.path_moved.type === "Low") {
-        pushIcon("fa-recycle");
-      } else if (data.loan_write_refined.type === "High") {
-        pushIcon("fa-share");
-      } else if (data.loan_read_refined.type === "High") {
-        pushIcon("fa-share");
-      } else if (data.loan_write_refined.type === "Low") {
-        // I wanted to use share-all and reply-all for mutable
-        // loans but share-all is a pro icon :(
-        // pushIcon("fa-reply-all");
-        pushIcon("fa-reply");
-      } else if (data.loan_read_refined.type === "Low") {
-        pushIcon("fa-reply");
+
+      let visualFacts: VisualFact<Facts>[] = [
+        {
+          fact: "is_live",
+          states: [
+            {
+              value: { type: "High" },
+              icon: "level-up",
+              desc: "Path is initialized here",
+            },
+            {
+              value: { type: "Low" },
+              icon: "level-down",
+              desc: "Path is dropped here",
+            },
+          ],
+        },
+        {
+          fact: "path_moved",
+          states: [
+            {
+              value: { type: "High" },
+              icon: "sign-out",
+              desc: "Path is moved here",
+            },
+            {
+              value: { type: "Low" },
+              icon: "recycle",
+              desc: "Path is re-initialized after move here",
+            },
+          ],
+        },
+        {
+          fact: "loan_read_refined",
+          states: [
+            {
+              value: { type: "High" },
+              icon: "arrow-right",
+              desc: "Path is borrowed here",
+            },
+            {
+              value: { type: "Low" },
+              icon: "rotate-left",
+              desc: "Borrow on path is dropped here",
+            },
+          ],
+        },
+        {
+          fact: "loan_write_refined",
+          states: [
+            {
+              value: { type: "High" },
+              icon: "arrow-right",
+              desc: "Path is borrowed here",
+            },
+            {
+              value: { type: "Low" },
+              icon: "rotate-left",
+              desc: "Borrow on path is dropped here",
+            },
+          ],
+        },
+      ];
+
+      loop: for (let { fact, states } of visualFacts) {
+        for (let { value, icon, desc } of states) {
+          if (_.isEqual(data[fact], value)) {
+            pushIcon(`fa-${icon}`, desc);
+            break loop;
+          }
+        }
       }
     };
 
@@ -104,16 +179,16 @@ class PermDiffRowIcon implements Icon {
     stylePerm(wSpan, this.diffs.permissions.write, writeChar);
     stylePerm(dSpan, this.diffs.permissions.drop, dropChar);
 
-    addActionIcons(actionIcos, this.diffs);
+    addActionIcons(icoC, this.diffs);
 
     pathC.appendChild(pathSpan);
-    pathC.appendChild(actionIcos);
 
     permC.appendChild(rSpan);
     permC.appendChild(wSpan);
     permC.appendChild(dSpan);
 
     row.appendChild(pathC);
+    row.appendChild(icoC);
     row.appendChild(permC);
 
     return row;
