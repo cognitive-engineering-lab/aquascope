@@ -13,7 +13,7 @@ import {
 } from "../types";
 import {
   Color,
-  Icon,
+  HTMLIcon,
   IconField,
   dropChar,
   dropColor,
@@ -57,7 +57,7 @@ let makeBraceElem = (content: string, color: Color) => {
 };
 
 // Icon for displaying a single permission field, e.g. "R" in "RWO".
-class SinglePermIcon implements Icon {
+class SinglePermIcon implements HTMLIcon {
   readonly display: boolean;
   readonly start: HTMLElement;
   readonly end: HTMLElement;
@@ -132,7 +132,7 @@ class SinglePermIcon implements Icon {
     return extraDecos;
   }
 
-  toDom(): HTMLElement {
+  toDOM(): HTMLElement {
     let tt = document.createElementNS("http://www.w3.org/2000/svg", "text");
     tt.classList.add("permission");
     tt.setAttribute("font-family", "Verdana");
@@ -214,7 +214,7 @@ class BoundaryPointWidget extends WidgetType {
     wrap.style.top = `${(icons.length - 1) * 4}px`;
 
     icons.forEach((icoI: SinglePermIcon, idx: number) => {
-      let ico: HTMLElement = icoI.toDom();
+      let ico: HTMLElement = icoI.toDOM();
       let y = (idx / icons.length) * 100 + 100 / icons.length - 5;
       ico.setAttribute("text-anchor", "middle");
       ico.setAttribute("x", "50%");

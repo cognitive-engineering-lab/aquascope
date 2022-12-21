@@ -17,9 +17,14 @@ export const glyphWidth = 12;
 // ----------
 // Interfaces
 
-export interface Icon {
+export interface HTMLIcon {
   readonly display: boolean;
-  toDom(): HTMLElement;
+  toDOM(): HTMLElement;
+}
+
+export interface ReactIcon {
+  readonly display: boolean;
+  render(): JSX.Element;
 }
 
 export interface IconField<C, T> {
