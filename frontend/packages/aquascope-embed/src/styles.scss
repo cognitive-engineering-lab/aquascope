@@ -13,6 +13,8 @@
 }
 
 .aquascope {
+  border: 2px dashed var(--theme-popup-border);
+  
   .cm-editor {
     background-color: var(--code-bg); 
   }

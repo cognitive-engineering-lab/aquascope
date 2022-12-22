@@ -8,6 +8,16 @@
     "@codemirror/lang-rust": "^6.0.1",
     "@codemirror/language": "^6.3.0",
     "@codemirror/state": "^6.1.2",
-    "@codemirror/view": "^6.4.0"
+    "@codemirror/view": "^6.4.0",
+    "lodash": "^4.17.21"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.191",
+    "@types/react": "^18.0.26",
+    "@types/react-dom": "^18.0.9"
   }
 }

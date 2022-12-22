@@ -29,4 +29,3 @@ yarn-error.log*
 pnpm-workspace.yaml
 .eslintrc.cjs
 .prettierrc.cjs
-jest.config.cjs
