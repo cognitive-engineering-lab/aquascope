@@ -8,7 +8,8 @@
   let_chains,
   unboxed_closures,
   once_cell,
-  exact_size_is_empty
+  exact_size_is_empty,
+  is_some_and
 )]
 
 #[macro_use]
