@@ -4,6 +4,7 @@ use std::{
   time::Instant,
 };
 
+use aquascope::errors::{initialize_error_tracking, track_body_diagnostics};
 use clap::{Parser, Subcommand};
 use flowistry::{
   mir::borrowck_facts::{self, NO_SIMPLIFY},
@@ -150,7 +151,7 @@ pub fn run_with_callbacks(
 ) -> AquascopeResult<()> {
   let mut args = args.to_vec();
   args.extend(
-    "-Z identify-regions -Z mir-opt-level=0 -Z maximal-hir-to-mir-coverage -A warnings"
+    "-Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage -A warnings"
       .split(' ')
       .map(|s| s.to_owned()),
   );
@@ -266,10 +267,18 @@ impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
     _compiler: &rustc_interface::interface::Compiler,
     queries: &'tcx rustc_interface::Queries<'tcx>,
   ) -> rustc_driver::Compilation {
+    // Setting up error tracking happens here. Within rustc callbacks
+    // seem to be set up *after* `config` is called.
+    initialize_error_tracking();
+
     let _start = Instant::now();
+
     queries.global_ctxt().unwrap().take().enter(|tcx| {
       let mut analysis = self.analysis.take().unwrap();
       find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
+        // Track diagnostics for the analysis of the current body
+        let def_id = tcx.hir().body_owner_def_id(body_id);
+        track_body_diagnostics(def_id);
         self.output.push(analysis.analyze(tcx, body_id));
       });
     });

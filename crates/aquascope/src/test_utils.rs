@@ -18,9 +18,12 @@ use rustc_middle::{
 };
 use rustc_span::{source_map::FileLoader, BytePos};
 
-use crate::analysis::{
-  self,
-  permissions::{Permissions, PermissionsDataDiff},
+use crate::{
+  analysis::{
+    self,
+    permissions::{Permissions, PermissionsDataDiff},
+  },
+  errors,
 };
 
 struct StringLoader(String);
@@ -340,6 +343,7 @@ pub fn compile_bodies(
       })
       .for_each(|body_id| {
         let def_id = tcx.hir().body_owner_def_id(body_id);
+        errors::track_body_diagnostics(def_id);
         let body_with_facts =
           borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
 
@@ -359,7 +363,7 @@ pub fn compile(
     callback: Some(callback),
   };
   let args = format!(
-    "rustc dummy.rs --crate-type lib --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z maximal-hir-to-mir-coverage --allow warnings --sysroot {}",
+    "rustc dummy.rs --crate-type lib --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings --sysroot {}",
     &*SYSROOT
   );
   let args = args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
@@ -369,7 +373,6 @@ pub fn compile(
   rustc_driver::catch_fatal_errors(|| {
     let mut compiler = rustc_driver::RunCompiler::new(&args, &mut callbacks);
     compiler.set_file_loader(Some(Box::new(StringLoader(input.into()))));
-    // compiler.set_emitter(None); // XXX: we want to suppress rustc errors but I'm not sure why this doesn't work.
     compiler.run()
   });
 }
@@ -392,6 +395,7 @@ where
     _compiler: &rustc_interface::interface::Compiler,
     queries: &'tcx rustc_interface::Queries<'tcx>,
   ) -> rustc_driver::Compilation {
+    errors::initialize_error_tracking();
     queries.global_ctxt().unwrap().take().enter(|tcx| {
       let callback = self.callback.take().unwrap();
       callback(tcx);

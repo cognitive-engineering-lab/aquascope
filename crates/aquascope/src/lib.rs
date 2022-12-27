@@ -19,6 +19,7 @@ extern crate polonius_engine;
 extern crate rustc_borrowck;
 extern crate rustc_data_structures;
 extern crate rustc_driver;
+extern crate rustc_errors;
 extern crate rustc_graphviz;
 extern crate rustc_hir;
 extern crate rustc_hir_pretty;
@@ -36,6 +37,7 @@ extern crate rustc_trait_selection;
 extern crate smallvec;
 
 pub mod analysis;
+pub mod errors;
 pub mod mir;
 pub mod test_utils;
 

@@ -171,6 +171,19 @@ where
     None
   }
 
+  // Determines whether or not a block was inserted solely as a
+  // `FalseEdge` or `FalseUnwind`. These were making the post-dominator
+  // analysis fail for conditional terminators.
+  fn is_false_location(&self, loc: Location) -> bool {
+    use mir::TerminatorKind as TK;
+    let bb = loc.block;
+    let idx = loc.statement_index;
+    let data = &self.body.basic_blocks[bb];
+    let term = data.terminator();
+    data.statements.is_empty()
+      && matches!(term.kind, TK::FalseUnwind { .. } | TK::FalseEdge { .. })
+  }
+
   /// Produces a MirOrderedLocations which is defined as follows.
   /// The `entry_block` represents the `BasicBlock` which post-dominates all
   /// blocks in the given set of locations and conversely the `exit_block`
@@ -211,6 +224,7 @@ where
 
     let mut total_location_map: HashMap<BasicBlock, Vec<usize>> = locations
       .into_iter()
+      .filter(|loc| !self.is_false_location(*loc))
       .fold(HashMap::default(), |mut acc, loc| {
         let bb = loc.block;
         let idx = loc.statement_index;
@@ -223,8 +237,6 @@ where
     for idxs in total_location_map.values_mut() {
       idxs.sort_unstable();
     }
-
-    log::debug!("Found locations: {total_location_map:#?}");
 
     let basic_blocks = total_location_map.keys().collect::<Vec<_>>();
 
@@ -243,7 +255,12 @@ where
       })
     });
 
-    log::debug!("Entry: {entry_block:?} Exit {exit_block:?}");
+    if exit_block.is_none() {
+      log::debug!("Found locations: {total_location_map:#?}");
+      log::warn!(
+        "No post-dominator: Entry: {entry_block:?} Exit {exit_block:?}"
+      );
+    }
 
     Some(MirOrderedLocations {
       entry_block: **entry_block,

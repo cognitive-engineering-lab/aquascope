@@ -19,6 +19,7 @@ use crate::{
       Difference, PermissionsCtxt, PermissionsDataDiff, PermissionsStateStep,
     },
   },
+  errors,
   mir::utils::PlaceExt as AquascopePlaceExt,
   Range,
 };
@@ -53,11 +54,8 @@ where
     visibility_scopes: Vec::default(),
   };
 
-  log::debug!("HIR IDS:");
-
   hir_visitor.visit_nested_body(ctxt.body_id);
 
-  // TODO: this is not correct!
   let interim = hir_visitor
     .diff
     .into_iter()
@@ -92,6 +90,10 @@ fn prettify_permission_steps<'tcx>(
     };
   }
 
+  let first_error_span_opt =
+    errors::get_span_of_first_error(ctxt.def_id.expect_local())
+      .and_then(|s| s.as_local(ctxt.body_with_facts.body.span));
+
   perm_steps
     .into_iter()
     .filter_map(|(id, place_to_diffs)| {
@@ -101,7 +103,6 @@ fn prettify_permission_steps<'tcx>(
         .as_local(ctxt.body_with_facts.body.span)
         .unwrap_or(span);
 
-      let range = span_to_range(span);
       let mut entries = place_to_diffs.into_iter().collect::<Vec<_>>();
 
       entries
@@ -114,10 +115,23 @@ fn prettify_permission_steps<'tcx>(
         })
         .collect::<Vec<_>>();
 
-      Some(PermissionsStateStep {
+      let range = span_to_range(span);
+      let step = PermissionsStateStep {
         location: range,
         state,
-      })
+      };
+
+      if let Some(err_span) = &first_error_span_opt {
+        // This could be a little more graceful. The idea is that
+        // we want to remove all permission steps which occur after
+        // the first error, but the steps involved with the first
+        // error could still be helpful. This is why we filter all
+        // spans with a LO BytePos greater than the error
+        // span HI BytePos.
+        (span.lo() <= err_span.hi()).then(|| step)
+      } else {
+        Some(step)
+      }
     })
     .collect::<Vec<_>>()
 }

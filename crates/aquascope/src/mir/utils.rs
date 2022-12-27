@@ -5,6 +5,9 @@ use rustc_middle::{
   ty::TyCtxt,
 };
 
+// ------------------------
+// Places
+
 pub trait PlaceExt {
   fn is_source_visible(&self, tcx: TyCtxt, body: &Body) -> bool;
 }
