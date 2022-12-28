@@ -15,4 +15,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: insta
-          args: test
+          args: test --features=no-docker
