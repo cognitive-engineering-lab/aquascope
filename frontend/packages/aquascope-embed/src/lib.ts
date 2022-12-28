@@ -10,8 +10,7 @@ import "./styles.scss";
 // What Gavin thinks the example usage of this is:
 //
 // <pre class="aquascope"
-//      data-server-host="127.0.0.1"
-//      data-server-port="8008"
+//      data-server-url="http://127.0.0.1:8008"
 //      data-no-interact="true"
 //      >
 // fn main() {
@@ -42,8 +41,9 @@ let initEditors = () => {
     btnWrap.appendChild(computePermBtn);
     pre.appendChild(btnWrap);
 
-    let serverHost = pre.dataset.serverHost!;
-    let serverPort = pre.dataset.serverPort!;
+    let serverUrl = pre.dataset.serverUrl
+      ? new URL(pre.dataset.serverUrl)
+      : undefined;
     let readOnly = pre.dataset.noInteract! == "true";
 
     let ed = new Editor(
@@ -56,8 +56,7 @@ let initEditors = () => {
         else console.error(err);
       },
       initialCode,
-      serverHost,
-      serverPort,
+      serverUrl,
       readOnly
     );
 

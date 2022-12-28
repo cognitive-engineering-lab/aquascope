@@ -26,8 +26,7 @@ export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
 export { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 export * as types from "./types";
 
-const DEFAULT_SERVER_HOST = "127.0.0.1";
-const DEFAULT_SERVER_PORT = "8008";
+const DEFAULT_SERVER_URL = new URL("http://127.0.0.1:8008");
 
 type Result<T> = { Ok: T } | { Err: BackendError };
 
@@ -125,8 +124,7 @@ export class Editor {
       console.log(err);
     },
     initialCode: string = defaultCodeExample,
-    readonly serverHost: string = DEFAULT_SERVER_HOST,
-    readonly serverPort: string = DEFAULT_SERVER_PORT,
+    readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false
   ) {
     let initialState = EditorState.create({
@@ -182,18 +180,16 @@ export class Editor {
 
   async callBackendWithCode(endpoint: string): Promise<ServerResponse> {
     let inEditor = this.getCurrentCode();
-    let serverResponseRaw = await fetch(
-      `http://${this.serverHost}:${this.serverPort}/${endpoint}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          code: inEditor,
-        }),
-      }
-    );
+    let endpointUrl = new URL(endpoint, this.serverUrl);
+    let serverResponseRaw = await fetch(endpointUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        code: inEditor,
+      }),
+    });
     let serverResponse: ServerResponse = await serverResponseRaw.json();
     return serverResponse;
   }
