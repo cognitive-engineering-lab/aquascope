@@ -1,17 +1,19 @@
 #[derive(Debug)]
 struct Both {
-    left: i32,
-    right: i32,
+    left: String,
+    right: String,
 }
 
 impl Both {
-    fn borrow_left(&mut self) -> &mut i32 {
+    fn borrow_left(&mut self) -> &mut String {
         &mut self.left
     }
 }
 
 fn main() {
-    let mut both = Both { left: 0, right: 1 };
+    let s1 = String::from("left");
+    let s2 = String::from("right");
+    let mut both = Both { left: s1, right: s2 };
 
     let left = both.borrow_left();
 

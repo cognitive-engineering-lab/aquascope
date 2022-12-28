@@ -74,6 +74,7 @@ pub struct PermissionsData {
   // Type declaration information
   pub type_droppable: bool,
   pub type_writeable: bool,
+  pub type_copyable: bool,
 
   // Liveness information
   pub is_live: bool,

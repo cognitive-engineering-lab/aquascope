@@ -18,6 +18,7 @@ impl PlaceExt for Place<'_> {
     let local_info = &body.local_decls[local];
 
     let is_loc = local_info.is_user_variable();
+    let from_desugaring = local_info.from_compiler_desugaring();
     let source_info = local_info.source_info;
     // The assumption is that decls whose source_scope should be collapsed
     // (i.e. with that of the outermost expansion site) are coming from a
@@ -25,6 +26,6 @@ impl PlaceExt for Place<'_> {
     // actually visible in the source scope.
     let should_collapse = tcx.should_collapse_debuginfo(source_info.span);
 
-    is_loc && !should_collapse
+    is_loc && !should_collapse && !from_desugaring
   }
 }

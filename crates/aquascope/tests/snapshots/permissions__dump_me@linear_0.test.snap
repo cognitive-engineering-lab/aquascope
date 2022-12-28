@@ -87,8 +87,7 @@ description: dump_me@linear_0.test
           write:
             type: High
           drop:
-            type: None
-            value: false
+            type: High
     - - x
       - is_live:
           type: Low
@@ -199,8 +198,7 @@ description: dump_me@linear_0.test
           write:
             type: Low
           drop:
-            type: None
-            value: false
+            type: Low
     - - z
       - is_live:
           type: Low
