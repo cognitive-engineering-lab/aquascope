@@ -8,6 +8,7 @@ import {
 } from "@codemirror/state";
 import { DecorationSet, EditorView } from "@codemirror/view";
 
+import { renderInterpreter } from "./editor-utils/interpreter";
 import { IconField } from "./editor-utils/misc";
 import {
   copiedValueHover,
@@ -18,6 +19,8 @@ import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 import "./styles.scss";
 import {
   BackendError,
+  MStack,
+  MStep,
   PermissionsBoundaryOutput,
   PermissionsDiffOutput,
 } from "./types";
@@ -91,29 +94,20 @@ type ServerResponse = {
 // `;
 
 export const defaultCodeExample: string = `
-trait Kill {
-  fn kill(self);
-}
-
-impl Kill for String {
-  fn kill(self) {}
-}
-
 fn main() {
-  let mut s1 = String::from("hi");
-  let mut s2 = String::from("hello");
-
-  // something here
-
-  s2.kill();
-  s1.kill();
-}`;
+  let mut a = Box::new(2);
+  *a += 1;
+  let b = a;
+  println!("{b}");
+}
+`.trim();
 
 let readOnly = new Compartment();
 let mainKeybinding = new Compartment();
 
 export class Editor {
   private view: EditorView;
+  private interpreterContainer: HTMLDivElement;
 
   public constructor(
     dom: HTMLElement,
@@ -141,10 +135,16 @@ export class Editor {
       ],
     });
 
+    let editorContainer = document.createElement("div");
     let initialView = new EditorView({
       state: initialState,
-      parent: dom,
+      parent: editorContainer,
     });
+
+    this.interpreterContainer = document.createElement("div");
+
+    dom.appendChild(editorContainer);
+    dom.appendChild(this.interpreterContainer);
 
     this.view = initialView;
   }
@@ -175,7 +175,6 @@ export class Editor {
       effects: [f.effectType.of(newEffects)],
     });
   }
-
   // Actions to communicate with the aquascope server
 
   async callBackendWithCode(endpoint: string): Promise<ServerResponse> {
@@ -229,6 +228,27 @@ export class Editor {
           error: serverResponse.stderr,
         });
         return this.addPermissionsField(receiverPermissionsField, out.Ok);
+      } else {
+        return this.reportStdErr(out.Err);
+      }
+    } else {
+      return this.reportStdErr({
+        type: "BuildError",
+        error: serverResponse.stderr,
+      });
+    }
+  }
+
+  async computeInterpreter() {
+    let serverResponse = await this.callBackendWithCode("interpreter");
+    if (serverResponse.success) {
+      let out: Result<MStep<Range>[]> = JSON.parse(serverResponse.stdout);
+      if ("Ok" in out) {
+        this.reportStdErr({
+          type: "BuildError",
+          error: serverResponse.stderr,
+        });
+        renderInterpreter(this.interpreterContainer, out.Ok);
       } else {
         return this.reportStdErr(out.Err);
       }

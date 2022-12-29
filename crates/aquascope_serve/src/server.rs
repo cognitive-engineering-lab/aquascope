@@ -1,6 +1,6 @@
 use crate::{
     container::{self, Container},
-    Config, ContainerCreationSnafu, Error, ErrorJson, PermissionStepsSnafu, ReceiverTypesSnafu,
+    Config, ContainerCreationSnafu, Error, ErrorJson, PermissionStepsSnafu, ReceiverTypesSnafu, InterpreterSnafu,
     Result, ServerResponse, SingleFileRequest,
 };
 use async_trait::async_trait;
@@ -28,7 +28,8 @@ pub(crate) async fn serve(cfg: Config) {
             }),
         )
         .route("/receiver-types", post(receiver_types))
-        .route("/permission-diffs", post(permission_diffs));
+        .route("/permission-diffs", post(permission_diffs))
+        .route("/interpreter", post(interpreter));
 
     app = app.layer({
         CorsLayer::new()
@@ -93,6 +94,31 @@ async fn permission_diffs(Json(req): Json<SingleFileRequest>) -> Result<Json<Ser
             .boxed()
         },
         PermissionStepsSnafu,
+    )
+    .await
+    .map(Json);
+
+    log::debug!("returning JSON {:?}", json);
+
+    json
+}
+
+async fn interpreter(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
+    log::trace!("Received request for interpret");
+
+    let json = with_container(
+        req,
+        |knt, req| {
+            async move {
+                let v = knt.interpreter(req).await;
+                if let Err(e) = knt.cleanup().await {
+                    log::warn!("Error cleaning up container: {:?}", e);
+                }
+                v
+            }
+            .boxed()
+        },
+        InterpreterSnafu,
     )
     .await
     .map(Json);

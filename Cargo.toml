@@ -2,5 +2,13 @@
 members = [ "crates/*" ]
 exclude = [ "files" ]
 
+# Make snapshot testing faster
+[profile.dev.package.insta]
+opt-level = 3
+
+[profile.dev.package.similar]
+opt-level = 3
+
 [patch.crates-io]
 flowistry = { git = "https://github.com/willcrichton/flowistry" }
+

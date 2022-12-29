@@ -9,6 +9,7 @@
     "@codemirror/language": "^6.3.0",
     "@codemirror/state": "^6.1.2",
     "@codemirror/view": "^6.4.0",
+    "leader-line-new": "^1.1.9",
     "lodash": "^4.17.21"
   },
   "peerDependencies": {

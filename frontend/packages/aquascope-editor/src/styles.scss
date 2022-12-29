@@ -130,3 +130,39 @@
 
   /* **************** */
 }
+
+.interpreter {
+  background: white;
+  padding: 1em;
+  display: flex;
+  gap: 1em;
+  flex-direction: column;
+
+  .step {
+    display: flex;
+    flex-direction: row;
+    border: 1px solid #ccc;
+    padding: 0.5em;
+    border-radius: 8px;
+
+    > div {
+      flex: 1;
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    table {
+      border: 1px solid #ccc;
+      border-collapse: collapse;
+      font-family: 'Source Code Pro', monospace;
+
+      td { 
+        border: 1px solid #ccc;
+      }
+    }
+  }
+}

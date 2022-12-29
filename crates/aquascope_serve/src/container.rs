@@ -370,6 +370,25 @@ impl Container {
         })
     }
 
+    pub async fn interpreter(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
+        self.write_source_code(&req.code).await?;
+
+        let mut cmd = self.interpreter_command();
+
+        let (stdout, stderr) = self.exec_output(&mut cmd).await?;
+
+        Ok(ServerResponse {
+            // XXX: we'll assume that if there was anything on `stdout`
+            // then there's something successful to report. Thid does not
+            // mean that `stderr` was empty and all things there shouldn't
+            // go unreported.
+            success: !stdout.trim().is_empty(),
+            stdout,
+            stderr,
+        })
+    }
+
+
     // -------------
     // Commands
 
@@ -392,6 +411,20 @@ impl Container {
 
         let mut cmd = Command::new("cargo");
         cmd.args(["--quiet", "aquascope", "coarse-perm-steps"])
+            .current_dir(cwd);
+
+        if cfg!(feature = "no-docker") {
+            let _ = cmd.env("RUST_LOG", "debug").env("RUST_BACKTRACE", "1");
+        }
+
+        cmd
+    }
+
+    fn interpreter_command(&self) -> Command {
+        let cwd = self.cwd();
+
+        let mut cmd = Command::new("cargo");
+        cmd.args(["--quiet", "aquascope", "interpret"])
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {

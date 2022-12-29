@@ -14,6 +14,9 @@ window.addEventListener("load", () => {
   const permStepsButton = document.getElementById(
     "showPermSteps"
   ) as HTMLInputElement;
+  const interpretButton = document.getElementById(
+    "showInterpret"
+  ) as HTMLInputElement;
 
   const vimKeybindingToggle = document.getElementById(
     "vimKeybindings"
@@ -75,4 +78,5 @@ window.addEventListener("load", () => {
     // return globals.editor.computeReceiverPermissions();
     return globals.editor.computePermissionSteps();
   });
+  interpretButton.addEventListener("click", () => globals.editor.computeInterpreter())
 });

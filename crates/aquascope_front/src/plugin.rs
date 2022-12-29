@@ -36,6 +36,11 @@ enum AquascopeCommand {
     flags: Vec<String>,
   },
 
+  Interpret {
+    #[clap(last = true)]
+    flags: Vec<String>,
+  },
+
   Preload,
   RustcVersion,
 }
@@ -52,16 +57,12 @@ impl RustcPlugin for AquascopePlugin {
     "aquascope-driver".into()
   }
 
-  fn args(
-    &self,
-    target_dir: &Utf8Path,
-  ) -> RustcPluginArgs<AquascopePluginArgs> {
+  fn args(&self, target_dir: &Utf8Path) -> RustcPluginArgs<AquascopePluginArgs> {
     let args = AquascopePluginArgs::parse_from(env::args().skip(1));
 
     log::debug!("Provided PluginArgs {args:?}");
 
-    let cargo_path =
-      env::var("CARGO_PATH").unwrap_or_else(|_| "cargo".to_string());
+    let cargo_path = env::var("CARGO_PATH").unwrap_or_else(|_| "cargo".to_string());
 
     use AquascopeCommand::*;
     match &args.command {
@@ -77,8 +78,7 @@ impl RustcPlugin for AquascopePlugin {
         exit(exit_status.code().unwrap_or(-1));
       }
       RustcVersion => {
-        let commit_hash =
-          rustc_interface::util::rustc_version_str().unwrap_or("unknown");
+        let commit_hash = rustc_interface::util::rustc_version_str().unwrap_or("unknown");
         println!("{commit_hash}");
         exit(0);
       }
@@ -88,6 +88,7 @@ impl RustcPlugin for AquascopePlugin {
     let flags = match &args.command {
       VisMethodCalls { flags } => flags,
       CoarsePermSteps { flags } => flags,
+      Interpret { flags } => flags,
       _ => unreachable!(),
     };
 
@@ -98,11 +99,7 @@ impl RustcPlugin for AquascopePlugin {
     }
   }
 
-  fn run(
-    self,
-    compiler_args: Vec<String>,
-    plugin_args: AquascopePluginArgs,
-  ) -> RustcResult<()> {
+  fn run(self, compiler_args: Vec<String>, plugin_args: AquascopePluginArgs) -> RustcResult<()> {
     use AquascopeCommand::*;
     match plugin_args.command {
       // TODO rename the command because it will eventually show *all* permissions
@@ -113,6 +110,16 @@ impl RustcPlugin for AquascopePlugin {
       )),
       CoarsePermSteps { .. } => {
         postprocess(run(crate::permissions::permission_diffs, &compiler_args))
+      }
+      Interpret { .. } => {
+        let mut callbacks = aquascope::interpret::InterpretCallbacks::default();
+        let _ = run_with_callbacks(&compiler_args, &mut callbacks);
+        postprocess(
+          callbacks
+            .result
+            .unwrap()
+            .map_err(|e| AquascopeError::AnalysisError(e.to_string())),
+        )
       }
       _ => unreachable!(),
     }
@@ -164,10 +171,7 @@ pub fn run_with_callbacks(
   compiler.run().map_err(|_| AquascopeError::BuildError)
 }
 
-fn run<A: AquascopeAnalysis>(
-  analysis: A,
-  args: &[String],
-) -> AquascopeResult<A::Output> {
+fn run<A: AquascopeAnalysis>(analysis: A, args: &[String]) -> AquascopeResult<A::Output> {
   let mut callbacks = AquascopeCallbacks {
     analysis: Some(analysis),
     output: Vec::default(),
@@ -205,11 +209,7 @@ pub type AquascopeResult<T> = Result<T, AquascopeError>;
 
 pub trait AquascopeAnalysis: Sized + Send + Sync {
   type Output: Join + Serialize + Send + Sync;
-  fn analyze(
-    &mut self,
-    tcx: TyCtxt,
-    id: BodyId,
-  ) -> anyhow::Result<Self::Output>;
+  fn analyze(&mut self, tcx: TyCtxt, id: BodyId) -> anyhow::Result<Self::Output>;
 }
 
 pub trait Join {
@@ -234,17 +234,11 @@ impl<O: Join> Join for anyhow::Result<O> {
 
 impl<F, O> AquascopeAnalysis for F
 where
-  F: for<'tcx> Fn<(TyCtxt<'tcx>, BodyId), Output = anyhow::Result<O>>
-    + Send
-    + Sync,
+  F: for<'tcx> Fn<(TyCtxt<'tcx>, BodyId), Output = anyhow::Result<O>> + Send + Sync,
   O: Join + Serialize + Send + Sync,
 {
   type Output = O;
-  fn analyze(
-    &mut self,
-    tcx: TyCtxt,
-    id: BodyId,
-  ) -> anyhow::Result<Self::Output> {
+  fn analyze(&mut self, tcx: TyCtxt, id: BodyId) -> anyhow::Result<Self::Output> {
     (self)(tcx, id)
   }
 }
