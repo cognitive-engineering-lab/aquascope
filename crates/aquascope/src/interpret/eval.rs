@@ -1,19 +1,19 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 use anyhow::{anyhow, Context, Result};
 use either::Either;
 use flowistry::mir::utils::PlaceExt;
 use miri::{
-  Immediate, InterpCx, InterpResult, LocalValue, Machine, MiriConfig, MiriMachine, OpTy, Operand,
+  Immediate, InterpCx, InterpResult, LocalValue, Machine, MiriConfig, MiriMachine, Operand,
 };
 
-use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
   mir::{ClearCrossCrate, LocalInfo, Location, Place, RETURN_PLACE},
-  ty::TyCtxt,
+  ty::{InstanceDef, TyCtxt},
 };
 use rustc_session::CtfeBacktrace;
 use rustc_span::Span;
+use rustc_target::abi::Size;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -27,7 +27,7 @@ pub struct MFrame<L> {
   pub locals: Vec<(String, MValue)>,
 }
 
-pub(crate) type MirLoc = (LocalDefId, Either<Location, Span>);
+pub(crate) type MirLoc<'tcx> = (InstanceDef<'tcx>, Either<Location, Span>);
 
 #[derive(Serialize, Deserialize, Debug, TS)]
 #[ts(export)]
@@ -35,7 +35,7 @@ pub struct MStack<L> {
   pub frames: Vec<MFrame<L>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, TS)]
+#[derive(Serialize, Deserialize, Debug, TS, Default)]
 #[ts(export)]
 pub struct MHeap {
   pub locations: Vec<(MLocation, MValue)>,
@@ -48,10 +48,16 @@ pub struct MStep<L> {
   pub heap: MHeap,
 }
 
+#[derive(Default)]
+pub(crate) struct HeapMapping {
+  pub(crate) heap: MHeap,
+  pub(crate) place_to_index: HashMap<Size, MLocation>,
+}
+
 pub struct VisEvaluator<'mir, 'tcx> {
   pub(super) tcx: TyCtxt<'tcx>,
   pub(super) ecx: InterpCx<'mir, 'tcx, MiriMachine<'mir, 'tcx>>,
-  pub(super) heap_allocs: RefCell<Vec<miri::MPlaceTy<'tcx, miri::Provenance>>>,
+  pub(super) heap_mapping: RefCell<HeapMapping>,
 }
 
 impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
@@ -78,17 +84,16 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     Ok(VisEvaluator {
       tcx,
       ecx,
-      heap_allocs: RefCell::default(),
+      heap_mapping: RefCell::default(),
     })
   }
 
   fn build_frame(
     &self,
     frame: &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
-  ) -> InterpResult<'tcx, MFrame<MirLoc>> {
-    let source_map = self.tcx.sess.source_map();
+    loc_override: Option<MirLoc<'tcx>>,
+  ) -> InterpResult<'tcx, MFrame<MirLoc<'tcx>>> {
     let body = &frame.body;
-
     let def_id = frame.instance.def_id();
 
     let name = self
@@ -100,7 +105,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       .intersperse("::")
       .collect::<String>();
 
-    let current_loc = (def_id.expect_local(), frame.current_loc());
+    let current_loc = loc_override.unwrap_or((frame.instance.def, frame.current_loc()));
 
     let mut locals = frame
       .locals
@@ -147,54 +152,91 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     })
   }
 
-  fn build_stack(&self) -> InterpResult<'tcx, MStack<MirLoc>> {
-    let frames = Machine::stack(&self.ecx)
-      .iter()
-      .filter(|frame| frame.instance.def_id().is_local())
-      .map(|frame| self.build_frame(frame))
+  fn build_stack(&self, current_loc: MirLoc<'tcx>) -> InterpResult<'tcx, MStack<MirLoc<'tcx>>> {
+    let frames = self
+      .local_frames()
+      .map(|(is_last, frame)| self.build_frame(frame, is_last.then_some(current_loc)))
       .collect::<InterpResult<'_, _>>()?;
     Ok(MStack { frames })
   }
 
-  fn build_heap(&self) -> InterpResult<'tcx, MHeap> {
-    let locations = self
-      .heap_allocs
-      .borrow()
-      .iter()
-      .enumerate()
-      .map(|(i, mplace)| Ok((i, self.read(&OpTy::from(*mplace))?)))
-      .collect::<InterpResult<'_, Vec<_>>>()?;
-
-    Ok(MHeap { locations })
+  fn build_heap(&self) -> MHeap {
+    self.heap_mapping.replace(Default::default()).heap
   }
 
-  fn build_step(&self) -> InterpResult<'tcx, Option<MStep<MirLoc>>> {
-    self.heap_allocs.borrow_mut().clear();
-    let stack = self.build_stack()?;
+  fn build_step(
+    &self,
+    current_loc: MirLoc<'tcx>,
+  ) -> InterpResult<'tcx, Option<MStep<MirLoc<'tcx>>>> {
+    let stack = self.build_stack(current_loc)?;
     if stack.frames.is_empty() {
       return Ok(None);
     }
 
-    let heap = self.build_heap()?;
-
+    let heap = self.build_heap();
     return Ok(Some(MStep { stack, heap }));
   }
 
-  fn step(&mut self) -> InterpResult<'tcx, Option<MStep<MirLoc>>> {
+  fn local_frames(
+    &self,
+  ) -> impl Iterator<
+    Item = (
+      bool,
+      &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
+    ),
+  > {
+    let stack = Machine::stack(&self.ecx);
+    let n = stack.len();
+    stack.iter().enumerate().filter_map(move |(i, frame)| {
+      frame
+        .instance
+        .def_id()
+        .is_local()
+        .then_some((i == n - 1, frame))
+    })
+  }
+
+  fn step(&mut self) -> InterpResult<'tcx, (Option<MStep<MirLoc<'tcx>>>, bool)> {
     loop {
-      if !self.ecx.step()? {
-        return Ok(None);
+      let local_frames = self.local_frames().collect::<Vec<_>>();
+      let current_loc = local_frames
+        .last()
+        .map(|(_, frame)| (frame.instance.def, frame.current_loc()));
+      let n_frames = local_frames.len();
+
+      let more_work = self.ecx.step()?;
+
+      if let Some(mut current_loc) = current_loc {
+        let local_frames = self.local_frames().collect::<Vec<_>>();
+        let new_call = local_frames.len() > n_frames;
+        if new_call {
+          let (_, frame) = local_frames.last().unwrap();
+          let hir = self.tcx.hir();
+          let body_node = hir.body_owner(hir.body_owned_by(frame.instance.def_id().expect_local()));
+          current_loc = (frame.instance.def, Either::Right(hir.span(body_node)));
+        }
+
+        if let Some(step) = self.build_step(current_loc)? {
+          return Ok((Some(step), more_work));
+        }
       }
 
-      let Some(step) = self.build_step()? else { continue };
-      return Ok(Some(step));
+      if !more_work {
+        return Ok((None, more_work));
+      }
     }
   }
 
-  pub fn eval(&mut self) -> InterpResult<'tcx, Vec<MStep<MirLoc>>> {
+  pub fn eval(&mut self) -> InterpResult<'tcx, Vec<MStep<MirLoc<'tcx>>>> {
     let mut steps = Vec::new();
-    while let Some(pair) = self.step()? {
-      steps.push(pair);
+    loop {
+      let (step, more_work) = self.step()?;
+      if let Some(step) = step {
+        steps.push(step);
+      }
+      if !more_work {
+        break;
+      }
     }
 
     Ok(steps)

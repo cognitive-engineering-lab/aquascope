@@ -7,6 +7,7 @@ import {
   StateField,
 } from "@codemirror/state";
 import { DecorationSet, EditorView } from "@codemirror/view";
+import _ from "lodash";
 
 import { renderInterpreter } from "./editor-utils/interpreter";
 import { IconField } from "./editor-utils/misc";
@@ -19,10 +20,10 @@ import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 import "./styles.scss";
 import {
   BackendError,
-  MStack,
   MStep,
   PermissionsBoundaryOutput,
   PermissionsDiffOutput,
+  Range,
 } from "./types";
 
 export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
@@ -93,21 +94,104 @@ type ServerResponse = {
 // }
 // `;
 
+// `
+// fn main() {
+//   let mut a = Box::new(2);
+//   *a += 1;
+//   let b = a;
+//   println!("{b}");
+// }
+// `
+
+// `
+// fn main() {
+//   let n = 5;
+//   // L1
+//   let y = plus_one(n);
+//   // L3
+//   println!("The value of y is: {y}");
+// }
+
+// fn plus_one(x: i32) -> i32 {
+//   // L2
+//   x + 1
+// }
+// `
+
 export const defaultCodeExample: string = `
 fn main() {
-  let mut a = Box::new(2);
-  *a += 1;
-  let b = a;
-  println!("{b}");
+  \`[let n = 5;]\`
+  \`[let y = plus_one(n);]\`  
+  println!("The value of y is: {y}");
+}
+
+\`[fn plus_one(x: i32)]\` -> i32 {  
+  x + 1
 }
 `.trim();
 
 let readOnly = new Compartment();
 let mainKeybinding = new Compartment();
 
+type ParseResult =
+  | { type: "ok"; code: string; ranges: Range[] }
+  | { type: "err"; error: string };
+
+let parseWithDelimiters = (
+  code: string,
+  delimiters: [string, string][]
+): ParseResult => {
+  let [open, close] = _.unzip(delimiters);
+  let makeCheck = (arr: string[]) => {
+    let r = new RegExp(`^${arr.map(s => _.escapeRegExp(s)).join("|")}`);
+    return (s: string) => {
+      let match = s.match(r);
+      return match ? match[0].length : null;
+    };
+  };
+  let [openCheck, closeCheck] = [makeCheck(open), makeCheck(close)];
+
+  let index = 0;
+  let inSeq = null;
+  let ranges: Range[] = [];
+  let outputCode = [];
+  let i = 0;
+  while (i < code.length) {
+    if (inSeq === null) {
+      let n = openCheck(code.substring(i));
+      if (n) {
+        i += n;
+        inSeq = index;
+        continue;
+      }
+    } else {
+      let n = closeCheck(code.substring(i));
+      if (n) {
+        i += n;
+        ranges.push({
+          char_start: inSeq!,
+          char_end: index,
+          byte_start: 0,
+          byte_end: 0,
+          filename: "",
+        });
+        inSeq = null;
+        continue;
+      }
+    }
+
+    index += 1;
+    outputCode.push(code[i]);
+    i += 1;
+  }
+
+  return { type: "ok", code: outputCode.join(""), ranges };
+};
+
 export class Editor {
   private view: EditorView;
   private interpreterContainer: HTMLDivElement;
+  private markedRanges: Range[];
 
   public constructor(
     dom: HTMLElement,
@@ -121,8 +205,11 @@ export class Editor {
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false
   ) {
+    let parseResult = parseWithDelimiters(initialCode, [["`[", "]`"]]);
+    if (parseResult.type == "err") throw new Error(parseResult.error);
+
     let initialState = EditorState.create({
-      doc: initialCode,
+      doc: parseResult.code,
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
@@ -134,6 +221,8 @@ export class Editor {
         ...supportedFields,
       ],
     });
+
+    this.markedRanges = parseResult.ranges;
 
     let editorContainer = document.createElement("div");
     let initialView = new EditorView({
@@ -248,7 +337,12 @@ export class Editor {
           type: "BuildError",
           error: serverResponse.stderr,
         });
-        renderInterpreter(this.interpreterContainer, out.Ok);
+        renderInterpreter(
+          this.interpreterContainer,
+          out.Ok,
+          this.view.state.doc.toJSON().join("\n"),
+          this.markedRanges
+        );
       } else {
         return this.reportStdErr(out.Err);
       }

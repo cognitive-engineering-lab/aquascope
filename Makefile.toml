@@ -4,7 +4,6 @@ default_to_workspace = false
 
 [tasks.watch-cargo]
 script = "cargo watch -x 'install --path crates/aquascope_front --debug --offline'"
-install_crate = { crate_name = "cargo-watch" }
 
 [tasks.watch-server]
 script = "cargo run --features=no-docker"

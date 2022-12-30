@@ -12,13 +12,13 @@ use serde::Serialize;
 use snafu::prelude::*;
 use std::process::Command;
 use std::{
-    env, fs, io, iter,
+    env, io, iter,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     str,
     sync::Arc,
 };
-use tempfile::{tempdir, TempDir};
+
 
 const DEFAULT_IMAGE: &str = "aquascope";
 const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";

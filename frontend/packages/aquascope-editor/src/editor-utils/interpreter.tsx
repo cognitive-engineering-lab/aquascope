@@ -1,16 +1,58 @@
 import LeaderLine from "leader-line-new";
-import React, { useEffect, useRef } from "react";
+import _ from "lodash";
+import React, { useContext, useEffect, useRef } from "react";
 import ReactDOM from "react-dom/client";
 
-import { MFrame, MHeap, MStack, MStep, MValue } from "../types";
+import {
+  Abbreviated,
+  MFrame,
+  MHeap,
+  MStack,
+  MStep,
+  MValue,
+  Range,
+} from "../types";
+
+let CodeContext = React.createContext("");
+
+let intersperse = <T,>(arr: T[], sep: T): T[] => {
+  let outp = [];
+  for (let i = 0; i < arr.length; ++i) {
+    outp.push(arr[i]);
+    if (i != arr.length - 1) {
+      outp.push(sep);
+    }
+  }
+  return outp;
+};
+
+let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) =>
+  value.type == "All" ? (
+    <>
+      {intersperse(
+        value.value.map((el, i) => <ValueView key={i} value={el} />),
+        <>,</>
+      )}
+    </>
+  ) : (
+    <>
+      {intersperse(
+        value.value[0].map((el, i) => <ValueView key={i} value={el} />),
+        <>,</>
+      )}
+      ,...,
+      <ValueView value={value.value[1]} />
+    </>
+  );
 
 let ValueView = ({ value }: { value: MValue }) => (
-  <div>
+  <>
     {value.type == "Bool" ||
     value.type == "Char" ||
     value.type == "Uint" ||
     value.type == "Int" ||
-    value.type == "Float" ? (
+    value.type == "Float" ||
+    value.type == "String" ? (
       value.value.toString()
     ) : value.type == "Struct" ? (
       <>
@@ -28,14 +70,36 @@ let ValueView = ({ value }: { value: MValue }) => (
           </tbody>
         </table>
       </>
+    ) : value.type == "Enum" ? (
+      <>
+        {value.value.name} ({value.value.variant})
+        <table>
+          <tbody>
+            {value.value.fields.map(([k, v]) => (
+              <tr key={k}>
+                <td>{k}</td>
+                <td>
+                  <ValueView value={v} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
     ) : value.type == "Pointer" ? (
       <span className="pointer" data-point-to={value.value}>
         *
       </span>
+    ) : value.type == "Array" ? (
+      <>
+        [<AbbreviatedView value={value.value} />]
+      </>
+    ) : value.type == "Unallocated" ? (
+      <>X</>
     ) : (
-      "<TBD>"
+      <>TODO</>
     )}
-  </div>
+  </>
 );
 
 let LocalsView = ({ locals }: { locals: [string, MValue][] }) => (
@@ -53,12 +117,17 @@ let LocalsView = ({ locals }: { locals: [string, MValue][] }) => (
   </table>
 );
 
-let FrameView = ({ frame }: { frame: MFrame<Range> }) => (
-  <div className="frame">
-    <div>{frame.name}</div>
-    <LocalsView locals={frame.locals} />
-  </div>
-);
+let FrameView = ({ frame }: { frame: MFrame<Range> }) => {
+  let code = useContext(CodeContext);
+  let snippet = code.slice(frame.location.char_start, frame.location.char_end);
+  return (
+    <div className="frame">
+      <div>{frame.name}</div>
+      <code>{snippet}</code>
+      <LocalsView locals={frame.locals} />
+    </div>
+  );
+};
 
 let StackView = ({ stack }: { stack: MStack<Range> }) => (
   <div className="stack">
@@ -90,14 +159,13 @@ let StepView = ({ step }: { step: MStep<Range> }) => {
   let stackRef = useRef<HTMLDivElement | null>(null);
   let heapRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    console.log(stackRef);
     let pointers =
       stackRef.current!.querySelectorAll<HTMLSpanElement>(".pointer");
-    pointers.forEach(ptr => {
+    let lines = Array.from(pointers).map(ptr => {
       let i = parseInt(ptr.dataset.pointTo!);
-      new LeaderLine(
+      return new LeaderLine(
         ptr,
-        heapRef.current!.querySelector(`tr:nth-child(${i+1})`)!,
+        heapRef.current!.querySelector(`tr:nth-child(${i + 1})`)!,
         {
           color: "black",
           size: 1,
@@ -105,6 +173,7 @@ let StepView = ({ step }: { step: MStep<Range> }) => {
         }
       );
     });
+    return () => lines.forEach(line => line.remove());
   }, []);
   return (
     <div className="step">
@@ -118,16 +187,35 @@ let StepView = ({ step }: { step: MStep<Range> }) => {
   );
 };
 
+let filterSteps = (steps: MStep<Range>[], ranges: Range[]): MStep<Range>[] =>
+  steps.filter(step => {
+    let lastFrame = _.last(step.stack.frames)!;
+    let loc = lastFrame.location;
+    return _.some(
+      ranges,
+      other =>
+        loc.char_start <= other.char_start && other.char_end <= loc.char_end
+    );
+  });
+
 export function renderInterpreter(
   container: HTMLDivElement,
-  steps: MStep<Range>[]
+  steps: MStep<Range>[],
+  contents: string,
+  markedRanges: Range[]
 ) {
   let root = ReactDOM.createRoot(container);
+  if (markedRanges.length > 0) {
+    steps = filterSteps(steps, markedRanges);
+  }
+
   root.render(
     <div className="interpreter">
-      {steps.map((step, i) => (
-        <StepView key={i} step={step} />
-      ))}
+      <CodeContext.Provider value={contents}>
+        {steps.map((step, i) => (
+          <StepView key={i} step={step} />
+        ))}
+      </CodeContext.Provider>
     </div>
   );
 }

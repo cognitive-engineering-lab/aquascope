@@ -137,6 +137,7 @@
   display: flex;
   gap: 1em;
   flex-direction: column;
+  width: 500px;
 
   .step {
     display: flex;
@@ -153,6 +154,10 @@
       margin-top: 0;
       font-size: 18px;
       font-weight: bold;
+    }
+
+    code {
+      font-size: 0.8em;
     }
 
     table {

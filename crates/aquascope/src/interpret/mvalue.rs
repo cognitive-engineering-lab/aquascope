@@ -1,13 +1,10 @@
-
-
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hasher, Hash};
-
-use miri::{Immediate, InterpCx, InterpResult, Machine, OpTy, Value, MPlaceTy};
+use miri::{Immediate, InterpCx, InterpResult, MPlaceTy, Machine, OpTy, Value};
+use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
 use rustc_middle::mir::interpret::Provenance;
 
-use rustc_middle::ty::{AdtKind, FieldDef, TyKind};
+use rustc_middle::ty::layout::LayoutOf;
+use rustc_middle::ty::{AdtKind, FieldDef, Ty, TyKind};
 use rustc_target::abi::Size;
 use rustc_type_ir::FloatTy;
 use serde::{Deserialize, Serialize};
@@ -16,6 +13,31 @@ use ts_rs::TS;
 use super::eval::VisEvaluator;
 
 pub type MLocation = usize;
+
+const ABBREV_MAX: u64 = 10;
+
+#[derive(Serialize, Deserialize, Debug, TS, PartialEq)]
+#[serde(tag = "type", content = "value")]
+#[ts(export)]
+pub enum Abbreviated<T> {
+  All(Vec<T>),
+  Only(Vec<T>, Box<T>),
+}
+
+impl<T> Abbreviated<T> {
+  pub fn new<'tcx>(n: u64, mk: impl Fn(u64) -> InterpResult<'tcx, T>) -> InterpResult<'tcx, Self> {
+    if n <= ABBREV_MAX {
+      let elts = (0..n).map(mk).collect::<InterpResult<'_, Vec<_>>>()?;
+      Ok(Abbreviated::All(elts))
+    } else {
+      let initial = (0..ABBREV_MAX)
+        .map(&mk)
+        .collect::<InterpResult<'tcx, Vec<_>>>()?;
+      let last = mk(n - 1)?;
+      Ok(Abbreviated::Only(initial, Box::new(last)))
+    }
+  }
+}
 
 #[derive(Serialize, Deserialize, Debug, TS, PartialEq)]
 #[serde(tag = "type", content = "value")]
@@ -34,10 +56,15 @@ pub enum MValue {
     name: String,
     fields: Vec<(String, MValue)>,
   },
+  Enum {
+    name: String,
+    variant: String,
+    fields: Vec<(String, MValue)>,
+  },
 
   // Special-case composites
   String(String),
-  Array(Vec<MValue>),
+  Array(Abbreviated<MValue>),
 
   Unallocated,
 }
@@ -85,50 +112,91 @@ where
 // }
 
 impl<'tcx> VisEvaluator<'_, 'tcx> {
-  fn read_unique(&self, op: &OpTy<'tcx, miri::Provenance>) -> InterpResult<'tcx, MValue> {
+  fn add_alloc(
+    &self,
+    mplace: miri::MPlaceTy<'tcx, miri::Provenance>,
+    postprocess: impl FnOnce(miri::MPlaceTy<'tcx, miri::Provenance>) -> InterpResult<'tcx, MValue>,
+  ) -> InterpResult<'tcx, MValue> {
+    let addr = mplace.ptr.addr();
+    let already_found = self
+      .heap_mapping
+      .borrow()
+      .place_to_index
+      .contains_key(&addr);
+    if !already_found {
+      let mvalue = postprocess(mplace)?;
+      let mut heap_mapping = self.heap_mapping.borrow_mut();
+      let location = heap_mapping.heap.locations.len();
+      heap_mapping.heap.locations.push((location, mvalue));
+      heap_mapping.place_to_index.insert(addr, location);
+    }
+
+    let location = self.heap_mapping.borrow().place_to_index[&addr];
+    Ok(MValue::Pointer(location))
+  }
+
+  fn read_unique(
+    &self,
+    op: &OpTy<'tcx, miri::Provenance>,
+    postprocess: impl FnOnce(miri::MPlaceTy<'tcx, miri::Provenance>) -> InterpResult<'tcx, MValue>,
+  ) -> InterpResult<'tcx, MValue> {
     debug_assert!(op.layout.ty.is_adt());
 
     let (_, nonnull) = op.field_by_name("pointer", &self.ecx)?;
     let (_, ptr) = nonnull.field_by_name("pointer", &self.ecx)?;
 
     let Ok(mplace) = self.ecx.deref_operand(&ptr) else {
-      return Ok(MValue::Unallocated) 
+      return Ok(MValue::Unallocated);
     };
-    let mut heap_allocs = self.heap_allocs.borrow_mut();
 
-    let key = |m: &MPlaceTy<'tcx, miri::Provenance>| self.ecx.read_immediate(&OpTy::from(*m)).unwrap().to_scalar();
-
-    let idx = match heap_allocs.iter().position(|mp| key(&mplace) == key(mp)) {
-      Some(idx) => idx,
-      None => {
-        heap_allocs.push(mplace);
-        heap_allocs.len() - 1
-      }
-    };
-    Ok(MValue::Pointer(idx))
+    self.add_alloc(mplace, postprocess)
   }
 
-  // fn read_raw_vec(
-  //   &self,
-  //   op: &OpTy<'tcx, miri::Provenance>,
-  //   len: u64,
-  // ) -> InterpResult<'tcx, Vec<MValue>> {
-  //   let (_, unique_t) = op.field_by_name("ptr", &self.ecx)?;
-  //   let place = match self.ecx.deref_operand(&ptr) {
-  //     Ok(op) => op,
-  //     Err(_) => {
-  //       return Ok(vec![MValue::Unallocated]);
-  //     }
-  //   };
+  fn read_array(
+    &self,
+    base: MPlaceTy<'tcx, miri::Provenance>,
+    stride: Size,
+    len: u64,
+    el_ty: Ty<'tcx>,
+    postprocess: Option<&dyn Fn(MValue) -> MValue>,
+  ) -> InterpResult<'tcx, MValue> {
+    let read = |i: u64| {
+      let offset = stride * i;
+      let layout = self.ecx.layout_of(el_ty)?;
+      let offset_place = base.offset(offset, layout, &self.ecx)?;
+      let value = self.read(&offset_place.into())?;
+      Ok(match &postprocess {
+        Some(f) => f(value),
+        None => value,
+      })
+    };
+    let values = Abbreviated::new(len, read)?;
 
-  //   (0..len)
-  //     .map(|i| {
-  //       let offset = place.layout.size * i;
-  //       let offset_place = place.offset(offset, place.layout, &self.ecx)?;
-  //       self.read(&offset_place.into())
-  //     })
-  //     .collect::<InterpResult<'tcx, Vec<_>>>()
-  // }
+    Ok(MValue::Array(values))
+  }
+
+  fn read_raw_vec(
+    &self,
+    op: &OpTy<'tcx, miri::Provenance>,
+    len: u64,
+    postprocess: Option<&dyn Fn(MValue) -> MValue>,
+  ) -> InterpResult<'tcx, MValue> {
+    let (_, ptr) = op.field_by_name("ptr", &self.ecx)?;
+    self.read_unique(&ptr, |base| {
+      self.read_array(base, base.layout.size, len, base.layout.ty, postprocess)
+    })
+  }
+
+  fn read_vec(
+    &self,
+    op: &OpTy<'tcx, miri::Provenance>,
+    postprocess: Option<&dyn Fn(MValue) -> MValue>,
+  ) -> InterpResult<'tcx, MValue> {
+    let (_, buf) = op.field_by_name("buf", &self.ecx)?;
+    let (_, len) = op.field_by_name("len", &self.ecx)?;
+    let MValue::Uint(len) = self.read(&len)? else { unreachable!() };
+    self.read_raw_vec(&buf, len, postprocess)
+  }
 
   pub(super) fn read(&self, op: &OpTy<'tcx, miri::Provenance>) -> InterpResult<'tcx, MValue> {
     let ty = op.layout.ty;
@@ -136,45 +204,63 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
     Ok(match ty.kind() {
       _ if ty.is_box() => {
         let unique = op.project_field(&self.ecx, 0)?;
-        self.read_unique(&unique)?
+        self.read_unique(&unique, |mplace| self.read(&OpTy::from(mplace)))?
       }
 
-      TyKind::Adt(adt_def, _subst) => match adt_def.adt_kind() {
-        AdtKind::Struct => {
-          let def_id = adt_def.did();
-          let name = self.tcx.item_name(def_id).to_ident_string();
+      TyKind::Adt(adt_def, _subst) => {
+        let def_id = adt_def.did();
+        let name = self.tcx.item_name(def_id).to_ident_string();
+        match adt_def.adt_kind() {
+          AdtKind::Struct => match name.as_str() {
+            "String" => {
+              let (_, vec) = op.field_by_name("vec", &self.ecx)?;
+              self.read_vec(
+                &vec,
+                Some(&|v: MValue| {
+                  let MValue::Uint(c) = v else { unreachable!() };
+                  MValue::Char(String::from(char::from(c as u8)))
+                }),
+              )?
+            }
+            "Vec" => self.read_vec(op, None)?,
+            _ => {
+              let fields = adt_def
+                .all_fields()
+                .enumerate()
+                .map(|(i, field)| {
+                  let field_op = op.project_field(&self.ecx, i)?;
+                  let field_val = self.read(&field_op)?;
+                  Ok((field.name.to_ident_string(), field_val))
+                })
+                .collect::<InterpResult<'tcx, Vec<_>>>()?;
 
-          // match self.type_def_ids.get_path(def_id) {
-          //   Some(path) => match path.as_str() {
-          //     "std::vec::Vec" => {
-          //       let (_, len_field) = op.field_by_name("len", &self.ecx)?;
-          //       let len = match self.read(&len_field)? {
-          //         MValue::Uint(n) => n,
-          //         _ => unreachable!(),
-          //       };
-          //       let (_, buf_field) = op.field_by_name("buf", &self.ecx)?;
-          //       let contents = self.read_raw_vec(&buf_field, len)?;
-          //       MValue::Vec(contents)
-          //     }
-          //     _ => todo!(),
-          //   },
-          //   None => {
-          let fields = adt_def
-            .all_fields()
-            .enumerate()
-            .map(|(i, field)| {
-              let field_op = op.project_field(&self.ecx, i)?;
-              let field_val = self.read(&field_op)?;
-              Ok((field.name.to_ident_string(), field_val))
-            })
-            .collect::<InterpResult<'tcx, Vec<_>>>()?;
-
-          MValue::Struct { name, fields }
-          // }
-          // }
+              MValue::Struct { name, fields }
+            }
+          },
+          AdtKind::Enum => {
+            let (_, variant_idx) = self.ecx.read_discriminant(op)?;
+            let casted = op.project_downcast(&self.ecx, variant_idx)?;
+            let variant_def = adt_def.variant(variant_idx);
+            let variant = variant_def.name.to_ident_string();
+            let fields = variant_def
+              .fields
+              .iter()
+              .enumerate()
+              .map(|(i, field)| {
+                let field_op = casted.project_field(&self.ecx, i)?;
+                let field_val = self.read(&field_op)?;
+                Ok((field.name.to_ident_string(), field_val))
+              })
+              .collect::<InterpResult<'tcx, Vec<_>>>()?;
+            MValue::Enum {
+              name,
+              variant,
+              fields,
+            }
+          }
+          _ => todo!(),
         }
-        _ => todo!(),
-      },
+      }
 
       _ if ty.is_primitive() => {
         let imm = self.ecx.read_immediate(op)?;
@@ -201,7 +287,18 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
         }
       }
 
-      _ if ty.is_str() => MValue::String(self.ecx.read_str(&op.assert_mem_place())?.to_string()),
+      TyKind::Array(el_ty, _) => {
+        let base = op.assert_mem_place();
+        let FieldsShape::Array { stride, count } = base.layout.layout.fields() else { unreachable!() };
+        self.read_array(base, *stride, *count, *el_ty, None)?
+      }
+
+      _ if ty.is_str() => {
+        let mplace = op.assert_mem_place();
+        self.add_alloc(mplace, |mplace| {
+          Ok(MValue::String(self.ecx.read_str(&mplace)?.to_string()))
+        })?
+      }
 
       _ if ty.is_any_ptr() => match self.ecx.deref_operand(op) {
         Ok(mplace) => self.read(&mplace.into())?,
