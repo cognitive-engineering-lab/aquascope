@@ -8,7 +8,6 @@ import {
   keymap,
 } from "@codemirror/view";
 import { Tag, tags as t } from "@lezer/highlight";
-import { Editor } from "aquascope-editor";
 
 let tf = (tag: Tag, hljs: string) => ({ tag, class: `hljs-${hljs}` });
 let tt = (cm: keyof typeof t, hljs: string) => tf(t[cm] as any, hljs);

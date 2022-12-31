@@ -16,6 +16,8 @@ importers:
       '@types/react-dom': ^18.0.9
       leader-line-new: ^1.1.9
       lodash: ^4.17.21
+      react: ^18.2.0
+      react-dom: ^18.2.0
     dependencies:
       '@codemirror/lang-rust': 6.0.1
       '@codemirror/language': 6.3.1
@@ -27,6 +29,8 @@ importers:
       '@types/lodash': 4.14.191
       '@types/react': 18.0.26
       '@types/react-dom': 18.0.9
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
 
   packages/aquascope-embed:
     specifiers:
@@ -62,7 +66,7 @@ importers:
       react: ^18.2.0
       react-dom: ^18.2.0
     devDependencies:
-      '@codemirror/autocomplete': 6.3.4
+      '@codemirror/autocomplete': 6.3.4_xho5z7vebvnwbrancz7lieaqzy
       '@codemirror/commands': 6.1.2
       '@codemirror/language': 6.3.1
       '@codemirror/lint': 6.1.0
@@ -76,8 +80,12 @@ importers:
 
 packages:
 
-  /@codemirror/autocomplete/6.3.4:
+  /@codemirror/autocomplete/6.3.4_xho5z7vebvnwbrancz7lieaqzy:
     resolution: {integrity: sha512-irxKsTSjS0OkfMWWt9YxtNK97++/E+XIHfKnRpSVfZyHzda/amYF0BR+T8mMkrGQWidx2zApxHx08GT13egyQA==}
+    peerDependencies:
+      '@codemirror/language': ^6.0.0
+      '@codemirror/state': ^6.0.0
+      '@codemirror/view': ^6.0.0
     dependencies:
       '@codemirror/language': 6.3.1
       '@codemirror/state': 6.1.4

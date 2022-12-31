@@ -78,5 +78,7 @@ window.addEventListener("load", () => {
     // return globals.editor.computeReceiverPermissions();
     return globals.editor.computePermissionSteps();
   });
-  interpretButton.addEventListener("click", () => globals.editor.computeInterpreter())
+  interpretButton.addEventListener("click", () =>
+    globals.editor.computeInterpreter()
+  );
 });

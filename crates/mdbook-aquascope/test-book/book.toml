@@ -1,0 +1,10 @@
+[book]
+authors = ["Will Crichton"]
+language = "en"
+multilingual = false
+src = "src"
+
+[preprocessor.aquascope]
+
+[build]
+extra-watch-dirs = ["../../../frontend/packages/aquascope-embed/dist"]

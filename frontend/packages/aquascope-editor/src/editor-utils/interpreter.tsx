@@ -123,7 +123,7 @@ let FrameView = ({ frame }: { frame: MFrame<Range> }) => {
   return (
     <div className="frame">
       <div>{frame.name}</div>
-      <code>{snippet}</code>
+      <pre>{snippet}</pre>
       <LocalsView locals={frame.locals} />
     </div>
   );
@@ -143,8 +143,8 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
     <h2>Heap</h2>
     <table>
       <tbody>
-        {heap.locations.map(([loc, value]) => (
-          <tr>
+        {heap.locations.map(([loc, value], i) => (
+          <tr key={i}>
             <td>
               <ValueView key={loc} value={value} />
             </td>

@@ -18,13 +18,7 @@ import {
 } from "./editor-utils/permission-boundaries";
 import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 import "./styles.scss";
-import {
-  BackendError,
-  MStep,
-  PermissionsBoundaryOutput,
-  PermissionsDiffOutput,
-  Range,
-} from "./types";
+import { BackendError, Range } from "./types";
 
 export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
 export { coarsePermissionDiffs } from "./editor-utils/permission-steps";
@@ -282,75 +276,36 @@ export class Editor {
     return serverResponse;
   }
 
-  async computePermissionSteps() {
-    let serverResponse = await this.callBackendWithCode("permission-diffs");
-    if (serverResponse.success) {
-      let out: Result<PermissionsDiffOutput> = JSON.parse(
-        serverResponse.stdout
-      );
-      if ("Ok" in out) {
+  async renderOperation(operation: string, out?: Result<any>) {
+    if (!out) {
+      let serverResponse = await this.callBackendWithCode(operation);
+      if (serverResponse.success) {
+        out = JSON.parse(serverResponse.stdout);
         this.reportStdErr({
           type: "BuildError",
           error: serverResponse.stderr,
         });
-        return this.addPermissionsField(coarsePermissionDiffs, out.Ok);
       } else {
-        return this.reportStdErr(out.Err);
+        return this.reportStdErr({
+          type: "BuildError",
+          error: serverResponse.stderr,
+        });
       }
-    } else {
-      return this.reportStdErr({
-        type: "BuildError",
-        error: serverResponse.stderr,
-      });
     }
-  }
 
-  async computeReceiverPermissions() {
-    let serverResponse = await this.callBackendWithCode("receiver-types");
-    if (serverResponse.success) {
-      let out: Result<PermissionsBoundaryOutput> = JSON.parse(
-        serverResponse.stdout
+    let result = (out as any).Ok;
+
+    if (operation == "interpreter") {
+      renderInterpreter(
+        this.interpreterContainer,
+        result,
+        this.view.state.doc.toJSON().join("\n"),
+        this.markedRanges
       );
-      if ("Ok" in out) {
-        this.reportStdErr({
-          type: "BuildError",
-          error: serverResponse.stderr,
-        });
-        return this.addPermissionsField(receiverPermissionsField, out.Ok);
-      } else {
-        return this.reportStdErr(out.Err);
-      }
-    } else {
-      return this.reportStdErr({
-        type: "BuildError",
-        error: serverResponse.stderr,
-      });
-    }
-  }
-
-  async computeInterpreter() {
-    let serverResponse = await this.callBackendWithCode("interpreter");
-    if (serverResponse.success) {
-      let out: Result<MStep<Range>[]> = JSON.parse(serverResponse.stdout);
-      if ("Ok" in out) {
-        this.reportStdErr({
-          type: "BuildError",
-          error: serverResponse.stderr,
-        });
-        renderInterpreter(
-          this.interpreterContainer,
-          out.Ok,
-          this.view.state.doc.toJSON().join("\n"),
-          this.markedRanges
-        );
-      } else {
-        return this.reportStdErr(out.Err);
-      }
-    } else {
-      return this.reportStdErr({
-        type: "BuildError",
-        error: serverResponse.stderr,
-      });
+    } else if (operation == "permission-diffs") {
+      this.addPermissionsField(coarsePermissionDiffs, result);
+    } else if (operation == "receiver-types") {
+      this.addPermissionsField(receiverPermissionsField, result);
     }
   }
 }

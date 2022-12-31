@@ -203,7 +203,7 @@ class PermissionStepTableWidget extends WidgetType {
 
     let table = (
       <table className="perm-step-table">
-        {this.diffs.map((diff, i) => diff.render())}
+        {this.diffs.map(diff => diff.render())}
       </table>
     );
     let inner = (

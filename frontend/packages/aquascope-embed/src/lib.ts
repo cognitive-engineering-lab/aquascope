@@ -60,14 +60,18 @@ let initEditors = () => {
       readOnly
     );
 
-    computePermBtn.addEventListener("click", _ => {
-      ed.computeReceiverPermissions();
-      ed.computePermissionSteps();
-    });
+    let operation = pre.dataset.operation;
+    if (operation) {
+      let response = pre.dataset.response
+        ? JSON.parse(pre.dataset.response)
+        : undefined;
 
-    // start loading the permissions
-    ed.computeReceiverPermissions();
-    ed.computePermissionSteps();
+      ed.renderOperation(operation, response);
+
+      computePermBtn.addEventListener("click", _ => {
+        ed.renderOperation(operation!);
+      });
+    }
   });
 };
 
