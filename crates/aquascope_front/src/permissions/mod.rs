@@ -2,6 +2,7 @@ use anyhow::Result;
 use aquascope::analysis::{
   self,
   permissions::{PermissionsBoundary, PermissionsStateStep},
+  AnalysisOutput, BodyAnalysisJoin,
 };
 use flowistry::{
   mir::borrowck_facts::get_body_with_borrowck_facts, source_map,
@@ -16,12 +17,12 @@ use ts_rs::TS;
 #[ts(export)]
 pub struct PermissionsBoundaryOutput(Vec<PermissionsBoundary>);
 
-impl super::plugin::Join for PermissionsBoundaryOutput {
-  fn join(self, other: Self) -> Self {
+impl BodyAnalysisJoin for PermissionsBoundaryOutput {
+  fn analysis_join(self, other: Self) -> Self {
     Self(
       self
         .0
-        .join(other.0)
+        .analysis_join(other.0)
         .into_iter()
         .unique_by(|pi| pi.location)
         .collect::<Vec<_>>(),
@@ -47,33 +48,21 @@ macro_rules! gen_permission_ctxt {
 pub fn permission_boundaries(
   tcx: TyCtxt,
   body_id: BodyId,
-) -> Result<PermissionsBoundaryOutput> {
-  let permissions_ctxt = gen_permission_ctxt!(tcx, body_id);
-
-  let source_map = tcx.sess.source_map();
-  let call_infos =
-    analysis::pair_permissions_to_calls(permissions_ctxt, |span| {
-      source_map::Range::from_span(span, source_map)
-        .ok()
-        .unwrap_or_else(|| {
-          log::error!(
-            "The span {span:?} could not be turned into a valid Range"
-          );
-          source_map::Range::default()
-        })
-        .into()
-    });
-
-  Ok(PermissionsBoundaryOutput(call_infos))
+) -> Result<AnalysisOutput<PermissionsBoundary>> {
+  Ok(analysis::AquascopeAnalysis::run(
+    tcx,
+    body_id,
+    analysis::pair_permissions_to_calls,
+  ))
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsDiffOutput(Vec<PermissionsStateStep>);
 
-impl super::plugin::Join for PermissionsDiffOutput {
-  fn join(self, other: Self) -> Self {
-    Self(self.0.join(other.0))
+impl BodyAnalysisJoin for PermissionsDiffOutput {
+  fn analysis_join(self, other: Self) -> Self {
+    Self(self.0.analysis_join(other.0))
   }
 }
 

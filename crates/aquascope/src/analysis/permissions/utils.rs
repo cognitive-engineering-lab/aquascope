@@ -286,9 +286,9 @@ impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
           type_writeable: false,
           type_copyable: false,
           path_moved: false,
-          loan_read_refined: false,
-          loan_write_refined: false,
-          loan_drop_refined: false,
+          loan_read_refined: None,
+          loan_write_refined: None,
+          loan_drop_refined: None,
           permissions: mp,
         })
       })

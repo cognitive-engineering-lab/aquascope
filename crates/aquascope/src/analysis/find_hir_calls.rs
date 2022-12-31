@@ -1,20 +1,22 @@
 use rustc_hir::{
   intravisit::{self, Visitor},
-  BodyId, Expr, ExprKind,
+  BodyId, Expr, ExprKind, HirId,
 };
-use rustc_middle::{
-  hir::nested_filter::OnlyBodies,
-  ty::{FnSig, TyCtxt, TypeckResults},
-};
-use rustc_span::Span;
+use rustc_middle::{hir::nested_filter::OnlyBodies, ty::TyCtxt};
 
-struct MethodCallFinder<'a, 'tcx> {
+struct HirExprScraper<'tcx, A, F>
+where
+  F: Fn<(&'tcx Expr<'tcx>,), Output = Option<A>>,
+{
   tcx: TyCtxt<'tcx>,
-  typeck_res: &'a TypeckResults<'tcx>,
-  call_spans: Vec<(Span, FnSig<'tcx>)>,
+  maybe_scrape: F,
+  data: Vec<A>,
 }
 
-impl<'tcx> Visitor<'tcx> for MethodCallFinder<'_, 'tcx> {
+impl<'tcx, A, F> Visitor<'tcx> for HirExprScraper<'tcx, A, F>
+where
+  F: Fn<(&'tcx Expr<'tcx>,), Output = Option<A>>,
+{
   type NestedFilter = OnlyBodies;
 
   fn nested_visit_map(&mut self) -> Self::Map {
@@ -23,29 +25,37 @@ impl<'tcx> Visitor<'tcx> for MethodCallFinder<'_, 'tcx> {
 
   fn visit_expr(&mut self, expression: &'tcx Expr) {
     intravisit::walk_expr(self, expression);
-
-    let hir_id = expression.hir_id;
-    if let ExprKind::MethodCall(_ps, _, _, call_span) = expression.kind {
-      let def_id = self.typeck_res.type_dependent_def_id(hir_id).unwrap();
-      let fn_sig = self.tcx.fn_sig(def_id).skip_binder();
-      self.call_spans.push((call_span, fn_sig));
+    if let Some(a) = (self.maybe_scrape)(expression) {
+      self.data.push(a);
     }
   }
 }
 
-pub fn find_method_call_spans(
-  tcx: TyCtxt,
-  body_id: BodyId,
-) -> Vec<(Span, FnSig)> {
-  let typeck_res = tcx.typeck_body(body_id);
-  let mut finder = MethodCallFinder {
+pub fn scrape_expr_data<F, O>(tcx: TyCtxt, body_id: BodyId, f: F) -> Vec<O>
+where
+  F: for<'tcx> Fn<(&'tcx Expr<'tcx>,), Output = Option<O>>,
+{
+  let mut finder = HirExprScraper {
     tcx,
-    typeck_res,
-    call_spans: Vec::default(),
+    maybe_scrape: f,
+    data: Vec::default(),
   };
   // XXX: `visit_all_item_likes_in_crate` visits all bodies, but
   // here we are only searching for bodies in the body that's under
   // analysis.
   finder.visit_nested_body(body_id);
-  finder.call_spans
+  finder.data
+}
+
+// DEPRECATED: directly use the above method for specialized scraping.
+pub fn find_method_call_spans(tcx: TyCtxt, body_id: BodyId) -> Vec<HirId> {
+  let f = |expr: &Expr| -> Option<HirId> {
+    if let ExprKind::MethodCall(..) = expr.kind {
+      Some(expr.hir_id)
+    } else {
+      None
+    }
+  };
+
+  scrape_expr_data(tcx, body_id, f)
 }

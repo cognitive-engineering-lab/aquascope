@@ -1,4 +1,4 @@
-use flowistry::mir::utils::PlaceExt;
+use flowistry::mir::utils::{BodyExt, PlaceExt};
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
 use rustc_borrowck::{
   borrow_set::{BorrowData, BorrowSet},
@@ -16,9 +16,13 @@ use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
 use rustc_trait_selection::infer::InferCtxtExt;
 
-use super::{
-  AquascopeFacts, Loan, Output, Path, Permissions, PermissionsData,
-  PermissionsDomain, Point, Variable,
+use crate::{
+  analysis::permissions::{
+    AquascopeFacts, Loan, LoanKey, LoanPoints, LoanRegions, Output, Path,
+    Permissions, PermissionsData, PermissionsDomain, Point, RefinementRegion,
+    Refiner, Variable,
+  },
+  Range,
 };
 
 type MoveablePath = <RustcFacts as FactTypes>::Path;
@@ -198,18 +202,22 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let type_copyable = self.is_path_copyable(*path);
 
     let path_moved = path_moved_at.contains(path);
-    let loan_read_refined = cannot_read.contains_key(path);
-    let loan_write_refined = cannot_write.contains_key(path);
-    let loan_drop_refined = cannot_drop.contains_key(path);
+
+    let loan_read_refined: Option<LoanKey> =
+      cannot_read.get(path).map(Into::<LoanKey>::into);
+    let loan_write_refined: Option<LoanKey> =
+      cannot_write.get(path).map(Into::<LoanKey>::into);
+    let loan_drop_refined: Option<LoanKey> =
+      cannot_drop.get(path).map(Into::<LoanKey>::into);
 
     let permissions = if !is_live {
       Permissions::bottom()
     } else {
       Permissions {
-        read: !path_moved && !loan_read_refined,
-        write: type_writeable && !path_moved && !loan_write_refined,
+        read: !path_moved && loan_read_refined.is_none(),
+        write: type_writeable && !path_moved && loan_write_refined.is_none(),
         drop: type_copyable
-          || (type_droppable && !path_moved && !loan_drop_refined),
+          || (type_droppable && !path_moved && loan_drop_refined.is_none()),
       }
     };
 
