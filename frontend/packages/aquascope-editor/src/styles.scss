@@ -129,6 +129,24 @@
   }
 
   /* **************** */
+
+  .step-marker {
+    display: inline-block;
+    border-radius: 4px;
+    margin: 0 6px;
+    padding: 0 2px;
+    background: var(--bg);
+    border: 1px solid var(--fg);
+
+    > span {
+      font-size: 0.8em;
+      color: var(--fg);
+      vertical-align: middle;
+      position: relative;
+      bottom: 1px;
+      font-weight: bold;
+    }
+  }
 }
 
 .interpreter {
@@ -136,18 +154,23 @@
   padding: 1em;
   display: flex;
   gap: 1em;
-  flex-direction: column;
-  width: 500px;
+  flex-direction: row;  
+  flex-wrap: wrap;
 
   .step {
-    display: flex;
-    flex-direction: row;
+    
     border: 1px solid #ccc;
     padding: 0.5em;
     border-radius: 8px;
+    width: max-content;
 
-    > div {
-      flex: 1;
+    .memory-container {
+      display: flex;
+      flex-direction: row;
+      
+      .memory {
+        flex: 1;
+      }
     }
 
     h2 {

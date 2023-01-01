@@ -297,6 +297,7 @@ export class Editor {
 
     if (operation == "interpreter") {
       renderInterpreter(
+        this.view,
         this.interpreterContainer,
         result,
         this.view.state.doc.toJSON().join("\n"),

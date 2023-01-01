@@ -7,6 +7,7 @@ use miri::{
   Immediate, InterpCx, InterpResult, LocalValue, Machine, MiriConfig, MiriMachine, Operand,
 };
 
+use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{ClearCrossCrate, LocalInfo, Location, Place, RETURN_PLACE},
   ty::{InstanceDef, TyCtxt},
@@ -17,12 +18,15 @@ use rustc_target::abi::Size;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::Range;
+
 use super::mvalue::{MLocation, MValue};
 
 #[derive(Serialize, Deserialize, Debug, TS)]
 #[ts(export)]
 pub struct MFrame<L> {
   pub name: String,
+  pub body_span: Range,
   pub location: L,
   pub locals: Vec<(String, MValue)>,
 }
@@ -58,6 +62,20 @@ pub struct VisEvaluator<'mir, 'tcx> {
   pub(super) tcx: TyCtxt<'tcx>,
   pub(super) ecx: InterpCx<'mir, 'tcx, MiriMachine<'mir, 'tcx>>,
   pub(super) heap_mapping: RefCell<HeapMapping>,
+}
+
+enum BodySpanType {
+  Header,
+  Whole,
+}
+
+fn body_span(tcx: TyCtxt, def_id: DefId, body_span_type: BodySpanType) -> Span {
+  let hir = tcx.hir();
+  let body_node = hir.body_owner(hir.body_owned_by(def_id.expect_local()));
+  match body_span_type {
+    BodySpanType::Header => hir.span(body_node),
+    BodySpanType::Whole => hir.span_with_body(body_node),
+  }
 }
 
 impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
@@ -105,6 +123,14 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       .intersperse("::")
       .collect::<String>();
 
+    let body_span = Range::from(
+      flowistry::source_map::Range::from_span(
+        body_span(self.tcx, frame.instance.def_id(), BodySpanType::Whole),
+        self.tcx.sess.source_map(),
+      )
+      .unwrap(),
+    );
+
     let current_loc = loc_override.unwrap_or((frame.instance.def, frame.current_loc()));
 
     let mut locals = frame
@@ -132,14 +158,14 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         };
 
         let LocalValue::Live(op) = state.value else { return None };
-        let value = match op {
-          Operand::Immediate(Immediate::Uninit) => Ok(MValue::Unallocated),
-          _ => (|| {
-            let op_ty = self.ecx.local_to_op(frame, local, state.layout.get())?;
-            let value = self.read(&op_ty)?;
-            Ok(value)
-          })(),
+        if let Operand::Immediate(Immediate::Uninit) = op {
+          return None;
         };
+        let value = (|| {
+          let op_ty = self.ecx.local_to_op(frame, local, state.layout.get())?;
+          let value = self.read(&op_ty)?;
+          Ok(value)
+        })();
         Some(value.map(move |value| (name, value)))
       })
       .collect::<InterpResult<'tcx, Vec<_>>>()?;
@@ -147,6 +173,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
     Ok(MFrame {
       name,
+      body_span,
       locals,
       location: current_loc,
     })
@@ -211,9 +238,8 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         let new_call = local_frames.len() > n_frames;
         if new_call {
           let (_, frame) = local_frames.last().unwrap();
-          let hir = self.tcx.hir();
-          let body_node = hir.body_owner(hir.body_owned_by(frame.instance.def_id().expect_local()));
-          current_loc = (frame.instance.def, Either::Right(hir.span(body_node)));
+          let span = body_span(self.tcx, frame.instance.def_id(), BodySpanType::Header);
+          current_loc = (frame.instance.def, Either::Right(span));
         }
 
         if let Some(step) = self.build_step(current_loc)? {

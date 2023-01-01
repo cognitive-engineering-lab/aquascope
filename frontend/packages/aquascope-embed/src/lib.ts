@@ -23,10 +23,10 @@ import "./styles.scss";
 // be *read only* (because no-interact is true).
 let initEditors = () => {
   // embedded aquascope editors should be <div> tags with the class 'aquascope'
-  document.querySelectorAll<HTMLElement>(".aquascope").forEach(elem => {
-    // the containing html element
-    let pre = elem;
-
+  document.querySelectorAll<HTMLElement>(".aquascope-embed").forEach(elem => {
+    elem.classList.remove("aquascope-embed")
+    elem.classList.add("aquascope");
+    
     // container for the button
     let btnWrap = document.createElement("div");
     btnWrap.classList.add("top-right");
@@ -35,19 +35,18 @@ let initEditors = () => {
     let computePermBtn = document.createElement("button");
     computePermBtn.className = "fa fa-refresh cm-button";
 
-    let initialCode = pre.textContent!.trim();
-    pre.textContent = "";
+    let initialCode = JSON.parse(elem.dataset.code!);
 
     btnWrap.appendChild(computePermBtn);
-    pre.appendChild(btnWrap);
+    elem.appendChild(btnWrap);
 
-    let serverUrl = pre.dataset.serverUrl
-      ? new URL(pre.dataset.serverUrl)
+    let serverUrl = elem.dataset.serverUrl
+      ? new URL(elem.dataset.serverUrl)
       : undefined;
-    let readOnly = pre.dataset.noInteract! == "true";
+    let readOnly = elem.dataset.noInteract! == "true";
 
     let ed = new Editor(
-      pre,
+      elem,
       setup,
       [receiverPermissionsField.stateField, coarsePermissionDiffs.stateField],
       err => {
@@ -60,10 +59,10 @@ let initEditors = () => {
       readOnly
     );
 
-    let operation = pre.dataset.operation;
+    let operation = elem.dataset.operation;
     if (operation) {
-      let response = pre.dataset.response
-        ? JSON.parse(pre.dataset.response)
+      let response = elem.dataset.response
+        ? JSON.parse(elem.dataset.response)
         : undefined;
 
       ed.renderOperation(operation, response);

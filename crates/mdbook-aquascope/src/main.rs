@@ -2,8 +2,20 @@ use anyhow::{bail, Result};
 use mdbook_preprocessor_utils::{
   mdbook::preprocess::PreprocessorContext, Asset, SimplePreprocessor,
 };
-use regex::Regex;
-use std::{fmt::Write, fs, path::Path, process::Command};
+use nom::{
+  bytes::complete::{tag, take_until},
+  character::complete::{anychar, char, none_of},
+  multi::many0,
+  sequence::preceded,
+  IResult,
+};
+use nom_locate::LocatedSpan;
+use std::{
+  fmt::Write,
+  fs,
+  path::{Path, PathBuf},
+  process::Command,
+};
 use tempfile::tempdir;
 
 mdbook_preprocessor_utils::asset_generator!("../../../frontend/packages/aquascope-embed/dist/");
@@ -11,11 +23,16 @@ mdbook_preprocessor_utils::asset_generator!("../../../frontend/packages/aquascop
 const FRONTEND_ASSETS: [Asset; 2] = [make_asset!("lib.js"), make_asset!("lib.css")];
 
 struct AquascopePreprocessor {
-  regex: Regex,
+  miri_sysroot: PathBuf,
+  target_libdir: PathBuf,
+}
+
+fn strip_markers(code: &str) -> String {
+  code.replace("`[", "").replace("]`", "")
 }
 
 impl AquascopePreprocessor {
-  fn process_code(&self, operation: &str, code: &str) -> Result<String> {
+  fn process_code(&self, header: &[String], code: &str) -> Result<String> {
     let tempdir = tempdir()?;
     let root = tempdir.path();
     let status = Command::new("cargo")
@@ -26,10 +43,13 @@ impl AquascopePreprocessor {
       bail!("Cargo failed");
     }
 
-    fs::write(root.join("example/src/main.rs"), code)?;
+    let cleaned = strip_markers(code);
+    fs::write(root.join("example/src/main.rs"), cleaned)?;
 
     let output = Command::new("cargo")
       .args(["aquascope", "interpret"])
+      .env("SYSROOT", &self.miri_sysroot)
+      .env("DYLD_LIBRARY_PATH", &self.target_libdir)
       .current_dir(root.join("example"))
       .output()?;
     if !output.status.success() {
@@ -37,8 +57,10 @@ impl AquascopePreprocessor {
     }
 
     let response = String::from_utf8(output.stdout)?;
+    let logs = String::from_utf8(output.stderr)?;
+    eprintln!("{logs}");
 
-    let mut html = String::from(r#"<pre class="aquascope""#);
+    let mut html = String::from(r#"<div class="aquascope-embed""#);
 
     let mut add_data = |k: &str, v: &str| {
       write!(
@@ -49,13 +71,29 @@ impl AquascopePreprocessor {
       )
     };
 
-    add_data("operation", operation)?;
-    add_data("response", &response)?;
+    add_data("code", &serde_json::to_string(code)?)?;
+    add_data("operation", &header[0])?;
+    add_data("response", response.trim_end())?;
 
-    write!(html, ">{code}</pre>")?;
+    write!(html, "></div>")?;
 
     Ok(html)
   }
+}
+
+fn parse_aquascope_block(
+  i: LocatedSpan<&str>,
+) -> IResult<LocatedSpan<&str>, (Vec<String>, String)> {
+  let (i, _) = tag("```aquascope")(i)?;
+  let (i, header) = many0(preceded(char(','), many0(none_of(",\n"))))(i)?;
+  let (i, code) = take_until("```")(i)?;
+  let (i, _) = tag("```")(i)?;
+  let header = header
+    .into_iter()
+    .map(|v| v.into_iter().collect::<String>())
+    .collect::<Vec<_>>();
+  let code = code.fragment().trim().to_string();
+  Ok((i, (header, code)))
 }
 
 impl SimplePreprocessor for AquascopePreprocessor {
@@ -64,8 +102,40 @@ impl SimplePreprocessor for AquascopePreprocessor {
   }
 
   fn build(_ctx: &PreprocessorContext) -> Result<Self> {
-    let regex = Regex::new("```aquascope,?(.*)\n((?s).*)\n```")?;
-    Ok(AquascopePreprocessor { regex })
+    let run_and_get_output = |cmd: &mut Command| -> Result<String> {
+      let output = cmd.output()?;
+      if !output.status.success() {
+        bail!("Command failed");
+      }
+      let stdout = String::from_utf8(output.stdout)?;
+      Ok(stdout.trim_end().to_string())
+    };
+
+    // TODO: read this from rust-toolchain.toml
+    const TOOLCHAIN: &str = "nightly-2022-12-07";
+    let output = run_and_get_output(Command::new("cargo").args([
+      &format!("+{TOOLCHAIN}"),
+      "miri",
+      "setup",
+      "--print-sysroot",
+    ]))?;
+    let miri_sysroot = PathBuf::from(output);
+
+    let output = run_and_get_output(Command::new("rustup").args([
+      "which",
+      "--toolchain",
+      TOOLCHAIN,
+      "rustc",
+    ]))?;
+    let rustc = PathBuf::from(output);
+
+    let output = run_and_get_output(Command::new(&rustc).args(["--print", "target-libdir"]))?;
+    let target_libdir = PathBuf::from(output);
+
+    Ok(AquascopePreprocessor {
+      miri_sysroot,
+      target_libdir,
+    })
   }
 
   fn replacements(
@@ -73,17 +143,24 @@ impl SimplePreprocessor for AquascopePreprocessor {
     _chapter_dir: &Path,
     content: &str,
   ) -> Result<Vec<(std::ops::Range<usize>, String)>> {
-    self
-      .regex
-      .captures_iter(content)
-      .map(|captures| {
-        let range = captures.get(0).unwrap().range();
-        let operation = captures.get(1).unwrap().as_str();
-        let code = captures.get(2).unwrap().as_str();
-        let html = self.process_code(operation, code)?;
-        Ok((range, html))
-      })
-      .collect()
+    let mut replacements = Vec::new();
+    let mut content = LocatedSpan::new(content);
+    loop {
+      if let Ok((next, (header, code))) = parse_aquascope_block(content) {
+        let html = self.process_code(&header, &code)?;
+        let range = content.location_offset()..next.location_offset();
+        replacements.push((range, html));
+        content = next;
+      } else {
+        match anychar::<_, nom::error::Error<LocatedSpan<&str>>>(content) {
+          Ok((next, _)) => {
+            content = next;
+          }
+          Err(_) => break,
+        }
+      }
+    }
+    Ok(replacements)
   }
 
   fn linked_assets(&self) -> Vec<Asset> {

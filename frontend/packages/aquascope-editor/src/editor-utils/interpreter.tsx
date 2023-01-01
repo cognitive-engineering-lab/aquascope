@@ -1,3 +1,10 @@
+import { StateEffect } from "@codemirror/state";
+import {
+  Decoration,
+  EditorView,
+  ViewPlugin,
+  WidgetType,
+} from "@codemirror/view";
 import LeaderLine from "leader-line-new";
 import _ from "lodash";
 import React, { useContext, useEffect, useRef } from "react";
@@ -12,6 +19,8 @@ import {
   MValue,
   Range,
 } from "../types";
+
+const DEBUG: boolean = false;
 
 let CodeContext = React.createContext("");
 
@@ -123,15 +132,15 @@ let FrameView = ({ frame }: { frame: MFrame<Range> }) => {
   return (
     <div className="frame">
       <div>{frame.name}</div>
-      <pre>{snippet}</pre>
+      {DEBUG ? <pre>{snippet}</pre> : null}
       <LocalsView locals={frame.locals} />
     </div>
   );
 };
 
 let StackView = ({ stack }: { stack: MStack<Range> }) => (
-  <div className="stack">
-    <h2>Stack</h2>
+  <div className="memory stack">
+    <div className="memory-header">Stack</div>
     {stack.frames.map((frame, i) => (
       <FrameView key={i} frame={frame} />
     ))}
@@ -139,8 +148,8 @@ let StackView = ({ stack }: { stack: MStack<Range> }) => (
 );
 
 let HeapView = ({ heap }: { heap: MHeap }) => (
-  <div className="heap">
-    <h2>Heap</h2>
+  <div className="memory heap">
+    <div className="memory-header">Heap</div>
     <table>
       <tbody>
         {heap.locations.map(([loc, value], i) => (
@@ -155,7 +164,7 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
   </div>
 );
 
-let StepView = ({ step }: { step: MStep<Range> }) => {
+let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
   let stackRef = useRef<HTMLDivElement | null>(null);
   let heapRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -177,28 +186,72 @@ let StepView = ({ step }: { step: MStep<Range> }) => {
   }, []);
   return (
     <div className="step">
-      <div ref={stackRef}>
-        <StackView stack={step.stack} />
-      </div>
-      <div ref={heapRef}>
-        <HeapView heap={step.heap} />
+      <div className="step-name">L{index + 1}</div>
+      <div className="memory-container">
+        <div ref={stackRef}>
+          <StackView stack={step.stack} />
+        </div>
+        {step.heap.locations.length > 0 ? (
+          <div ref={heapRef}>
+            <HeapView heap={step.heap} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
 };
 
-let filterSteps = (steps: MStep<Range>[], ranges: Range[]): MStep<Range>[] =>
-  steps.filter(step => {
-    let lastFrame = _.last(step.stack.frames)!;
-    let loc = lastFrame.location;
-    return _.some(
-      ranges,
-      other =>
-        loc.char_start <= other.char_start && other.char_end <= loc.char_end
-    );
+let filterSteps = (
+  steps: MStep<Range>[],
+  ranges: Range[]
+): [Range[], MStep<Range>[]] => {
+  let stepsRev = [...steps].reverse();
+  let indexedRanges: [number, Range, MStep<Range>][] = ranges.map(range => {
+    let stepRevIdx = stepsRev.findIndex((step, i) => {
+      let frame = _.last(step.stack.frames)!;
+      let rangeInFrame =
+        frame.body_span.char_start <= range.char_start &&
+        range.char_end <= frame.body_span.char_end;
+      let rangeAfterLoc = range.char_end > frame.location.char_start;
+      return rangeInFrame && rangeAfterLoc;
+    });
+    if (stepRevIdx == -1)
+      throw new Error(
+        `Could not find step for range: ${JSON.stringify(range, undefined, 2)}`
+      );
+    return [steps.length - stepRevIdx, range, stepsRev[stepRevIdx]];
   });
+  let sortedRanges = _.sortBy(indexedRanges, ([idx]) => idx);
+  return [
+    sortedRanges.map(([_stepIdx, range]) => range),
+    sortedRanges.map(([_stepIdx, _range, step]) => step),
+  ];
+};
+
+let StepMarkerView = ({ index }: { index: number }) => {
+  return (
+    <span className="step-marker">
+      <span>L{index + 1}</span>
+    </span>
+  );
+};
+
+class StepMarkerWidget extends WidgetType {
+  constructor(readonly index: number) {
+    super();
+  }
+
+  toDOM() {
+    let container = document.createElement("span");
+    ReactDOM.createRoot(container).render(
+      <StepMarkerView index={this.index} />
+    );
+    return container;
+  }
+}
 
 export function renderInterpreter(
+  view: EditorView,
   container: HTMLDivElement,
   steps: MStep<Range>[],
   contents: string,
@@ -206,14 +259,31 @@ export function renderInterpreter(
 ) {
   let root = ReactDOM.createRoot(container);
   if (markedRanges.length > 0) {
-    steps = filterSteps(steps, markedRanges);
+    let [sortedRanges, filteredSteps] = filterSteps(steps, markedRanges);
+    steps = filteredSteps;
+
+    let decos = _.sortBy(
+      sortedRanges.map((range, i) =>
+        Decoration.widget({
+          widget: new StepMarkerWidget(i),
+        }).range(range.char_start)
+      ),
+      deco => deco.from
+    );
+
+    let plugin = ViewPlugin.fromClass(class {}, {
+      decorations: () => Decoration.set(decos),
+    });
+    view.dispatch({
+      effects: [StateEffect.appendConfig.of(plugin)],
+    });
   }
 
   root.render(
     <div className="interpreter">
       <CodeContext.Provider value={contents}>
         {steps.map((step, i) => (
-          <StepView key={i} step={step} />
+          <StepView key={i} index={i} step={step} />
         ))}
       </CodeContext.Provider>
     </div>

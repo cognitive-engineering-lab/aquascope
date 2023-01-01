@@ -1,12 +1,10 @@
 use either::Either;
-use flowistry::{
-  mir::utils::BodyExt,
-};
+use flowistry::mir::utils::BodyExt;
 use itertools::Itertools;
 use miri::InterpCx;
 use rustc_hir::{intravisit::Visitor, Body, Expr, ExprKind, HirId, Stmt};
 use rustc_middle::{
-  mir::{Location},
+  mir::Location,
   ty::{InstanceDef, TyCtxt},
 };
 use rustc_span::{BytePos, Span};
@@ -139,6 +137,7 @@ pub fn group_steps<Loc1, Loc2: PartialEq + Clone>(
           Some(MFrame {
             location: current_loc,
             name: frame.name,
+            body_span: frame.body_span,
             locals: frame.locals,
           })
         })

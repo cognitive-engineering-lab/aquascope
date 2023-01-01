@@ -18,7 +18,10 @@ use std::{
     str,
     sync::Arc,
 };
-
+#[cfg(feature = "no-docker")]
+use tempfile::{tempdir, TempDir};
+#[cfg(feature = "no-docker")]
+use std::fs;
 
 const DEFAULT_IMAGE: &str = "aquascope";
 const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
