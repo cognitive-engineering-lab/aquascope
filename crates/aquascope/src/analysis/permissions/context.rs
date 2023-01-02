@@ -1,4 +1,4 @@
-use flowistry::mir::utils::{BodyExt, PlaceExt};
+use flowistry::mir::utils::PlaceExt;
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
 use rustc_borrowck::{
   borrow_set::{BorrowData, BorrowSet},
@@ -16,13 +16,9 @@ use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
 use rustc_trait_selection::infer::InferCtxtExt;
 
-use crate::{
-  analysis::permissions::{
-    AquascopeFacts, Loan, LoanKey, LoanPoints, LoanRegions, Output, Path,
-    Permissions, PermissionsData, PermissionsDomain, Point, RefinementRegion,
-    Refiner, Variable,
-  },
-  Range,
+use crate::analysis::permissions::{
+  AquascopeFacts, Loan, LoanKey, Output, Path, Permissions, PermissionsData,
+  PermissionsDomain, Point, Variable,
 };
 
 type MoveablePath = <RustcFacts as FactTypes>::Path;
@@ -173,6 +169,28 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       // There is no way in the type system to have a non-readable type.
       read: true,
       drop,
+    }
+  }
+
+  pub fn permissions_for_const_ty(&self, ty: Ty<'tcx>) -> PermissionsData {
+    use rustc_hir::lang_items::LangItem;
+    let copy_def_id = self.tcx.require_lang_item(LangItem::Copy, None);
+    let type_copyable = self.implements_trait(ty, copy_def_id);
+
+    PermissionsData {
+      is_live: true,
+      type_droppable: true,
+      type_writeable: true,
+      type_copyable,
+      path_moved: false,
+      loan_read_refined: None,
+      loan_write_refined: None,
+      loan_drop_refined: None,
+      permissions: Permissions {
+        read: true,
+        write: true,
+        drop: true,
+      },
     }
   }
 

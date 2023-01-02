@@ -48,6 +48,21 @@ pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
   }
 }
 
+pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
+  let tcx = ctxt.tcx;
+  let body = &ctxt.body_with_facts.body;
+  let _basic_blocks = body.basic_blocks.indices();
+
+  let mut stderr = std::io::stderr();
+  rustc_middle::mir::pretty::write_mir_fn(
+    tcx,
+    body,
+    &mut |_, _| Ok(()),
+    &mut stderr,
+  )
+  .unwrap();
+}
+
 fn write_dot(path: &Path, buf: Vec<u8>) -> Result<()> {
   use std::process::{Command, Stdio};
 

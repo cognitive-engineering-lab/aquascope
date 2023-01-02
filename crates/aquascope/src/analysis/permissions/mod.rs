@@ -7,8 +7,8 @@ mod places_conflict;
 pub mod utils;
 
 use std::{
-  collections::hash_map::{Entry, HashMap},
-  ops::{Add, Deref, DerefMut},
+  collections::hash_map::Entry,
+  ops::{Deref, DerefMut},
 };
 
 pub use context::PermissionsCtxt;
@@ -24,7 +24,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::{
-  analysis::{KeyShifter, LoanKey, LoanPoints, LoanRegions, MoveKey},
+  analysis::{KeyShifter, LoanKey, MoveKey},
   Range,
 };
 
@@ -74,6 +74,7 @@ pub struct Permissions {
 // information about what factors into the permissions. Things like
 // declared type information, loan refinements, move refinements, etc.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 pub struct PermissionsData {
   // Type declaration information
   pub type_droppable: bool,
@@ -146,10 +147,11 @@ where
 {
   High,
   Low,
-  None { value: Option<A> },
+  None {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<A>,
+  },
 }
-
-pub type BoolStep = ValueStep<bool>;
 
 // -----------------
 // Permission Domain
@@ -167,10 +169,10 @@ pub trait Difference {
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsDataDiff {
-  pub is_live: BoolStep,
-  pub type_droppable: BoolStep,
-  pub type_writeable: BoolStep,
-  pub path_moved: BoolStep,
+  pub is_live: ValueStep<bool>,
+  pub type_droppable: ValueStep<bool>,
+  pub type_writeable: ValueStep<bool>,
+  pub path_moved: ValueStep<bool>,
   pub loan_read_refined: ValueStep<LoanKey>,
   pub loan_write_refined: ValueStep<LoanKey>,
   pub loan_drop_refined: ValueStep<LoanKey>,
@@ -195,27 +197,12 @@ macro_rules! make_diff {
     #[derive(Clone, Debug, Serialize, TS)]
     #[ts(export)]
     pub struct $diff {
-      $( pub $i: BoolStep, )*
+      $( pub $i: ValueStep<bool>, )*
     }
 
     impl $diff {
       fn is_empty(&self) -> bool {
         $( self.$i.is_empty() && )* true
-      }
-
-      fn split(&self) -> ($base, $base) {
-        (
-          $base {
-            $(
-              $i: self.$i.split().0,
-            )*
-          },
-          $base {
-            $(
-              $i: self.$i.split().1,
-            )*
-          }
-        )
       }
     }
   }
@@ -231,14 +218,14 @@ make_diff!(Permissions => PermissionsDiff {
 // Again these should all be generated, very pattern oriented.
 
 impl Difference for bool {
-  type Diff = BoolStep;
+  type Diff = ValueStep<bool>;
   fn diff(&self, rhs: bool) -> Self::Diff {
     if *self && !rhs {
-      BoolStep::Low
+      ValueStep::Low
     } else if !*self && rhs {
-      BoolStep::High
+      ValueStep::High
     } else {
-      BoolStep::None { value: Some(*self) }
+      ValueStep::None { value: Some(*self) }
     }
   }
 }
@@ -342,17 +329,12 @@ impl<'tcx> From<Ty<'tcx>> for Permissions {
   }
 }
 
-impl BoolStep {
+impl<T> ValueStep<T>
+where
+  T: Clone + std::fmt::Debug + Serialize + TS,
+{
   fn is_empty(&self) -> bool {
     matches!(self, Self::None { .. })
-  }
-
-  fn split(&self) -> (bool, bool) {
-    match self {
-      Self::High => (false, true),
-      Self::Low => (true, false),
-      Self::None { value } => (value.unwrap(), value.unwrap()),
-    }
   }
 }
 

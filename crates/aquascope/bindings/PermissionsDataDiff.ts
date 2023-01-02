@@ -3,4 +3,4 @@ import type { LoanKey } from "./LoanKey";
 import type { PermissionsDiff } from "./PermissionsDiff";
 import type { ValueStep } from "./ValueStep";
 
-export interface PermissionsDataDiff { is_live: ValueStep, type_droppable: ValueStep, type_writeable: ValueStep, path_moved: ValueStep, loan_read_refined: ValueStep<LoanKey>, loan_write_refined: ValueStep<LoanKey>, loan_drop_refined: ValueStep<LoanKey>, permissions: PermissionsDiff, }
+export interface PermissionsDataDiff { is_live: ValueStep<boolean>, type_droppable: ValueStep<boolean>, type_writeable: ValueStep<boolean>, path_moved: ValueStep<boolean>, loan_read_refined: ValueStep<LoanKey>, loan_write_refined: ValueStep<LoanKey>, loan_drop_refined: ValueStep<LoanKey>, permissions: PermissionsDiff, }

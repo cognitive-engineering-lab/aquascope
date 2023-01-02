@@ -15,6 +15,7 @@ use rustc_mir_dataflow::{
 
 /// Escape tags in such a way that it is suitable for inclusion in a
 /// Graphviz HTML label.
+#[allow(dead_code)]
 pub fn safeguard_strings(s: &str) -> String {
   s.replace('#', "$").replace('\'', "^")
 }

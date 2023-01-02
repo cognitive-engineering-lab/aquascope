@@ -1,6 +1,6 @@
 use rustc_hir::{
   intravisit::{self, Visitor},
-  BodyId, Expr, ExprKind, HirId,
+  BodyId, Expr,
 };
 use rustc_middle::{hir::nested_filter::OnlyBodies, ty::TyCtxt};
 
@@ -45,17 +45,4 @@ where
   // analysis.
   finder.visit_nested_body(body_id);
   finder.data
-}
-
-// DEPRECATED: directly use the above method for specialized scraping.
-pub fn find_method_call_spans(tcx: TyCtxt, body_id: BodyId) -> Vec<HirId> {
-  let f = |expr: &Expr| -> Option<HirId> {
-    if let ExprKind::MethodCall(..) = expr.kind {
-      Some(expr.hir_id)
-    } else {
-      None
-    }
-  };
-
-  scrape_expr_data(tcx, body_id, f)
 }

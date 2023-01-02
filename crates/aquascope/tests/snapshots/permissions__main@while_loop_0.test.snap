@@ -12,18 +12,18 @@ description: main@while_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+          value: ~
+        loan_write_refined:
+          type: None
+          value: ~
+        loan_drop_refined:
+          type: None
+          value: ~
         permissions:
           read:
             type: High
@@ -41,18 +41,18 @@ description: main@while_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+          value: ~
+        loan_write_refined:
+          type: None
+          value: ~
+        loan_drop_refined:
+          type: None
+          value: ~
         permissions:
           read:
             type: High
@@ -70,17 +70,17 @@ description: main@while_loop_0.test
         type_writeable:
           type: None
           value: false
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: Low
+        loan_read_refined:
+          type: None
+          value: ~
+        loan_write_refined:
+          type: None
+          value: ~
+        loan_drop_refined:
+          type: None
+          value: ~
         permissions:
           read:
             type: High
@@ -99,15 +99,15 @@ description: main@while_loop_0.test
         type_writeable:
           type: None
           value: true
+        path_moved:
+          type: None
+          value: false
         loan_read_refined:
           type: High
         loan_write_refined:
           type: High
         loan_drop_refined:
           type: High
-        path_moved:
-          type: None
-          value: false
         permissions:
           read:
             type: Low
@@ -125,18 +125,18 @@ description: main@while_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+          value: ~
+        loan_write_refined:
+          type: None
+          value: ~
+        loan_drop_refined:
+          type: None
+          value: ~
         permissions:
           read:
             type: Low
@@ -154,18 +154,18 @@ description: main@while_loop_0.test
         type_writeable:
           type: None
           value: false
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+          value: ~
+        loan_write_refined:
+          type: None
+          value: ~
+        loan_drop_refined:
+          type: None
+          value: ~
         permissions:
           read:
             type: Low
@@ -184,15 +184,15 @@ description: main@while_loop_0.test
         type_writeable:
           type: None
           value: true
+        path_moved:
+          type: None
+          value: false
         loan_read_refined:
           type: Low
         loan_write_refined:
           type: Low
         loan_drop_refined:
           type: Low
-        path_moved:
-          type: None
-          value: false
         permissions:
           read:
             type: High
@@ -210,18 +210,18 @@ description: main@while_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+          value: ~
+        loan_write_refined:
+          type: None
+          value: ~
+        loan_drop_refined:
+          type: None
+          value: ~
         permissions:
           read:
             type: Low

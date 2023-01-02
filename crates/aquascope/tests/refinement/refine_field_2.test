@@ -1,3 +1,6 @@
+// NOTE: the field min is copyable and thus is represented
+// as having drop permissions.
+
 struct TestResult { scores: Vec<usize>, min: Option<usize> }
 
 impl TestResult {
@@ -9,13 +12,13 @@ fn func(res: &mut TestResult) {
 
     let _a = &`[*res R--]`;
     let _a = &`[res.scores R--]`;
-    let _a = &`[res.min R--]`;
+    let _a = &`[res.min R-D]`;
 
     for score in res.scores.iter_mut() {
 
       let _a = &`[*res ---]`;
       let _a = &`[res.scores ---]`;
-      let _a = &`[res.min R--]`;
+      let _a = &`[res.min R-D]`;
 
       *score = (*score).max(*min);
     }
@@ -23,5 +26,5 @@ fn func(res: &mut TestResult) {
 
   let _a = &`[*res RW-]`;
   let _a = &`[res.scores RW-]`;
-  let _a = &`[res.min RW-]`;
+  let _a = &`[res.min RWD]`;
 }

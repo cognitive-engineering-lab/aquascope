@@ -1,34 +1,25 @@
 //! Core contextual analysis for Aquascope.
 
-#[allow(dead_code)]
 pub mod find_bindings;
-mod find_hir_calls;
-pub mod find_mir_calls;
 pub mod ir_mapper;
 pub mod permissions;
+mod scrape_hir;
 
 use std::{
   cell::RefCell,
-  collections::{hash_map::Entry, HashMap},
+  collections::HashMap,
   ops::{Add, Deref, DerefMut},
 };
 
 pub use find_bindings::find_bindings;
-use flowistry::{
-  mir::{
-    borrowck_facts::get_body_with_borrowck_facts,
-    utils::{BodyExt, PlaceExt},
-  },
-  source_map,
+use flowistry::mir::{
+  borrowck_facts::get_body_with_borrowck_facts, utils::BodyExt,
 };
-use ir_mapper::IRMapper;
 pub use permissions::{
   permission_boundaries::pair_permissions_to_calls,
   permission_stepper::compute_permission_steps,
 };
-use permissions::{
-  Loan, PermissionsBoundary, PermissionsCtxt, Point, RefinementRegion, Refiner,
-};
+use permissions::{Loan, PermissionsCtxt, Point, RefinementRegion, Refiner};
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
@@ -244,6 +235,12 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     let bwf = get_body_with_borrowck_facts(tcx, def_id);
     let permissions = compute_permissions(tcx, body_id, bwf);
     let analysis_ctxt = AquascopeAnalysis { permissions };
+
+    // FIXME: remove
+    crate::analysis::permissions::utils::dump_mir_debug(
+      &analysis_ctxt.permissions,
+    );
+
     let values = f(&analysis_ctxt);
     let (loan_points, loan_regions) = analysis_ctxt.construct_loan_info();
     AnalysisOutput {
@@ -311,9 +308,6 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
         } else {
           start_span
         };
-
-        let start = self.span_to_range(start_span);
-        let end = self.span_to_range(end_span);
 
         let active_nodes = self
           .loan_to_spans(**loan, start_span, end_span)

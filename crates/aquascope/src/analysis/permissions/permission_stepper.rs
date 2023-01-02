@@ -16,7 +16,8 @@ use crate::{
   analysis::{
     ir_mapper::{GatherDepth, GatherMode, IRMapper},
     permissions::{
-      Difference, PermissionsCtxt, PermissionsDataDiff, PermissionsStateStep,
+      utils, Difference, PermissionsCtxt, PermissionsDataDiff,
+      PermissionsStateStep,
     },
   },
   errors,
@@ -34,15 +35,6 @@ where
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
   let _basic_blocks = body.basic_blocks.indices();
-
-  // FIXME REMOVE
-  let mut stderr = std::io::stderr();
-  rustc_middle::mir::pretty::write_mir_fn(
-    tcx,
-    body,
-    &mut |_, _| Ok(()),
-    &mut stderr,
-  );
 
   let ir_mapper = &IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
 
