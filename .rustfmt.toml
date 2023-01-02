@@ -1,0 +1,15 @@
+tab_spaces = 2
+
+imports_granularity = "Crate"
+
+overflow_delimited_expr = true
+
+reorder_imports = true
+
+group_imports = "StdExternalCrate"
+
+spaces_around_ranges = true
+
+use_field_init_shorthand = true
+
+max_width = 80
