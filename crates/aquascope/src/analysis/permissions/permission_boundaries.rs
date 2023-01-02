@@ -1,234 +1,33 @@
-use std::convert::TryInto;
-
-use anyhow::{anyhow, Result};
 use either::Either;
-use flowistry::mir::utils::OperandExt;
+use flowistry::mir::utils::{OperandExt, SpanExt};
 use rustc_hir::HirId;
-use rustc_middle::{
-  mir::{
-    Body, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
-    TerminatorKind,
-  },
-  ty::{Ty, TyCtxt},
-};
+use rustc_middle::mir::{Rvalue, Statement, StatementKind};
 use rustc_span::Span;
 
 use crate::{
   analysis::{
-    ir_mapper::{GatherDepth, GatherMode, IRMapper},
-    permissions::{
-      Permissions, PermissionsBoundary, PermissionsCtxt, PermissionsData, Point,
-    },
-    scrape_hir::scrape_expr_data,
+    ir_mapper::GatherDepth,
+    permissions::{Permissions, PermissionsBoundary},
     AquascopeAnalysis,
   },
   mir::utils::PlaceExt,
 };
 
-// -------------------------------------
-// Permission boundaries on method calls
-
-struct MethodCallBoundary<'a, 'tcx: 'a> {
-  pub location: Span,
-  pub hir_id: HirId,
-  pub expected: Permissions,
-  pub analysis_ctxt: &'a AquascopeAnalysis<'a, 'tcx>,
-}
-
-impl std::fmt::Debug for MethodCallBoundary<'_, '_> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("MethodCallBoundary")
-      .field("location", &self.location)
-      .field("hir_id", &self.hir_id)
-      .field("expected", &self.expected)
-      .finish()
-  }
-}
-
-impl TryInto<PermissionsBoundary> for MethodCallBoundary<'_, '_> {
-  type Error = anyhow::Error;
-  fn try_into(self) -> Result<PermissionsBoundary> {
-    enum RcvrTy<'tcx> {
-      Constant(Ty<'tcx>),
-      Aggregate(Ty<'tcx>),
-      Place(Place<'tcx>),
-    }
-
-    impl<'tcx> RcvrTy<'tcx> {
-      fn as_place_unchecked(&self) -> Place<'tcx> {
-        match self {
-          RcvrTy::Place(place) => *place,
-          _ => unreachable!(),
-        }
-      }
-
-      fn permissions_data_at(
-        &self,
-        ctxt: &PermissionsCtxt<'_, 'tcx>,
-        point: Point,
-      ) -> PermissionsData {
-        match self {
-          RcvrTy::Place(pl) => {
-            let path = ctxt.place_to_path(pl);
-            ctxt.permissions_data_at_point(path, point)
-          }
-          RcvrTy::Constant(ty) | RcvrTy::Aggregate(ty) => {
-            ctxt.permissions_for_const_ty(*ty)
-          }
-        }
-      }
-
-      fn from_op(
-        op: &Operand<'tcx>,
-        body: &Body<'tcx>,
-        tcx: TyCtxt<'tcx>,
-      ) -> RcvrTy<'tcx> {
-        op.to_place()
-          .map(RcvrTy::Place)
-          .unwrap_or_else(|| RcvrTy::Constant(op.ty(body, tcx)))
-      }
-    }
-
-    log::debug!("Computing PermissionsBoundary for {self:?}");
-
-    let ctxt = &self.analysis_ctxt.permissions;
-    let body = &ctxt.body_with_facts.body;
-    let tcx = ctxt.tcx;
-    let ir_mapper = &IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
-
-    let hir_id = self.hir_id;
-
-    let mir_locations_opt =
-      ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
-
-    // assert!(mir_locations_opt.is_some());
-
-    let mir_locations = mir_locations_opt
-      .ok_or_else(|| anyhow!("no associated mir locations"))?
-      .values()
-      .collect::<Vec<_>>();
-
-    // Step 1. find the boundary equivalent
-    let function_calls = mir_locations
-      .iter()
-      .filter(|loc| {
-        matches!(
-          body.stmt_at(**loc),
-          Either::Right(Terminator {
-            kind: TerminatorKind::Call {
-              from_hir_call: true,
-              ..
-            },
-            ..
-          })
-        )
-      })
-      .collect::<Vec<_>>();
-
-    log::debug!("function calls: {function_calls:#?}");
-
-    // FIXME: not all method calls have exactly 1 method call. Mulitple calls
-    // can be inserted if the receiver is the result of a method call.
-    // Example:
-    // ```
-    // String::from("hello").push_str(" world!");
-    // ```
-    // taking the last of these calls is a fragile way of handling this.
-    assert!(!function_calls.is_empty());
-    let call_loc = function_calls.last().unwrap();
-
-    let Either::Right(Terminator {
-        kind:
-          TerminatorKind::Call {
-            args,
-            from_hir_call: true,
-            ..
-          },
-        ..
-      }) = body.stmt_at(**call_loc) else { unreachable!() };
-
-    let is_terminal = |r: &RcvrTy| -> bool {
-      match r {
-        RcvrTy::Constant(_) | RcvrTy::Aggregate(_) => true,
-        RcvrTy::Place(place) => place.is_source_visible(tcx, body),
-      }
-    };
-
-    let rcvr_op = &args[0];
-    let mut rcvr = RcvrTy::from_op(rcvr_op, body, tcx);
-    let mut point = ctxt.location_to_point(**call_loc);
-    let mut changed = true;
-
-    // Step 2. traverse the locations until you reach a RValue which
-    // is source visible. If the receiver place is not source visible
-    // (e.g. constants) we will stop there and
-    while changed && !is_terminal(&rcvr) {
-      changed = false;
-      let curr_place = rcvr.as_place_unchecked();
-
-      mir_locations.iter().for_each(|loc| {
-        match body.stmt_at(*loc) {
-          Either::Left(Statement {
-            kind: StatementKind::Assign(box (lhs, rhs)),
-            ..
-          }) if *lhs == curr_place => {
-            changed = true;
-            point = ctxt.location_to_point(*loc);
-            rcvr = match rhs {
-              Rvalue::Ref(_, _, place) => RcvrTy::Place(*place),
-              Rvalue::Use(op) => RcvrTy::from_op(op, body, tcx),
-              Rvalue::CopyForDeref(place) => RcvrTy::Place(*place),
-              Rvalue::Aggregate(..) => RcvrTy::Aggregate(rhs.ty(body, tcx)),
-
-              // TODO: revisit the rest of these which are sure to come up in the wild.
-              Rvalue::Repeat(..) => unimplemented!("Rvalue::repeat"),
-              Rvalue::ThreadLocalRef(..) => {
-                unimplemented!("Rvalue::thread-local-ref")
-              }
-              Rvalue::AddressOf(..) => unimplemented!("Rvalue::address-of"),
-              Rvalue::Len(..) => unimplemented!("Rvalue::len"),
-              Rvalue::Cast(..) => unimplemented!("Rvalue::cast"),
-              Rvalue::BinaryOp(..) => unimplemented!("Rvalue::binop"),
-              Rvalue::CheckedBinaryOp(..) => {
-                unimplemented!("Rvalue::checkedbinop")
-              }
-              Rvalue::NullaryOp(..) => unimplemented!("Rvalue::nullaryop"),
-              Rvalue::UnaryOp(..) => unimplemented!("Rvalue::unaryop"),
-              Rvalue::Discriminant(..) => {
-                unimplemented!("Rvalue::discriminatn")
-              }
-              Rvalue::ShallowInitBox(..) => {
-                unimplemented!("Rvalue::shallow-init-box")
-              }
-            }
-          }
-          _ => (),
-        }
-      })
-    }
-
-    let actual = rcvr.permissions_data_at(ctxt, point);
-    let expected = self.expected;
-
-    // FIXME HACK: we assume that the `.` is one character to the left of the method call.
-    // this is of course not *strictly* true and should be fixed.
-    let location =
-      self.analysis_ctxt.span_to_range(self.location).char_start - 1;
-
-    Ok(PermissionsBoundary {
-      location,
-      actual,
-      expected,
-    })
-  }
+// A previous implementation of the permission boundaries
+// computation allowed for multiple stacks to get generated
+// per HirId, this isn't the case currently so we could
+// cleanup these types a bit.
+trait IntoMany {
+  type Elem;
+  fn into_many(self) -> Box<dyn Iterator<Item = Self::Elem>>;
 }
 
 // ----------------------------------
 // Permission boundaries on path uses
 
 struct PathBoundary<'a, 'tcx: 'a> {
-  pub location: Span,
   pub hir_id: HirId,
+  pub location: Span,
   pub expected: Permissions,
   pub analysis_ctxt: &'a AquascopeAnalysis<'a, 'tcx>,
 }
@@ -243,197 +42,258 @@ impl std::fmt::Debug for PathBoundary<'_, '_> {
   }
 }
 
-impl TryInto<PermissionsBoundary> for PathBoundary<'_, '_> {
-  type Error = anyhow::Error;
-  fn try_into(self) -> Result<PermissionsBoundary> {
-    enum RcvrTy<'tcx> {
-      Constant(Ty<'tcx>),
-      Aggregate(Ty<'tcx>),
-      Place(Place<'tcx>),
-    }
-
-    impl<'tcx> RcvrTy<'tcx> {
-      fn as_place_unchecked(&self) -> Place<'tcx> {
-        match self {
-          RcvrTy::Place(place) => *place,
-          _ => unreachable!(),
-        }
-      }
-
-      fn permissions_data_at(
-        &self,
-        ctxt: &PermissionsCtxt<'_, 'tcx>,
-        point: Point,
-      ) -> PermissionsData {
-        match self {
-          RcvrTy::Place(pl) => {
-            let path = ctxt.place_to_path(pl);
-            ctxt.permissions_data_at_point(path, point)
-          }
-          RcvrTy::Constant(ty) | RcvrTy::Aggregate(ty) => {
-            ctxt.permissions_for_const_ty(*ty)
-          }
-        }
-      }
-
-      fn from_op(
-        op: &Operand<'tcx>,
-        body: &Body<'tcx>,
-        tcx: TyCtxt<'tcx>,
-      ) -> RcvrTy<'tcx> {
-        op.to_place()
-          .map(RcvrTy::Place)
-          .unwrap_or_else(|| RcvrTy::Constant(op.ty(body, tcx)))
-      }
-    }
-
+impl IntoMany for PathBoundary<'_, '_> {
+  type Elem = PermissionsBoundary;
+  fn into_many(self) -> Box<dyn Iterator<Item = Self::Elem>> {
     log::debug!("Computing PermissionsBoundary for {self:?}");
 
     let ctxt = &self.analysis_ctxt.permissions;
     let body = &ctxt.body_with_facts.body;
     let tcx = ctxt.tcx;
-    let ir_mapper = &IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
-
+    let hir = tcx.hir();
+    let ir_mapper = &self.analysis_ctxt.ir_mapper;
     let hir_id = self.hir_id;
 
-    let mir_locations_opt =
-      ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
+    // For a given Path, the MIR location may not be immediately associated with it.
+    // For example, in a function call `foo( &x );`, the Hir Node::Path `&x` will not
+    // have the MIR locations associated with it, the Hir Node::Call `foo( &x )` will,
+    // so we traverse upwards in the tree until we find a location associated with it.
+    let search_at_hir_id = |hir_id| {
+      let mir_locations_opt =
+        ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
 
-    log::debug!("Finding locations for {hir_id:?}");
+      let mir_locations = mir_locations_opt?
+        .values()
+        .filter_map(|loc| {
+          if let Either::Left(Statement {
+            kind: StatementKind::Assign(box (_, rvalue)),
+            ..
+          }) = body.stmt_at(loc)
+          {
+            match rvalue {
+              Rvalue::Ref(_, _, place)
+                if place.is_source_visible(tcx, body) =>
+              {
+                Some((loc, *place))
+              }
+              Rvalue::Use(op) => op.to_place().and_then(|p| {
+                p.is_source_visible(tcx, body).then_some((loc, p))
+              }),
 
-    // assert!(mir_locations_opt.is_some());
-
-    let mir_locations = mir_locations_opt
-      .ok_or_else(|| anyhow!("No associated MIR locations"))?
-      .values()
-      .collect::<Vec<_>>();
-
-    log::debug!("MIR LOCATIONS: {mir_locations:#?}");
-
-    // Step 1. find the boundary equivalent
-    let mir_rhs = mir_locations
-      .iter()
-      .filter_map(|loc| {
-        if let Either::Left(Statement {
-          kind: StatementKind::Assign(box (_, rvalue)),
-          ..
-        }) = body.stmt_at(*loc)
-        {
-          match rvalue {
-            Rvalue::Ref(_, _, place) if place.is_source_visible(tcx, body) => {
-              Some((*loc, *place))
+              Rvalue::CopyForDeref(place)
+                if place.is_source_visible(tcx, body) =>
+              {
+                Some((loc, *place))
+              }
+              _ => None,
             }
-            Rvalue::Use(op) => op.to_place().and_then(|p| {
-              p.is_source_visible(tcx, body).then_some((*loc, p))
-            }),
-
-            Rvalue::CopyForDeref(place)
-              if place.is_source_visible(tcx, body) =>
-            {
-              Some((*loc, *place))
-            }
-            _ => None,
+          } else {
+            None
           }
-        } else {
-          None
+        })
+        .collect::<Vec<_>>();
+
+      let (loc, place) = mir_locations.first()?;
+      log::debug!("Chosen place at location {place:#?} {loc:#?}");
+      let point = ctxt.location_to_point(*loc);
+      let path = ctxt.place_to_path(place);
+
+      Some((point, path))
+    };
+
+    let i = search_at_hir_id(hir_id)
+      .or_else(|| {
+        hir.parent_iter(hir_id).find_map(|(hir_id, _)| {
+          log::debug!("\tsearching upwards in: {hir_id:?}");
+          search_at_hir_id(hir_id)
+        })
+      })
+      .map(|(point, path)| {
+        let actual = ctxt.permissions_data_at_point(path, point);
+        let expected = self.expected;
+
+        log::debug!("Permissions data: {actual:#?}");
+
+        let span = self.location.as_local(body.span).unwrap_or(self.location);
+
+        // NOTE: all permission stacks are placed directly to the _right_ of the path.
+        let location = self.analysis_ctxt.span_to_range(span).char_end;
+
+        PermissionsBoundary {
+          location,
+          actual,
+          expected,
         }
       })
-      .collect::<Vec<_>>();
+      .into_iter();
 
-    log::debug!("MIR Rvalues: {mir_rhs:#?}");
-
-    assert!(!mir_rhs.is_empty());
-    assert_eq!(1, mir_rhs.len());
-
-    let (loc, place) = mir_rhs
-      .first()
-      .ok_or_else(|| anyhow!("No source visible places in assignments"))?;
-    let point = ctxt.location_to_point(*loc);
-    let path = ctxt.place_to_path(place);
-
-    let actual = ctxt.permissions_data_at_point(path, point);
-    let expected = self.expected;
-
-    // FIXME HACK: we assume that the `.` is one character to the left of the method call.
-    // this is of course not *strictly* true and should be fixed.
-    let location = self.analysis_ctxt.span_to_range(self.location).char_end + 1;
-
-    Ok(PermissionsBoundary {
-      location,
-      actual,
-      expected,
-    })
+    Box::new(i)
   }
 }
 
 // ----------------------------------
 // Entry
 
-pub fn pair_permissions_to_calls<'a, 'tcx: 'a>(
+pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
   ctxt: &AquascopeAnalysis<'a, 'tcx>,
 ) -> Vec<PermissionsBoundary> {
-  use rustc_hir::{def::Res, Expr, ExprKind, Path, QPath};
+  // -----------------------------------
+  // TODO cleanup and move mod elsewhere
+  // -----------------------------------
 
-  let typeck_res = ctxt.permissions.tcx.typeck_body(ctxt.permissions.body_id);
-  let method_call_points =
-    scrape_expr_data(ctxt.permissions.tcx, ctxt.permissions.body_id, |expr| {
-      if let Expr {
-        hir_id,
-        kind: ExprKind::MethodCall(_, _, _, fn_span),
-        ..
-      } = expr
-      {
-        let def_id = typeck_res.type_dependent_def_id(*hir_id).unwrap();
-        let fn_sig = ctxt.permissions.tcx.fn_sig(def_id).skip_binder();
-        Some(MethodCallBoundary {
-          location: *fn_span,
-          hir_id: *hir_id,
-          expected: fn_sig.inputs()[0].into(),
-          analysis_ctxt: ctxt,
-        })
-      } else {
-        None
+  mod path_visitor {
+    use rustc_hir::{
+      def::Res,
+      intravisit::{self, Visitor},
+      BodyId, Expr, ExprKind, Mutability, Path, QPath,
+    };
+    use rustc_middle::{
+      hir::nested_filter::OnlyBodies,
+      ty::{TyCtxt, TypeckResults},
+    };
+
+    use super::*;
+
+    struct HirExprScraper<'a, 'tcx: 'a> {
+      tcx: TyCtxt<'tcx>,
+      typeck_res: &'a TypeckResults<'tcx>,
+      data: Vec<PathBoundary<'a, 'tcx>>,
+      ctxt: &'a AquascopeAnalysis<'a, 'tcx>,
+    }
+
+    impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
+      type NestedFilter = OnlyBodies;
+
+      fn nested_visit_map(&mut self) -> Self::Map {
+        self.tcx.hir()
       }
-    })
-    .into_iter()
-    .map(TryInto::<PermissionsBoundary>::try_into);
 
-  let path_use_points =
-    scrape_expr_data(ctxt.permissions.tcx, ctxt.permissions.body_id, |expr| {
-      if let Expr {
-        hir_id,
-        kind:
-          ExprKind::Path(QPath::Resolved(
-            _,
-            Path {
-              span,
-              res: Res::Local(_),
-              ..
-            },
-          )),
-        ..
-      } = expr
-      {
-        log::debug!("Found PATH {expr:#?}");
-        let t0 = typeck_res.expr_ty(expr);
-        let t1 = typeck_res.expr_ty_adjusted(expr);
-        log::debug!("expr ty: {t0:#?} {t1:#?}");
+      fn visit_expr(&mut self, expr: &'tcx Expr) {
+        let hir_id = expr.hir_id;
+        let span = expr.span;
 
-        Some(PathBoundary {
-          hir_id: *hir_id,
-          location: *span,
-          expected: t1.into(),
-          analysis_ctxt: ctxt,
-        })
-      } else {
-        None
+        match expr.kind {
+          // For method calls, it's most accurate to get the expected
+          // permissions from the method signature declared type.
+          ExprKind::MethodCall(_, rcvr, args, fn_span)
+            if !fn_span.from_expansion()
+              && rcvr
+                .is_place_expr(|e| !matches!(e.kind, ExprKind::Lit(_))) =>
+          {
+            let def_id = self.typeck_res.type_dependent_def_id(hir_id).unwrap();
+            let fn_sig = self.tcx.fn_sig(def_id).skip_binder();
+
+            let pb = PathBoundary {
+              location: rcvr.span,
+              hir_id,
+              expected: fn_sig.inputs()[0].into(),
+              analysis_ctxt: self.ctxt,
+            };
+
+            self.data.push(pb);
+            args.iter().for_each(|a| {
+              intravisit::walk_expr(self, a);
+            });
+          }
+
+          ExprKind::AddrOf(_, mutability, inner)
+            // FIXME: this will only place bounds on
+            // directly referenced paths.
+            // The previous logic (only requiring that the inner
+            // expression not be from an expansion) failed to filter
+            // out the slice reference in the `println!`. Even though,
+            // this reference did in fact come from an expansion.
+            if inner.is_syntactic_place_expr()
+              && !inner.span.from_expansion() =>
+          {
+            let pb = PathBoundary {
+              hir_id,
+              location: inner.span.shrink_to_lo(),
+              expected: Permissions {
+                read: true,
+                write: matches!(mutability, Mutability::Mut),
+                drop: false,
+              },
+              analysis_ctxt: self.ctxt,
+            };
+
+            self.data.push(pb);
+
+            if !matches!(inner.kind, ExprKind::Path(..)) {
+              intravisit::walk_expr(self, expr);
+            }
+          }
+
+          // XXX: we only want to attach permissions to path resolved to `Local` ids.
+          // FIXME: the commented out region produced some hard-to-resolve bugs
+          // which I will come back to later. An example,
+          // ```
+          // fn foo(s: &String, b: &mut String) {}
+          //
+          // fn main() {
+          //   let mut x = "s".to_owned();
+          //   let w: &mut String = &mut x;
+          //   foo(&x, w);
+          // }
+          // ```
+          // if you allow a permission stack to be placed at the `w` in
+          // the Call `foo( &x, w )`, the analysis will currently
+          // find the permissions for the path `(*w)`, even though,
+          // it is actually reborrowed before the call. Thus, falsely
+          // showing that the drop permission is missing.
+          //
+          // ExprKind::Path(QPath::Resolved(
+          //   _,
+          //   Path {
+          //     span,
+          //     res: Res::Local(_),
+          //     ..
+          //   },
+          // )) if !span.from_expansion() => {
+          //   let pb = PathBoundary {
+          //     hir_id,
+          //     location: span.shrink_to_lo(),
+          //     expected: Permissions {
+          //       read: true,
+          //       write: false,
+          //       drop: true,
+          //     },
+          //     analysis_ctxt: self.ctxt,
+          //   };
+          //   self.data.push(pb);
+          // }
+
+          _ => {
+            intravisit::walk_expr(self, expr);
+          }
+        }
       }
-    })
-    .into_iter()
-    .map(TryInto::<PermissionsBoundary>::try_into);
+    }
 
-  method_call_points
-    .chain(path_use_points)
-    .flatten()
-    .collect::<Vec<_>>()
+    pub(super) fn get_path_boundaries<'a, 'tcx: 'a>(
+      tcx: TyCtxt<'tcx>,
+      body_id: BodyId,
+      ctxt: &'a AquascopeAnalysis<'a, 'tcx>,
+    ) -> Vec<PathBoundary<'a, 'tcx>> {
+      let typeck_res = tcx.typeck_body(body_id);
+      let mut finder = HirExprScraper {
+        tcx,
+        typeck_res,
+        ctxt,
+        data: Vec::default(),
+      };
+      finder.visit_nested_body(body_id);
+      finder.data
+    }
+  }
+
+  let path_use_points = path_visitor::get_path_boundaries(
+    ctxt.permissions.tcx,
+    ctxt.permissions.body_id,
+    ctxt,
+  )
+  .into_iter()
+  .map(IntoMany::into_many);
+
+  path_use_points.flatten().collect::<Vec<_>>()
 }

@@ -13,10 +13,12 @@ use std::{
 
 pub use find_bindings::find_bindings;
 use flowistry::mir::{
-  borrowck_facts::get_body_with_borrowck_facts, utils::BodyExt,
+  borrowck_facts::get_body_with_borrowck_facts,
+  utils::{BodyExt, SpanExt},
 };
+use ir_mapper::{GatherMode, IRMapper};
 pub use permissions::{
-  permission_boundaries::pair_permissions_to_calls,
+  permission_boundaries::compute_permission_boundaries,
   permission_stepper::compute_permission_steps,
 };
 use permissions::{Loan, PermissionsCtxt, Point, RefinementRegion, Refiner};
@@ -208,6 +210,7 @@ pub fn compute_permissions<'a, 'tcx>(
 
 pub struct AquascopeAnalysis<'a, 'tcx: 'a> {
   pub(crate) permissions: PermissionsCtxt<'a, 'tcx>,
+  pub(crate) ir_mapper: IRMapper<'a, 'tcx>,
 }
 
 #[derive(Clone, Debug, Serialize, TS)]
@@ -234,7 +237,12 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     let def_id = tcx.hir().body_owner_def_id(body_id);
     let bwf = get_body_with_borrowck_facts(tcx, def_id);
     let permissions = compute_permissions(tcx, body_id, bwf);
-    let analysis_ctxt = AquascopeAnalysis { permissions };
+    let body = &permissions.body_with_facts.body;
+    let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
+    let analysis_ctxt = AquascopeAnalysis {
+      permissions,
+      ir_mapper,
+    };
 
     // FIXME: remove
     crate::analysis::permissions::utils::dump_mir_debug(
@@ -266,12 +274,17 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
 
     let loans_to_spans = loan_regions
       .iter()
-      .map(|(loan, _)| {
+      .filter_map(|(loan, _)| {
         // TODO: using `reserve_location` is not exactly accurate because this
         // could be a two-phase borrow. This needs to use the `activation_location`.
         let loan_loc = self.permissions.borrow_set[*loan].reserve_location;
         let loan_span = self.permissions.location_to_span(loan_loc);
-        (loan, loan_span)
+
+        let span = loan_span
+          .as_local(self.permissions.body_with_facts.body.span)
+          .unwrap_or(loan_span);
+
+        (!span.is_empty()).then_some((loan, span))
       })
       .collect::<HashMap<_, _>>();
 

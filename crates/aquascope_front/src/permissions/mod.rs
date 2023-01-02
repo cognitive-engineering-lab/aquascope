@@ -52,7 +52,7 @@ pub fn permission_boundaries(
   Ok(analysis::AquascopeAnalysis::run(
     tcx,
     body_id,
-    analysis::pair_permissions_to_calls,
+    analysis::compute_permission_boundaries,
   ))
 }
 
