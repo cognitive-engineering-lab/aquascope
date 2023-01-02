@@ -6,7 +6,6 @@ use flowistry::mir::utils::PlaceExt;
 use miri::{
   Immediate, InterpCx, InterpResult, LocalValue, Machine, MiriConfig, MiriMachine, Operand,
 };
-
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{ClearCrossCrate, LocalInfo, Location, Place, RETURN_PLACE},
@@ -42,7 +41,7 @@ pub struct MStack<L> {
 #[derive(Serialize, Deserialize, Debug, TS, Default)]
 #[ts(export)]
 pub struct MHeap {
-  pub locations: Vec<(MLocation, MValue)>,
+  pub locations: Vec<MValue>,
 }
 
 #[derive(Serialize, Deserialize, Debug, TS)]
@@ -52,16 +51,19 @@ pub struct MStep<L> {
   pub heap: MHeap,
 }
 
+pub(crate) type Addr = Size;
+
 #[derive(Default)]
-pub(crate) struct HeapMapping {
+pub(crate) struct MemoryMap {
   pub(crate) heap: MHeap,
-  pub(crate) place_to_index: HashMap<Size, MLocation>,
+  pub(crate) place_to_loc: HashMap<Addr, MLocation>,
+  pub(crate) stack_slots: HashMap<Addr, (usize, String)>,
 }
 
 pub struct VisEvaluator<'mir, 'tcx> {
   pub(super) tcx: TyCtxt<'tcx>,
   pub(super) ecx: InterpCx<'mir, 'tcx, MiriMachine<'mir, 'tcx>>,
-  pub(super) heap_mapping: RefCell<HeapMapping>,
+  pub(super) memory_map: RefCell<MemoryMap>,
 }
 
 enum BodySpanType {
@@ -102,13 +104,14 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     Ok(VisEvaluator {
       tcx,
       ecx,
-      heap_mapping: RefCell::default(),
+      memory_map: RefCell::default(),
     })
   }
 
   fn build_frame(
     &self,
     frame: &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
+    index: usize,
     loc_override: Option<MirLoc<'tcx>>,
   ) -> InterpResult<'tcx, MFrame<MirLoc<'tcx>>> {
     let body = &frame.body;
@@ -158,8 +161,15 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         };
 
         let LocalValue::Live(op) = state.value else { return None };
-        if let Operand::Immediate(Immediate::Uninit) = op {
-          return None;
+        match op {
+          Operand::Immediate(Immediate::Uninit) => return None,
+          Operand::Indirect(mplace) => {
+            let mut memory_map = self.memory_map.borrow_mut();
+            memory_map
+              .stack_slots
+              .insert(mplace.ptr.addr(), (index, name.clone()));
+          }
+          _ => {}
         };
         let value = (|| {
           let op_ty = self.ecx.local_to_op(frame, local, state.layout.get())?;
@@ -182,13 +192,16 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   fn build_stack(&self, current_loc: MirLoc<'tcx>) -> InterpResult<'tcx, MStack<MirLoc<'tcx>>> {
     let frames = self
       .local_frames()
-      .map(|(is_last, frame)| self.build_frame(frame, is_last.then_some(current_loc)))
+      .enumerate()
+      .map(|(index, (is_last, frame))| {
+        self.build_frame(frame, index, is_last.then_some(current_loc))
+      })
       .collect::<InterpResult<'_, _>>()?;
     Ok(MStack { frames })
   }
 
   fn build_heap(&self) -> MHeap {
-    self.heap_mapping.replace(Default::default()).heap
+    self.memory_map.replace(Default::default()).heap
   }
 
   fn build_step(

@@ -1,3 +1,4 @@
+$monospace: "Source Code Pro", monospace;
 .aquascope {
   position: relative;
   height: 100%;
@@ -17,7 +18,7 @@
   .aquascope-stderr {
     padding: 15px;
     background-color: #f9ffff;
-    font-family: "Source Code Pro", monospace;
+    font-family: $monospace;
     font-size: 0.9em;
     overflow: scroll;
   }
@@ -128,48 +129,79 @@
     font-size: 0.9em;
   }
 
-  /* **************** */
+  /* **************** */  
+}
 
-  .step-marker {
-    display: inline-block;
-    border-radius: 4px;
+.step-marker {
+  display: inline-block;
+  border-radius: 4px;  
+  padding: 0 2px;
+  background: var(--bg);
+  border: 1px solid var(--fg);
+
+  .cm-editor & {
     margin: 0 6px;
-    padding: 0 2px;
-    background: var(--bg);
-    border: 1px solid var(--fg);
-
-    > span {
-      font-size: 0.8em;
-      color: var(--fg);
-      vertical-align: middle;
-      position: relative;
-      bottom: 1px;
-      font-weight: bold;
-    }
   }
+
+  > span {
+    font-size: 0.8em;
+    color: var(--fg);
+    vertical-align: middle;
+    position: relative;
+    bottom: 1px;
+    font-weight: bold;
+  }
+  
 }
 
 .interpreter {
-  background: white;
+  background: var(--bg);
   padding: 1em;
   display: flex;
-  gap: 1em;
-  flex-direction: row;  
+  gap: 30px;
+  flex-direction: column;  
   flex-wrap: wrap;
 
   .step {
-    
-    border: 1px solid #ccc;
-    padding: 0.5em;
-    border-radius: 8px;
+    // border: 1px solid #ccc;
+    // padding: 0.5em;
+    // border-radius: 8px;
     width: max-content;
+
+    .step-header {
+      margin-bottom: 5px;
+
+      .step-marker {
+        font-size: 18px;
+        font-family: $monospace;        
+      }
+    }
+
+    .memory-header {
+      margin-bottom: 5px;     
+      font-weight: bold;
+    }
 
     .memory-container {
       display: flex;
       flex-direction: row;
+      gap: 100px;
+      padding-left: 10px;
       
       .memory {
         flex: 1;
+        border: 1px dashed #ccc;
+        padding: 0.5em;              
+
+        .frames {
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+
+          .frame-header {
+            font-family: $monospace;
+          }
+        }
       }
     }
 
@@ -186,9 +218,9 @@
     table {
       border: 1px solid #ccc;
       border-collapse: collapse;
-      font-family: 'Source Code Pro', monospace;
+      font-family: $monospace;
 
-      td { 
+      td {
         border: 1px solid #ccc;
       }
     }

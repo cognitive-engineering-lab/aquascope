@@ -71,14 +71,14 @@ window.addEventListener("load", () => {
   vimKeybindingToggle.addEventListener("click", toggleVim);
 
   showRcvrTypesButton.addEventListener("click", _ => {
-    return globals.editor.computeReceiverPermissions();
+    return globals.editor.renderOperation("receiver-types");
   });
 
   permStepsButton.addEventListener("click", _ => {
     // return globals.editor.computeReceiverPermissions();
-    return globals.editor.computePermissionSteps();
+    return globals.editor.renderOperation("permission-diffs");
   });
   interpretButton.addEventListener("click", () =>
-    globals.editor.computeInterpreter()
+    globals.editor.renderOperation("interpreter")
   );
 });

@@ -1,4 +1,6 @@
-use miri::{Immediate, InterpCx, InterpResult, MPlaceTy, Machine, OpTy, Value};
+use miri::{
+  AllocMap, Immediate, InterpCx, InterpResult, MPlaceTy, Machine, MemoryKind, OpTy, Value,
+};
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
 use rustc_middle::mir::interpret::Provenance;
@@ -12,7 +14,13 @@ use ts_rs::TS;
 
 use super::eval::VisEvaluator;
 
-pub type MLocation = usize;
+#[derive(Serialize, Deserialize, Clone, Debug, TS, PartialEq)]
+#[serde(tag = "type", content = "value")]
+#[ts(export)]
+pub enum MLocation {
+  Stack { frame: usize, local: String },
+  Heap { index: usize },
+}
 
 const ABBREV_MAX: u64 = 10;
 
@@ -118,20 +126,34 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
     postprocess: impl FnOnce(miri::MPlaceTy<'tcx, miri::Provenance>) -> InterpResult<'tcx, MValue>,
   ) -> InterpResult<'tcx, MValue> {
     let addr = mplace.ptr.addr();
-    let already_found = self
-      .heap_mapping
-      .borrow()
-      .place_to_index
-      .contains_key(&addr);
+    let memory_kind = match mplace.ptr.provenance {
+      Some(miri::Provenance::Concrete { alloc_id, .. }) => {
+        let (memory_kind, _) = self.ecx.memory.alloc_map().get(alloc_id).unwrap();
+        memory_kind
+      }
+      _ => unreachable!(),
+    };
+    let already_found = self.memory_map.borrow().place_to_loc.contains_key(&addr);
     if !already_found {
       let mvalue = postprocess(mplace)?;
-      let mut heap_mapping = self.heap_mapping.borrow_mut();
-      let location = heap_mapping.heap.locations.len();
-      heap_mapping.heap.locations.push((location, mvalue));
-      heap_mapping.place_to_index.insert(addr, location);
+      let mut memory_map = self.memory_map.borrow_mut();
+      let location = match memory_kind {
+        MemoryKind::Stack => {
+          let (frame, local) = memory_map.stack_slots[&addr].clone();
+          MLocation::Stack { frame, local }
+        }
+        MemoryKind::Machine(..) => {
+          let index = memory_map.heap.locations.len();
+          memory_map.heap.locations.push(mvalue);
+          MLocation::Heap { index }
+        }
+        _ => unimplemented!(),
+      };
+
+      memory_map.place_to_loc.insert(addr, location);
     }
 
-    let location = self.heap_mapping.borrow().place_to_index[&addr];
+    let location = self.memory_map.borrow().place_to_loc[&addr].clone();
     Ok(MValue::Pointer(location))
   }
 
@@ -300,10 +322,10 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
         })?
       }
 
-      _ if ty.is_any_ptr() => match self.ecx.deref_operand(op) {
-        Ok(mplace) => self.read(&mplace.into())?,
-        Err(_) => MValue::Unallocated,
-      },
+      _ if ty.is_any_ptr() => {
+        let mplace = self.ecx.deref_operand(&op)?;
+        self.add_alloc(mplace, |mplace| self.read(&OpTy::from(mplace)))?
+      }
 
       kind => todo!("{:?} / {:?}", **op, kind),
     })

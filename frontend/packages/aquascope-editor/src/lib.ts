@@ -202,11 +202,16 @@ export class Editor {
     let parseResult = parseWithDelimiters(initialCode, [["`[", "]`"]]);
     if (parseResult.type == "err") throw new Error(parseResult.error);
 
+    let resetMarkedRangesOnEdit = EditorView.updateListener.of(() => {
+      this.markedRanges = [];
+    });
+
     let initialState = EditorState.create({
       doc: parseResult.code,
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
+        resetMarkedRangesOnEdit,
         setup,
         rust(),
         indentUnit.of("  "),
@@ -217,6 +222,7 @@ export class Editor {
     });
 
     this.markedRanges = parseResult.ranges;
+    console.debug("Marked ranges:", this.markedRanges);
 
     let editorContainer = document.createElement("div");
     let initialView = new EditorView({

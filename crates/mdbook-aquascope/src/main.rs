@@ -10,11 +10,12 @@ use nom::{
   IResult,
 };
 use nom_locate::LocatedSpan;
+use rayon::prelude::*;
 use std::{
   fmt::Write,
   fs,
   path::{Path, PathBuf},
-  process::Command,
+  process::{Command, Stdio},
 };
 use tempfile::tempdir;
 
@@ -38,27 +39,32 @@ impl AquascopePreprocessor {
     let status = Command::new("cargo")
       .args(["new", "--bin", "example"])
       .current_dir(root)
+      .stdout(Stdio::null())
+      .stderr(Stdio::null())
       .status()?;
     if !status.success() {
       bail!("Cargo failed");
     }
 
     let cleaned = strip_markers(code);
-    fs::write(root.join("example/src/main.rs"), cleaned)?;
+    fs::write(root.join("example/src/main.rs"), &cleaned)?;
 
+    let operation = &header[0];
     let output = Command::new("cargo")
-      .args(["aquascope", "interpret"])
+      .args(["aquascope", operation])
       .env("SYSROOT", &self.miri_sysroot)
       .env("DYLD_LIBRARY_PATH", &self.target_libdir)
+      .env("RUST_BACKTRACE", "1")
       .current_dir(root.join("example"))
       .output()?;
     if !output.status.success() {
-      bail!("Aquascope failed: {}", String::from_utf8(output.stderr)?)
+      let error = String::from_utf8(output.stderr)?;
+      bail!("Aquascope failed for program:\n{cleaned}\nwith error:\n{error}")
     }
 
     let response = String::from_utf8(output.stdout)?;
-    let logs = String::from_utf8(output.stderr)?;
-    eprintln!("{logs}");
+    // let logs = String::from_utf8(output.stderr)?;
+    // eprintln!("{logs}");
 
     let mut html = String::from(r#"<div class="aquascope-embed""#);
 
@@ -72,7 +78,7 @@ impl AquascopePreprocessor {
     };
 
     add_data("code", &serde_json::to_string(code)?)?;
-    add_data("operation", &header[0])?;
+    add_data("operation", operation)?;
     add_data("response", response.trim_end())?;
 
     write!(html, "></div>")?;
@@ -143,13 +149,12 @@ impl SimplePreprocessor for AquascopePreprocessor {
     _chapter_dir: &Path,
     content: &str,
   ) -> Result<Vec<(std::ops::Range<usize>, String)>> {
-    let mut replacements = Vec::new();
     let mut content = LocatedSpan::new(content);
+    let mut to_process = Vec::new();
     loop {
       if let Ok((next, (header, code))) = parse_aquascope_block(content) {
-        let html = self.process_code(&header, &code)?;
         let range = content.location_offset()..next.location_offset();
-        replacements.push((range, html));
+        to_process.push((range, header, code));
         content = next;
       } else {
         match anychar::<_, nom::error::Error<LocatedSpan<&str>>>(content) {
@@ -160,6 +165,15 @@ impl SimplePreprocessor for AquascopePreprocessor {
         }
       }
     }
+
+    let replacements = to_process
+      .into_par_iter()
+      .map(|(range, header, code)| {
+        let html = self.process_code(&header, &code)?;
+        Ok((range, html))
+      })
+      .collect::<Result<Vec<_>>>()?;
+
     Ok(replacements)
   }
 

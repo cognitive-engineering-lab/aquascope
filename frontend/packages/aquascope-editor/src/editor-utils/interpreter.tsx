@@ -96,9 +96,18 @@ let ValueView = ({ value }: { value: MValue }) => (
         </table>
       </>
     ) : value.type == "Pointer" ? (
-      <span className="pointer" data-point-to={value.value}>
-        *
-      </span>
+      (() => {
+        let ptr = value.value;
+        let pointTo =
+          ptr.type == "Heap"
+            ? `.heap-${ptr.value.index}`
+            : `.stack-${ptr.value.frame}-${ptr.value.local}`;
+        return (
+          <span className="pointer" data-point-to={pointTo}>
+            ●
+          </span>
+        );
+      })()
     ) : value.type == "Array" ? (
       <>
         [<AbbreviatedView value={value.value} />]
@@ -111,13 +120,19 @@ let ValueView = ({ value }: { value: MValue }) => (
   </>
 );
 
-let LocalsView = ({ locals }: { locals: [string, MValue][] }) => (
+let LocalsView = ({
+  index,
+  locals,
+}: {
+  index: number;
+  locals: [string, MValue][];
+}) => (
   <table>
     <tbody>
       {locals.map(([key, value], i) => (
         <tr key={i}>
           <td>{key}</td>
-          <td>
+          <td className={`stack-${index}-${key}`}>
             <ValueView value={value} />
           </td>
         </tr>
@@ -126,14 +141,14 @@ let LocalsView = ({ locals }: { locals: [string, MValue][] }) => (
   </table>
 );
 
-let FrameView = ({ frame }: { frame: MFrame<Range> }) => {
+let FrameView = ({ index, frame }: { index: number; frame: MFrame<Range> }) => {
   let code = useContext(CodeContext);
   let snippet = code.slice(frame.location.char_start, frame.location.char_end);
   return (
     <div className="frame">
-      <div>{frame.name}</div>
+      <div className="frame-header">{frame.name}</div>
       {DEBUG ? <pre>{snippet}</pre> : null}
-      <LocalsView locals={frame.locals} />
+      <LocalsView index={index} locals={frame.locals} />
     </div>
   );
 };
@@ -141,9 +156,11 @@ let FrameView = ({ frame }: { frame: MFrame<Range> }) => {
 let StackView = ({ stack }: { stack: MStack<Range> }) => (
   <div className="memory stack">
     <div className="memory-header">Stack</div>
-    {stack.frames.map((frame, i) => (
-      <FrameView key={i} frame={frame} />
-    ))}
+    <div className="frames">
+      {stack.frames.map((frame, i) => (
+        <FrameView key={i} index={i} frame={frame} />
+      ))}
+    </div>
   </div>
 );
 
@@ -152,10 +169,10 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
     <div className="memory-header">Heap</div>
     <table>
       <tbody>
-        {heap.locations.map(([loc, value], i) => (
+        {heap.locations.map((value, i) => (
           <tr key={i}>
-            <td>
-              <ValueView key={loc} value={value} />
+            <td className={`heap-${i}`}>
+              <ValueView value={value} />
             </td>
           </tr>
         ))}
@@ -165,37 +182,38 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
 );
 
 let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
-  let stackRef = useRef<HTMLDivElement | null>(null);
-  let heapRef = useRef<HTMLDivElement | null>(null);
+  let ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    let pointers =
-      stackRef.current!.querySelectorAll<HTMLSpanElement>(".pointer");
-    let lines = Array.from(pointers).map(ptr => {
-      let i = parseInt(ptr.dataset.pointTo!);
-      return new LeaderLine(
-        ptr,
-        heapRef.current!.querySelector(`tr:nth-child(${i + 1})`)!,
-        {
-          color: "black",
-          size: 1,
-          endPlugSize: 2,
-        }
-      );
+    let container = ref.current!;
+    let pointers = container.querySelectorAll<HTMLSpanElement>(".pointer");
+    let lines = Array.from(pointers).map(src => {
+      let dstSel = src.dataset.pointTo!;
+      let dst = container.querySelector(dstSel);
+      if (!dst)
+        throw new Error(
+          `Could not find endpoint for pointer selector: ${dstSel}`
+        );
+      let endSocket: "right" | "left" = dstSel.startsWith(".stack")
+        ? "right"
+        : "left";
+      return new LeaderLine(src, dst, {
+        color: "black",
+        size: 1,
+        endPlugSize: 2,
+        startSocket: "right",
+        endSocket,
+      });
     });
     return () => lines.forEach(line => line.remove());
   }, []);
   return (
     <div className="step">
-      <div className="step-name">L{index + 1}</div>
-      <div className="memory-container">
-        <div ref={stackRef}>
-          <StackView stack={step.stack} />
-        </div>
-        {step.heap.locations.length > 0 ? (
-          <div ref={heapRef}>
-            <HeapView heap={step.heap} />
-          </div>
-        ) : null}
+      <div className="step-header">
+        <span className="step-marker">L{index + 1}</span>
+      </div>
+      <div className="memory-container" ref={ref}>
+        <StackView stack={step.stack} />
+        {step.heap.locations.length > 0 ? <HeapView heap={step.heap} /> : null}
       </div>
     </div>
   );
