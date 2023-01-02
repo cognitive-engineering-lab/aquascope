@@ -108,18 +108,24 @@
   }
 
   span.perm-diff-add {
-    /* display: inline-block; */
     color: rgb(93, 202, 54);
   }
 
+  span.perm-diff-sub {
+    color: rgb(255, 66, 68);
+  }
+
   spen.perm-diff-none {
-    /* display: inline-block; */
+    color: black;
+  }
+
+  span.perm-diff-none-high {
     color: lightgray;
   }
 
-  span.perm-diff-sub {
-    /* display: inline-block; */
-    color: rgb(255, 66, 68);
+  span.perm-diff-none-low {
+    color: lightgray;
+    // opacity: 0.4;
   }
 
   .aquascope-action-indicator {

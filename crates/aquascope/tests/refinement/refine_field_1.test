@@ -24,7 +24,7 @@ fn main() {
     let _a = &`[both.left ---]`;
     let _a = &`[both.right ---]`;
 
-    *left += 1;
+    left.push_str("used again");
 
     println!("{left:?}");
 

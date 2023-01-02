@@ -107,7 +107,7 @@ impl MirOrderedLocations {
     })
   }
 
-  fn values(&self) -> impl Iterator<Item = Location> + Captures<'_> {
+  pub fn values(&self) -> impl Iterator<Item = Location> + Captures<'_> {
     self.locations.iter().flat_map(|(bb, idxs)| {
       idxs.iter().map(|idx| Location {
         block: *bb,

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod context;
 mod graphviz;
 pub mod permission_boundaries;
@@ -17,7 +15,7 @@ pub use context::PermissionsCtxt;
 pub use permissions_datalog::{compute, Output};
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::RustcFacts;
-use rustc_data_structures::fx::FxHashMap as HashMap;
+use rustc_data_structures::fx::FxHashMap;
 use rustc_middle::{
   mir::{Mutability, Place},
   ty::Ty,
@@ -25,7 +23,10 @@ use rustc_middle::{
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::Range;
+use crate::{
+  analysis::{KeyShifter, LoanKey, MoveKey},
+  Range,
+};
 
 #[derive(Copy, Clone, Debug)]
 pub struct AquascopeFacts;
@@ -51,12 +52,15 @@ impl polonius_engine::Atom for PathIndex {
 }
 
 // ------------------------------------------------
-// Permission Boundaries
+// General Information
 
 pub type Path = <AquascopeFacts as FactTypes>::Path;
 pub type Point = <AquascopeFacts as FactTypes>::Point;
 pub type Loan = <AquascopeFacts as FactTypes>::Loan;
 pub type Variable = <AquascopeFacts as FactTypes>::Variable;
+
+// ------------------------------------------------
+// Permission Boundaries
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Serialize, TS)]
 #[ts(export)]
@@ -69,7 +73,8 @@ pub struct Permissions {
 // In contrast to Permissions, the PermissionsData stores all relevant
 // information about what factors into the permissions. Things like
 // declared type information, loan refinements, move refinements, etc.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 pub struct PermissionsData {
   // Type declaration information
   pub type_droppable: bool,
@@ -80,60 +85,40 @@ pub struct PermissionsData {
   pub is_live: bool,
 
   // Initialization information
+  // TODO: this should be an Option<MoveKey> once moves are tracked.
   pub path_moved: bool,
 
   // Refinement information
-  pub loan_read_refined: bool,
-  pub loan_write_refined: bool,
-  pub loan_drop_refined: bool,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub loan_read_refined: Option<LoanKey>,
 
-  // Even though these are derivable from the
-  // above information, we'll keep it explicitly so
-  // others don't have to compute permissions.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub loan_write_refined: Option<LoanKey>,
+
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub loan_drop_refined: Option<LoanKey>,
+
+  // Permissions can be directly derived from the above
+  // information but we don't want that logic duplicated anywhere.
   pub permissions: Permissions,
 }
 
 /// A point where the permissions reality are checked against their expectations.
-/// Currently, the only boundary supported is method calls on a receiver, however,
-/// these boundaries could be drawn in any program location.
-#[derive(Debug, Clone, Serialize, PartialEq, TS)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsBoundary {
   // instead of giving the range, the backend should supply the exact location. this will
   // be especially usefull when we have permissions on more than just method calls.
   pub location: usize,
   pub expected: Permissions,
-  pub actual: Permissions,
-  pub was_copied: bool,
-  pub explanations: MissingPermsInfo,
+  pub actual: PermissionsData,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, TS)]
-#[ts(export)]
-pub struct MissingPermsInfo {
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub read: Option<MissingPermReason>,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub write: Option<MissingPermReason>,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub drop: Option<MissingPermReason>,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, TS)]
-#[serde(tag = "type")]
-#[ts(export)]
-pub enum MissingPermReason {
-  // TODO store information to visually build the explanation
-  InsufficientType,
-  Refined(RefinementRegion),
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, TS)]
-#[serde(tag = "type")]
 #[ts(export)]
 pub enum Refiner {
-  Loan(Range),
-  Move(Range),
+  Loan(LoanKey),
+  Move(MoveKey),
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, TS)]
@@ -141,9 +126,6 @@ pub enum Refiner {
 pub struct RefinementRegion {
   pub refiner_point: Refiner,
   pub refined_ranges: Vec<Range>,
-  // NOTE: the start and end only cary meaning in a linear scope.
-  pub start: Range,
-  pub end: Range,
 }
 
 // ------------------------------------------------
@@ -159,12 +141,15 @@ pub struct PermissionsStateStep {
 #[derive(Clone, Debug, Serialize, TS)]
 #[serde(tag = "type")]
 #[ts(export)]
-pub enum BoolStep {
+pub enum ValueStep<A>
+where
+  A: Clone + std::fmt::Debug + Serialize + TS,
+{
   High,
   Low,
-  /// value indicates whether or not the permission is held.
   None {
-    value: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<A>,
   },
 }
 
@@ -173,7 +158,7 @@ pub enum BoolStep {
 
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
 /// A representation of the permissions *forall* places in the body under analysis.
-pub struct PermissionsDomain<'tcx>(HashMap<Place<'tcx>, PermissionsData>);
+pub struct PermissionsDomain<'tcx>(FxHashMap<Place<'tcx>, PermissionsData>);
 
 pub trait Difference {
   type Diff;
@@ -184,26 +169,18 @@ pub trait Difference {
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsDataDiff {
-  pub is_live: BoolStep,
-  pub type_droppable: BoolStep,
-  pub type_writeable: BoolStep,
-  pub loan_read_refined: BoolStep,
-  pub loan_write_refined: BoolStep,
-  pub loan_drop_refined: BoolStep,
-  pub path_moved: BoolStep,
+  pub is_live: ValueStep<bool>,
+  pub type_droppable: ValueStep<bool>,
+  pub type_writeable: ValueStep<bool>,
+  pub path_moved: ValueStep<bool>,
+  pub loan_read_refined: ValueStep<LoanKey>,
+  pub loan_write_refined: ValueStep<LoanKey>,
+  pub loan_drop_refined: ValueStep<LoanKey>,
   pub permissions: PermissionsDiff,
 }
 
 impl PermissionsDataDiff {
   fn is_empty(&self) -> bool {
-    // self.is_live.is_empty()
-    //   && self.type_droppable.is_empty()
-    //   && self.type_writeable.is_empty()
-    //   && self.loan_read_refined.is_empty()
-    //   && self.loan_write_refined.is_empty()
-    //   && self.loan_drop_refined.is_empty()
-    //   && self.path_moved.is_empty()
-    //   &&
     self.permissions.is_empty()
   }
 }
@@ -220,27 +197,12 @@ macro_rules! make_diff {
     #[derive(Clone, Debug, Serialize, TS)]
     #[ts(export)]
     pub struct $diff {
-      $( pub $i: BoolStep, )*
+      $( pub $i: ValueStep<bool>, )*
     }
 
     impl $diff {
       fn is_empty(&self) -> bool {
         $( self.$i.is_empty() && )* true
-      }
-
-      fn split(&self) -> ($base, $base) {
-        (
-          $base {
-            $(
-              $i: self.$i.split().0,
-            )*
-          },
-          $base {
-            $(
-              $i: self.$i.split().1,
-            )*
-          }
-        )
       }
     }
   }
@@ -256,14 +218,37 @@ make_diff!(Permissions => PermissionsDiff {
 // Again these should all be generated, very pattern oriented.
 
 impl Difference for bool {
-  type Diff = BoolStep;
+  type Diff = ValueStep<bool>;
   fn diff(&self, rhs: bool) -> Self::Diff {
     if *self && !rhs {
-      BoolStep::Low
+      ValueStep::Low
     } else if !*self && rhs {
-      BoolStep::High
+      ValueStep::High
     } else {
-      BoolStep::None { value: *self }
+      ValueStep::None { value: Some(*self) }
+    }
+  }
+}
+
+impl<A> Difference for Option<A>
+where
+  A: Clone + PartialEq + Eq + std::fmt::Debug + Serialize + TS,
+{
+  type Diff = ValueStep<A>;
+
+  fn diff(&self, rhs: Option<A>) -> Self::Diff {
+    match (self, rhs) {
+      (None, None) => ValueStep::None { value: None },
+      (Some(_), None) => ValueStep::Low,
+      (None, Some(_)) => ValueStep::High,
+      (Some(v0), Some(v1)) => {
+        if *v0 != v1 {
+          log::warn!(
+            "Option diff Some does not contain same value {v0:?} -> {v1:?}"
+          );
+        }
+        ValueStep::None { value: Some(v1) }
+      }
     }
   }
 }
@@ -344,30 +329,25 @@ impl<'tcx> From<Ty<'tcx>> for Permissions {
   }
 }
 
-impl BoolStep {
+impl<T> ValueStep<T>
+where
+  T: Clone + std::fmt::Debug + Serialize + TS,
+{
   fn is_empty(&self) -> bool {
     matches!(self, Self::None { .. })
   }
-
-  fn split(&self) -> (bool, bool) {
-    match self {
-      Self::High => (false, true),
-      Self::Low => (true, false),
-      Self::None { value } => (*value, *value),
-    }
-  }
 }
 
-impl<'tcx> From<HashMap<Place<'tcx>, PermissionsData>>
+impl<'tcx> From<FxHashMap<Place<'tcx>, PermissionsData>>
   for PermissionsDomain<'tcx>
 {
-  fn from(m: HashMap<Place<'tcx>, PermissionsData>) -> Self {
+  fn from(m: FxHashMap<Place<'tcx>, PermissionsData>) -> Self {
     PermissionsDomain(m)
   }
 }
 
 impl<'tcx> Deref for PermissionsDomain<'tcx> {
-  type Target = HashMap<Place<'tcx>, PermissionsData>;
+  type Target = FxHashMap<Place<'tcx>, PermissionsData>;
 
   fn deref(&self) -> &Self::Target {
     &self.0
@@ -381,11 +361,11 @@ impl DerefMut for PermissionsDomain<'_> {
 }
 
 impl<'tcx> Difference for &PermissionsDomain<'tcx> {
-  type Diff = HashMap<Place<'tcx>, PermissionsDataDiff>;
+  type Diff = FxHashMap<Place<'tcx>, PermissionsDataDiff>;
   fn diff(&self, rhs: &PermissionsDomain<'tcx>) -> Self::Diff {
     self
       .iter()
-      .fold(HashMap::default(), |mut acc, (place, p1)| {
+      .fold(FxHashMap::default(), |mut acc, (place, p1)| {
         let p2 = rhs.get(place).unwrap();
         let diff = p1.diff(*p2);
 
@@ -400,5 +380,25 @@ impl<'tcx> Difference for &PermissionsDomain<'tcx> {
 
         acc
       })
+  }
+}
+
+impl KeyShifter for PermissionsData {
+  fn shift_keys(self, loan_shift: LoanKey) -> Self {
+    PermissionsData {
+      loan_read_refined: self.loan_read_refined.map(|l| l + loan_shift),
+      loan_write_refined: self.loan_write_refined.map(|l| l + loan_shift),
+      loan_drop_refined: self.loan_drop_refined.map(|l| l + loan_shift),
+      ..self
+    }
+  }
+}
+
+impl KeyShifter for PermissionsBoundary {
+  fn shift_keys(self, loan_shift: LoanKey) -> Self {
+    PermissionsBoundary {
+      actual: self.actual.shift_keys(loan_shift),
+      ..self
+    }
   }
 }

@@ -5,11 +5,7 @@ use rustc_hir::{
   intravisit::{self, Visitor as HirVisitor},
   HirId,
 };
-use rustc_middle::{
-  hir::nested_filter,
-  mir::{Location, Place},
-};
-use rustc_mir_dataflow::Analysis;
+use rustc_middle::{hir::nested_filter, mir::Place};
 use rustc_span::Span;
 
 use crate::{
@@ -34,15 +30,6 @@ where
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
   let _basic_blocks = body.basic_blocks.indices();
-
-  // FIXME REMOVE
-  let mut stderr = std::io::stderr();
-  rustc_middle::mir::pretty::write_mir_fn(
-    tcx,
-    body,
-    &mut |_, _| Ok(()),
-    &mut stderr,
-  );
 
   let ir_mapper = &IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
 
@@ -131,10 +118,6 @@ fn prettify_permission_steps<'tcx>(
     })
     .collect::<Vec<_>>()
 }
-
-#[allow(type_alias_bounds)]
-type DomainAtHir<'tcx, A: Analysis<'tcx>> =
-  HashMap<HirId, HashMap<Location, A::Domain>>;
 
 struct HirPermDiffFlow<'a, 'tcx>
 where

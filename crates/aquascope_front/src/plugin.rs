@@ -4,7 +4,10 @@ use std::{
   time::Instant,
 };
 
-use aquascope::errors::{initialize_error_tracking, track_body_diagnostics};
+use aquascope::{
+  analysis::BodyAnalysisJoin,
+  errors::{initialize_error_tracking, track_body_diagnostics},
+};
 use clap::{Parser, Subcommand};
 use flowistry::{
   mir::borrowck_facts::{self, NO_SIMPLIFY},
@@ -184,7 +187,7 @@ fn run<A: AquascopeAnalysis>(
   callbacks
     .output
     .into_iter()
-    .reduce(Join::join)
+    .reduce(BodyAnalysisJoin::analysis_join)
     .unwrap()
     .map_err(|e| AquascopeError::AnalysisError(e.to_string()))
 }
@@ -205,7 +208,7 @@ pub enum AquascopeError {
 pub type AquascopeResult<T> = Result<T, AquascopeError>;
 
 pub trait AquascopeAnalysis: Sized + Send + Sync {
-  type Output: Join + Serialize + Send + Sync;
+  type Output: BodyAnalysisJoin + Serialize + Send + Sync;
   fn analyze(
     &mut self,
     tcx: TyCtxt,
@@ -213,32 +216,12 @@ pub trait AquascopeAnalysis: Sized + Send + Sync {
   ) -> anyhow::Result<Self::Output>;
 }
 
-pub trait Join {
-  fn join(self, other: Self) -> Self;
-}
-
-impl<T> Join for Vec<T> {
-  fn join(self, other: Self) -> Self {
-    let mut v = self;
-    v.extend(other.into_iter());
-    v
-  }
-}
-
-impl<O: Join> Join for anyhow::Result<O> {
-  fn join(self, other: Self) -> Self {
-    let v1 = self?;
-    let v2 = other?;
-    Ok(v1.join(v2))
-  }
-}
-
 impl<F, O> AquascopeAnalysis for F
 where
   F: for<'tcx> Fn<(TyCtxt<'tcx>, BodyId), Output = anyhow::Result<O>>
     + Send
     + Sync,
-  O: Join + Serialize + Send + Sync,
+  O: BodyAnalysisJoin + Serialize + Send + Sync,
 {
   type Output = O;
   fn analyze(

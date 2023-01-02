@@ -7,7 +7,8 @@ import {
 } from "@codemirror/view";
 
 import {
-  MissingPermReason,
+  AnalysisFacts,
+  LoanKey,
   PermissionsBoundary,
   RefinementRegion,
 } from "../types";
@@ -59,77 +60,22 @@ let makeBraceElem = (content: string, color: Color) => {
 // Icon for displaying a single permission field, e.g. "R" in "RWO".
 class SinglePermIcon implements HTMLIcon {
   readonly display: boolean;
-  readonly start: HTMLElement;
-  readonly end: HTMLElement;
-  readonly loanTag: string;
-  readonly regionTag: string;
   constructor(
     readonly contents: string,
     readonly expected: boolean,
     readonly actual: boolean,
     readonly color: Color,
-    readonly onHover: MissingPermReason | undefined,
+    readonly facts: AnalysisFacts,
+    readonly typeRefined: boolean,
+    readonly moveRefined: boolean,
+    readonly loanRefined?: LoanKey,
     readonly wasCopied: boolean = false
   ) {
     this.display = expected;
-    this.start = makeBraceElem("{ ", color);
-    this.end = makeBraceElem(" }", color);
-    this.loanTag = makeTag(20);
-    this.regionTag = makeTag(25);
   }
 
   getAuxiliary(): Array<Range<Decoration>> {
-    if (this.onHover == undefined || !this.display) {
-      return [];
-    }
-
-    const variant: string = this.onHover.type;
-
-    if ("InsufficientType" === variant) {
-      console.log("TODO: display explanation for insufficient types");
-      return [];
-    }
-
-    const refinedRegion = this.onHover as RefinementRegion;
-
-    let loanDeco = Decoration.mark({
-      class: "aquascope-loan",
-      tagName: this.loanTag,
-    }).range(
-      refinedRegion.refiner_point.char_start,
-      refinedRegion.refiner_point.char_end
-    );
-
-    let regionDecos = refinedRegion.refined_ranges
-      .filter(range => range.char_start != range.char_end)
-      .map(range => {
-        console.log(range);
-        let highlightedRange = Decoration.mark({
-          class: "aquascope-live-region",
-          tagName: this.regionTag,
-        }).range(range.char_start, range.char_end);
-        return highlightedRange;
-      });
-
-    // The start and end are the colored braces which used
-    // to indicate the start and end of a refinement region.
-    // We aren't using them currently but who knows if they'll
-    // be wanted in the future for anything.
-    let start = this.start;
-    let charStart = refinedRegion.start.char_start;
-    let _startDeco = Decoration.widget({
-      widget: new RegionEnd(start),
-    }).range(charStart);
-
-    let end = this.end;
-    let charEnd = refinedRegion.end.char_end;
-    let _endDeco = Decoration.widget({
-      widget: new RegionEnd(end),
-    }).range(charEnd);
-
-    let extraDecos = [loanDeco, ...regionDecos];
-
-    return extraDecos;
+    return [];
   }
 
   toDOM(): HTMLElement {
@@ -142,40 +88,47 @@ class SinglePermIcon implements HTMLIcon {
     tt.setAttribute("paint-order", "stroke");
     tt.textContent = this.contents;
 
-    let myColor = this.color;
-    let transparent = whiteColor.withAlpha(0.0);
-
     let forCustomTag = (tag: string, callback: (e: HTMLElement) => void) => {
       Array.from(
         document.getElementsByTagName(tag) as HTMLCollectionOf<HTMLElement>
       ).forEach(callback);
     };
 
-    tt.addEventListener("mouseenter", _ => {
-      this.start.style.width = "15px";
-      this.end.style.width = "15px";
+    let insertHoverToggle = (loanKey: number) => {
+      let myColor = this.color;
+      let transparent = whiteColor.withAlpha(0.0);
 
-      forCustomTag(this.loanTag, elem => {
-        elem.style.textDecoration = `underline 3px ${myColor.toString()}`;
+      const loanTag = this.facts.loanPoints[loanKey];
+      const regionTag = this.facts.loanRegions[loanKey];
+
+      console.log(`inserting the toggle! ${loanTag} ${regionTag}`);
+
+      tt.addEventListener("mouseenter", _ => {
+        forCustomTag(loanTag, elem => {
+          elem.style.textDecoration = `underline 3px ${myColor.toString()}`;
+        });
+
+        forCustomTag(regionTag, elem => {
+          elem.style.backgroundColor = myColor.withAlpha(0.2).toString();
+        });
       });
 
-      forCustomTag(this.regionTag, elem => {
-        elem.style.backgroundColor = myColor.withAlpha(0.2).toString();
-      });
-    });
+      tt.addEventListener("mouseleave", _ => {
+        forCustomTag(loanTag, elem => {
+          elem.style.textDecoration = `underline 3px ${transparent.toString()}`;
+        });
 
-    tt.addEventListener("mouseleave", _ => {
-      this.start.style.width = "0px";
-      this.end.style.width = "0px";
-
-      forCustomTag(this.loanTag, elem => {
-        elem.style.textDecoration = `underline 3px ${transparent.toString()}`;
+        forCustomTag(regionTag, elem => {
+          elem.style.backgroundColor = whiteColor.withAlpha(0).toString();
+        });
       });
+    };
 
-      forCustomTag(this.regionTag, elem => {
-        elem.style.backgroundColor = whiteColor.withAlpha(0).toString();
-      });
-    });
+    console.log(this);
+
+    if (this.loanRefined !== undefined) {
+      insertHoverToggle(this.loanRefined);
+    }
 
     return tt as HTMLElement & SVGTextElement;
   }
@@ -223,11 +176,14 @@ class BoundaryPointWidget extends WidgetType {
       ico.setAttribute("fill", fillColor.toString());
       ico.setAttribute("stroke", icoI.color.toString());
       ico.dataset.bufferPos = this.pos.toString();
-      if (icoI.wasCopied) {
-        ico.classList.add("copied-tip");
-      } else if (icoI.onHover?.type === "InsufficientType") {
-        ico.classList.add("insufficient-type-tip");
-      }
+
+      // FIXME!
+      // if (icoI.wasCopied) {
+      //   ico.classList.add("copied-tip");
+      // } else if (icoI.onHover?.type === "InsufficientType") {
+      //   ico.classList.add("insufficient-type-tip");
+      // }
+
       // TODO: we also need to include a tooltip for moves.
       wrap.appendChild(ico);
     });
@@ -240,31 +196,46 @@ class BoundaryPointWidget extends WidgetType {
   }
 }
 
-let callTypesToPermissions = (permInfo: PermissionsBoundary): BoundaryPoint => {
-  const expl = permInfo.explanations;
+let fromPermissionsBoundary = (
+  permInfo: PermissionsBoundary,
+  facts: AnalysisFacts
+): BoundaryPoint => {
+  const data = permInfo.actual;
+
+  console.log(permInfo);
+
   const readIco = new SinglePermIcon(
     readChar,
     permInfo.expected.read,
-    permInfo.actual.read,
+    data.permissions.read,
     readColor,
-    expl?.read
+    facts,
+    false,
+    data.path_moved,
+    data.loan_read_refined
   );
   const writeIco = new SinglePermIcon(
     writeChar,
     permInfo.expected.write,
-    permInfo.actual.write,
+    data.permissions.write,
     writeColor,
-    expl?.write
+    facts,
+    !data.type_writeable,
+    data.path_moved,
+    data.loan_write_refined
   );
   const dropIco = new SinglePermIcon(
     dropChar,
     permInfo.expected.drop,
-    permInfo.actual.drop,
+    data.permissions.drop,
     dropColor,
-    expl?.drop,
-    permInfo.was_copied
-    // expl.was_copied
+    facts,
+    !data.type_droppable,
+    data.path_moved,
+    data.loan_write_refined,
+    data.type_copyable
   );
+
   return [readIco, writeIco, dropIco, permInfo.location];
 };
 
@@ -358,5 +329,5 @@ export const receiverPermissionsField: IconField<
 > = {
   effectType: permissionStateIcoType,
   stateField: boundaryStateField,
-  fromOutput: callTypesToPermissions,
+  fromOutput: fromPermissionsBoundary,
 };

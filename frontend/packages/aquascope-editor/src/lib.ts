@@ -8,7 +8,13 @@ import {
 } from "@codemirror/state";
 import { DecorationSet, EditorView } from "@codemirror/view";
 
-import { IconField } from "./editor-utils/misc";
+import {
+  IconField,
+  LoanFacts,
+  generateAnalysisDecorationFacts,
+  loanFactsField,
+  loanFactsStateType,
+} from "./editor-utils/misc";
 import {
   copiedValueHover,
   insufficientTypeHover,
@@ -17,8 +23,10 @@ import {
 import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 import "./styles.scss";
 import {
+  AnalysisFacts,
+  AnalysisOutput,
   BackendError,
-  PermissionsBoundaryOutput,
+  PermissionsBoundary,
   PermissionsDiffOutput,
 } from "./types";
 
@@ -139,6 +147,7 @@ export class Editor {
         indentUnit.of("  "),
         copiedValueHover,
         insufficientTypeHover,
+        loanFactsField,
         ...supportedFields,
       ],
     });
@@ -167,11 +176,20 @@ export class Editor {
     });
   }
 
+  // NOTE: Exchanges the analysis facts for loan points and regions. Currently,
+  // this is only used by the permission boundaries (stacks) visualization.
+  public addAnalysisFacts(vs: Array<LoanFacts>) {
+    this.view.dispatch({
+      effects: [loanFactsStateType.of(vs)],
+    });
+  }
+
   public addPermissionsField<B, T, F extends IconField<B, T>>(
     f: F,
-    methodCallPoints: Array<B>
+    methodCallPoints: Array<B>,
+    facts: AnalysisFacts
   ) {
-    let newEffects = methodCallPoints.map(f.fromOutput);
+    let newEffects = methodCallPoints.map(v => f.fromOutput(v, facts));
     console.log(newEffects);
     this.view.dispatch({
       effects: [f.effectType.of(newEffects)],
@@ -209,7 +227,15 @@ export class Editor {
           type: "BuildError",
           error: serverResponse.stderr,
         });
-        return this.addPermissionsField(coarsePermissionDiffs, out.Ok);
+        let emptyFacts = {
+          loanPoints: {},
+          loanRegions: {},
+        };
+        return this.addPermissionsField(
+          coarsePermissionDiffs,
+          out.Ok,
+          emptyFacts
+        );
       } else {
         return this.reportStdErr(out.Err);
       }
@@ -224,7 +250,7 @@ export class Editor {
   async computeReceiverPermissions() {
     let serverResponse = await this.callBackendWithCode("receiver-types");
     if (serverResponse.success) {
-      let out: Result<PermissionsBoundaryOutput> = JSON.parse(
+      let out: Result<AnalysisOutput<PermissionsBoundary>> = JSON.parse(
         serverResponse.stdout
       );
       if ("Ok" in out) {
@@ -232,7 +258,13 @@ export class Editor {
           type: "BuildError",
           error: serverResponse.stderr,
         });
-        return this.addPermissionsField(receiverPermissionsField, out.Ok);
+        let [facts, loanFacts] = generateAnalysisDecorationFacts(out.Ok);
+        this.addAnalysisFacts(loanFacts);
+        return this.addPermissionsField(
+          receiverPermissionsField,
+          out.Ok.values,
+          facts
+        );
       } else {
         return this.reportStdErr(out.Err);
       }
