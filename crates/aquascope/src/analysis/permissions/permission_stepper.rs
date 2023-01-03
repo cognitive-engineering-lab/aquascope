@@ -3,7 +3,6 @@ use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::{
   self as hir,
   intravisit::{self, Visitor as HirVisitor},
-  HirId,
 };
 use rustc_middle::{hir::nested_filter, mir::Place};
 use rustc_span::Span;
@@ -12,7 +11,8 @@ use crate::{
   analysis::{
     ir_mapper::{GatherDepth, GatherMode, IRMapper},
     permissions::{
-      Difference, PermissionsCtxt, PermissionsDataDiff, PermissionsStateStep,
+      Difference, Permissions, PermissionsCtxt, PermissionsData,
+      PermissionsDataDiff, PermissionsDomain, PermissionsStateStep,
     },
   },
   errors,
@@ -53,11 +53,11 @@ where
 // - Convert Spans to Ranges
 fn prettify_permission_steps<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
-  perm_steps: HashMap<HirId, HashMap<Place<'tcx>, PermissionsDataDiff>>,
+  perm_steps: HashMap<Span, HashMap<Place<'tcx>, PermissionsDataDiff>>,
   span_to_range: impl Fn(Span) -> Range,
 ) -> Vec<PermissionsStateStep> {
+  use crate::analysis::permissions::ValueStep;
   let tcx = ctxt.tcx;
-  let hir = tcx.hir();
   let body = &ctxt.body_with_facts.body;
 
   macro_rules! place_to_string {
@@ -70,35 +70,62 @@ fn prettify_permission_steps<'tcx>(
   let first_error_span_opt =
     errors::get_span_of_first_error(ctxt.def_id.expect_local())
       .and_then(|s| s.as_local(ctxt.body_with_facts.body.span));
+  let source_map = tcx.sess.source_map();
 
   perm_steps
     .into_iter()
-    .filter_map(|(id, place_to_diffs)| {
-      let span = hir.span(id);
-      let span = span
-        .as_local(ctxt.body_with_facts.body.span)
-        .unwrap_or(span);
+    .fold(
+      HashMap::<Span, Vec<(Place<'tcx>, PermissionsDataDiff)>>::default(),
+      |mut acc, (unsanitized_span, place_to_diffs)| {
+        let span = unsanitized_span
+          .as_local(ctxt.body_with_facts.body.span)
+          .unwrap_or(unsanitized_span);
+
+        // Attach the span to the end of the line. Later, all permission
+        // steps appearing on the same line will be combined.
+        let span = source_map.span_extend_to_line(span).shrink_to_hi();
+
+        macro_rules! some_permissions {
+          ($diff:expr) => {
+            !$diff.is_empty()
+              || !matches!($diff.permissions.read, ValueStep::None {
+                value: Some(false),
+              })
+              || !matches!($diff.permissions.write, ValueStep::None {
+                value: Some(false),
+              })
+              || !matches!($diff.permissions.drop, ValueStep::None {
+                value: Some(false),
+              })
+          };
+        }
+
+        let entries = place_to_diffs
+          .into_iter()
+          .filter(|(place, diff)| {
+            place.is_source_visible(tcx, body) && some_permissions!(diff)
+          })
+          .collect::<Vec<_>>();
+
+        // This could be a little more graceful. The idea is that
+        // we want to remove all permission steps which occur after
+        // the first error, but the steps involved with the first
+        // error could still be helpful. This is why we filter all
+        // spans with a LO BytePos greater than the error
+        // span HI BytePos.
+        if !(entries.is_empty()
+          || first_error_span_opt
+            .is_some_and(|err_span| err_span.hi() < span.lo()))
+        {
+          acc.entry(span).or_default().extend(entries);
+        }
+
+        acc
+      },
+    )
+    .into_iter()
+    .map(|(span, mut entries)| {
       let range = span_to_range(span);
-
-      let mut entries = place_to_diffs
-        .into_iter()
-        .filter(|(place, diff)| {
-          place.is_source_visible(tcx, body) // && !diff.is_empty()
-        })
-        .collect::<Vec<_>>();
-
-      // This could be a little more graceful. The idea is that
-      // we want to remove all permission steps which occur after
-      // the first error, but the steps involved with the first
-      // error could still be helpful. This is why we filter all
-      // spans with a LO BytePos greater than the error
-      // span HI BytePos.
-      if entries.is_empty()
-        || first_error_span_opt
-          .is_some_and(|err_span| err_span.hi() < span.lo())
-      {
-        return None;
-      }
 
       entries
         .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
@@ -111,10 +138,10 @@ fn prettify_permission_steps<'tcx>(
         })
         .collect::<Vec<_>>();
 
-      Some(PermissionsStateStep {
+      PermissionsStateStep {
         location: range,
         state,
-      })
+      }
     })
     .collect::<Vec<_>>()
 }
@@ -125,9 +152,41 @@ where
 {
   ctxt: &'a PermissionsCtxt<'a, 'tcx>,
   ir_mapper: &'a IRMapper<'a, 'tcx>,
-  diff: HashMap<HirId, HashMap<Place<'tcx>, PermissionsDataDiff>>,
+
+  // For a given Span, we attach the before and after Domain.
+  // The difference of the domains is not computed yet because we may have
+  // to combine differences for processing at the source level.
+  //
+  // NOTE: this post-processing is needed because the current version
+  // will only show one permissions diff per line (mostly for aesthetic reasons).
+  // A future iteration of this may decide to remove this restriction.
+  diff: HashMap<Span, HashMap<Place<'tcx>, PermissionsDataDiff>>,
   step_barriers: Vec<Place<'tcx>>,
   visibility_scopes: Vec<HashMap<Place<'tcx>, PermissionsDataDiff>>,
+}
+
+impl<'tcx> HirPermDiffFlow<'_, 'tcx> {
+  fn domain_bottom(&self) -> PermissionsDomain<'tcx> {
+    self
+      .ctxt
+      .domain_places()
+      .into_iter()
+      .map(|place| {
+        (place, PermissionsData {
+          is_live: false,
+          type_droppable: false,
+          type_writeable: false,
+          type_copyable: false,
+          path_moved: false,
+          loan_read_refined: None,
+          loan_write_refined: None,
+          loan_drop_refined: None,
+          permissions: Permissions::bottom(),
+        })
+      })
+      .collect::<HashMap<_, _>>()
+      .into()
+  }
 }
 
 macro_rules! filter_exec_commit {
@@ -152,7 +211,12 @@ macro_rules! filter_exec_commit {
     // Execute the inner block
     $inner;
     let $scopes = $this.visibility_scopes.pop().unwrap();
-    $this.diff.insert($id, $scopes);
+    let span = $this.ctxt.tcx.hir().span($id);
+
+    // FIXME: for desugaring and macro expansion, it's possible for multiple
+    // permission step boxes to hash to the exact same span. This is
+    // not currently handled and will creep up on us most definitely.
+    $this.diff.entry(span).or_default().extend($scopes);
   }
 }
 
@@ -207,7 +271,7 @@ macro_rules! with_seamless_branching {
       // From the beginning to the point *after* the end location of `id`, `visibility_here`
       // represents all the places where a permissions change was visible. Specifically,
       // this is the difference in PermissionsDomain @ (after_point - before_point).
-      let mut visibility_here =
+      if let Some(mut visibility_here) =
         $this.ir_mapper.get_mir_locations(id, GatherDepth::Nested).and_then(|mir_order| {
           mir_order.get_entry_exit_locations().map(|(loc1, loc2)| {
             let before_point = after_branch_point_opt.unwrap_or_else(|| {
@@ -221,13 +285,13 @@ macro_rules! with_seamless_branching {
               .unwrap_or_else(|| $this.ctxt.permissions_domain_at_point(after_point));
             dmn_before.diff(dmn_after)
           })
-        }).unwrap_or_else(|| {
-          // FIXME
-          panic!("this should not happen!")
-        });
-      filter_exec_commit!($this, id, visibility_here, {
-        intravisit::$k($this, target);
-      });
+        }) {
+          filter_exec_commit!($this, id, visibility_here, {
+            intravisit::$k($this, target);
+          });
+        } else {
+          log::warn!("No target location found for branch landing pad {}", hir.node_to_string(id));
+        }
     }
   }
 }
@@ -258,18 +322,23 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
   }
 
   fn visit_body(&mut self, body: &'tcx hir::Body) {
-    // TODO: I can see a version of this analysis that maps
-    // permission differences to Spans, instead of HirIds. This
-    // has a few advantages, but this case here is a good example.
-    // For a function which takes parameters, there's nowhere in
-    // the pointwise analysis that says "HERE is where that is live",
-    // they are just live coming in.
-    // Therefore, currently, there isn't a HirId we can attach this liveness to.
-    // What we could do, is split the body up into different spans, one of the
-    // spans being the entry `fn foo(...) {` and we can attach these differences
-    // there explicitly. This could also make conditionals slightly more accurate
-    // because the current version attaches differences to the expression itself,
-    // which isn't really what we want visually.
+    let body_id = body.value.hir_id;
+    let empty_domain = &self.domain_bottom();
+    self
+      .ir_mapper
+      .get_mir_locations(body_id, GatherDepth::Nested)
+      .iter()
+      .for_each(|mir_order| {
+        mir_order.entry_location().iter().for_each(|entry_loc| {
+          let entry_point = self.ctxt.location_to_point(*entry_loc);
+          let entry_domain = self.ctxt.permissions_domain_at_point(entry_point);
+          let d = empty_domain.diff(&entry_domain);
+          let id = body.id().hir_id;
+          let span = self.ctxt.tcx.hir().span(id).shrink_to_lo();
+          self.diff.insert(span, d);
+        })
+      });
+
     intravisit::walk_body(self, body);
   }
 

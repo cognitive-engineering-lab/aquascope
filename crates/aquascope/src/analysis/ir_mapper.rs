@@ -64,28 +64,29 @@ pub enum GatherDepth {
 
 #[derive(Debug)]
 pub struct MirOrderedLocations {
-  entry_block: BasicBlock,
+  entry_block: Option<BasicBlock>,
   exit_block: Option<BasicBlock>,
   // associated indices must remain sorted
   locations: HashMap<BasicBlock, Vec<usize>>,
 }
 
 impl MirOrderedLocations {
-  fn minimum(&self) -> Location {
-    let block = self.entry_block;
-    let statement_index = *self
-      .locations
-      .get(&block)
-      .expect("Block with no associated locations")
-      .first()
-      .unwrap();
-    Location {
-      block,
-      statement_index,
-    }
+  pub fn entry_location(&self) -> Option<Location> {
+    self.entry_block.map(|block| {
+      let statement_index = *self
+        .locations
+        .get(&block)
+        .expect("Block with no associated locations")
+        .first()
+        .unwrap();
+      Location {
+        block,
+        statement_index,
+      }
+    })
   }
 
-  fn maximum(&self) -> Option<Location> {
+  pub fn exit_location(&self) -> Option<Location> {
     self.exit_block.map(|block| {
       let statement_index = *self
         .locations
@@ -101,10 +102,9 @@ impl MirOrderedLocations {
   }
 
   pub fn get_entry_exit_locations(&self) -> Option<(Location, Location)> {
-    self.maximum().map(|mx| {
-      let m = self.minimum();
-      (m, mx)
-    })
+    self
+      .entry_location()
+      .and_then(|mn| self.exit_location().map(|mx| (mn, mx)))
   }
 
   pub fn values(&self) -> impl Iterator<Item = Location> + Captures<'_> {
@@ -240,14 +240,11 @@ where
 
     let basic_blocks = total_location_map.keys().collect::<Vec<_>>();
 
-    let entry_block = basic_blocks
-      .iter()
-      .find(|&&&b1| {
-        basic_blocks
-          .iter()
-          .all(|&&b2| b1 == b2 || self.dominators.is_dominated_by(b2, b1))
-      })
-      .unwrap();
+    let entry_block = basic_blocks.iter().find(|&&&b1| {
+      basic_blocks
+        .iter()
+        .all(|&&b2| b1 == b2 || self.dominators.is_dominated_by(b2, b1))
+    });
 
     let exit_block = basic_blocks.iter().find(|&&&b1| {
       basic_blocks.iter().all(|&&b2| {
@@ -263,7 +260,7 @@ where
     }
 
     Some(MirOrderedLocations {
-      entry_block: **entry_block,
+      entry_block: entry_block.map(|b| **b),
       exit_block: exit_block.map(|b| **b),
       locations: total_location_map,
     })
