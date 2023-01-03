@@ -7,7 +7,9 @@ import {
   StateField,
 } from "@codemirror/state";
 import { DecorationSet, EditorView } from "@codemirror/view";
+import _ from "lodash";
 
+import { renderInterpreter } from "./editor-utils/interpreter";
 import {
   IconField,
   LoanFacts,
@@ -28,14 +30,14 @@ import {
   BackendError,
   PermissionsBoundary,
   PermissionsDiffOutput,
+  Range,
 } from "./types";
 
 export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
 export { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 export * as types from "./types";
 
-const DEFAULT_SERVER_HOST = "127.0.0.1";
-const DEFAULT_SERVER_PORT = "8008";
+const DEFAULT_SERVER_URL = new URL("http://127.0.0.1:8008");
 
 type Result<T> = { Ok: T } | { Err: BackendError };
 
@@ -99,30 +101,104 @@ type ServerResponse = {
 // }
 // `;
 
+// `
+// fn main() {
+//   let mut a = Box::new(2);
+//   *a += 1;
+//   let b = a;
+//   println!("{b}");
+// }
+// `
+
+// `
+// fn main() {
+//   let n = 5;
+//   // L1
+//   let y = plus_one(n);
+//   // L3
+//   println!("The value of y is: {y}");
+// }
+
+// fn plus_one(x: i32) -> i32 {
+//   // L2
+//   x + 1
+// }
+// `
+
 export const defaultCodeExample: string = `
-trait Kill {
-  fn kill(self);
-}
-
-impl Kill for String {
-  fn kill(self) {}
-}
-
 fn main() {
-  let mut s1 = String::from("hi");
-  let mut s2 = String::from("hello");
+  \`[let n = 5;]\`
+  \`[let y = plus_one(n);]\`  
+  println!("The value of y is: {y}");
+}
 
-  // something here
-
-  s2.kill();
-  s1.kill();
-}`;
+\`[fn plus_one(x: i32)]\` -> i32 {  
+  x + 1
+}
+`.trim();
 
 let readOnly = new Compartment();
 let mainKeybinding = new Compartment();
 
+type ParseResult =
+  | { type: "ok"; code: string; ranges: Range[] }
+  | { type: "err"; error: string };
+
+let parseWithDelimiters = (
+  code: string,
+  delimiters: [string, string][]
+): ParseResult => {
+  let [open, close] = _.unzip(delimiters);
+  let makeCheck = (arr: string[]) => {
+    let r = new RegExp(`^${arr.map(s => _.escapeRegExp(s)).join("|")}`);
+    return (s: string) => {
+      let match = s.match(r);
+      return match ? match[0].length : null;
+    };
+  };
+  let [openCheck, closeCheck] = [makeCheck(open), makeCheck(close)];
+
+  let index = 0;
+  let inSeq = null;
+  let ranges: Range[] = [];
+  let outputCode = [];
+  let i = 0;
+  while (i < code.length) {
+    if (inSeq === null) {
+      let n = openCheck(code.substring(i));
+      if (n) {
+        i += n;
+        inSeq = index;
+        continue;
+      }
+    } else {
+      let n = closeCheck(code.substring(i));
+      if (n) {
+        i += n;
+        ranges.push({
+          char_start: inSeq!,
+          char_end: index,
+          byte_start: 0,
+          byte_end: 0,
+          filename: "",
+        });
+        inSeq = null;
+        continue;
+      }
+    }
+
+    index += 1;
+    outputCode.push(code[i]);
+    i += 1;
+  }
+
+  return { type: "ok", code: outputCode.join(""), ranges };
+};
+
 export class Editor {
   private view: EditorView;
+  private interpreterContainer: HTMLDivElement;
+  private markedRanges: Range[];
 
   public constructor(
     dom: HTMLElement,
@@ -133,15 +209,22 @@ export class Editor {
       console.log(err);
     },
     initialCode: string = defaultCodeExample,
-    readonly serverHost: string = DEFAULT_SERVER_HOST,
-    readonly serverPort: string = DEFAULT_SERVER_PORT,
+    readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false
   ) {
+    let parseResult = parseWithDelimiters(initialCode, [["`[", "]`"]]);
+    if (parseResult.type == "err") throw new Error(parseResult.error);
+
+    let resetMarkedRangesOnEdit = EditorView.updateListener.of(() => {
+      this.markedRanges = [];
+    });
+
     let initialState = EditorState.create({
-      doc: initialCode,
+      doc: parseResult.code,
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
+        resetMarkedRangesOnEdit,
         setup,
         rust(),
         indentUnit.of("  "),
@@ -152,10 +235,19 @@ export class Editor {
       ],
     });
 
+    this.markedRanges = parseResult.ranges;
+    console.debug("Marked ranges:", this.markedRanges);
+
+    let editorContainer = document.createElement("div");
     let initialView = new EditorView({
       state: initialState,
-      parent: dom,
+      parent: editorContainer,
     });
+
+    this.interpreterContainer = document.createElement("div");
+
+    dom.appendChild(editorContainer);
+    dom.appendChild(this.interpreterContainer);
 
     this.view = initialView;
   }
@@ -195,84 +287,62 @@ export class Editor {
       effects: [f.effectType.of(newEffects)],
     });
   }
-
   // Actions to communicate with the aquascope server
 
   async callBackendWithCode(endpoint: string): Promise<ServerResponse> {
     let inEditor = this.getCurrentCode();
-    let serverResponseRaw = await fetch(
-      `http://${this.serverHost}:${this.serverPort}/${endpoint}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          code: inEditor,
-        }),
-      }
-    );
+    let endpointUrl = new URL(endpoint, this.serverUrl);
+    let serverResponseRaw = await fetch(endpointUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        code: inEditor,
+      }),
+    });
     let serverResponse: ServerResponse = await serverResponseRaw.json();
     return serverResponse;
   }
 
-  async computePermissionSteps() {
-    let serverResponse = await this.callBackendWithCode("permission-diffs");
-    if (serverResponse.success) {
-      let out: Result<PermissionsDiffOutput> = JSON.parse(
-        serverResponse.stdout
-      );
-      if ("Ok" in out) {
+  async renderOperation(operation: string, out?: Result<any>, config?: any) {
+    if (!out) {
+      let serverResponse = await this.callBackendWithCode(operation);
+      if (serverResponse.success) {
+        out = JSON.parse(serverResponse.stdout);
         this.reportStdErr({
           type: "BuildError",
           error: serverResponse.stderr,
         });
-        let emptyFacts = {
-          loanPoints: {},
-          loanRegions: {},
-        };
-        return this.addPermissionsField(
-          coarsePermissionDiffs,
-          out.Ok,
-          emptyFacts
-        );
       } else {
-        return this.reportStdErr(out.Err);
+        return this.reportStdErr({
+          type: "BuildError",
+          error: serverResponse.stderr,
+        });
       }
-    } else {
-      return this.reportStdErr({
-        type: "BuildError",
-        error: serverResponse.stderr,
-      });
     }
-  }
 
-  async computeReceiverPermissions() {
-    let serverResponse = await this.callBackendWithCode("receiver-types");
-    if (serverResponse.success) {
-      let out: Result<AnalysisOutput<PermissionsBoundary>> = JSON.parse(
-        serverResponse.stdout
+    let result = (out as any).Ok;
+
+    if (operation == "interpreter") {
+      renderInterpreter(
+        this.view,
+        this.interpreterContainer,
+        result,
+        this.view.state.doc.toJSON().join("\n"),
+        this.markedRanges,
+        config
       );
-      if ("Ok" in out) {
-        this.reportStdErr({
-          type: "BuildError",
-          error: serverResponse.stderr,
-        });
-        let [facts, loanFacts] = generateAnalysisDecorationFacts(out.Ok);
-        this.addAnalysisFacts(loanFacts);
-        return this.addPermissionsField(
-          receiverPermissionsField,
-          out.Ok.values,
-          facts
-        );
-      } else {
-        return this.reportStdErr(out.Err);
-      }
-    } else {
-      return this.reportStdErr({
-        type: "BuildError",
-        error: serverResponse.stderr,
-      });
+    } else if (operation == "permission-diffs") {
+      let emptyFacts = {
+        loanPoints: {},
+        loanRegions: {},
+      };
+      this.addPermissionsField(coarsePermissionDiffs, result, emptyFacts);
+    } else if (operation == "receiver-types") {
+      let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
+      this.addAnalysisFacts(loanFacts);
+      this.addPermissionsField(receiverPermissionsField, result.values, facts);
     }
   }
 }

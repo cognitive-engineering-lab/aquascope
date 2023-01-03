@@ -23,6 +23,17 @@ export { PermissionsStateStep } from "./bindings/PermissionsStateStep";
 export { PermissionsDiff } from "./bindings/PermissionsDiff";
 export { PermissionsDataDiff } from "./bindings/PermissionsDataDiff";
 
+export { MMemorySegment } from "./bindings/MMemorySegment";
+export { MPathSegment } from "./bindings/MPathSegment";
+export { MPath } from "./bindings/MPath";
+export { MValue } from "./bindings/MValue";
+export { MFrame } from "./bindings/MFrame";
+export { MStack } from "./bindings/MStack";
+export { MHeap } from "./bindings/MHeap";
+export { MStep } from "./bindings/MStep";
+export { MLocation } from "./bindings/MLocation";
+export { Abbreviated } from "./bindings/Abbreviated";
+
 interface BuildError {
   type: "BuildError";
   error: string;

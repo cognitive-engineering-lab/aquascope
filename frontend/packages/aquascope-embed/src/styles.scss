@@ -62,3 +62,34 @@
     }
   }
 }
+
+.step-marker {
+  background-color: var(--bg);
+  border-color: var(--fg);
+
+  > span {
+    color: var(--fg);
+  }
+}
+
+.interpreter {
+  background: var(--bg);
+
+  .step {
+    .header .header-bg {
+      background: var(--bg);
+    }
+  }
+  
+  table {
+    margin: 0;
+    
+    tbody tr:nth-child(2n) {
+      background: inherit;
+    }
+    
+    td {
+      padding: 2px 4px;
+    }
+  }
+}

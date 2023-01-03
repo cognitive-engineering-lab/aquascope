@@ -30,12 +30,17 @@ pub struct AquascopePluginArgs {
 
 #[derive(Debug, Subcommand, Serialize, Deserialize)]
 enum AquascopeCommand {
-  VisMethodCalls {
+  ReceiverTypes {
     #[clap(last = true)]
     flags: Vec<String>,
   },
 
-  CoarsePermSteps {
+  PermissionDiffs {
+    #[clap(last = true)]
+    flags: Vec<String>,
+  },
+
+  Interpreter {
     #[clap(last = true)]
     flags: Vec<String>,
   },
@@ -90,8 +95,9 @@ impl RustcPlugin for AquascopePlugin {
     };
 
     let flags = match &args.command {
-      VisMethodCalls { flags } => flags,
-      CoarsePermSteps { flags } => flags,
+      ReceiverTypes { flags } => flags,
+      PermissionDiffs { flags } => flags,
+      Interpreter { flags } => flags,
       _ => unreachable!(),
     };
 
@@ -111,12 +117,23 @@ impl RustcPlugin for AquascopePlugin {
     match plugin_args.command {
       // TODO rename the command because it will eventually show *all* permissions
       // and not just those for method calls.
-      VisMethodCalls { .. } => postprocess(run(
+      ReceiverTypes { .. } => postprocess(run(
         crate::permissions::permission_boundaries,
         &compiler_args,
       )),
-      CoarsePermSteps { .. } => {
+      PermissionDiffs { .. } => {
         postprocess(run(crate::permissions::permission_diffs, &compiler_args))
+      }
+      Interpreter { .. } => {
+        let mut callbacks =
+          aquascope::interpreter::InterpretCallbacks::default();
+        let _ = run_with_callbacks(&compiler_args, &mut callbacks);
+        postprocess(
+          callbacks
+            .result
+            .unwrap()
+            .map_err(|e| AquascopeError::AnalysisError(e.to_string())),
+        )
       }
       _ => unreachable!(),
     }

@@ -10,14 +10,17 @@ use bollard::{
 use futures::StreamExt;
 use serde::Serialize;
 use snafu::prelude::*;
+#[cfg(feature = "no-docker")]
+use std::fs;
 use std::process::Command;
 use std::{
-    env, fs, io, iter,
+    env, io, iter,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     str,
     sync::Arc,
 };
+#[cfg(feature = "no-docker")]
 use tempfile::{tempdir, TempDir};
 
 const DEFAULT_IMAGE: &str = "aquascope";
@@ -370,6 +373,24 @@ impl Container {
         })
     }
 
+    pub async fn interpreter(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
+        self.write_source_code(&req.code).await?;
+
+        let mut cmd = self.interpreter_command();
+
+        let (stdout, stderr) = self.exec_output(&mut cmd).await?;
+
+        Ok(ServerResponse {
+            // XXX: we'll assume that if there was anything on `stdout`
+            // then there's something successful to report. Thid does not
+            // mean that `stderr` was empty and all things there shouldn't
+            // go unreported.
+            success: !stdout.trim().is_empty(),
+            stdout,
+            stderr,
+        })
+    }
+
     // -------------
     // Commands
 
@@ -377,7 +398,7 @@ impl Container {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
-        cmd.args(["--quiet", "aquascope", "vis-method-calls"])
+        cmd.args(["--quiet", "aquascope", "receiver-types"])
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {
@@ -391,7 +412,21 @@ impl Container {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
-        cmd.args(["--quiet", "aquascope", "coarse-perm-steps"])
+        cmd.args(["--quiet", "aquascope", "permission-diffs"])
+            .current_dir(cwd);
+
+        if cfg!(feature = "no-docker") {
+            let _ = cmd.env("RUST_LOG", "debug").env("RUST_BACKTRACE", "1");
+        }
+
+        cmd
+    }
+
+    fn interpreter_command(&self) -> Command {
+        let cwd = self.cwd();
+
+        let mut cmd = Command::new("cargo");
+        cmd.args(["--quiet", "aquascope", "interpreter"])
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {

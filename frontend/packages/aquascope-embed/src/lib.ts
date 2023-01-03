@@ -10,8 +10,7 @@ import "./styles.scss";
 // What Gavin thinks the example usage of this is:
 //
 // <pre class="aquascope"
-//      data-server-host="127.0.0.1"
-//      data-server-port="8008"
+//      data-server-url="http://127.0.0.1:8008"
 //      data-no-interact="true"
 //      >
 // fn main() {
@@ -24,9 +23,9 @@ import "./styles.scss";
 // be *read only* (because no-interact is true).
 let initEditors = () => {
   // embedded aquascope editors should be <div> tags with the class 'aquascope'
-  document.querySelectorAll<HTMLElement>(".aquascope").forEach(elem => {
-    // the containing html element
-    let pre = elem;
+  document.querySelectorAll<HTMLElement>(".aquascope-embed").forEach(elem => {
+    elem.classList.remove("aquascope-embed");
+    elem.classList.add("aquascope");
 
     // container for the button
     let btnWrap = document.createElement("div");
@@ -36,18 +35,18 @@ let initEditors = () => {
     let computePermBtn = document.createElement("button");
     computePermBtn.className = "fa fa-refresh cm-button";
 
-    let initialCode = pre.textContent!.trim();
-    pre.textContent = "";
+    let initialCode = JSON.parse(elem.dataset.code!);
 
     btnWrap.appendChild(computePermBtn);
-    pre.appendChild(btnWrap);
+    elem.appendChild(btnWrap);
 
-    let serverHost = pre.dataset.serverHost!;
-    let serverPort = pre.dataset.serverPort!;
-    let readOnly = pre.dataset.noInteract! == "true";
+    let serverUrl = elem.dataset.serverUrl
+      ? new URL(elem.dataset.serverUrl)
+      : undefined;
+    let readOnly = elem.dataset.noInteract! == "true";
 
     let ed = new Editor(
-      pre,
+      elem,
       setup,
       [receiverPermissionsField.stateField, coarsePermissionDiffs.stateField],
       err => {
@@ -56,19 +55,26 @@ let initEditors = () => {
         else console.error(err);
       },
       initialCode,
-      serverHost,
-      serverPort,
+      serverUrl,
       readOnly
     );
 
-    computePermBtn.addEventListener("click", _ => {
-      ed.computeReceiverPermissions();
-      ed.computePermissionSteps();
-    });
+    let operation = elem.dataset.operation;
+    if (operation) {
+      let response = elem.dataset.response
+        ? JSON.parse(elem.dataset.response)
+        : undefined;
 
-    // start loading the permissions
-    ed.computeReceiverPermissions();
-    ed.computePermissionSteps();
+      let config = elem.dataset.config
+        ? JSON.parse(elem.dataset.config)
+        : undefined;
+
+      ed.renderOperation(operation, response, config);
+
+      computePermBtn.addEventListener("click", _ => {
+        ed.renderOperation(operation!);
+      });
+    }
   });
 };
 

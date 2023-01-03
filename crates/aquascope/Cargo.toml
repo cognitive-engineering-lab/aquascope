@@ -9,27 +9,27 @@ license = "MIT"
 [package.metadata.rust-analyzer]
 rustc_private = true
 
+[features]
+testing = ["lazy_static", "insta"]
+
 [dependencies]
 anyhow = "1.0.0"
 log = "0.4"
 itertools = "0.10.5"
 flowistry = "0.5.34"
-datafrog = "2.0.0"
-ts-rs = "6.2"
 serde = { version = "1.0", features = ["derive"] }
-
-# testing
-lazy_static = "1.4"
+ts-rs = "6.2"
 regex = "1"
 
+# interpret module
+miri = {git = "https://github.com/rust-lang/miri.git", rev = "98ad06d856abb9b85ef1e3b234c2370076873b1b"}
+aquascope_workspace_utils = { path = "../aquascope_workspace_utils" }
+
+# testing
+lazy_static = { version = "1.4", optional = true }
+insta = { version = "1.22.0", features = ["json", "yaml", "redactions"], optional = true }
+
 [dev-dependencies]
+aquascope = { path = ".", features = ["testing"] }
 env_logger = "0.9.3"
-insta = { version = "1.22.0", features = ["json", "yaml", "redactions"] }
 test-log = "0.2.11"
-
-# Make snapshot testing faster
-[profile.dev.package.insta]
-opt-level = 3
-
-[profile.dev.package.similar]
-opt-level = 3

@@ -2,19 +2,21 @@
 skip_core_tasks = true
 default_to_workspace = false
 
-[tasks.watch-cargo]
+[tasks.watch-front]
 script = "cargo watch -x 'install --path crates/aquascope_front --debug --offline'"
-install_crate = { crate_name = "cargo-watch" }
+
+[tasks.watch-mdbook]
+script = "cargo watch -x 'install --path crates/mdbook-aquascope --debug --offline'"
 
 [tasks.watch-server]
 script = "cargo run --features=no-docker"
 
 [tasks.watch.run_task]
-name = ["watch-cargo", "watch-server"]
+name = ["watch-front", "watch-server", "watch-mdbook"]
 parallel = true
 
 [tasks.init-bindings]
 script = """
-cargo test export_bindings
+cargo test -p aquascope export_bindings
 mkdir -p frontend/packages/aquascope-editor/src/bindings
 cp crates/**/bindings/* frontend/packages/aquascope-editor/src/bindings"""
