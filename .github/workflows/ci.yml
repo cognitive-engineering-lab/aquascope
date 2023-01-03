@@ -19,6 +19,7 @@ jobs:
           version: latest
           use-tool-cache: true
       - run: npm install -g graco && cd frontend && graco prepare
+      - run: cargo miri setup
       - uses: actions-rs/cargo@v1
         with:
           command: insta

@@ -426,7 +426,7 @@ impl Container {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
-        cmd.args(["--quiet", "aquascope", "interpret"])
+        cmd.args(["--quiet", "aquascope", "interpreter"])
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {

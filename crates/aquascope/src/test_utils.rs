@@ -24,7 +24,7 @@ use crate::{
     permissions::{Permissions, PermissionsDataDiff},
   },
   errors,
-  interpreter::{self, get_miri_sysroot, MStep},
+  interpreter::{self, MStep},
 };
 
 struct StringLoader(String);
@@ -305,7 +305,7 @@ pub fn test_interpreter_in_file(
     let input = load_test_from_file(path)?;
     let args = format!(
       "--crate-type bin --sysroot {}",
-      get_miri_sysroot()?.display()
+      aquascope_workspace_utils::miri_sysroot()?.display()
     );
     compile(input, &args, |tcx| {
       let name = path.file_name().unwrap().to_string_lossy().to_string();

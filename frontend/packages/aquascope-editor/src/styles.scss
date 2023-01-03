@@ -159,10 +159,11 @@ $monospace: "Source Code Pro", monospace;
 
 .interpreter {
   background: white;
-  padding: 1em;
+  padding: 1rem;
   display: flex;
   gap: 30px;
   flex-wrap: wrap;
+  overflow-x: auto;
 
   .step {
     // border: 1px solid #ccc;
@@ -207,13 +208,13 @@ $monospace: "Source Code Pro", monospace;
     .memory-container {
       display: flex;
       flex-direction: row;
-      gap: 100px;
+      gap: 80px;
       padding-left: 10px;
       
       .memory {
         flex: 1;
         border: 1px dashed #ccc;
-        padding: 0.5em;              
+        padding: 0.7rem;              
         height: max-content;
 
         .frames {

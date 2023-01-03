@@ -136,18 +136,18 @@ impl SimplePreprocessor for AquascopePreprocessor {
       Ok(stdout.trim_end().to_string())
     };
 
-    let miri_sysroot = aquascope::interpreter::get_miri_sysroot()?;
+    let miri_sysroot = aquascope_workspace_utils::miri_sysroot()?;
 
     let output = run_and_get_output(Command::new("rustup").args([
       "which",
       "--toolchain",
-      aquascope::interpreter::toolchain(),
+      &aquascope_workspace_utils::toolchain()?,
       "rustc",
     ]))?;
     let rustc = PathBuf::from(output);
 
     let output = run_and_get_output(
-      Command::new(rustc).args(["--print", "target-libdir"]),
+      Command::new(&rustc).args(["--print", "target-libdir"]),
     )?;
     let target_libdir = PathBuf::from(output);
 

@@ -7,7 +7,13 @@ import {
 } from "@codemirror/view";
 import LeaderLine from "leader-line-new";
 import _ from "lodash";
-import React, { CSSProperties, useContext, useEffect, useRef } from "react";
+import React, {
+  CSSProperties,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import ReactDOM from "react-dom/client";
 
 import {
@@ -203,17 +209,25 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
   </div>
 );
 
-let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
-  let ref = useRef<HTMLDivElement | null>(null);
+let StepView = ({
+  container,
+  step,
+  index,
+}: {
+  container: React.RefObject<HTMLDivElement>;
+  step: MStep<Range>;
+  index: number;
+}) => {
+  let ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    let container = ref.current!;
-    let pointers = container.querySelectorAll<HTMLSpanElement>(".pointer");
+    let stepContainer = ref.current!;
+    let pointers = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
     let color = getComputedStyle(document.body).getPropertyValue("--fg")
       ? "var(--fg)"
       : "black";
     let lines = Array.from(pointers).map(src => {
       let dstSel = src.dataset.pointTo!;
-      let dst = container.querySelector(dstSel);
+      let dst = stepContainer.querySelector(dstSel);
       if (!dst)
         throw new Error(
           `Could not find endpoint for pointer selector: ${dstSel}`
@@ -230,11 +244,15 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
       });
     });
 
-    let resizeListener = () => lines.forEach(line => line.position());
-    window.addEventListener("resize", resizeListener);
+    let reposition = () => lines.forEach(line => line.position());
+    window.addEventListener("resize", reposition);
+
+    let interpreterContainer = container.current!;
+    interpreterContainer.addEventListener("scroll", reposition);
 
     return () => {
-      window.removeEventListener("resize", resizeListener);
+      window.removeEventListener("resize", reposition);
+      interpreterContainer.removeEventListener("scroll", reposition);
       lines.forEach(line => line.remove());
     };
   }, []);
@@ -247,6 +265,22 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
         <StackView stack={step.stack} />
         {step.heap.locations.length > 0 ? <HeapView heap={step.heap} /> : null}
       </div>
+    </div>
+  );
+};
+
+let InterpreterView = ({ steps }: { steps: MStep<Range>[] }) => {
+  let ref = useRef<HTMLDivElement>(null);
+  let config = useContext(ConfigContext);
+  let flexDirection: CSSProperties["flexDirection"] = config.horizontal
+    ? "row"
+    : "column";
+
+  return (
+    <div ref={ref} className="interpreter" style={{ flexDirection }}>
+      {steps.map((step, i) => (
+        <StepView key={i} index={i} step={step} container={ref} />
+      ))}
     </div>
   );
 };
@@ -330,18 +364,10 @@ export function renderInterpreter(
     });
   }
 
-  let flexDirection: CSSProperties["flexDirection"] = config.horizontal
-    ? "row"
-    : "column";
-
   root.render(
     <CodeContext.Provider value={contents}>
       <ConfigContext.Provider value={config}>
-        <div className="interpreter" style={{ flexDirection }}>
-          {steps.map((step, i) => (
-            <StepView key={i} index={i} step={step} />
-          ))}
-        </div>
+        <InterpreterView steps={steps} />
       </ConfigContext.Provider>
     </CodeContext.Provider>
   );
