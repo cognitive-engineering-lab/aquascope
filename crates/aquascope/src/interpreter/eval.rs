@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use either::Either;
 use flowistry::mir::utils::PlaceExt;
 use miri::{
-  Immediate, InterpCx, InterpResult, LocalValue, Machine, MiriConfig,
+  AllocId, Immediate, InterpCx, InterpResult, LocalValue, Machine, MiriConfig,
   MiriMachine, Operand,
 };
 use rustc_hir::def_id::DefId;
@@ -18,7 +18,7 @@ use rustc_target::abi::Size;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::mvalue::{MLocation, MValue};
+use super::mvalue::{MPath, MValue, MMemorySegment};
 use crate::Range;
 
 #[derive(Serialize, Deserialize, Debug, TS)]
@@ -51,13 +51,11 @@ pub struct MStep<L> {
   pub heap: MHeap,
 }
 
-pub(crate) type Addr = Size;
-
 #[derive(Default)]
 pub(crate) struct MemoryMap {
   pub(crate) heap: MHeap,
-  pub(crate) place_to_loc: HashMap<Addr, MLocation>,
-  pub(crate) stack_slots: HashMap<Addr, (usize, String)>,
+  pub(crate) place_to_loc: HashMap<AllocId, MMemorySegment>,
+  pub(crate) stack_slots: HashMap<AllocId, (usize, String)>,
 }
 
 pub struct VisEvaluator<'mir, 'tcx> {
@@ -138,9 +136,10 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
           Operand::Immediate(Immediate::Uninit) => return None,
           Operand::Indirect(mplace) => {
             let mut memory_map = self.memory_map.borrow_mut();
+            let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
             memory_map
               .stack_slots
-              .insert(mplace.ptr.addr(), (index, name.clone()));
+              .insert(alloc_id, (index, name.clone()));
           }
           _ => {}
         };

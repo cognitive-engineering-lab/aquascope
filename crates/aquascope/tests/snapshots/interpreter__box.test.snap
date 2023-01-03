@@ -21,9 +21,11 @@ description: box.test
           - - x
             - type: Pointer
               value:
-                type: Heap
-                value:
-                  index: 0
+                segment:
+                  type: Heap
+                  value:
+                    index: 0
+                parts: []
   heap:
     locations:
       - type: Int
@@ -47,9 +49,11 @@ description: box.test
           - - x
             - type: Pointer
               value:
-                type: Heap
-                value:
-                  index: 0
+                segment:
+                  type: Heap
+                  value:
+                    index: 0
+                parts: []
   heap:
     locations:
       - type: Int
@@ -73,15 +77,19 @@ description: box.test
           - - x
             - type: Pointer
               value:
-                type: Heap
-                value:
-                  index: 0
+                segment:
+                  type: Heap
+                  value:
+                    index: 0
+                parts: []
           - - y
             - type: Pointer
               value:
-                type: Heap
-                value:
-                  index: 0
+                segment:
+                  type: Heap
+                  value:
+                    index: 0
+                parts: []
   heap:
     locations:
       - type: Int

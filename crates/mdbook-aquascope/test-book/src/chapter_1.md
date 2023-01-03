@@ -1,9 +1,15 @@
 # Chapter 1
 
-```aquascope,interpreter,horizontal=true
+```aquascope,interpreter
 fn main() {
-    let a = Box::new([0; 1_000_000]);
-    let b = a;
+    let m1 = String::from("Hello");
+    let m2 = String::from("world");`[]`
+    greet(&m1, &m2);`[]` // note the ampersands
+    let n = m1.len() + m2.len();
+}
+
+fn greet(g1: &String, g2: &String) { // note the ampersands
+    `[]`println!("{} {}!", g1, g2);
 }
 ```
 

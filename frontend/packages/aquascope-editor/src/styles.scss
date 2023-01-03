@@ -169,7 +169,6 @@ $monospace: "Source Code Pro", monospace;
     // border: 1px solid #ccc;
     // padding: 0.5em;
     // border-radius: 8px;
-    width: max-content;
 
     .header {
       position: relative;
@@ -196,7 +195,7 @@ $monospace: "Source Code Pro", monospace;
 
       .step-marker {
         font-size: 18px;
-        font-family: $monospace;        
+        font-family: $monospace;
       }
     }
 
@@ -211,8 +210,7 @@ $monospace: "Source Code Pro", monospace;
       gap: 80px;
       padding-left: 10px;
       
-      .memory {
-        flex: 1;
+      .memory {        
         border: 1px dashed #ccc;
         padding: 0.7rem;              
         height: max-content;

@@ -6,7 +6,10 @@ use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
 use rustc_middle::{
   mir::interpret::Provenance,
-  ty::{layout::LayoutOf, AdtKind, FieldDef, Ty, TyKind},
+  ty::{
+    layout::{LayoutOf, TyAndLayout},
+    AdtKind, FieldDef, Ty, TyKind,
+  },
 };
 use rustc_target::abi::Size;
 use rustc_type_ir::FloatTy;
@@ -18,12 +21,27 @@ use super::eval::VisEvaluator;
 #[derive(Serialize, Deserialize, Clone, Debug, TS, PartialEq)]
 #[serde(tag = "type", content = "value")]
 #[ts(export)]
-pub enum MLocation {
+pub enum MMemorySegment {
   Stack { frame: usize, local: String },
   Heap { index: usize },
 }
 
-const ABBREV_MAX: u64 = 10;
+#[derive(Serialize, Deserialize, Clone, Debug, TS, PartialEq)]
+#[serde(tag = "type", content = "value")]
+#[ts(export)]
+pub enum MPathSegment {
+  Field(usize),
+  Index(usize),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, TS, PartialEq)]
+#[ts(export)]
+pub struct MPath {
+  segment: MMemorySegment,
+  parts: Vec<MPathSegment>,
+}
+
+const ABBREV_MAX: u64 = 12;
 
 #[derive(Serialize, Deserialize, Debug, TS, PartialEq)]
 #[serde(tag = "type", content = "value")]
@@ -42,11 +60,21 @@ impl<T> Abbreviated<T> {
       let elts = (0 .. n).map(mk).collect::<InterpResult<'_, Vec<_>>>()?;
       Ok(Abbreviated::All(elts))
     } else {
-      let initial = (0 .. ABBREV_MAX)
+      let initial = (0 .. ABBREV_MAX - 1)
         .map(&mk)
         .collect::<InterpResult<'tcx, Vec<_>>>()?;
       let last = mk(n - 1)?;
       Ok(Abbreviated::Only(initial, Box::new(last)))
+    }
+  }
+
+  pub fn map<U>(self, f: impl Fn(T) -> U) -> Abbreviated<U> {
+    match self {
+      Abbreviated::All(v) => Abbreviated::All(v.into_iter().map(f).collect()),
+      Abbreviated::Only(initial, last) => Abbreviated::Only(
+        initial.into_iter().map(&f).collect(),
+        Box::new(f(*last)),
+      ),
     }
   }
 }
@@ -63,7 +91,7 @@ pub enum MValue {
   Float(f64),
 
   // General-purpose composites
-  Pointer(MLocation),
+  Pointer(MPath),
   Struct {
     name: String,
     fields: Vec<(String, MValue)>,
@@ -75,7 +103,7 @@ pub enum MValue {
   },
 
   // Special-case composites
-  String(String),
+  String(Abbreviated<u64>),
   Array(Abbreviated<MValue>),
 
   Unallocated,
@@ -118,13 +146,24 @@ where
   }
 }
 
-// fn calculate_hash<T: Hash>(t: &T) -> u64 {
-//   let mut s = DefaultHasher::new();
-//   t.hash(&mut s);
-//   s.finish()
-// }
-
 impl<'tcx> VisEvaluator<'_, 'tcx> {
+  fn get_path_segments(
+    &self,
+    layout: TyAndLayout<'tcx>,
+    offset: Size,
+  ) -> Vec<MPathSegment> {
+    let ty = layout.ty;
+    match ty.kind() {
+      _ if ty.is_str() => {
+        let FieldsShape::Array { stride, .. } = layout.layout.fields() else { unreachable!() };
+        let index = offset.bytes() / stride.bytes();
+        vec![MPathSegment::Index(index as usize)]
+      }
+      _ if offset != Size::ZERO => unimplemented!("{ty:?}"),
+      _ => Vec::new(),
+    }
+  }
+
   fn add_alloc(
     &self,
     mplace: miri::MPlaceTy<'tcx, miri::Provenance>,
@@ -133,37 +172,36 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
     ) -> InterpResult<'tcx, MValue>,
   ) -> InterpResult<'tcx, MValue> {
     let addr = mplace.ptr.addr();
-    let memory_kind = match mplace.ptr.provenance {
-      Some(miri::Provenance::Concrete { alloc_id, .. }) => {
-        let (memory_kind, _) =
-          self.ecx.memory.alloc_map().get(alloc_id).unwrap();
-        memory_kind
-      }
-      _ => unreachable!(),
-    };
-    let already_found =
-      self.memory_map.borrow().place_to_loc.contains_key(&addr);
+    let (alloc_id, offset, _) = self.ecx.ptr_get_alloc_id(mplace.ptr)?;
+    let (memory_kind, _) = self.ecx.memory.alloc_map().get(alloc_id).unwrap();
+    let already_found = self
+      .memory_map
+      .borrow()
+      .place_to_loc
+      .contains_key(&alloc_id);
     if !already_found {
       let mvalue = postprocess(mplace)?;
       let mut memory_map = self.memory_map.borrow_mut();
-      let location = match memory_kind {
+      let segment = match memory_kind {
         MemoryKind::Stack => {
-          let (frame, local) = memory_map.stack_slots[&addr].clone();
-          MLocation::Stack { frame, local }
+          let (frame, local) = memory_map.stack_slots[&alloc_id].clone();
+          MMemorySegment::Stack { frame, local }
         }
         MemoryKind::Machine(..) => {
           let index = memory_map.heap.locations.len();
           memory_map.heap.locations.push(mvalue);
-          MLocation::Heap { index }
+          MMemorySegment::Heap { index }
         }
         _ => unimplemented!(),
       };
-
-      memory_map.place_to_loc.insert(addr, location);
+      memory_map.place_to_loc.insert(alloc_id, segment);
     }
 
-    let location = self.memory_map.borrow().place_to_loc[&addr].clone();
-    Ok(MValue::Pointer(location))
+    let parts = self.get_path_segments(mplace.layout, offset);
+    let segment = self.memory_map.borrow().place_to_loc[&alloc_id].clone();
+    let path = MPath { segment, parts };
+
+    Ok(MValue::Pointer(path))
   }
 
   fn read_unique(
@@ -191,20 +229,14 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
     stride: Size,
     len: u64,
     el_ty: Ty<'tcx>,
-    postprocess: Option<&dyn Fn(MValue) -> MValue>,
   ) -> InterpResult<'tcx, MValue> {
     let read = |i: u64| {
       let offset = stride * i;
       let layout = self.ecx.layout_of(el_ty)?;
       let offset_place = base.offset(offset, layout, &self.ecx)?;
-      let value = self.read(&offset_place.into())?;
-      Ok(match &postprocess {
-        Some(f) => f(value),
-        None => value,
-      })
+      self.read(&offset_place.into())
     };
     let values = Abbreviated::new(len, read)?;
-
     Ok(MValue::Array(values))
   }
 
@@ -212,18 +244,23 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
     &self,
     op: &OpTy<'tcx, miri::Provenance>,
     len: u64,
-    postprocess: Option<&dyn Fn(MValue) -> MValue>,
+    postprocess: Option<impl Fn(MValue) -> MValue>,
   ) -> InterpResult<'tcx, MValue> {
     let (_, ptr) = op.field_by_name("ptr", &self.ecx)?;
     self.read_unique(&ptr, |base| {
-      self.read_array(base, base.layout.size, len, base.layout.ty, postprocess)
+      let mut array =
+        self.read_array(base, base.layout.size, len, base.layout.ty)?;
+      Ok(match postprocess {
+        Some(f) => f(array),
+        None => array,
+      })
     })
   }
 
   fn read_vec(
     &self,
     op: &OpTy<'tcx, miri::Provenance>,
-    postprocess: Option<&dyn Fn(MValue) -> MValue>,
+    postprocess: Option<impl Fn(MValue) -> MValue>,
   ) -> InterpResult<'tcx, MValue> {
     let (_, buf) = op.field_by_name("buf", &self.ecx)?;
     let (_, len) = op.field_by_name("len", &self.ecx)?;
@@ -253,12 +290,16 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
               self.read_vec(
                 &vec,
                 Some(&|v: MValue| {
-                  let MValue::Uint(c) = v else { unreachable!() };
-                  MValue::Char(String::from(char::from(c as u8)))
+                  let MValue::Array(values) = v else { unreachable!() };
+                  let chars = values.map(|el| {
+                    let MValue::Uint(c) = el else { unreachable!() };
+                    c
+                  });
+                  MValue::String(chars)
                 }),
               )?
             }
-            "Vec" => self.read_vec(op, None)?,
+            "Vec" => self.read_vec(op, Option::<fn(_) -> _>::None)?,
             _ => {
               let fields = adt_def
                 .all_fields()
@@ -328,13 +369,19 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
       TyKind::Array(el_ty, _) => {
         let base = op.assert_mem_place();
         let FieldsShape::Array { stride, count } = base.layout.layout.fields() else { unreachable!() };
-        self.read_array(base, *stride, *count, *el_ty, None)?
+        self.read_array(base, *stride, *count, *el_ty)?
       }
 
       _ if ty.is_str() => {
         let mplace = op.assert_mem_place();
         self.add_alloc(mplace, |mplace| {
-          Ok(MValue::String(self.ecx.read_str(&mplace)?.to_string()))
+          let length = mplace.meta.unwrap_meta().to_u64()?;
+          eprintln!("{length}");
+          let s = self.ecx.read_str(&mplace)?;
+          let chars = s.chars().collect::<Vec<_>>();
+          let abbrev =
+            Abbreviated::new(s.len() as u64, |i| Ok(chars[i as usize] as u64))?;
+          Ok(MValue::String(abbrev))
         })?
       }
 

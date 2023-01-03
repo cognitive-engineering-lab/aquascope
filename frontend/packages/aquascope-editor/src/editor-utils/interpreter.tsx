@@ -34,6 +34,7 @@ interface InterpreterConfig {
 
 let ConfigContext = React.createContext<InterpreterConfig>({});
 let CodeContext = React.createContext("");
+let PathContext = React.createContext("");
 
 let codeRange = (code: string, range: Range) => {
   return code.slice(range.char_start, range.char_end);
@@ -50,24 +51,48 @@ let intersperse = <T,>(arr: T[], sep: T): T[] => {
   return outp;
 };
 
-let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) =>
-  value.type == "All" ? (
+let AbbreviatedView = <T,>({
+  value,
+  renderEl,
+  sep = ",",
+}: {
+  value: Abbreviated<T>;
+  renderEl: (t: T) => JSX.Element;
+  sep?: string;
+}) => {
+  let path = useContext(PathContext);
+  let IndexedContainer: React.FC<
+    React.PropsWithChildren<{ index: number }>
+  > = ({ children, index }) => (
+    <span className={`${path}-index-${index}`} data-connector="bottom">
+      {children}
+    </span>
+  );
+  // TODO: handle indexes into abbreviated + end regions
+  return value.type == "All" ? (
     <>
       {intersperse(
-        value.value.map((el, i) => <ValueView key={i} value={el} />),
-        <>,</>
+        value.value.map((el, i) => (
+          <IndexedContainer index={i}>{renderEl(el)}</IndexedContainer>
+        )),
+        <>{sep}</>
       )}
     </>
   ) : (
     <>
       {intersperse(
-        value.value[0].map((el, i) => <ValueView key={i} value={el} />),
-        <>,</>
+        value.value[0].map((el, i) => (
+          <IndexedContainer index={i}>{renderEl(el)}</IndexedContainer>
+        )),
+        <>{sep}</>
       )}
-      ,...,
-      <ValueView value={value.value[1]} />
+      {sep}...{sep}
+      <IndexedContainer index={100}>
+        {renderEl(value.value[1])}
+      </IndexedContainer>
     </>
   );
+};
 
 let ValueView = ({ value }: { value: MValue }) => (
   <>
@@ -75,8 +100,7 @@ let ValueView = ({ value }: { value: MValue }) => (
     value.type == "Char" ||
     value.type == "Uint" ||
     value.type == "Int" ||
-    value.type == "Float" ||
-    value.type == "String" ? (
+    value.type == "Float" ? (
       value.value.toString()
     ) : value.type == "Struct" ? (
       <>
@@ -113,10 +137,14 @@ let ValueView = ({ value }: { value: MValue }) => (
     ) : value.type == "Pointer" ? (
       (() => {
         let ptr = value.value;
-        let pointTo =
-          ptr.type == "Heap"
-            ? `.heap-${ptr.value.index}`
-            : `.stack-${ptr.value.frame}-${ptr.value.local}`;
+        let segment =
+          ptr.segment.type == "Heap"
+            ? `heap-${ptr.segment.value.index}`
+            : `stack-${ptr.segment.value.frame}-${ptr.segment.value.local}`;
+        let parts = ptr.parts.map(part =>
+          part.type == "Index" ? `index-${part.value}` : `field-${part.value}`
+        );
+        let pointTo = [segment, ...parts].join("-");
         return (
           <span className="pointer" data-point-to={pointTo}>
             ●
@@ -125,8 +153,19 @@ let ValueView = ({ value }: { value: MValue }) => (
       })()
     ) : value.type == "Array" ? (
       <>
-        [<AbbreviatedView value={value.value} />]
+        [
+        <AbbreviatedView
+          value={value.value}
+          renderEl={el => <ValueView value={el} />}
+        />
+        ]
       </>
+    ) : value.type == "String" ? (
+      <AbbreviatedView
+        value={value.value}
+        renderEl={el => <>{String.fromCharCode(Number(el))}</>}
+        sep={""}
+      />
     ) : value.type == "Unallocated" ? (
       <>X</>
     ) : (
@@ -147,14 +186,19 @@ let LocalsView = ({
   ) : (
     <table>
       <tbody>
-        {locals.map(([key, value], i) => (
-          <tr key={i}>
-            <td>{key}</td>
-            <td className={`stack-${index}-${key}`}>
-              <ValueView value={value} />
-            </td>
-          </tr>
-        ))}
+        {locals.map(([key, value], i) => {
+          let path = `stack-${index}-${key}`;
+          return (
+            <tr key={i}>
+              <td>{key}</td>
+              <td className={path} data-connector="right">
+                <PathContext.Provider value={path}>
+                  <ValueView value={value} />
+                </PathContext.Provider>
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -197,13 +241,18 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
     <Header className="memory-header">Heap</Header>
     <table>
       <tbody>
-        {heap.locations.map((value, i) => (
-          <tr key={i}>
-            <td className={`heap-${i}`}>
-              <ValueView value={value} />
-            </td>
-          </tr>
-        ))}
+        {heap.locations.map((value, i) => {
+          let path = `heap-${i}`;
+          return (
+            <tr key={i}>
+              <td className={path} data-connector="left">
+                <PathContext.Provider value={path}>
+                  <ValueView value={value} />
+                </PathContext.Provider>
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   </div>
@@ -227,20 +276,22 @@ let StepView = ({
       : "black";
     let lines = Array.from(pointers).map(src => {
       let dstSel = src.dataset.pointTo!;
-      let dst = stepContainer.querySelector(dstSel);
+      let dst = stepContainer.querySelector<HTMLElement>("." + dstSel);
       if (!dst)
         throw new Error(
           `Could not find endpoint for pointer selector: ${dstSel}`
         );
-      let endSocket: "right" | "left" = dstSel.startsWith(".stack")
-        ? "right"
-        : "left";
-      return new LeaderLine(src, dst, {
+      let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+      let dstAnchor = dstSel.startsWith("stack")
+        ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
+        : dst;
+      return new LeaderLine(src, dstAnchor, {
         color,
         size: 1,
         endPlugSize: 2,
         startSocket: "right",
         endSocket,
+        // path: "grid",
       });
     });
 
