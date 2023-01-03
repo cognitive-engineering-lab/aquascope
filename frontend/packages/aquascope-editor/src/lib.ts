@@ -282,7 +282,7 @@ export class Editor {
     return serverResponse;
   }
 
-  async renderOperation(operation: string, out?: Result<any>) {
+  async renderOperation(operation: string, out?: Result<any>, config?: any) {
     if (!out) {
       let serverResponse = await this.callBackendWithCode(operation);
       if (serverResponse.success) {
@@ -307,7 +307,8 @@ export class Editor {
         this.interpreterContainer,
         result,
         this.view.state.doc.toJSON().join("\n"),
-        this.markedRanges
+        this.markedRanges,
+        config
       );
     } else if (operation == "permission-diffs") {
       this.addPermissionsField(coarsePermissionDiffs, result);

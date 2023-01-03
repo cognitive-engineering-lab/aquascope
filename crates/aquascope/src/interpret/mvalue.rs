@@ -295,11 +295,11 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
           TyKind::Char => MValue::Char(scalar.to_char()?.to_string()),
           TyKind::Uint(uty) => MValue::Uint(match uty.bit_width() {
             Some(width) => scalar.to_uint(Size::from_bits(width))? as u64,
-            None => scalar.to_machine_usize(&self.ecx)? as u64,
+            None => scalar.to_machine_usize(&self.ecx)?,
           }),
           TyKind::Int(ity) => MValue::Int(match ity.bit_width() {
             Some(width) => scalar.to_int(Size::from_bits(width))? as i64,
-            None => scalar.to_machine_isize(&self.ecx)? as i64,
+            None => scalar.to_machine_isize(&self.ecx)?,
           }),
           TyKind::Float(fty) => MValue::Float(match fty {
             FloatTy::F32 => f32::from_bits(scalar.to_f32()?.to_bits() as u32) as f64,
@@ -323,7 +323,7 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
       }
 
       _ if ty.is_any_ptr() => {
-        let mplace = self.ecx.deref_operand(&op)?;
+        let mplace = self.ecx.deref_operand(op)?;
         self.add_alloc(mplace, |mplace| self.read(&OpTy::from(mplace)))?
       }
 

@@ -24,9 +24,9 @@ import "./styles.scss";
 let initEditors = () => {
   // embedded aquascope editors should be <div> tags with the class 'aquascope'
   document.querySelectorAll<HTMLElement>(".aquascope-embed").forEach(elem => {
-    elem.classList.remove("aquascope-embed")
+    elem.classList.remove("aquascope-embed");
     elem.classList.add("aquascope");
-    
+
     // container for the button
     let btnWrap = document.createElement("div");
     btnWrap.classList.add("top-right");
@@ -65,7 +65,11 @@ let initEditors = () => {
         ? JSON.parse(elem.dataset.response)
         : undefined;
 
-      ed.renderOperation(operation, response);
+      let config = elem.dataset.config
+        ? JSON.parse(elem.dataset.config)
+        : undefined;
+
+      ed.renderOperation(operation, response, config);
 
       computePermBtn.addEventListener("click", _ => {
         ed.renderOperation(operation!);

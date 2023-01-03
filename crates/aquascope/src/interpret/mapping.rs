@@ -85,7 +85,7 @@ impl<'tcx> Mapper<'_, '_, 'tcx> {
             .collect::<Vec<_>>(),
         )
       })
-      .flat_map(|x| x)
+      .flatten()
       .collect();
 
     (hir.body_owner(body_id), body_mapping)

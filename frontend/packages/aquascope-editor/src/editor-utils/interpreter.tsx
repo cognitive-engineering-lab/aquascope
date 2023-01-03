@@ -7,7 +7,7 @@ import {
 } from "@codemirror/view";
 import LeaderLine from "leader-line-new";
 import _ from "lodash";
-import React, { useContext, useEffect, useRef } from "react";
+import React, { CSSProperties, useContext, useEffect, useRef } from "react";
 import ReactDOM from "react-dom/client";
 
 import {
@@ -22,7 +22,16 @@ import {
 
 const DEBUG: boolean = false;
 
+interface InterpreterConfig {
+  horizontal?: boolean;
+}
+
+let ConfigContext = React.createContext<InterpreterConfig>({});
 let CodeContext = React.createContext("");
+
+let codeRange = (code: string, range: Range) => {
+  return code.slice(range.char_start, range.char_end);
+};
 
 let intersperse = <T,>(arr: T[], sep: T): T[] => {
   let outp = [];
@@ -126,27 +135,40 @@ let LocalsView = ({
 }: {
   index: number;
   locals: [string, MValue][];
+}) =>
+  locals.length == 0 ? (
+    <div className="empty-frame">(empty frame)</div>
+  ) : (
+    <table>
+      <tbody>
+        {locals.map(([key, value], i) => (
+          <tr key={i}>
+            <td>{key}</td>
+            <td className={`stack-${index}-${key}`}>
+              <ValueView value={value} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+let Header: React.FC<React.PropsWithChildren<{ className: string }>> = ({
+  children,
+  className,
 }) => (
-  <table>
-    <tbody>
-      {locals.map(([key, value], i) => (
-        <tr key={i}>
-          <td>{key}</td>
-          <td className={`stack-${index}-${key}`}>
-            <ValueView value={value} />
-          </td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
+  <div className={`header ${className || ""}`}>
+    <div className="header-text">{children}</div>
+    <div className="header-bg" />
+  </div>
 );
 
 let FrameView = ({ index, frame }: { index: number; frame: MFrame<Range> }) => {
   let code = useContext(CodeContext);
-  let snippet = code.slice(frame.location.char_start, frame.location.char_end);
+  let snippet = codeRange(code, frame.location);
   return (
     <div className="frame">
-      <div className="frame-header">{frame.name}</div>
+      <Header className="frame-header">{frame.name}</Header>
       {DEBUG ? <pre>{snippet}</pre> : null}
       <LocalsView index={index} locals={frame.locals} />
     </div>
@@ -155,7 +177,7 @@ let FrameView = ({ index, frame }: { index: number; frame: MFrame<Range> }) => {
 
 let StackView = ({ stack }: { stack: MStack<Range> }) => (
   <div className="memory stack">
-    <div className="memory-header">Stack</div>
+    <Header className="memory-header">Stack</Header>
     <div className="frames">
       {stack.frames.map((frame, i) => (
         <FrameView key={i} index={i} frame={frame} />
@@ -166,7 +188,7 @@ let StackView = ({ stack }: { stack: MStack<Range> }) => (
 
 let HeapView = ({ heap }: { heap: MHeap }) => (
   <div className="memory heap">
-    <div className="memory-header">Heap</div>
+    <Header className="memory-header">Heap</Header>
     <table>
       <tbody>
         {heap.locations.map((value, i) => (
@@ -186,6 +208,9 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
   useEffect(() => {
     let container = ref.current!;
     let pointers = container.querySelectorAll<HTMLSpanElement>(".pointer");
+    let color = getComputedStyle(document.body).getPropertyValue("--fg")
+      ? "var(--fg)"
+      : "black";
     let lines = Array.from(pointers).map(src => {
       let dstSel = src.dataset.pointTo!;
       let dst = container.querySelector(dstSel);
@@ -197,14 +222,21 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
         ? "right"
         : "left";
       return new LeaderLine(src, dst, {
-        color: "black",
+        color,
         size: 1,
         endPlugSize: 2,
         startSocket: "right",
         endSocket,
       });
     });
-    return () => lines.forEach(line => line.remove());
+
+    let resizeListener = () => lines.forEach(line => line.position());
+    window.addEventListener("resize", resizeListener);
+
+    return () => {
+      window.removeEventListener("resize", resizeListener);
+      lines.forEach(line => line.remove());
+    };
   }, []);
   return (
     <div className="step">
@@ -273,7 +305,8 @@ export function renderInterpreter(
   container: HTMLDivElement,
   steps: MStep<Range>[],
   contents: string,
-  markedRanges: Range[]
+  markedRanges: Range[],
+  config: InterpreterConfig = {}
 ) {
   let root = ReactDOM.createRoot(container);
   if (markedRanges.length > 0) {
@@ -297,13 +330,19 @@ export function renderInterpreter(
     });
   }
 
+  let flexDirection: CSSProperties["flexDirection"] = config.horizontal
+    ? "row"
+    : "column";
+
   root.render(
-    <div className="interpreter">
-      <CodeContext.Provider value={contents}>
-        {steps.map((step, i) => (
-          <StepView key={i} index={i} step={step} />
-        ))}
-      </CodeContext.Provider>
-    </div>
+    <CodeContext.Provider value={contents}>
+      <ConfigContext.Provider value={config}>
+        <div className="interpreter" style={{ flexDirection }}>
+          {steps.map((step, i) => (
+            <StepView key={i} index={i} step={step} />
+          ))}
+        </div>
+      </ConfigContext.Provider>
+    </CodeContext.Provider>
   );
 }

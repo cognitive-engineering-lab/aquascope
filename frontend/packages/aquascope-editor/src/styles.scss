@@ -136,16 +136,16 @@ $monospace: "Source Code Pro", monospace;
   display: inline-block;
   border-radius: 4px;  
   padding: 0 2px;
-  background: var(--bg);
-  border: 1px solid var(--fg);
+  background: white;
+  border: 1px solid black;
 
   .cm-editor & {
-    margin: 0 6px;
+    margin: 2px 6px 0;
   }
 
   > span {
     font-size: 0.8em;
-    color: var(--fg);
+    color: black;
     vertical-align: middle;
     position: relative;
     bottom: 1px;
@@ -155,11 +155,10 @@ $monospace: "Source Code Pro", monospace;
 }
 
 .interpreter {
-  background: var(--bg);
+  background: white;
   padding: 1em;
   display: flex;
   gap: 30px;
-  flex-direction: column;  
   flex-wrap: wrap;
 
   .step {
@@ -167,6 +166,26 @@ $monospace: "Source Code Pro", monospace;
     // padding: 0.5em;
     // border-radius: 8px;
     width: max-content;
+
+    .header {
+      position: relative;
+
+      .header-text {
+        position: relative;
+        z-index: 12;
+      }
+
+      .header-bg {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 11;
+        background: white;
+        opacity: 0.8;
+      }
+    }
 
     .step-header {
       margin-bottom: 5px;
@@ -192,6 +211,7 @@ $monospace: "Source Code Pro", monospace;
         flex: 1;
         border: 1px dashed #ccc;
         padding: 0.5em;              
+        height: max-content;
 
         .frames {
           display: flex;
@@ -200,6 +220,10 @@ $monospace: "Source Code Pro", monospace;
 
           .frame-header {
             font-family: $monospace;
+          }
+
+          .empty-frame {
+            font-size: 0.85em;
           }
         }
       }
@@ -225,4 +249,8 @@ $monospace: "Source Code Pro", monospace;
       }
     }
   }
+}
+
+.leader-line {
+  z-index: 10;
 }

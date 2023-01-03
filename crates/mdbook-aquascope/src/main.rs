@@ -6,12 +6,13 @@ use nom::{
   bytes::complete::{tag, take_until},
   character::complete::{anychar, char, none_of},
   multi::many0,
-  sequence::preceded,
+  sequence::{preceded, separated_pair, tuple},
   IResult,
 };
 use nom_locate::LocatedSpan;
 use rayon::prelude::*;
 use std::{
+  collections::HashMap,
   fmt::Write,
   fs,
   path::{Path, PathBuf},
@@ -33,7 +34,7 @@ fn strip_markers(code: &str) -> String {
 }
 
 impl AquascopePreprocessor {
-  fn process_code(&self, header: &[String], code: &str) -> Result<String> {
+  fn process_code(&self, operation: &str, kvs: &[(String, String)], code: &str) -> Result<String> {
     let tempdir = tempdir()?;
     let root = tempdir.path();
     let status = Command::new("cargo")
@@ -49,7 +50,6 @@ impl AquascopePreprocessor {
     let cleaned = strip_markers(code);
     fs::write(root.join("example/src/main.rs"), &cleaned)?;
 
-    let operation = &header[0];
     let output = Command::new("cargo")
       .args(["aquascope", operation])
       .env("SYSROOT", &self.miri_sysroot)
@@ -80,6 +80,8 @@ impl AquascopePreprocessor {
     add_data("code", &serde_json::to_string(code)?)?;
     add_data("operation", operation)?;
     add_data("response", response.trim_end())?;
+    let config = kvs.iter().map(|(k, v)| (k, v)).collect::<HashMap<_, _>>();
+    add_data("config", &serde_json::to_string(&config)?)?;
 
     write!(html, "></div>")?;
 
@@ -89,17 +91,25 @@ impl AquascopePreprocessor {
 
 fn parse_aquascope_block(
   i: LocatedSpan<&str>,
-) -> IResult<LocatedSpan<&str>, (Vec<String>, String)> {
-  let (i, _) = tag("```aquascope")(i)?;
-  let (i, header) = many0(preceded(char(','), many0(none_of(",\n"))))(i)?;
-  let (i, code) = take_until("```")(i)?;
-  let (i, _) = tag("```")(i)?;
-  let header = header
-    .into_iter()
-    .map(|v| v.into_iter().collect::<String>())
-    .collect::<Vec<_>>();
+) -> IResult<LocatedSpan<&str>, (String, Vec<(String, String)>, String)> {
+  fn parse_sym(i: LocatedSpan<&str>) -> IResult<LocatedSpan<&str>, String> {
+    let (i, v) = many0(none_of(",=\n"))(i)?;
+    Ok((i, v.into_iter().collect::<String>()))
+  }
+
+  let mut parser = tuple((
+    tag("```aquascope"),
+    preceded(char(','), parse_sym),
+    many0(preceded(
+      char(','),
+      separated_pair(parse_sym, char('='), parse_sym),
+    )),
+    take_until("```"),
+    tag("```"),
+  ));
+  let (i, (_, operation, kvs, code, _)) = parser(i)?;
   let code = code.fragment().trim().to_string();
-  Ok((i, (header, code)))
+  Ok((i, (operation, kvs, code)))
 }
 
 impl SimplePreprocessor for AquascopePreprocessor {
@@ -152,9 +162,9 @@ impl SimplePreprocessor for AquascopePreprocessor {
     let mut content = LocatedSpan::new(content);
     let mut to_process = Vec::new();
     loop {
-      if let Ok((next, (header, code))) = parse_aquascope_block(content) {
+      if let Ok((next, (operation, kvs, code))) = parse_aquascope_block(content) {
         let range = content.location_offset()..next.location_offset();
-        to_process.push((range, header, code));
+        to_process.push((range, operation, kvs, code));
         content = next;
       } else {
         match anychar::<_, nom::error::Error<LocatedSpan<&str>>>(content) {
@@ -168,8 +178,8 @@ impl SimplePreprocessor for AquascopePreprocessor {
 
     let replacements = to_process
       .into_par_iter()
-      .map(|(range, header, code)| {
-        let html = self.process_code(&header, &code)?;
+      .map(|(range, operation, kvs, code)| {
+        let html = self.process_code(&operation, &kvs, &code)?;
         Ok((range, html))
       })
       .collect::<Result<Vec<_>>>()?;
