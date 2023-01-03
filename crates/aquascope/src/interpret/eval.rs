@@ -21,15 +21,13 @@ use ts_rs::TS;
 use super::mvalue::{MLocation, MValue};
 use crate::Range;
 
-pub(crate) type MLocals = Vec<(String, MValue)>;
-
 #[derive(Serialize, Deserialize, Debug, TS)]
 #[ts(export)]
 pub struct MFrame<L> {
   pub name: String,
   pub body_span: Range,
   pub location: L,
-  pub locals: MLocals,
+  pub locals: Vec<(String, MValue)>,
 }
 
 pub(crate) type MirLoc<'tcx> = (InstanceDef<'tcx>, Either<Location, Span>);
@@ -110,7 +108,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     frame: &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
     index: usize,
     body: &Body<'tcx>,
-  ) -> InterpResult<'tcx, MLocals> {
+  ) -> InterpResult<'tcx, Vec<(String, MValue)>> {
     frame
       .locals
       .iter_enumerated()

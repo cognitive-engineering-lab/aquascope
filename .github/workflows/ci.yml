@@ -12,12 +12,13 @@ jobs:
   test:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v2      
       - uses: actions-rs/install@v0.1
         with:
           crate: cargo-insta
           version: latest
           use-tool-cache: true
+      - run: npm install -g graco && cd frontend && graco prepare
       - uses: actions-rs/cargo@v1
         with:
           command: insta
