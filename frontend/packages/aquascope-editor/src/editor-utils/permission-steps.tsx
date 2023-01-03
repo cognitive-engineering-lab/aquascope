@@ -4,7 +4,12 @@ import _ from "lodash";
 import React from "react";
 import ReactDOMServer from "react-dom/server";
 
-import { BoolStep, PermissionsDataDiff, PermissionsStateStep } from "../types";
+import {
+  AnalysisFacts,
+  PermissionsDataDiff,
+  PermissionsStateStep,
+  ValueStep,
+} from "../types";
 import {
   IconField,
   ReactIcon,
@@ -143,7 +148,7 @@ class PermDiffRowIcon implements ReactIcon {
   };
 
   PermCol = (): JSX.Element => {
-    let perms: [BoolStep, string][] = [
+    let perms: [ValueStep<boolean>, string][] = [
       [this.diffs.permissions.read, readChar],
       [this.diffs.permissions.write, writeChar],
       [this.diffs.permissions.drop, dropChar],
@@ -153,11 +158,19 @@ class PermDiffRowIcon implements ReactIcon {
         {perms.map(([diff, content]) =>
           diff.type == "High" ? (
             <span key={content} className="perm-diff-add">
-              +{content}
+              {content}
             </span>
           ) : diff.type == "Low" ? (
             <span key={content} className="perm-diff-sub">
-              -{content}
+              {content}
+            </span>
+          ) : diff.type === "None" && diff.value ? (
+            <span key={content} className="perm-diff-none-high">
+              {content}
+            </span>
+          ) : diff.type === "None" && !diff.value ? (
+            <span key={content} className="perm-diff-none-low">
+              -
             </span>
           ) : null
         )}
@@ -203,7 +216,7 @@ class PermissionStepTableWidget extends WidgetType {
 
     let table = (
       <table className="perm-step-table">
-        {this.diffs.map(diff => diff.render())}
+        {this.diffs.map((diff, i) => diff.render())}
       </table>
     );
     let inner = (
@@ -223,7 +236,8 @@ class PermissionStepTableWidget extends WidgetType {
 }
 
 let stateStepToPermissions = (
-  stateStep: PermissionsStateStep
+  stateStep: PermissionsStateStep,
+  _facts: AnalysisFacts
 ): PermissionStepTable => {
   let icos = stateStep.state.map(([path, diff]) => {
     return new PermDiffRowIcon(path, diff);

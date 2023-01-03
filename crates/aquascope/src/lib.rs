@@ -9,7 +9,8 @@
   unboxed_closures,
   once_cell,
   exact_size_is_empty,
-  iter_intersperse
+  iter_intersperse,
+  is_some_and
 )]
 
 #[macro_use]
@@ -24,6 +25,7 @@ extern crate rustc_borrowck;
 extern crate rustc_const_eval;
 extern crate rustc_data_structures;
 extern crate rustc_driver;
+extern crate rustc_errors;
 extern crate rustc_graphviz;
 extern crate rustc_hir;
 extern crate rustc_hir_pretty;
@@ -42,6 +44,7 @@ extern crate rustc_type_ir;
 extern crate smallvec;
 
 pub mod analysis;
+pub mod errors;
 pub mod interpret;
 pub mod mir;
 pub mod test_utils;
@@ -50,7 +53,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 // re-export Range from Flowistry with TS.
-#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, Default, TS)]
+#[derive(
+  Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, Default, TS,
+)]
 #[ts(export)]
 pub struct Range {
   pub char_start: usize,

@@ -1,3 +1,11 @@
+use std::{
+  collections::HashMap,
+  fmt::Write,
+  fs,
+  path::{Path, PathBuf},
+  process::{Command, Stdio},
+};
+
 use anyhow::{bail, Result};
 use mdbook_preprocessor_utils::{
   mdbook::preprocess::PreprocessorContext, Asset, SimplePreprocessor,
@@ -11,18 +19,14 @@ use nom::{
 };
 use nom_locate::LocatedSpan;
 use rayon::prelude::*;
-use std::{
-  collections::HashMap,
-  fmt::Write,
-  fs,
-  path::{Path, PathBuf},
-  process::{Command, Stdio},
-};
 use tempfile::tempdir;
 
-mdbook_preprocessor_utils::asset_generator!("../../../frontend/packages/aquascope-embed/dist/");
+mdbook_preprocessor_utils::asset_generator!(
+  "../../../frontend/packages/aquascope-embed/dist/"
+);
 
-const FRONTEND_ASSETS: [Asset; 2] = [make_asset!("lib.js"), make_asset!("lib.css")];
+const FRONTEND_ASSETS: [Asset; 2] =
+  [make_asset!("lib.js"), make_asset!("lib.css")];
 
 struct AquascopePreprocessor {
   miri_sysroot: PathBuf,
@@ -34,7 +38,12 @@ fn strip_markers(code: &str) -> String {
 }
 
 impl AquascopePreprocessor {
-  fn process_code(&self, operation: &str, kvs: &[(String, String)], code: &str) -> Result<String> {
+  fn process_code(
+    &self,
+    operation: &str,
+    kvs: &[(String, String)],
+    code: &str,
+  ) -> Result<String> {
     let tempdir = tempdir()?;
     let root = tempdir.path();
     let status = Command::new("cargo")
@@ -145,7 +154,9 @@ impl SimplePreprocessor for AquascopePreprocessor {
     ]))?;
     let rustc = PathBuf::from(output);
 
-    let output = run_and_get_output(Command::new(&rustc).args(["--print", "target-libdir"]))?;
+    let output = run_and_get_output(
+      Command::new(&rustc).args(["--print", "target-libdir"]),
+    )?;
     let target_libdir = PathBuf::from(output);
 
     Ok(AquascopePreprocessor {
@@ -162,8 +173,9 @@ impl SimplePreprocessor for AquascopePreprocessor {
     let mut content = LocatedSpan::new(content);
     let mut to_process = Vec::new();
     loop {
-      if let Ok((next, (operation, kvs, code))) = parse_aquascope_block(content) {
-        let range = content.location_offset()..next.location_offset();
+      if let Ok((next, (operation, kvs, code))) = parse_aquascope_block(content)
+      {
+        let range = content.location_offset() .. next.location_offset();
         to_process.push((range, operation, kvs, code));
         content = next;
       } else {

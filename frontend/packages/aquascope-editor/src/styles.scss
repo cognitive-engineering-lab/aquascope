@@ -109,18 +109,24 @@ $monospace: "Source Code Pro", monospace;
   }
 
   span.perm-diff-add {
-    /* display: inline-block; */
     color: rgb(93, 202, 54);
   }
 
+  span.perm-diff-sub {
+    color: rgb(255, 66, 68);
+  }
+
   spen.perm-diff-none {
-    /* display: inline-block; */
+    color: black;
+  }
+
+  span.perm-diff-none-high {
     color: lightgray;
   }
 
-  span.perm-diff-sub {
-    /* display: inline-block; */
-    color: rgb(255, 66, 68);
+  span.perm-diff-none-low {
+    color: lightgray;
+    // opacity: 0.4;
   }
 
   .aquascope-action-indicator {
@@ -128,8 +134,6 @@ $monospace: "Source Code Pro", monospace;
     // border-color: var(--icons);
     font-size: 0.9em;
   }
-
-  /* **************** */  
 }
 
 .step-marker {
@@ -151,7 +155,6 @@ $monospace: "Source Code Pro", monospace;
     bottom: 1px;
     font-weight: bold;
   }
-  
 }
 
 .interpreter {

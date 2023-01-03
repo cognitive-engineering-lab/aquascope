@@ -5,11 +5,7 @@ use rustc_hir::{
   intravisit::{self, Visitor as HirVisitor},
   HirId,
 };
-use rustc_middle::{
-  hir::nested_filter,
-  mir::{Location, Place},
-};
-use rustc_mir_dataflow::Analysis;
+use rustc_middle::{hir::nested_filter, mir::Place};
 use rustc_span::Span;
 
 use crate::{
@@ -19,6 +15,7 @@ use crate::{
       Difference, PermissionsCtxt, PermissionsDataDiff, PermissionsStateStep,
     },
   },
+  errors,
   mir::utils::PlaceExt as AquascopePlaceExt,
   Range,
 };
@@ -34,15 +31,6 @@ where
   let body = &ctxt.body_with_facts.body;
   let _basic_blocks = body.basic_blocks.indices();
 
-  // FIXME REMOVE
-  let mut stderr = std::io::stderr();
-  rustc_middle::mir::pretty::write_mir_fn(
-    tcx,
-    body,
-    &mut |_, _| Ok(()),
-    &mut stderr,
-  );
-
   let ir_mapper = &IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
 
   let mut hir_visitor = HirPermDiffFlow {
@@ -53,29 +41,16 @@ where
     visibility_scopes: Vec::default(),
   };
 
-  log::debug!("HIR IDS:");
-
   hir_visitor.visit_nested_body(ctxt.body_id);
 
-  // TODO: this is not correct!
-  let interim = hir_visitor
-    .diff
-    .into_iter()
-    .filter_map(|(id, places_to_perms)| {
-      let filtered = places_to_perms
-        .into_iter()
-        .filter(|(place, diff)| {
-          place.is_source_visible(tcx, body) && !diff.is_empty()
-        })
-        .collect::<HashMap<_, _>>();
-
-      (!filtered.is_empty()).then_some((id, filtered))
-    })
-    .collect::<HashMap<_, _>>();
-
-  prettify_permission_steps(ctxt, interim, span_to_range)
+  prettify_permission_steps(ctxt, hir_visitor.diff, span_to_range)
 }
 
+// Prettify, means:
+// - Remove all places that are not source visible
+// - Remove all tables which are empty
+// - Sanitize spans (mostly for macro invocation)
+// - Convert Spans to Ranges
 fn prettify_permission_steps<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
   perm_steps: HashMap<HirId, HashMap<Place<'tcx>, PermissionsDataDiff>>,
@@ -92,20 +67,42 @@ fn prettify_permission_steps<'tcx>(
     };
   }
 
+  let first_error_span_opt =
+    errors::get_span_of_first_error(ctxt.def_id.expect_local())
+      .and_then(|s| s.as_local(ctxt.body_with_facts.body.span));
+
   perm_steps
     .into_iter()
     .filter_map(|(id, place_to_diffs)| {
       let span = hir.span(id);
-
       let span = span
         .as_local(ctxt.body_with_facts.body.span)
         .unwrap_or(span);
-
       let range = span_to_range(span);
-      let mut entries = place_to_diffs.into_iter().collect::<Vec<_>>();
+
+      let mut entries = place_to_diffs
+        .into_iter()
+        .filter(|(place, diff)| {
+          place.is_source_visible(tcx, body) // && !diff.is_empty()
+        })
+        .collect::<Vec<_>>();
+
+      // This could be a little more graceful. The idea is that
+      // we want to remove all permission steps which occur after
+      // the first error, but the steps involved with the first
+      // error could still be helpful. This is why we filter all
+      // spans with a LO BytePos greater than the error
+      // span HI BytePos.
+      if entries.is_empty()
+        || first_error_span_opt
+          .is_some_and(|err_span| err_span.hi() < span.lo())
+      {
+        return None;
+      }
 
       entries
         .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
+
       let state = entries
         .into_iter()
         .map(|(place, diff)| {
@@ -121,10 +118,6 @@ fn prettify_permission_steps<'tcx>(
     })
     .collect::<Vec<_>>()
 }
-
-#[allow(type_alias_bounds)]
-type DomainAtHir<'tcx, A: Analysis<'tcx>> =
-  HashMap<HirId, HashMap<Location, A::Domain>>;
 
 struct HirPermDiffFlow<'a, 'tcx>
 where

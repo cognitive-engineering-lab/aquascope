@@ -1,12 +1,13 @@
 use miri::{
-  AllocMap, Immediate, InterpCx, InterpResult, MPlaceTy, Machine, MemoryKind, OpTy, Value,
+  AllocMap, Immediate, InterpCx, InterpResult, MPlaceTy, Machine, MemoryKind,
+  OpTy, Value,
 };
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
-use rustc_middle::mir::interpret::Provenance;
-
-use rustc_middle::ty::layout::LayoutOf;
-use rustc_middle::ty::{AdtKind, FieldDef, Ty, TyKind};
+use rustc_middle::{
+  mir::interpret::Provenance,
+  ty::{layout::LayoutOf, AdtKind, FieldDef, Ty, TyKind},
+};
 use rustc_target::abi::Size;
 use rustc_type_ir::FloatTy;
 use serde::{Deserialize, Serialize};
@@ -33,12 +34,15 @@ pub enum Abbreviated<T> {
 }
 
 impl<T> Abbreviated<T> {
-  pub fn new<'tcx>(n: u64, mk: impl Fn(u64) -> InterpResult<'tcx, T>) -> InterpResult<'tcx, Self> {
+  pub fn new<'tcx>(
+    n: u64,
+    mk: impl Fn(u64) -> InterpResult<'tcx, T>,
+  ) -> InterpResult<'tcx, Self> {
     if n <= ABBREV_MAX {
-      let elts = (0..n).map(mk).collect::<InterpResult<'_, Vec<_>>>()?;
+      let elts = (0 .. n).map(mk).collect::<InterpResult<'_, Vec<_>>>()?;
       Ok(Abbreviated::All(elts))
     } else {
-      let initial = (0..ABBREV_MAX)
+      let initial = (0 .. ABBREV_MAX)
         .map(&mk)
         .collect::<InterpResult<'tcx, Vec<_>>>()?;
       let last = mk(n - 1)?;
@@ -85,7 +89,8 @@ trait OpTyExt<'mir, 'tcx, M: Machine<'mir, 'tcx>>: Sized {
   ) -> InterpResult<'tcx, (&FieldDef, Self)>;
 }
 
-impl<'mir, 'tcx, M, Prov: Provenance> OpTyExt<'mir, 'tcx, M> for OpTy<'tcx, Prov>
+impl<'mir, 'tcx, M, Prov: Provenance> OpTyExt<'mir, 'tcx, M>
+  for OpTy<'tcx, Prov>
 where
   M: Machine<'mir, 'tcx, Provenance = Prov>,
   'tcx: 'mir,
@@ -123,17 +128,21 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
   fn add_alloc(
     &self,
     mplace: miri::MPlaceTy<'tcx, miri::Provenance>,
-    postprocess: impl FnOnce(miri::MPlaceTy<'tcx, miri::Provenance>) -> InterpResult<'tcx, MValue>,
+    postprocess: impl FnOnce(
+      miri::MPlaceTy<'tcx, miri::Provenance>,
+    ) -> InterpResult<'tcx, MValue>,
   ) -> InterpResult<'tcx, MValue> {
     let addr = mplace.ptr.addr();
     let memory_kind = match mplace.ptr.provenance {
       Some(miri::Provenance::Concrete { alloc_id, .. }) => {
-        let (memory_kind, _) = self.ecx.memory.alloc_map().get(alloc_id).unwrap();
+        let (memory_kind, _) =
+          self.ecx.memory.alloc_map().get(alloc_id).unwrap();
         memory_kind
       }
       _ => unreachable!(),
     };
-    let already_found = self.memory_map.borrow().place_to_loc.contains_key(&addr);
+    let already_found =
+      self.memory_map.borrow().place_to_loc.contains_key(&addr);
     if !already_found {
       let mvalue = postprocess(mplace)?;
       let mut memory_map = self.memory_map.borrow_mut();
@@ -160,7 +169,9 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
   fn read_unique(
     &self,
     op: &OpTy<'tcx, miri::Provenance>,
-    postprocess: impl FnOnce(miri::MPlaceTy<'tcx, miri::Provenance>) -> InterpResult<'tcx, MValue>,
+    postprocess: impl FnOnce(
+      miri::MPlaceTy<'tcx, miri::Provenance>,
+    ) -> InterpResult<'tcx, MValue>,
   ) -> InterpResult<'tcx, MValue> {
     debug_assert!(op.layout.ty.is_adt());
 
@@ -220,7 +231,10 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
     self.read_raw_vec(&buf, len, postprocess)
   }
 
-  pub(super) fn read(&self, op: &OpTy<'tcx, miri::Provenance>) -> InterpResult<'tcx, MValue> {
+  pub(super) fn read(
+    &self,
+    op: &OpTy<'tcx, miri::Provenance>,
+  ) -> InterpResult<'tcx, MValue> {
     let ty = op.layout.ty;
 
     Ok(match ty.kind() {
@@ -302,7 +316,9 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
             None => scalar.to_machine_isize(&self.ecx)?,
           }),
           TyKind::Float(fty) => MValue::Float(match fty {
-            FloatTy::F32 => f32::from_bits(scalar.to_f32()?.to_bits() as u32) as f64,
+            FloatTy::F32 => {
+              f32::from_bits(scalar.to_f32()?.to_bits() as u32) as f64
+            }
             FloatTy::F64 => f64::from_bits(scalar.to_f64()?.to_bits() as u64),
           }),
           _ => unreachable!(),

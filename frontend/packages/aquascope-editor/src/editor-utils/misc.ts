@@ -1,10 +1,19 @@
 import {
   Range,
   RangeSet,
+  StateEffect,
   StateEffectType,
   StateField,
 } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
+
+import {
+  AnalysisFacts,
+  AnalysisOutput,
+  LoanKey,
+  Range as RangeT,
+  RefinementRegion,
+} from "../types";
 
 // ---------
 // Constants
@@ -30,7 +39,7 @@ export interface ReactIcon {
 export interface IconField<C, T> {
   effectType: StateEffectType<Array<T>>;
   stateField: StateField<DecorationSet>;
-  fromOutput(o: C): T;
+  fromOutput(o: C, facts: AnalysisFacts): T;
 }
 
 // ------------
@@ -108,3 +117,81 @@ export let genStateField = <T>(
 
     provide: f => EditorView.decorations.from(f),
   });
+
+export type LoanFacts = {
+  refinerTag: string;
+  regionTag: string;
+  refinerPoint: RangeT;
+  region: RefinementRegion;
+};
+
+export const loanFactsStateType = StateEffect.define<Array<LoanFacts>>();
+
+export const loanFactsField = genStateField<Array<LoanFacts>>(
+  loanFactsStateType,
+  (ts: Array<LoanFacts>): Array<Range<Decoration>> =>
+    ts.flatMap(loanFactsToDecoration)
+);
+
+function loanFactsToDecoration({
+  refinerTag,
+  regionTag,
+  refinerPoint,
+  region,
+}: LoanFacts): Array<Range<Decoration>> {
+  let loanDeco = Decoration.mark({
+    class: "aquascope-loan",
+    tagName: refinerTag,
+  }).range(refinerPoint.char_start, refinerPoint.char_end);
+
+  let regionDecos = region.refined_ranges
+    .filter(range => range.char_start != range.char_end)
+    .map(range => {
+      let highlightedRange = Decoration.mark({
+        class: "aquascope-live-region",
+        tagName: regionTag,
+      }).range(range.char_start, range.char_end);
+      return highlightedRange;
+    });
+
+  return [loanDeco, ...regionDecos];
+}
+
+export function generateAnalysisDecorationFacts<T>(
+  output: AnalysisOutput<T>
+): [AnalysisFacts, Array<LoanFacts>] {
+  let points: Record<LoanKey, string> = {};
+  let regions: Record<LoanKey, string> = {};
+
+  let stateFacts = [];
+
+  for (const loan in output.loan_regions) {
+    let loanTag = makeTag(26);
+    let regionTag = makeTag(26);
+    let refinedRegion = output.loan_regions[loan];
+
+    // TODO: the refined region stores whether it is for a Loan or Move.
+    // When moves get reported this needs to be updated accordingly to
+    // accommodate for this scenario.
+
+    let loanPoint = output.loan_points[loan];
+
+    points[loan] = loanTag;
+    regions[loan] = regionTag;
+
+    let loanFacts = {
+      refinerTag: loanTag,
+      regionTag: regionTag,
+      refinerPoint: loanPoint,
+      region: refinedRegion,
+    };
+    stateFacts.push(loanFacts);
+  }
+
+  let facts = {
+    loanPoints: points,
+    loanRegions: regions,
+  };
+
+  return [facts, stateFacts];
+}

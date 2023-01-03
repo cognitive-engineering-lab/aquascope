@@ -9,12 +9,14 @@ use rustc_middle::{
   ty::{self, TyCtxt},
 };
 
+#[allow(dead_code)]
 #[derive(Copy, Clone)]
 pub enum ArtificialField {
   ArrayLength,
   ShallowBorrow,
 }
 
+#[allow(dead_code)]
 #[derive(Copy, Clone)]
 pub enum Overlap {
   Arbitrary,
@@ -22,6 +24,7 @@ pub enum Overlap {
   Disjoint,
 }
 
+#[allow(dead_code)]
 #[derive(Copy, Clone)]
 pub enum AccessDepth {
   Shallow(Option<ArtificialField>),
@@ -37,6 +40,7 @@ use AccessDepth::{Deep, Shallow};
 /// places overlap. `PlaceConflictBias::NoOverlap` assumes that for the purposes of the predicate
 /// being run in the calling context, the conservative choice is to assume the compared indices
 /// are disjoint (and therefore, do not overlap).
+#[allow(dead_code)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PlaceConflictBias {
   Overlap,
@@ -46,6 +50,7 @@ pub(crate) enum PlaceConflictBias {
 /// Helper function for checking if places conflict with a mutable borrow and deep access depth.
 /// This is used to check for places conflicting outside of the borrow checking code (such as in
 /// dataflow).
+#[allow(dead_code)]
 pub(crate) fn places_conflict<'tcx>(
   tcx: TyCtxt<'tcx>,
   body: &Body<'tcx>,

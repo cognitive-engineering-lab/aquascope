@@ -10,7 +10,13 @@ import { DecorationSet, EditorView } from "@codemirror/view";
 import _ from "lodash";
 
 import { renderInterpreter } from "./editor-utils/interpreter";
-import { IconField } from "./editor-utils/misc";
+import {
+  IconField,
+  LoanFacts,
+  generateAnalysisDecorationFacts,
+  loanFactsField,
+  loanFactsStateType,
+} from "./editor-utils/misc";
 import {
   copiedValueHover,
   insufficientTypeHover,
@@ -18,7 +24,14 @@ import {
 } from "./editor-utils/permission-boundaries";
 import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 import "./styles.scss";
-import { BackendError, Range } from "./types";
+import {
+  AnalysisFacts,
+  AnalysisOutput,
+  BackendError,
+  PermissionsBoundary,
+  PermissionsDiffOutput,
+  Range,
+} from "./types";
 
 export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
 export { coarsePermissionDiffs } from "./editor-utils/permission-steps";
@@ -217,6 +230,7 @@ export class Editor {
         indentUnit.of("  "),
         copiedValueHover,
         insufficientTypeHover,
+        loanFactsField,
         ...supportedFields,
       ],
     });
@@ -254,11 +268,20 @@ export class Editor {
     });
   }
 
+  // NOTE: Exchanges the analysis facts for loan points and regions. Currently,
+  // this is only used by the permission boundaries (stacks) visualization.
+  public addAnalysisFacts(vs: Array<LoanFacts>) {
+    this.view.dispatch({
+      effects: [loanFactsStateType.of(vs)],
+    });
+  }
+
   public addPermissionsField<B, T, F extends IconField<B, T>>(
     f: F,
-    methodCallPoints: Array<B>
+    methodCallPoints: Array<B>,
+    facts: AnalysisFacts
   ) {
-    let newEffects = methodCallPoints.map(f.fromOutput);
+    let newEffects = methodCallPoints.map(v => f.fromOutput(v, facts));
     console.log(newEffects);
     this.view.dispatch({
       effects: [f.effectType.of(newEffects)],
@@ -311,9 +334,15 @@ export class Editor {
         config
       );
     } else if (operation == "permission-diffs") {
-      this.addPermissionsField(coarsePermissionDiffs, result);
+      let emptyFacts = {
+        loanPoints: {},
+        loanRegions: {},
+      };
+      this.addPermissionsField(coarsePermissionDiffs, result, emptyFacts);
     } else if (operation == "receiver-types") {
-      this.addPermissionsField(receiverPermissionsField, result);
+      let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
+      this.addAnalysisFacts(loanFacts);
+      this.addPermissionsField(receiverPermissionsField, result.values, facts);
     }
   }
 }

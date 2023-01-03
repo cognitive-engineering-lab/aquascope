@@ -50,6 +50,7 @@ where
   /// never_drop(Path) :-
   ///    !is_direct(Path).
   ///
+  /// DEPRECATED: TODO remove
   pub never_drop: HashSet<T::Path>,
 
   /// .decl cannot_read(Path:path, Point:point)
@@ -314,6 +315,8 @@ pub fn compute<'a, 'tcx>(
   };
   let borrow_set =
     BorrowSet::build(tcx, body, locals_are_invalidated_at_exit, &move_data);
+  let def_id = def_id.to_def_id();
+  let param_env = tcx.param_env_reveal_all_normalized(def_id);
 
   let mut ctxt = PermissionsCtxt {
     tcx,
@@ -321,10 +324,11 @@ pub fn compute<'a, 'tcx>(
     polonius_input_facts,
     polonius_output,
     body_id,
-    def_id: def_id.to_def_id(),
+    def_id,
     body_with_facts,
     borrow_set,
     move_data,
+    param_env,
     loan_regions: None,
     place_data: IndexVec::new(),
     rev_lookup: HashMap::default(),

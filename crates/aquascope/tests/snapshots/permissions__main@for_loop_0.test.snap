@@ -12,18 +12,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
         permissions:
           read:
             type: High
@@ -41,18 +38,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
         permissions:
           read:
             type: High
@@ -70,17 +64,14 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: false
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: Low
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
         permissions:
           read:
             type: High
@@ -99,15 +90,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
+        path_moved:
+          type: None
+          value: false
         loan_read_refined:
           type: High
         loan_write_refined:
           type: High
         loan_drop_refined:
           type: High
-        path_moved:
-          type: None
-          value: false
         permissions:
           read:
             type: Low
@@ -125,17 +116,14 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: Low
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
         permissions:
           read:
             type: High
@@ -154,16 +142,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
+        path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
         loan_write_refined:
           type: High
         loan_drop_refined:
           type: High
-        path_moved:
-          type: None
-          value: false
         permissions:
           read:
             type: None
@@ -182,18 +169,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
         permissions:
           read:
             type: Low
@@ -211,18 +195,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: false
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
         permissions:
           read:
             type: Low
@@ -241,15 +222,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
+        path_moved:
+          type: None
+          value: false
         loan_read_refined:
           type: Low
         loan_write_refined:
           type: Low
         loan_drop_refined:
           type: Low
-        path_moved:
-          type: None
-          value: false
         permissions:
           read:
             type: High
@@ -267,16 +248,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
+        path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
         loan_write_refined:
           type: Low
         loan_drop_refined:
           type: Low
-        path_moved:
-          type: None
-          value: false
         permissions:
           read:
             type: None
@@ -295,18 +275,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
         permissions:
           read:
             type: Low
@@ -324,18 +301,15 @@ description: main@for_loop_0.test
         type_writeable:
           type: None
           value: true
-        loan_read_refined:
-          type: None
-          value: false
-        loan_write_refined:
-          type: None
-          value: false
-        loan_drop_refined:
-          type: None
-          value: false
         path_moved:
           type: None
           value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
         permissions:
           read:
             type: Low

@@ -4,6 +4,10 @@ use std::{
   time::Instant,
 };
 
+use aquascope::{
+  analysis::BodyAnalysisJoin,
+  errors::{initialize_error_tracking, track_body_diagnostics},
+};
 use clap::{Parser, Subcommand};
 use flowistry::{
   mir::borrowck_facts::{self, NO_SIMPLIFY},
@@ -57,12 +61,16 @@ impl RustcPlugin for AquascopePlugin {
     "aquascope-driver".into()
   }
 
-  fn args(&self, target_dir: &Utf8Path) -> RustcPluginArgs<AquascopePluginArgs> {
+  fn args(
+    &self,
+    target_dir: &Utf8Path,
+  ) -> RustcPluginArgs<AquascopePluginArgs> {
     let args = AquascopePluginArgs::parse_from(env::args().skip(1));
 
     log::debug!("Provided PluginArgs {args:?}");
 
-    let cargo_path = env::var("CARGO_PATH").unwrap_or_else(|_| "cargo".to_string());
+    let cargo_path =
+      env::var("CARGO_PATH").unwrap_or_else(|_| "cargo".to_string());
 
     use AquascopeCommand::*;
     match &args.command {
@@ -78,7 +86,8 @@ impl RustcPlugin for AquascopePlugin {
         exit(exit_status.code().unwrap_or(-1));
       }
       RustcVersion => {
-        let commit_hash = rustc_interface::util::rustc_version_str().unwrap_or("unknown");
+        let commit_hash =
+          rustc_interface::util::rustc_version_str().unwrap_or("unknown");
         println!("{commit_hash}");
         exit(0);
       }
@@ -99,7 +108,11 @@ impl RustcPlugin for AquascopePlugin {
     }
   }
 
-  fn run(self, compiler_args: Vec<String>, plugin_args: AquascopePluginArgs) -> RustcResult<()> {
+  fn run(
+    self,
+    compiler_args: Vec<String>,
+    plugin_args: AquascopePluginArgs,
+  ) -> RustcResult<()> {
     use AquascopeCommand::*;
     match plugin_args.command {
       // TODO rename the command because it will eventually show *all* permissions
@@ -157,7 +170,7 @@ pub fn run_with_callbacks(
 ) -> AquascopeResult<()> {
   let mut args = args.to_vec();
   args.extend(
-    "-Z identify-regions -Z mir-opt-level=0 -Z maximal-hir-to-mir-coverage -A warnings"
+    "-Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage -A warnings"
       .split(' ')
       .map(|s| s.to_owned()),
   );
@@ -171,7 +184,10 @@ pub fn run_with_callbacks(
   compiler.run().map_err(|_| AquascopeError::BuildError)
 }
 
-fn run<A: AquascopeAnalysis>(analysis: A, args: &[String]) -> AquascopeResult<A::Output> {
+fn run<A: AquascopeAnalysis>(
+  analysis: A,
+  args: &[String],
+) -> AquascopeResult<A::Output> {
   let mut callbacks = AquascopeCallbacks {
     analysis: Some(analysis),
     output: Vec::default(),
@@ -187,7 +203,7 @@ fn run<A: AquascopeAnalysis>(analysis: A, args: &[String]) -> AquascopeResult<A:
   callbacks
     .output
     .into_iter()
-    .reduce(Join::join)
+    .reduce(BodyAnalysisJoin::analysis_join)
     .unwrap()
     .map_err(|e| AquascopeError::AnalysisError(e.to_string()))
 }
@@ -208,37 +224,27 @@ pub enum AquascopeError {
 pub type AquascopeResult<T> = Result<T, AquascopeError>;
 
 pub trait AquascopeAnalysis: Sized + Send + Sync {
-  type Output: Join + Serialize + Send + Sync;
-  fn analyze(&mut self, tcx: TyCtxt, id: BodyId) -> anyhow::Result<Self::Output>;
-}
-
-pub trait Join {
-  fn join(self, other: Self) -> Self;
-}
-
-impl<T> Join for Vec<T> {
-  fn join(self, other: Self) -> Self {
-    let mut v = self;
-    v.extend(other.into_iter());
-    v
-  }
-}
-
-impl<O: Join> Join for anyhow::Result<O> {
-  fn join(self, other: Self) -> Self {
-    let v1 = self?;
-    let v2 = other?;
-    Ok(v1.join(v2))
-  }
+  type Output: BodyAnalysisJoin + Serialize + Send + Sync;
+  fn analyze(
+    &mut self,
+    tcx: TyCtxt,
+    id: BodyId,
+  ) -> anyhow::Result<Self::Output>;
 }
 
 impl<F, O> AquascopeAnalysis for F
 where
-  F: for<'tcx> Fn<(TyCtxt<'tcx>, BodyId), Output = anyhow::Result<O>> + Send + Sync,
-  O: Join + Serialize + Send + Sync,
+  F: for<'tcx> Fn<(TyCtxt<'tcx>, BodyId), Output = anyhow::Result<O>>
+    + Send
+    + Sync,
+  O: BodyAnalysisJoin + Serialize + Send + Sync,
 {
   type Output = O;
-  fn analyze(&mut self, tcx: TyCtxt, id: BodyId) -> anyhow::Result<Self::Output> {
+  fn analyze(
+    &mut self,
+    tcx: TyCtxt,
+    id: BodyId,
+  ) -> anyhow::Result<Self::Output> {
     (self)(tcx, id)
   }
 }
@@ -260,10 +266,18 @@ impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
     _compiler: &rustc_interface::interface::Compiler,
     queries: &'tcx rustc_interface::Queries<'tcx>,
   ) -> rustc_driver::Compilation {
+    // Setting up error tracking happens here. Within rustc callbacks
+    // seem to be set up *after* `config` is called.
+    initialize_error_tracking();
+
     let _start = Instant::now();
+
     queries.global_ctxt().unwrap().take().enter(|tcx| {
       let mut analysis = self.analysis.take().unwrap();
       find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
+        // Track diagnostics for the analysis of the current body
+        let def_id = tcx.hir().body_owner_def_id(body_id);
+        track_body_diagnostics(def_id);
         self.output.push(analysis.analyze(tcx, body_id));
       });
     });

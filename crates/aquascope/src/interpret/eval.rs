@@ -4,10 +4,10 @@ use anyhow::{anyhow, Context, Result};
 use either::Either;
 use flowistry::mir::utils::PlaceExt;
 use miri::{
-  Immediate, InterpCx, InterpResult, LocalValue, Machine, MiriConfig, MiriMachine, Operand,
+  Immediate, InterpCx, InterpResult, LocalValue, Machine, MiriConfig,
+  MiriMachine, Operand,
 };
 use rustc_hir::def_id::DefId;
-
 use rustc_middle::{
   mir::{Body, ClearCrossCrate, LocalInfo, Location, Place, RETURN_PLACE},
   ty::{InstanceDef, TyCtxt},
@@ -18,9 +18,8 @@ use rustc_target::abi::Size;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::Range;
-
 use super::mvalue::{MLocation, MValue};
+use crate::Range;
 
 pub(crate) type MLocals = Vec<(String, MValue)>;
 
@@ -88,18 +87,13 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     let (main_id, entry_fn_type) = tcx
       .entry_fn(())
       .context("no main or start function found")?;
-    let ecx = miri::create_ecx(
-      tcx,
-      main_id,
-      entry_fn_type,
-      &MiriConfig {
-        mute_stdout_stderr: true,
-        // have to make sure miri doesn't complain about us poking around memory
-        validate: false,
-        borrow_tracker: None,
-        ..Default::default()
-      },
-    )
+    let ecx = miri::create_ecx(tcx, main_id, entry_fn_type, &MiriConfig {
+      mute_stdout_stderr: true,
+      // have to make sure miri doesn't complain about us poking around memory
+      validate: false,
+      borrow_tracker: None,
+      ..Default::default()
+    })
     .map_err(|e| anyhow!("{e}"))?;
 
     *tcx.sess.ctfe_backtrace.borrow_mut() = CtfeBacktrace::Capture;
@@ -188,7 +182,8 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       .unwrap(),
     );
 
-    let current_loc = loc_override.unwrap_or((frame.instance.def, frame.current_loc()));
+    let current_loc =
+      loc_override.unwrap_or((frame.instance.def, frame.current_loc()));
 
     let locals = self.build_locals(frame, index, body)?;
 
@@ -200,7 +195,10 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     })
   }
 
-  fn build_stack(&self, current_loc: MirLoc<'tcx>) -> InterpResult<'tcx, MStack<MirLoc<'tcx>>> {
+  fn build_stack(
+    &self,
+    current_loc: MirLoc<'tcx>,
+  ) -> InterpResult<'tcx, MStack<MirLoc<'tcx>>> {
     let frames = self
       .local_frames()
       .enumerate()
@@ -247,7 +245,9 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     })
   }
 
-  fn step(&mut self) -> InterpResult<'tcx, (Option<MStep<MirLoc<'tcx>>>, bool)> {
+  fn step(
+    &mut self,
+  ) -> InterpResult<'tcx, (Option<MStep<MirLoc<'tcx>>>, bool)> {
     loop {
       let local_frames = self.local_frames().collect::<Vec<_>>();
       let current_loc = local_frames
@@ -267,7 +267,11 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         match frame_change {
           Ordering::Greater => {
             let (_, frame) = local_frames.last().unwrap();
-            let span = body_span(self.tcx, frame.instance.def_id(), BodySpanType::Header);
+            let span = body_span(
+              self.tcx,
+              frame.instance.def_id(),
+              BodySpanType::Header,
+            );
             current_loc = (frame.instance.def, Either::Right(span));
           }
           Ordering::Less => {

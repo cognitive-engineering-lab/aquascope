@@ -10,6 +10,8 @@ use bollard::{
 use futures::StreamExt;
 use serde::Serialize;
 use snafu::prelude::*;
+#[cfg(feature = "no-docker")]
+use std::fs;
 use std::process::Command;
 use std::{
     env, io, iter,
@@ -20,8 +22,6 @@ use std::{
 };
 #[cfg(feature = "no-docker")]
 use tempfile::{tempdir, TempDir};
-#[cfg(feature = "no-docker")]
-use std::fs;
 
 const DEFAULT_IMAGE: &str = "aquascope";
 const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
@@ -391,7 +391,6 @@ impl Container {
         })
     }
 
-
     // -------------
     // Commands
 
@@ -399,7 +398,7 @@ impl Container {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
-        cmd.args(["--quiet", "aquascope", "vis-method-calls"])
+        cmd.args(["--quiet", "aquascope", "receiver-types"])
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {
@@ -413,7 +412,7 @@ impl Container {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
-        cmd.args(["--quiet", "aquascope", "coarse-perm-steps"])
+        cmd.args(["--quiet", "aquascope", "permission-diffs"])
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {

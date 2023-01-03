@@ -17,5 +17,4 @@ sample-book/
 # Rust things
 target/
 debug/
-.rustfmt.toml
 Cargo.lock

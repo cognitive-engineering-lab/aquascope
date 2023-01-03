@@ -10,7 +10,9 @@ use rustc_data_structures::{
 use rustc_hir::{self as hir, HirId};
 use rustc_index::bit_set::{BitSet, SparseBitMatrix};
 use rustc_middle::{
-  mir::{self, visit::Visitor as MirVisitor, BasicBlock, Body, Location, Place},
+  mir::{
+    self, visit::Visitor as MirVisitor, BasicBlock, Body, Location, Place,
+  },
   ty::TyCtxt,
 };
 
@@ -119,7 +121,11 @@ impl<'a, 'tcx> IRMapper<'a, 'tcx>
 where
   'tcx: 'a,
 {
-  pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, gather_mode: GatherMode) -> Self {
+  pub fn new(
+    tcx: TyCtxt<'tcx>,
+    body: &'a Body<'tcx>,
+    gather_mode: GatherMode,
+  ) -> Self {
     let dominators = body.basic_blocks.dominators();
     let control_dependencies = PostDominators::build(body);
     let mut ir_map = IRMapper {
@@ -144,7 +150,10 @@ where
     ir_map
   }
 
-  pub fn local_assigned_place(&self, local: &hir::Local) -> Option<Place<'tcx>> {
+  pub fn local_assigned_place(
+    &self,
+    local: &hir::Local,
+  ) -> Option<Place<'tcx>> {
     use either::Either;
     use mir::{FakeReadCause as FRC, StatementKind as SK};
     let id = local.hir_id;
@@ -160,6 +169,19 @@ where
       }
     }
     None
+  }
+
+  // Determines whether or not a block was inserted solely as a
+  // `FalseEdge` or `FalseUnwind`. These were making the post-dominator
+  // analysis fail for conditional terminators.
+  fn is_false_location(&self, loc: Location) -> bool {
+    use mir::TerminatorKind as TK;
+    let bb = loc.block;
+    let idx = loc.statement_index;
+    let data = &self.body.basic_blocks[bb];
+    let term = data.terminator();
+    data.statements.is_empty()
+      && matches!(term.kind, TK::FalseUnwind { .. } | TK::FalseEdge { .. })
   }
 
   /// Produces a MirOrderedLocations which is defined as follows.
@@ -200,23 +222,21 @@ where
       return None;
     }
 
-    let mut total_location_map: HashMap<BasicBlock, Vec<usize>> =
-      locations
-        .into_iter()
-        .fold(HashMap::default(), |mut acc, loc| {
-          let bb = loc.block;
-          let idx = loc.statement_index;
-          if !self.is_block_unreachable(bb) {
-            acc.entry(bb).or_default().push(idx);
-          }
-          acc
-        });
+    let mut total_location_map: HashMap<BasicBlock, Vec<usize>> = locations
+      .into_iter()
+      .filter(|loc| !self.is_false_location(*loc))
+      .fold(HashMap::default(), |mut acc, loc| {
+        let bb = loc.block;
+        let idx = loc.statement_index;
+        if !self.is_block_unreachable(bb) {
+          acc.entry(bb).or_default().push(idx);
+        }
+        acc
+      });
 
     for idxs in total_location_map.values_mut() {
       idxs.sort_unstable();
     }
-
-    log::debug!("Found locations: {total_location_map:#?}");
 
     let basic_blocks = total_location_map.keys().collect::<Vec<_>>();
 
@@ -230,12 +250,17 @@ where
       .unwrap();
 
     let exit_block = basic_blocks.iter().find(|&&&b1| {
-      basic_blocks
-        .iter()
-        .all(|&&b2| b1 == b2 || self.post_dominators.is_postdominated_by(b1, b2))
+      basic_blocks.iter().all(|&&b2| {
+        b1 == b2 || self.post_dominators.is_postdominated_by(b1, b2)
+      })
     });
 
-    log::debug!("Entry: {entry_block:?} Exit {exit_block:?}");
+    if exit_block.is_none() {
+      log::debug!("Found locations: {total_location_map:#?}");
+      log::warn!(
+        "No post-dominator: Entry: {entry_block:?} Exit {exit_block:?}"
+      );
+    }
 
     Some(MirOrderedLocations {
       entry_block: **entry_block,
@@ -308,7 +333,10 @@ impl<'graph> GraphSuccessors<'graph> for BodyReversed<'_, '_> {
 }
 
 impl WithSuccessors for BodyReversed<'_, '_> {
-  fn successors(&self, node: Self::Node) -> <Self as GraphSuccessors<'_>>::Iter {
+  fn successors(
+    &self,
+    node: Self::Node,
+  ) -> <Self as GraphSuccessors<'_>>::Iter {
     Box::new(
       self.body.basic_blocks.predecessors()[node]
         .iter()
@@ -324,7 +352,10 @@ impl<'graph> GraphPredecessors<'graph> for BodyReversed<'_, '_> {
 }
 
 impl WithPredecessors for BodyReversed<'_, '_> {
-  fn predecessors(&self, node: Self::Node) -> <Self as GraphPredecessors<'_>>::Iter {
+  fn predecessors(
+    &self,
+    node: Self::Node,
+  ) -> <Self as GraphPredecessors<'_>>::Iter {
     Box::new(
       self.body.basic_blocks[node]
         .terminator()
@@ -408,7 +439,10 @@ impl PostDominators {
     )
   }
 
-  fn build_for_return(body: &Body, ret: BasicBlock) -> SparseBitMatrix<BasicBlock, BasicBlock> {
+  fn build_for_return(
+    body: &Body,
+    ret: BasicBlock,
+  ) -> SparseBitMatrix<BasicBlock, BasicBlock> {
     let doms = compute_post_dominators(body, ret);
     log::debug!("post-doms={doms:#?}");
 
@@ -433,22 +467,36 @@ impl PostDominators {
 // Gather the HIR -> MIR relationships for statements and terminators.
 
 impl<'tcx> MirVisitor<'tcx> for IRMapper<'_, 'tcx> {
-  fn visit_basic_block_data(&mut self, block: mir::BasicBlock, data: &mir::BasicBlockData<'tcx>) {
+  fn visit_basic_block_data(
+    &mut self,
+    block: mir::BasicBlock,
+    data: &mir::BasicBlockData<'tcx>,
+  ) {
     match self.gather_mode {
       GatherMode::All => self.super_basic_block_data(block, data),
-      GatherMode::IgnoreCleanup if !data.is_cleanup => self.super_basic_block_data(block, data),
+      GatherMode::IgnoreCleanup if !data.is_cleanup => {
+        self.super_basic_block_data(block, data)
+      }
       GatherMode::IgnoreCleanup => {
         log::debug!("Ignoring cleanup block {block:?}");
       }
     }
   }
 
-  fn visit_statement(&mut self, _terminator: &mir::Statement<'tcx>, location: Location) {
+  fn visit_statement(
+    &mut self,
+    _terminator: &mir::Statement<'tcx>,
+    location: Location,
+  ) {
     let hir_id = self.body.location_to_hir_id(location);
     self.hir_to_mir.entry(hir_id).or_default().insert(location);
   }
 
-  fn visit_terminator(&mut self, _terminator: &mir::Terminator<'tcx>, location: Location) {
+  fn visit_terminator(
+    &mut self,
+    _terminator: &mir::Terminator<'tcx>,
+    location: Location,
+  ) {
     let hir_id = self.body.location_to_hir_id(location);
     self.hir_to_mir.entry(hir_id).or_default().insert(location);
   }

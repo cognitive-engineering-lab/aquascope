@@ -18,9 +18,12 @@ use rustc_middle::{
 };
 use rustc_span::{source_map::FileLoader, BytePos};
 
-use crate::analysis::{
-  self,
-  permissions::{Permissions, PermissionsDataDiff},
+use crate::{
+  analysis::{
+    self,
+    permissions::{Permissions, PermissionsDataDiff},
+  },
+  errors,
 };
 
 struct StringLoader(String);
@@ -166,63 +169,75 @@ pub fn test_refinements_in_file(path: &Path) {
     let (clean_input, expected_permissions) =
       parse_test_source(&input, ("`[", "]`"))?;
 
-    compile_bodies(clean_input, move |tcx, body_id, body_with_facts| {
+    let mut expected_permissions = expected_permissions;
+
+    compile_bodies(clean_input, |tcx, body_id, body_with_facts| {
       let ctxt = analysis::compute_permissions(tcx, body_id, body_with_facts);
       let spanner = Spanner::new(tcx, body_id, &body_with_facts.body);
 
-      expected_permissions
-        .iter()
-        .for_each(|(range, expected_perms)| {
-          let span = range.to_span(tcx).unwrap();
-          let places = spanner.span_to_places(span);
+      expected_permissions.retain(|range, expected_perms| {
+        let span = range.to_span(tcx).unwrap();
+        let places = spanner.span_to_places(span);
 
-          log::debug!(
-            "Spanned places {span:?} {expected_perms:?}: {:?}",
-            places
-          );
+        log::debug!("Spanned places {span:?} {expected_perms:?}: {:?}", places);
 
-          // HACK: revisit this because it is most certainly based in
-          // a fragile assumption.
-          let mir_spanner = places.first().unwrap();
-          let loc = match mir_spanner.locations[0] {
-            LocationOrArg::Location(l) => l,
-            _ => unreachable!("not a location"),
-          };
+        // HACK: revisit this because it is most certainly based in
+        // a fragile assumption.
+        let mir_spanner = if places.is_empty() {
+          // If no places were found for this span then ignore it
+          // for now and see if it matches in a different body.
+          return true;
+        } else {
+          places.first().unwrap()
+        };
+        let loc = match mir_spanner.locations[0] {
+          LocationOrArg::Location(l) => l,
+          _ => unreachable!("not a location"),
+        };
 
-          // FIXME: this code is to catch any false assumptions I'm making
-          // about the structure of the generated MIR and the Flowistry Spanner.
-          let stmt = ctxt.body_with_facts.body.stmt_at(loc).left().unwrap();
-          let path = match &stmt.kind {
-            StatementKind::Assign(box (lhs, rvalue)) => {
-              let exp = ctxt.place_to_path(&mir_spanner.place);
-              let act = ctxt.place_to_path(lhs);
-              assert_eq!(exp, act);
+        // FIXME: this code is to catch any false assumptions I'm making
+        // about the structure of the generated MIR and the Flowistry Spanner.
+        let stmt = ctxt.body_with_facts.body.stmt_at(loc).left().unwrap();
+        let path = match &stmt.kind {
+          StatementKind::Assign(box (lhs, rvalue)) => {
+            let exp = ctxt.place_to_path(&mir_spanner.place);
+            let act = ctxt.place_to_path(lhs);
+            assert_eq!(exp, act);
 
-              let rplace = match rvalue {
-                Rvalue::Ref(_, _, place) => *place,
-                Rvalue::Use(op) => op.to_place().unwrap(),
-                _ => unimplemented!(),
-              };
+            let rplace = match rvalue {
+              Rvalue::Ref(_, _, place) => *place,
+              Rvalue::Use(op) => op.to_place().unwrap(),
+              _ => unimplemented!(),
+            };
 
-              ctxt.place_to_path(&rplace)
-            }
-            _ => unreachable!("not a move"),
-          };
+            ctxt.place_to_path(&rplace)
+          }
+          _ => unreachable!("not a move"),
+        };
 
-          let point = ctxt.location_to_point(loc);
-          let computed_perms =
-            ctxt.permissions_data_at_point(path, point).permissions;
+        let point = ctxt.location_to_point(loc);
 
-          if *expected_perms != computed_perms {
-            panic!(
-              "\n\n\x1b[31mExpected {expected_perms:?} \
+        let computed_perms =
+          ctxt.permissions_data_at_point(path, point).permissions;
+
+        if *expected_perms != computed_perms {
+          panic!(
+            "\n\n\x1b[31mExpected {expected_perms:?} \
                but got {computed_perms:?} permissions\n\t\
                \x1b[33m{stmt:?}\
                \x1b[0m\n\n"
-            );
-          }
-        });
+          );
+        }
+
+        log::debug!("successful test!");
+
+        false
+      });
     });
+
+    if !expected_permissions.is_empty() {
+      panic!("Not all ranges tested! {expected_permissions:#?}");
+    }
 
     Ok(())
   };
@@ -326,7 +341,7 @@ pub fn run_in_dir(
 
 pub fn compile_bodies(
   input: impl Into<String>,
-  callback: impl for<'tcx> Fn(TyCtxt<'tcx>, BodyId, &BodyWithBorrowckFacts<'tcx>)
+  mut callback: impl for<'tcx> FnMut(TyCtxt<'tcx>, BodyId, &BodyWithBorrowckFacts<'tcx>)
     + Send
     + std::marker::Sync,
 ) {
@@ -340,6 +355,7 @@ pub fn compile_bodies(
       })
       .for_each(|body_id| {
         let def_id = tcx.hir().body_owner_def_id(body_id);
+        errors::track_body_diagnostics(def_id);
         let body_with_facts =
           borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
 
@@ -359,7 +375,7 @@ pub fn compile(
     callback: Some(callback),
   };
   let args = format!(
-    "rustc dummy.rs --crate-type lib --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z maximal-hir-to-mir-coverage --allow warnings --sysroot {}",
+    "rustc dummy.rs --crate-type lib --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings --sysroot {}",
     &*SYSROOT
   );
   let args = args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
@@ -369,7 +385,6 @@ pub fn compile(
   rustc_driver::catch_fatal_errors(|| {
     let mut compiler = rustc_driver::RunCompiler::new(&args, &mut callbacks);
     compiler.set_file_loader(Some(Box::new(StringLoader(input.into()))));
-    // compiler.set_emitter(None); // XXX: we want to suppress rustc errors but I'm not sure why this doesn't work.
     compiler.run()
   });
 }
@@ -384,6 +399,11 @@ where
 {
   fn config(&mut self, config: &mut rustc_interface::Config) {
     NO_SIMPLIFY.store(true, std::sync::atomic::Ordering::SeqCst);
+    // FIXME: adding this (which should only suppress errors) makes the
+    // tests fail. Investiage this more after higher priority updates are made.
+    // config.parse_sess_created = Some(Box::new(|sess| {
+    //   *sess = rustc_session::parse::ParseSess::with_silent_emitter(None);
+    // }));
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 
@@ -392,6 +412,7 @@ where
     _compiler: &rustc_interface::interface::Compiler,
     queries: &'tcx rustc_interface::Queries<'tcx>,
   ) -> rustc_driver::Compilation {
+    errors::initialize_error_tracking();
     queries.global_ctxt().unwrap().take().enter(|tcx| {
       let callback = self.callback.take().unwrap();
       callback(tcx);

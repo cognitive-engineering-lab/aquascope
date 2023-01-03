@@ -7,15 +7,17 @@ use rustc_borrowck::{
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{def_id::DefId, BodyId, Mutability};
 use rustc_index::vec::IndexVec;
+use rustc_infer::infer::TyCtxtInferExt;
 use rustc_middle::{
   mir::{BorrowKind, Local, Location, Place, TerminatorKind},
-  ty::TyCtxt,
+  ty::{ParamEnv, Ty, TyCtxt},
 };
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
+use rustc_trait_selection::infer::InferCtxtExt;
 
-use super::{
-  AquascopeFacts, Loan, Output, Path, Permissions, PermissionsData,
+use crate::analysis::permissions::{
+  AquascopeFacts, Loan, LoanKey, Output, Path, Permissions, PermissionsData,
   PermissionsDomain, Point, Variable,
 };
 
@@ -32,6 +34,7 @@ pub struct PermissionsCtxt<'a, 'tcx> {
   pub borrow_set: BorrowSet<'tcx>,
   pub move_data: MoveData<'tcx>,
   pub loan_regions: Option<HashMap<Loan, (Point, Point)>>,
+  pub(crate) param_env: ParamEnv<'tcx>,
   pub(crate) place_data: IndexVec<Path, Place<'tcx>>,
   pub(crate) rev_lookup: HashMap<Local, Vec<Path>>,
 }
@@ -121,11 +124,46 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       .map_or(false, |live_vars| live_vars.contains(&var))
   }
 
+  pub fn is_path_copyable(&self, path: Path) -> bool {
+    use rustc_hir::lang_items::LangItem;
+    let body = &self.body_with_facts.body;
+    let place = self.path_to_place(path);
+    let ty = place.ty(&body.local_decls, self.tcx).ty;
+    let copy_def_id = self.tcx.require_lang_item(LangItem::Copy, None);
+    self.implements_trait(ty, copy_def_id)
+  }
+
+  pub fn is_path_write_enabled(&self, path: Path) -> bool {
+    !self.permissions_output.never_write.contains(&path)
+  }
+
+  pub fn is_path_drop_enabled(&self, path: Path) -> bool {
+    // TODO: experimental, I(gavin) want to get rid of the 'is_never_drop'
+    // relation in the permissions engine, because it uses memory that
+    // doesn't need to be stored.
+    !self.path_to_place(path).is_indirect()
+    // !self.permissions_output.never_drop.contains(&path)
+  }
+
   // Permission utilities
 
+  fn implements_trait(&self, ty: Ty<'tcx>, trait_def_id: DefId) -> bool {
+    use rustc_infer::traits::EvaluationResult;
+
+    let infcx = self.tcx.infer_ctxt().build();
+    let ty = self.tcx.erase_regions(ty);
+    let result =
+      infcx.type_implements_trait(trait_def_id, [ty], self.param_env);
+    matches!(
+      result,
+      EvaluationResult::EvaluatedToOk
+        | EvaluationResult::EvaluatedToOkModuloRegions
+    )
+  }
+
   pub fn max_permissions(&self, path: Path) -> Permissions {
-    let write = !self.permissions_output.never_write.contains(&path);
-    let drop = !self.permissions_output.never_drop.contains(&path);
+    let write = self.is_path_write_enabled(path);
+    let drop = self.is_path_drop_enabled(path);
     Permissions {
       write,
       // There is no way in the type system to have a non-readable type.
@@ -134,8 +172,28 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     }
   }
 
-  // TODO: expand the data stored format to include all of the factors which
-  // can modify a given set. (gavin read only). REMOVE
+  pub fn permissions_for_const_ty(&self, ty: Ty<'tcx>) -> PermissionsData {
+    use rustc_hir::lang_items::LangItem;
+    let copy_def_id = self.tcx.require_lang_item(LangItem::Copy, None);
+    let type_copyable = self.implements_trait(ty, copy_def_id);
+
+    PermissionsData {
+      is_live: true,
+      type_droppable: true,
+      type_writeable: true,
+      type_copyable,
+      path_moved: false,
+      loan_read_refined: None,
+      loan_write_refined: None,
+      loan_drop_refined: None,
+      permissions: Permissions {
+        read: true,
+        write: true,
+        drop: true,
+      },
+    }
+  }
+
   pub fn permissions_data_at_point(
     &self,
     path: Path,
@@ -157,23 +215,27 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let cannot_write = pms.cannot_write.get(point).unwrap_or(empty_hash);
     let cannot_drop = pms.cannot_drop.get(point).unwrap_or(empty_hash);
 
-    let never_write = self.permissions_output.never_write.contains(&path);
-    let never_drop = self.permissions_output.never_drop.contains(&path);
+    let type_writeable = self.is_path_write_enabled(*path);
+    let type_droppable = self.is_path_drop_enabled(*path);
+    let type_copyable = self.is_path_copyable(*path);
 
-    let type_droppable = !never_drop;
-    let type_writeable = !never_write;
     let path_moved = path_moved_at.contains(path);
-    let loan_read_refined = cannot_read.contains_key(path);
-    let loan_write_refined = cannot_write.contains_key(path);
-    let loan_drop_refined = cannot_drop.contains_key(path);
+
+    let loan_read_refined: Option<LoanKey> =
+      cannot_read.get(path).map(Into::<LoanKey>::into);
+    let loan_write_refined: Option<LoanKey> =
+      cannot_write.get(path).map(Into::<LoanKey>::into);
+    let loan_drop_refined: Option<LoanKey> =
+      cannot_drop.get(path).map(Into::<LoanKey>::into);
 
     let permissions = if !is_live {
       Permissions::bottom()
     } else {
       Permissions {
-        read: !path_moved && !loan_read_refined,
-        write: type_writeable && !path_moved && !loan_write_refined,
-        drop: type_droppable && !path_moved && !loan_drop_refined,
+        read: !path_moved && loan_read_refined.is_none(),
+        write: type_writeable && !path_moved && loan_write_refined.is_none(),
+        drop: type_copyable
+          || (type_droppable && !path_moved && loan_drop_refined.is_none()),
       }
     };
 
@@ -181,6 +243,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       is_live,
       type_droppable,
       type_writeable,
+      type_copyable,
       path_moved,
       loan_read_refined,
       loan_write_refined,
