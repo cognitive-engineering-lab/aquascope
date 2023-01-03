@@ -1,0 +1,100 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: stackref.test
+---
+- stack:
+    frames:
+      - name: main
+        body_span:
+          char_start: 0
+          char_end: 59
+          byte_start: 0
+          byte_end: 59
+          filename: dummy.rs
+        location:
+          char_start: 14
+          char_end: 28
+          byte_start: 14
+          byte_end: 28
+          filename: dummy.rs
+        locals:
+          - - x
+            - type: Int
+              value: 1
+  heap:
+    locations: []
+- stack:
+    frames:
+      - name: main
+        body_span:
+          char_start: 0
+          char_end: 59
+          byte_start: 0
+          byte_end: 59
+          filename: dummy.rs
+        location:
+          char_start: 31
+          char_end: 46
+          byte_start: 31
+          byte_end: 46
+          filename: dummy.rs
+        locals:
+          - - x
+            - type: Int
+              value: 1
+          - - y
+            - type: Pointer
+              value:
+                type: Stack
+                value:
+                  frame: 0
+                  local: x
+  heap:
+    locations: []
+- stack:
+    frames:
+      - name: main
+        body_span:
+          char_start: 0
+          char_end: 59
+          byte_start: 0
+          byte_end: 59
+          filename: dummy.rs
+        location:
+          char_start: 49
+          char_end: 57
+          byte_start: 49
+          byte_end: 57
+          filename: dummy.rs
+        locals:
+          - - x
+            - type: Int
+              value: 2
+          - - y
+            - type: Pointer
+              value:
+                type: Stack
+                value:
+                  frame: 0
+                  local: x
+  heap:
+    locations: []
+- stack:
+    frames:
+      - name: main
+        body_span:
+          char_start: 0
+          char_end: 59
+          byte_start: 0
+          byte_end: 59
+          filename: dummy.rs
+        location:
+          char_start: 58
+          char_end: 59
+          byte_start: 58
+          byte_end: 59
+          filename: dummy.rs
+        locals: []
+  heap:
+    locations: []
+

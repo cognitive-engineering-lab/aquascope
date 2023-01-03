@@ -125,7 +125,8 @@ impl RustcPlugin for AquascopePlugin {
         postprocess(run(crate::permissions::permission_diffs, &compiler_args))
       }
       Interpreter { .. } => {
-        let mut callbacks = aquascope::interpret::InterpretCallbacks::default();
+        let mut callbacks =
+          aquascope::interpreter::InterpretCallbacks::default();
         let _ = run_with_callbacks(&compiler_args, &mut callbacks);
         postprocess(
           callbacks

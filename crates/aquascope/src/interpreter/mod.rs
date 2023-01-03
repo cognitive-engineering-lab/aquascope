@@ -1,4 +1,6 @@
-use anyhow::Result;
+use std::{path::PathBuf, process::Command};
+
+use anyhow::{bail, Result};
 use either::Either;
 use flowistry::mir::utils::SpanExt;
 use rustc_middle::ty::TyCtxt;
@@ -7,12 +9,12 @@ mod eval;
 mod mapping;
 mod mvalue;
 
+pub use eval::MStep;
 pub use mvalue::MValue;
 
-use self::eval::MStep;
-use crate::{interpret::mapping::Mapper, Range};
+use crate::{interpreter::mapping::Mapper, Range};
 
-fn interpret(tcx: TyCtxt) -> Result<Vec<MStep<Range>>> {
+pub(crate) fn interpret(tcx: TyCtxt) -> Result<Vec<MStep<Range>>> {
   let mut evaluator = eval::VisEvaluator::new(tcx).unwrap();
   let mir_steps = evaluator.eval().map_err(|e| anyhow::format_err!("{}", e))?;
   // eprintln!("{mir_steps:#?}");
@@ -49,6 +51,27 @@ fn interpret(tcx: TyCtxt) -> Result<Vec<MStep<Range>>> {
     });
 
   Ok(src_steps)
+}
+
+pub fn toolchain() -> &'static str {
+  "nightly-2022-12-07"
+}
+
+pub fn get_miri_sysroot() -> Result<PathBuf> {
+  // TODO: read this from rust-toolchain.toml
+  let output = Command::new("cargo")
+    .args([
+      &format!("+{}", toolchain()),
+      "miri",
+      "setup",
+      "--print-sysroot",
+    ])
+    .output()?;
+  if !output.status.success() {
+    bail!("Command failed");
+  }
+  let stdout = String::from_utf8(output.stdout)?;
+  Ok(PathBuf::from(stdout.trim_end()))
 }
 
 #[derive(Default)]

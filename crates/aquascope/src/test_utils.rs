@@ -24,6 +24,7 @@ use crate::{
     permissions::{Permissions, PermissionsDataDiff},
   },
   errors,
+  interpreter::{self, get_miri_sysroot, MStep},
 };
 
 struct StringLoader(String);
@@ -296,6 +297,26 @@ pub fn test_steps_in_file(
   inner().unwrap()
 }
 
+pub fn test_interpreter_in_file(
+  path: &Path,
+  run_insta: impl Fn(String, Vec<MStep<crate::Range>>) + Sync,
+) {
+  let main = || -> Result<()> {
+    let input = load_test_from_file(path)?;
+    let args = format!(
+      "--crate-type bin --sysroot {}",
+      get_miri_sysroot()?.display()
+    );
+    compile(input, &args, |tcx| {
+      let name = path.file_name().unwrap().to_string_lossy().to_string();
+      let result = interpreter::interpret(tcx).unwrap();
+      run_insta(name, result);
+    });
+    Ok(())
+  };
+  main().unwrap();
+}
+
 pub fn run_in_dir(
   dir: impl AsRef<Path>,
   test_fn: impl Fn(&Path) + std::panic::RefUnwindSafe,
@@ -345,38 +366,42 @@ pub fn compile_bodies(
     + Send
     + std::marker::Sync,
 ) {
-  compile(input, |tcx| {
-    let hir = tcx.hir();
-    hir
-      .items()
-      .filter_map(|id| match hir.item(id).kind {
-        ItemKind::Fn(_, _, body) => Some(body),
-        _ => None,
-      })
-      .for_each(|body_id| {
-        let def_id = tcx.hir().body_owner_def_id(body_id);
-        errors::track_body_diagnostics(def_id);
-        let body_with_facts =
-          borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
+  compile(
+    input,
+    &format!("--crate-type lib --sysroot {}", &*SYSROOT),
+    |tcx| {
+      let hir = tcx.hir();
+      hir
+        .items()
+        .filter_map(|id| match hir.item(id).kind {
+          ItemKind::Fn(_, _, body) => Some(body),
+          _ => None,
+        })
+        .for_each(|body_id| {
+          let def_id = tcx.hir().body_owner_def_id(body_id);
+          errors::track_body_diagnostics(def_id);
+          let body_with_facts =
+            borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
 
-        log::debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
+          log::debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
 
-        callback(tcx, body_id, body_with_facts);
-      })
-  })
+          callback(tcx, body_id, body_with_facts);
+        })
+    },
+  )
 }
 
 #[allow(unused_must_use)]
 pub fn compile(
   input: impl Into<String>,
+  args: &str,
   callback: impl FnOnce(TyCtxt<'_>) + Send,
 ) {
   let mut callbacks = TestCallbacks {
     callback: Some(callback),
   };
   let args = format!(
-    "rustc dummy.rs --crate-type lib --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings --sysroot {}",
-    &*SYSROOT
+    "rustc dummy.rs --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings {args}",    
   );
   let args = args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
 

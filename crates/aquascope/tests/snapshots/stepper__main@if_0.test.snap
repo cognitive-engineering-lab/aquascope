@@ -1,6 +1,6 @@
 ---
-source: crates/aquascope/tests/permissions.rs
-description: main@if_1.test
+source: crates/aquascope/tests/stepper.rs
+description: main@if_0.test
 ---
 - - 1
   - - - s1
@@ -53,7 +53,61 @@ description: main@if_1.test
             type: High
           drop:
             type: High
+- - 5
+  - - - s1
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: High
+        loan_write_refined:
+          type: High
+        loan_drop_refined:
+          type: High
+        permissions:
+          read:
+            type: Low
+          write:
+            type: Low
+          drop:
+            type: Low
 - - 7
+  - - - s2
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: High
+        loan_write_refined:
+          type: High
+        loan_drop_refined:
+          type: High
+        permissions:
+          read:
+            type: Low
+          write:
+            type: Low
+          drop:
+            type: Low
+- - 8
   - - - "*b"
       - is_live:
           type: High
@@ -105,6 +159,59 @@ description: main@if_1.test
             value: false
           drop:
             type: High
+- - 10
+  - - - "*b"
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: Low
+          drop:
+            type: None
+            value: false
+    - - b
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low
     - - s1
       - is_live:
           type: None
@@ -119,68 +226,16 @@ description: main@if_1.test
           type: None
           value: false
         loan_read_refined:
-          type: High
-        loan_write_refined:
-          type: High
-        loan_drop_refined:
-          type: High
-        permissions:
-          read:
-            type: Low
-          write:
-            type: Low
-          drop:
-            type: Low
-- - 9
-  - - - "*b"
-      - is_live:
-          type: High
-        type_droppable:
-          type: None
-          value: false
-        type_writeable:
-          type: None
-          value: true
-        path_moved:
-          type: None
-          value: false
-        loan_read_refined:
-          type: None
-        loan_write_refined:
-          type: None
-        loan_drop_refined:
-          type: None
-        permissions:
-          read:
-            type: High
-          write:
-            type: High
-          drop:
-            type: None
-            value: false
-    - - b
-      - is_live:
-          type: High
-        type_droppable:
-          type: None
-          value: true
-        type_writeable:
-          type: None
-          value: false
-        path_moved:
           type: Low
-        loan_read_refined:
-          type: None
         loan_write_refined:
-          type: None
+          type: Low
         loan_drop_refined:
-          type: None
+          type: Low
         permissions:
           read:
             type: High
           write:
-            type: None
-            value: false
+            type: High
           drop:
             type: High
     - - s2
@@ -197,124 +252,19 @@ description: main@if_1.test
           type: None
           value: false
         loan_read_refined:
-          type: High
+          type: Low
         loan_write_refined:
-          type: High
+          type: Low
         loan_drop_refined:
-          type: High
+          type: Low
         permissions:
           read:
-            type: Low
+            type: High
           write:
-            type: Low
+            type: High
           drop:
-            type: Low
+            type: High
 - - 12
-  - - - "*b"
-      - is_live:
-          type: Low
-        type_droppable:
-          type: None
-          value: false
-        type_writeable:
-          type: None
-          value: true
-        path_moved:
-          type: None
-          value: false
-        loan_read_refined:
-          type: None
-        loan_write_refined:
-          type: None
-        loan_drop_refined:
-          type: None
-        permissions:
-          read:
-            type: Low
-          write:
-            type: Low
-          drop:
-            type: None
-            value: false
-    - - b
-      - is_live:
-          type: Low
-        type_droppable:
-          type: None
-          value: true
-        type_writeable:
-          type: None
-          value: false
-        path_moved:
-          type: None
-          value: false
-        loan_read_refined:
-          type: None
-        loan_write_refined:
-          type: None
-        loan_drop_refined:
-          type: None
-        permissions:
-          read:
-            type: Low
-          write:
-            type: None
-            value: false
-          drop:
-            type: Low
-    - - s1
-      - is_live:
-          type: None
-          value: true
-        type_droppable:
-          type: None
-          value: true
-        type_writeable:
-          type: None
-          value: true
-        path_moved:
-          type: None
-          value: false
-        loan_read_refined:
-          type: Low
-        loan_write_refined:
-          type: Low
-        loan_drop_refined:
-          type: Low
-        permissions:
-          read:
-            type: High
-          write:
-            type: High
-          drop:
-            type: High
-    - - s2
-      - is_live:
-          type: None
-          value: true
-        type_droppable:
-          type: None
-          value: true
-        type_writeable:
-          type: None
-          value: true
-        path_moved:
-          type: None
-          value: false
-        loan_read_refined:
-          type: Low
-        loan_write_refined:
-          type: Low
-        loan_drop_refined:
-          type: Low
-        permissions:
-          read:
-            type: High
-          write:
-            type: High
-          drop:
-            type: High
-- - 14
   - - - s1
       - is_live:
           type: Low
@@ -340,7 +290,7 @@ description: main@if_1.test
             type: Low
           drop:
             type: Low
-- - 15
+- - 13
   - - - s2
       - is_live:
           type: Low

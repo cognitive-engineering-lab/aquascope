@@ -136,26 +136,18 @@ impl SimplePreprocessor for AquascopePreprocessor {
       Ok(stdout.trim_end().to_string())
     };
 
-    // TODO: read this from rust-toolchain.toml
-    const TOOLCHAIN: &str = "nightly-2022-12-07";
-    let output = run_and_get_output(Command::new("cargo").args([
-      &format!("+{TOOLCHAIN}"),
-      "miri",
-      "setup",
-      "--print-sysroot",
-    ]))?;
-    let miri_sysroot = PathBuf::from(output);
+    let miri_sysroot = aquascope::interpreter::get_miri_sysroot()?;
 
     let output = run_and_get_output(Command::new("rustup").args([
       "which",
       "--toolchain",
-      TOOLCHAIN,
+      aquascope::interpreter::toolchain(),
       "rustc",
     ]))?;
     let rustc = PathBuf::from(output);
 
     let output = run_and_get_output(
-      Command::new(&rustc).args(["--print", "target-libdir"]),
+      Command::new(rustc).args(["--print", "target-libdir"]),
     )?;
     let target_libdir = PathBuf::from(output);
 

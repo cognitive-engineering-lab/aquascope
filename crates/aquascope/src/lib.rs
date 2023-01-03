@@ -45,8 +45,9 @@ extern crate smallvec;
 
 pub mod analysis;
 pub mod errors;
-pub mod interpret;
+pub mod interpreter;
 pub mod mir;
+#[cfg(feature = "testing")]
 pub mod test_utils;
 
 use serde::{Deserialize, Serialize};
