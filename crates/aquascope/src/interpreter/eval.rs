@@ -18,7 +18,7 @@ use rustc_target::abi::Size;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::mvalue::{MPath, MValue, MMemorySegment};
+use super::mvalue::{MMemorySegment, MPath, MValue};
 use crate::Range;
 
 #[derive(Serialize, Deserialize, Debug, TS)]
@@ -136,7 +136,8 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
           Operand::Immediate(Immediate::Uninit) => return None,
           Operand::Indirect(mplace) => {
             let mut memory_map = self.memory_map.borrow_mut();
-            let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
+            let (alloc_id, _, _) =
+              self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
             memory_map
               .stack_slots
               .insert(alloc_id, (index, name.clone()));

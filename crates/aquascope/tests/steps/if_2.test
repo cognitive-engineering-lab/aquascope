@@ -1,0 +1,14 @@
+fn add_ref<'a>(v: &mut Vec<&'a i32>, n: &'a i32) {
+  let mut v2 = vec![];
+  let r = if false {
+    &mut *v
+  } else {
+    &mut v2
+  };
+  let x = 0; let y = 1;
+  r.push(n);
+  println!("{x}{y}");
+  println!("{r:?}");
+  println!("{v2:?}");
+  println!("{v:?}");
+}
