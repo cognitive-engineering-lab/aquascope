@@ -272,7 +272,7 @@ pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
 
 
             let pb = PathBoundary {
-              location: lhs.span,
+              location: lhs.span.shrink_to_lo(),
               hir_id,
               expected: Permissions {
                 read: true,
