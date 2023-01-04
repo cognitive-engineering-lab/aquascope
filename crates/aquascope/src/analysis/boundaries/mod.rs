@@ -3,15 +3,37 @@ use flowistry::mir::utils::{OperandExt, SpanExt};
 use rustc_hir::HirId;
 use rustc_middle::mir::{Rvalue, Statement, StatementKind};
 use rustc_span::Span;
+use serde::Serialize;
+use ts_rs::TS;
 
 use crate::{
   analysis::{
     ir_mapper::GatherDepth,
-    permissions::{Permissions, PermissionsBoundary},
-    AquascopeAnalysis,
+    permissions::{Permissions, PermissionsData},
+    AquascopeAnalysis, KeyShifter, LoanKey,
   },
   mir::utils::PlaceExt,
 };
+
+/// A point where the permissions reality are checked against their expectations.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct PermissionsBoundary {
+  // instead of giving the range, the backend should supply the exact location. this will
+  // be especially usefull when we have permissions on more than just method calls.
+  pub location: usize,
+  pub expected: Permissions,
+  pub actual: PermissionsData,
+}
+
+impl KeyShifter for PermissionsBoundary {
+  fn shift_keys(self, loan_shift: LoanKey) -> Self {
+    PermissionsBoundary {
+      actual: self.actual.shift_keys(loan_shift),
+      ..self
+    }
+  }
+}
 
 // A previous implementation of the permission boundaries
 // computation allowed for multiple stacks to get generated

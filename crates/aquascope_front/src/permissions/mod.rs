@@ -1,7 +1,6 @@
 use anyhow::Result;
 use aquascope::analysis::{
-  self,
-  permissions::{PermissionsBoundary, PermissionsStateStep},
+  self, boundaries::PermissionsBoundary, stepper::PermissionsStateStep,
   AnalysisOutput, BodyAnalysisJoin,
 };
 use flowistry::{

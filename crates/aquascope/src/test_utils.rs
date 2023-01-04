@@ -19,10 +19,7 @@ use rustc_middle::{
 use rustc_span::{source_map::FileLoader, BytePos};
 
 use crate::{
-  analysis::{
-    self,
-    permissions::{Permissions, PermissionsDataDiff},
-  },
+  analysis::{self, permissions::Permissions, stepper::PermissionsDataDiff},
   errors,
   interpreter::{self, MStep},
 };

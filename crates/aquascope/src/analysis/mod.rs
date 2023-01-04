@@ -1,9 +1,11 @@
 //! Core contextual analysis for Aquascope.
 
+pub mod boundaries;
 pub mod find_bindings;
 pub mod ir_mapper;
 pub mod permissions;
 mod scrape_hir;
+pub mod stepper;
 
 use std::{
   cell::RefCell,
@@ -11,22 +13,20 @@ use std::{
   ops::{Add, Deref, DerefMut},
 };
 
+pub use boundaries::compute_permission_boundaries;
 pub use find_bindings::find_bindings;
 use flowistry::mir::{
   borrowck_facts::get_body_with_borrowck_facts,
   utils::{BodyExt, SpanExt},
 };
 use ir_mapper::{GatherMode, IRMapper};
-pub use permissions::{
-  permission_boundaries::compute_permission_boundaries,
-  permission_stepper::compute_permission_steps,
-};
 use permissions::{Loan, PermissionsCtxt, Point, RefinementRegion, Refiner};
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 use serde::Serialize;
+pub use stepper::compute_permission_steps;
 use ts_rs::TS;
 
 use crate::Range;

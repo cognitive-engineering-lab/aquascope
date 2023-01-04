@@ -1,8 +1,6 @@
 mod context;
 mod graphviz;
-pub mod permission_boundaries;
-pub mod permission_stepper;
-mod permissions_datalog;
+mod output;
 mod places_conflict;
 pub mod utils;
 
@@ -12,7 +10,7 @@ use std::{
 };
 
 pub use context::PermissionsCtxt;
-pub use permissions_datalog::{compute, Output};
+pub use output::{compute, Output};
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::RustcFacts;
 use rustc_data_structures::fx::FxHashMap;
@@ -103,17 +101,6 @@ pub struct PermissionsData {
   pub permissions: Permissions,
 }
 
-/// A point where the permissions reality are checked against their expectations.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export)]
-pub struct PermissionsBoundary {
-  // instead of giving the range, the backend should supply the exact location. this will
-  // be especially usefull when we have permissions on more than just method calls.
-  pub location: usize,
-  pub expected: Permissions,
-  pub actual: PermissionsData,
-}
-
 #[derive(Debug, Clone, Serialize, PartialEq, TS)]
 #[ts(export)]
 pub enum Refiner {
@@ -128,164 +115,16 @@ pub struct RefinementRegion {
   pub refined_ranges: Vec<Range>,
 }
 
-// ------------------------------------------------
-// Permission Stepper
-
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(export)]
-pub struct PermissionsStateStep {
-  pub location: Range,
-  pub state: Vec<(String, PermissionsDataDiff)>,
-}
-
-#[derive(Clone, Debug, Serialize, TS)]
-#[serde(tag = "type")]
-#[ts(export)]
-pub enum ValueStep<A>
-where
-  A: Clone + std::fmt::Debug + Serialize + TS,
-{
-  High,
-  Low,
-  None {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    value: Option<A>,
-  },
-}
-
-// -----------------
-// Permission Domain
-
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
 /// A representation of the permissions *forall* places in the body under analysis.
 pub struct PermissionsDomain<'tcx>(FxHashMap<Place<'tcx>, PermissionsData>);
 
-pub trait Difference {
-  type Diff;
-
-  fn diff(&self, rhs: Self) -> Self::Diff;
-}
-
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(export)]
-pub struct PermissionsDataDiff {
-  pub is_live: ValueStep<bool>,
-  pub type_droppable: ValueStep<bool>,
-  pub type_writeable: ValueStep<bool>,
-  pub path_moved: ValueStep<bool>,
-  pub loan_read_refined: ValueStep<LoanKey>,
-  pub loan_write_refined: ValueStep<LoanKey>,
-  pub loan_drop_refined: ValueStep<LoanKey>,
-  pub permissions: PermissionsDiff,
-}
-
-impl PermissionsDataDiff {
-  fn is_empty(&self) -> bool {
-    self.permissions.is_empty()
-  }
-}
-
-// A handy macro for making difference types with only BoolStep fields
-// TODO(gavinleroy): a diff type should be automatically generated if all the fields
-// in a macro can ge diffed, but I'll save that for later. Below is mostly a syntactic
-// macro to simplify things for the time being.
-// FIXME: no longer sufficient *rewrite*. Shouldn't need to pass the name $diff
-// and fields should be able to have a specified type, if not provided then
-// the default BoolStep can be taken.
-macro_rules! make_diff {
-  ($base:ident => $diff:ident { $($i:ident),* }) => {
-    #[derive(Clone, Debug, Serialize, TS)]
-    #[ts(export)]
-    pub struct $diff {
-      $( pub $i: ValueStep<bool>, )*
-    }
-
-    impl $diff {
-      fn is_empty(&self) -> bool {
-        $( self.$i.is_empty() && )* true
-      }
-    }
-  }
-}
-
-make_diff!(Permissions => PermissionsDiff {
-   read, write, drop
-});
-
-// ---------------------
-// Impls for above types
-
-// Again these should all be generated, very pattern oriented.
-
-impl Difference for bool {
-  type Diff = ValueStep<bool>;
-  fn diff(&self, rhs: bool) -> Self::Diff {
-    if *self && !rhs {
-      ValueStep::Low
-    } else if !*self && rhs {
-      ValueStep::High
-    } else {
-      ValueStep::None { value: Some(*self) }
-    }
-  }
-}
-
-impl<A> Difference for Option<A>
-where
-  A: Clone + PartialEq + Eq + std::fmt::Debug + Serialize + TS,
-{
-  type Diff = ValueStep<A>;
-
-  fn diff(&self, rhs: Option<A>) -> Self::Diff {
-    match (self, rhs) {
-      (None, None) => ValueStep::None { value: None },
-      (Some(_), None) => ValueStep::Low,
-      (None, Some(_)) => ValueStep::High,
-      (Some(v0), Some(v1)) => {
-        if *v0 != v1 {
-          log::warn!(
-            "Option diff Some does not contain same value {v0:?} -> {v1:?}"
-          );
-        }
-        ValueStep::None { value: Some(v1) }
-      }
-    }
-  }
-}
-
-impl Difference for Permissions {
-  type Diff = PermissionsDiff;
-
-  fn diff(&self, rhs: Permissions) -> Self::Diff {
-    PermissionsDiff {
-      read: self.read.diff(rhs.read),
-      write: self.write.diff(rhs.write),
-      drop: self.drop.diff(rhs.drop),
-    }
-  }
-}
-
-impl Difference for PermissionsData {
-  type Diff = PermissionsDataDiff;
-
-  fn diff(&self, rhs: PermissionsData) -> Self::Diff {
-    PermissionsDataDiff {
-      is_live: self.is_live.diff(rhs.is_live),
-      type_droppable: self.type_droppable.diff(rhs.type_droppable),
-      type_writeable: self.type_writeable.diff(rhs.type_writeable),
-      loan_read_refined: self.loan_read_refined.diff(rhs.loan_read_refined),
-      loan_write_refined: self.loan_write_refined.diff(rhs.loan_write_refined),
-      loan_drop_refined: self.loan_drop_refined.diff(rhs.loan_drop_refined),
-      path_moved: self.path_moved.diff(rhs.path_moved),
-      permissions: self.permissions.diff(rhs.permissions),
-    }
-  }
-}
+// ------------------------------------------------
 
 impl Permissions {
   // No "Top" value exists for permissions as this is on a per-place basis.
   // That is, the top value depends on a places type declaration.
-  fn bottom() -> Permissions {
+  pub fn bottom() -> Permissions {
     Permissions {
       read: false,
       write: false,
@@ -329,15 +168,6 @@ impl<'tcx> From<Ty<'tcx>> for Permissions {
   }
 }
 
-impl<T> ValueStep<T>
-where
-  T: Clone + std::fmt::Debug + Serialize + TS,
-{
-  fn is_empty(&self) -> bool {
-    matches!(self, Self::None { .. })
-  }
-}
-
 impl<'tcx> From<FxHashMap<Place<'tcx>, PermissionsData>>
   for PermissionsDomain<'tcx>
 {
@@ -360,44 +190,12 @@ impl DerefMut for PermissionsDomain<'_> {
   }
 }
 
-impl<'tcx> Difference for &PermissionsDomain<'tcx> {
-  type Diff = FxHashMap<Place<'tcx>, PermissionsDataDiff>;
-  fn diff(&self, rhs: &PermissionsDomain<'tcx>) -> Self::Diff {
-    self
-      .iter()
-      .fold(FxHashMap::default(), |mut acc, (place, p1)| {
-        let p2 = rhs.get(place).unwrap();
-        let diff = p1.diff(*p2);
-
-        match acc.entry(*place) {
-          Entry::Occupied(_) => {
-            panic!("Permissions step already in output for {place:?}");
-          }
-          Entry::Vacant(entry) => {
-            entry.insert(diff);
-          }
-        }
-
-        acc
-      })
-  }
-}
-
 impl KeyShifter for PermissionsData {
   fn shift_keys(self, loan_shift: LoanKey) -> Self {
     PermissionsData {
       loan_read_refined: self.loan_read_refined.map(|l| l + loan_shift),
       loan_write_refined: self.loan_write_refined.map(|l| l + loan_shift),
       loan_drop_refined: self.loan_drop_refined.map(|l| l + loan_shift),
-      ..self
-    }
-  }
-}
-
-impl KeyShifter for PermissionsBoundary {
-  fn shift_keys(self, loan_shift: LoanKey) -> Self {
-    PermissionsBoundary {
-      actual: self.actual.shift_keys(loan_shift),
       ..self
     }
   }
