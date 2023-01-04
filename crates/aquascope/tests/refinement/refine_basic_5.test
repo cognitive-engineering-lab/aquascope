@@ -1,0 +1,35 @@
+fn main() {
+  let mut z: i32 = 1;
+
+  let _a = &`[z RWD]`;
+
+  let x: &mut i32 = &mut z;
+
+  let _a = &`[z ---]`;
+  let _a = &`[x R-D]`;
+  let _a = &`[*x RWD]`;
+
+  let y: &i32 = &*x;
+
+  let _a = &`[z ---]`;
+  let _a = &`[x R--]`;
+  let _a = &`[*x R-D]`;
+  let _a = &`[y R-D]`;
+  let _a = &`[*y R-D]`;
+
+  *x += 1; // ERROR: *x doesn't have 'W' permissions
+
+  // NOTE: after the error, the generated facts say that
+  // we would have 'W' permision because the above statement
+  // was "executed". The permissions below show that an error
+  // occurred because there exists both read and write permission
+  // to the same place in memory.
+
+  let _a = &`[z ---]`;
+  let _a = &`[x R-D]`;
+  let _a = &`[*x RWD]`;
+  let _a = &`[y R-D]`;
+  let _a = &`[*y R-D]`;
+
+  println!("{} = {}", x, *y);
+}

@@ -1,6 +1,6 @@
 fn dummy_use(_n: &i32) {}
 
-fn dump_me() {
+fn main() {
   let mut x: i32 = 0;
 
   let mut y: i32 = 0;

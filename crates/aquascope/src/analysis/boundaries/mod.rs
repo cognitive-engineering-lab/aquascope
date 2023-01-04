@@ -67,14 +67,17 @@ impl std::fmt::Debug for PathBoundary<'_, '_> {
 impl IntoMany for PathBoundary<'_, '_> {
   type Elem = PermissionsBoundary;
   fn into_many(self) -> Box<dyn Iterator<Item = Self::Elem>> {
-    log::debug!("Computing PermissionsBoundary for {self:?}");
-
     let ctxt = &self.analysis_ctxt.permissions;
     let body = &ctxt.body_with_facts.body;
     let tcx = ctxt.tcx;
     let hir = tcx.hir();
     let ir_mapper = &self.analysis_ctxt.ir_mapper;
     let hir_id = self.hir_id;
+
+    log::debug!(
+      "Resolving permissions boundary for {}",
+      hir.node_to_string(self.hir_id)
+    );
 
     // For a given Path, the MIR location may not be immediately associated with it.
     // For example, in a function call `foo( &x );`, the Hir Node::Path `&x` will not
@@ -84,9 +87,18 @@ impl IntoMany for PathBoundary<'_, '_> {
       let mir_locations_opt =
         ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
 
+      macro_rules! maybe_in_op {
+        ($op:expr, $loc:expr) => {
+          $op
+            .to_place()
+            .and_then(|p| p.is_source_visible(tcx, body).then_some(($loc, p)))
+        };
+      };
+
       let mir_locations = mir_locations_opt?
         .values()
         .filter_map(|loc| {
+          log::debug!("looking at {loc:?}");
           if let Either::Left(Statement {
             kind: StatementKind::Assign(box (_, rvalue)),
             ..
@@ -98,10 +110,13 @@ impl IntoMany for PathBoundary<'_, '_> {
               {
                 Some((loc, *place))
               }
-              Rvalue::Use(op) => op.to_place().and_then(|p| {
-                p.is_source_visible(tcx, body).then_some((loc, p))
-              }),
-
+              Rvalue::Use(op) => maybe_in_op!(op, loc),
+              Rvalue::BinaryOp(_, box (lop, rop)) => {
+                maybe_in_op!(lop, loc).or_else(|| maybe_in_op!(rop, loc))
+              }
+              Rvalue::CheckedBinaryOp(_, box (lop, rop)) => {
+                maybe_in_op!(lop, loc).or_else(|| maybe_in_op!(rop, loc))
+              }
               Rvalue::CopyForDeref(place)
                 if place.is_source_visible(tcx, body) =>
               {
@@ -194,6 +209,11 @@ pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
         let hir_id = expr.hir_id;
         let span = expr.span;
 
+        log::debug!(
+          "visiting {}",
+          self.nested_visit_map().node_to_string(hir_id)
+        );
+
         match expr.kind {
           // For method calls, it's most accurate to get the expected
           // permissions from the method signature declared type.
@@ -244,6 +264,28 @@ pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
             if !matches!(inner.kind, ExprKind::Path(..)) {
               intravisit::walk_expr(self, expr);
             }
+          }
+
+          ExprKind::AssignOp(_, lhs, rhs) => {
+            let lhs_ty = self.typeck_res.expr_ty_adjusted(lhs);
+            log::debug!("Type of LHS: {:?}", lhs_ty);
+
+
+            let pb = PathBoundary {
+              location: lhs.span,
+              hir_id,
+              expected: Permissions {
+                read: true,
+                write: true,
+                drop: false,
+              },
+              analysis_ctxt: self.ctxt,
+            };
+
+            self.data.push(pb);
+
+              intravisit::walk_expr(self, lhs);
+              intravisit::walk_expr(self, rhs);
           }
 
           // XXX: we only want to attach permissions to path resolved to `Local` ids.

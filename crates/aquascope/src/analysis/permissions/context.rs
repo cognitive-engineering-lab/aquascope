@@ -231,12 +231,32 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let permissions = if !is_live {
       Permissions::bottom()
     } else {
-      Permissions {
-        read: !path_moved && loan_read_refined.is_none(),
-        write: type_writeable && !path_moved && loan_write_refined.is_none(),
-        drop: type_copyable
-          || (type_droppable && !path_moved && loan_drop_refined.is_none()),
-      }
+      // A path is readable IFF:
+      // - it is not moved.
+      // - there doesn't exist a read-refining loan at this point.
+      let read = !path_moved && loan_read_refined.is_none();
+
+      // A path is writeable IFF:
+      // - the path's declared type allows for mutability.
+      // - the path is readable (you can't write if you can't read)
+      //   this implies that the path isn't moved.
+      // - there doesn't exist a write-refining loan at this point.
+      let write = type_writeable && read && loan_write_refined.is_none();
+
+      // A path is droppable if it is doppable or copyable.
+      //
+      // * A path can be copied (implies drop) IFF:
+      //   - the declared type is copyable.
+      //   - the value can be read.
+      //
+      // * A path can be dropped (without copy) IFF:
+      //   - the path's declared type is droppable.
+      //   - it isn't moved.
+      //   - no drop-refining loan exists at this point.
+      let drop = (type_copyable && read)
+        || (type_droppable && !path_moved && loan_drop_refined.is_none());
+
+      Permissions { read, write, drop }
     };
 
     PermissionsData {

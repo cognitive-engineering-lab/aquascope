@@ -172,10 +172,15 @@ pub fn test_refinements_in_file(path: &Path) {
     compile_bodies(clean_input, |tcx, body_id, body_with_facts| {
       let ctxt = analysis::compute_permissions(tcx, body_id, body_with_facts);
       let spanner = Spanner::new(tcx, body_id, &body_with_facts.body);
+      let source_map = tcx.sess.source_map();
 
       expected_permissions.retain(|range, expected_perms| {
         let span = range.to_span(tcx).unwrap();
         let places = spanner.span_to_places(span);
+        let source_file = source_map.lookup_source_file(span.lo());
+        let source_line = source_map.lookup_line(span.lo()).unwrap().line;
+        let line_str = source_file.get_line(source_line).unwrap();
+        let source_line = source_line + 1;
 
         log::debug!("Spanned places {span:?} {expected_perms:?}: {:?}", places);
 
@@ -196,33 +201,33 @@ pub fn test_refinements_in_file(path: &Path) {
         // FIXME: this code is to catch any false assumptions I'm making
         // about the structure of the generated MIR and the Flowistry Spanner.
         let stmt = ctxt.body_with_facts.body.stmt_at(loc).left().unwrap();
-        let path = match &stmt.kind {
+        let place = match &stmt.kind {
           StatementKind::Assign(box (lhs, rvalue)) => {
             let exp = ctxt.place_to_path(&mir_spanner.place);
             let act = ctxt.place_to_path(lhs);
             assert_eq!(exp, act);
 
-            let rplace = match rvalue {
+            match rvalue {
               Rvalue::Ref(_, _, place) => *place,
               Rvalue::Use(op) => op.to_place().unwrap(),
               _ => unimplemented!(),
-            };
-
-            ctxt.place_to_path(&rplace)
+            }
           }
           _ => unreachable!("not a move"),
         };
 
+        let path = ctxt.place_to_path(&place);
         let point = ctxt.location_to_point(loc);
-
         let computed_perms =
           ctxt.permissions_data_at_point(path, point).permissions;
 
         if *expected_perms != computed_perms {
           panic!(
             "\n\n\x1b[31mExpected {expected_perms:?} \
-               but got {computed_perms:?} permissions\n\t\
-               \x1b[33m{stmt:?}\
+               but got {computed_perms:?} permissions\n  \
+               \x1b[33m\
+               for {place:?} in {stmt:?}\n  \
+               on line {source_line}: {line_str}\n  \
                \x1b[0m\n\n"
           );
         }
