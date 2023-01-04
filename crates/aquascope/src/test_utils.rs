@@ -401,7 +401,7 @@ pub fn compile(
     callback: Some(callback),
   };
   let args = format!(
-    "rustc dummy.rs --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings {args}",    
+    "rustc dummy.rs --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings {args}",
   );
   let args = args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
 

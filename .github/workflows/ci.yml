@@ -12,7 +12,7 @@ jobs:
   test:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2      
+      - uses: actions/checkout@v2
       - uses: actions-rs/install@v0.1
         with:
           crate: cargo-insta
@@ -24,12 +24,3 @@ jobs:
         with:
           command: insta
           args: test --features=no-docker
-
-  format:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: rustup component add rustfmt
-      - uses: mbrobbel/rustfmt-check@master
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
