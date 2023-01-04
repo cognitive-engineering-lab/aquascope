@@ -20,6 +20,7 @@ flowistry = "0.5.34"
 serde = { version = "1.0", features = ["derive"] }
 ts-rs = "6.2"
 regex = "1"
+fluid-let = "1.0"
 
 # interpret module
 miri = {git = "https://github.com/rust-lang/miri.git", rev = "98ad06d856abb9b85ef1e3b234c2370076873b1b"}

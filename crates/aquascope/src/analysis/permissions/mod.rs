@@ -4,10 +4,7 @@ mod output;
 mod places_conflict;
 pub mod utils;
 
-use std::{
-  collections::hash_map::Entry,
-  ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 pub use context::PermissionsCtxt;
 pub use output::{compute, Output};

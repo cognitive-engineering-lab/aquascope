@@ -1,9 +1,7 @@
-use std::{
-  collections::hash_map::Entry,
-  ops::{Deref, DerefMut},
-};
+use std::collections::hash_map::Entry;
 
 use flowistry::mir::utils::{PlaceExt as FlowistryPlaceExt, SpanExt};
+use fluid_let::fluid_let;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::{
   self as hir,
@@ -11,7 +9,7 @@ use rustc_hir::{
 };
 use rustc_middle::{hir::nested_filter, mir::Place};
 use rustc_span::Span;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
@@ -26,6 +24,25 @@ use crate::{
   mir::utils::PlaceExt as AquascopePlaceExt,
   Range,
 };
+
+fluid_let!(pub static INCLUDE_MODE: PermIncludeMode);
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Deserialize, Serialize, Hash)]
+pub enum PermIncludeMode {
+  Changes,
+  All,
+}
+
+impl std::str::FromStr for PermIncludeMode {
+  type Err = String;
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s {
+      "Changes" => Ok(Self::Changes),
+      "All" => Ok(Self::All),
+      _ => Err(format!("Could not parse: {s}")),
+    }
+  }
+}
 
 pub trait Difference {
   type Diff;
@@ -213,9 +230,12 @@ where
 
   let ir_mapper = &IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
 
+  let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
+
   let mut hir_visitor = HirPermDiffFlow {
     ctxt,
     ir_mapper,
+    mode,
     diff: HashMap::default(),
     step_barriers: Vec::default(),
     visibility_scopes: Vec::default(),
@@ -264,26 +284,9 @@ fn prettify_permission_steps<'tcx>(
         // steps appearing on the same line will be combined.
         let span = source_map.span_extend_to_line(span).shrink_to_hi();
 
-        macro_rules! some_permissions {
-          ($diff:expr) => {
-            !$diff.is_empty()
-              || !matches!($diff.permissions.read, ValueStep::None {
-                value: Some(false),
-              })
-              || !matches!($diff.permissions.write, ValueStep::None {
-                value: Some(false),
-              })
-              || !matches!($diff.permissions.drop, ValueStep::None {
-                value: Some(false),
-              })
-          };
-        }
-
         let entries = place_to_diffs
           .into_iter()
-          .filter(|(place, diff)| {
-            place.is_source_visible(tcx, body) && some_permissions!(diff)
-          })
+          .filter(|(place, _)| place.is_source_visible(tcx, body))
           .collect::<Vec<_>>();
 
         // This could be a little more graceful. The idea is that
@@ -331,7 +334,7 @@ where
 {
   ctxt: &'a PermissionsCtxt<'a, 'tcx>,
   ir_mapper: &'a IRMapper<'a, 'tcx>,
-
+  mode: PermIncludeMode,
   // For a given Span, we attach the before and after Domain.
   // The difference of the domains is not computed yet because we may have
   // to combine differences for processing at the source level.
@@ -366,6 +369,11 @@ impl<'tcx> HirPermDiffFlow<'_, 'tcx> {
       .collect::<HashMap<_, _>>()
       .into()
   }
+
+  fn should_keep(&self, p: &PermissionsDataDiff) -> bool {
+    !(matches!(p.is_live, ValueStep::None { value: Some(false) })
+      || (self.mode == PermIncludeMode::Changes && p.is_empty()))
+  }
 }
 
 macro_rules! filter_exec_commit {
@@ -373,7 +381,8 @@ macro_rules! filter_exec_commit {
     // For the current visibility we remove any place which is part of a barrier,
     // or if that place had *no change* (e.g. an empty difference).
     $scopes.retain(|place, df| {
-      !(df.is_empty() || $this.step_barriers.iter().any(|p| p.local == place.local))
+      $this.should_keep(&df)
+        && !$this.step_barriers.iter().any(|p| p.local == place.local)
     });
 
     // For each previous visibility scope, remove the permission differences
@@ -511,7 +520,11 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
         mir_order.entry_location().iter().for_each(|entry_loc| {
           let entry_point = self.ctxt.location_to_point(*entry_loc);
           let entry_domain = self.ctxt.permissions_domain_at_point(entry_point);
-          let d = empty_domain.diff(&entry_domain);
+          let d = empty_domain
+            .diff(&entry_domain)
+            .into_iter()
+            .filter(|(_, df)| self.should_keep(&df))
+            .collect::<HashMap<_, _>>();
           let id = body.id().hir_id;
           let span = self.ctxt.tcx.hir().span(id).shrink_to_lo();
           self.diff.insert(span, d);

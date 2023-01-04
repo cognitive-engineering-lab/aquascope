@@ -5,7 +5,10 @@ use std::{
 };
 
 use aquascope::{
-  analysis::BodyAnalysisJoin,
+  analysis::{
+    stepper::{PermIncludeMode, INCLUDE_MODE},
+    BodyAnalysisJoin,
+  },
   errors::{initialize_error_tracking, track_body_diagnostics},
 };
 use clap::{Parser, Subcommand};
@@ -13,6 +16,7 @@ use flowistry::{
   mir::borrowck_facts::{self, NO_SIMPLIFY},
   source_map::find_bodies,
 };
+use fluid_let::fluid_set;
 use rustc_hir::BodyId;
 use rustc_interface::interface::Result as RustcResult;
 use rustc_middle::ty::TyCtxt;
@@ -36,6 +40,9 @@ enum AquascopeCommand {
   },
 
   PermissionDiffs {
+    #[clap(long)]
+    steps_include_mode: Option<PermIncludeMode>,
+
     #[clap(last = true)]
     flags: Vec<String>,
   },
@@ -96,7 +103,7 @@ impl RustcPlugin for AquascopePlugin {
 
     let flags = match &args.command {
       ReceiverTypes { flags } => flags,
-      PermissionDiffs { flags } => flags,
+      PermissionDiffs { flags, .. } => flags,
       Interpreter { flags } => flags,
       _ => unreachable!(),
     };
@@ -121,7 +128,11 @@ impl RustcPlugin for AquascopePlugin {
         crate::permissions::permission_boundaries,
         &compiler_args,
       )),
-      PermissionDiffs { .. } => {
+      PermissionDiffs {
+        steps_include_mode, ..
+      } => {
+        let mode = steps_include_mode.unwrap_or(PermIncludeMode::Changes);
+        fluid_set!(INCLUDE_MODE, mode);
         postprocess(run(crate::permissions::permission_diffs, &compiler_args))
       }
       Interpreter { .. } => {
