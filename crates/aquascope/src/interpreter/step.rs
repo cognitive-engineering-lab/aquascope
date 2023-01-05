@@ -1,3 +1,5 @@
+//! Stepping through a Rust program
+
 use std::{cell::RefCell, cmp::Ordering, collections::HashMap};
 
 use anyhow::{anyhow, Context, Result};
@@ -29,8 +31,6 @@ pub struct MFrame<L> {
   pub locals: Vec<(String, MValue)>,
 }
 
-pub(crate) type MirLoc<'tcx> = (InstanceDef<'tcx>, Either<Location, Span>);
-
 #[derive(Serialize, Deserialize, Debug, TS)]
 #[ts(export)]
 pub struct MStack<L> {
@@ -50,6 +50,8 @@ pub struct MStep<L> {
   pub heap: MHeap,
 }
 
+pub(crate) type MirLoc<'tcx> = (InstanceDef<'tcx>, Either<Location, Span>);
+
 #[derive(Default)]
 pub(crate) struct MemoryMap<'tcx> {
   pub(crate) heap: MHeap,
@@ -59,7 +61,6 @@ pub(crate) struct MemoryMap<'tcx> {
 }
 
 pub struct VisEvaluator<'mir, 'tcx> {
-  pub(super) tcx: TyCtxt<'tcx>,
   pub(super) ecx: InterpCx<'mir, 'tcx, MiriMachine<'mir, 'tcx>>,
   pub(super) memory_map: RefCell<MemoryMap<'tcx>>,
 }
@@ -69,6 +70,7 @@ enum BodySpanType {
   Whole,
 }
 
+/// Returns the span of a body, either just the header or the entire item
 fn body_span(tcx: TyCtxt, def_id: DefId, body_span_type: BodySpanType) -> Span {
   let hir = tcx.hir();
   let fn_node = hir.body_owner(hir.body_owned_by(def_id.expect_local()));
@@ -92,10 +94,10 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     })
     .map_err(|e| anyhow!("{e}"))?;
 
+    // Ensures we get nice backtraces from miri evaluation errors
     *tcx.sess.ctfe_backtrace.borrow_mut() = CtfeBacktrace::Capture;
 
     Ok(VisEvaluator {
-      tcx,
       ecx,
       memory_map: RefCell::default(),
     })
@@ -111,12 +113,14 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     for (local, state) in frame.locals.iter_enumerated() {
       let decl = &body.local_decls[local];
       let name = if local == RETURN_PLACE {
+        // Don't include unit return types in locals
         if decl.ty.is_unit() {
           continue;
         }
 
         "(return)".into()
       } else {
+        // Only keep locals corresponding to user-defined variables
         if !matches!(
           decl.local_info,
           Some(box LocalInfo::User(ClearCrossCrate::Set(_)))
@@ -124,16 +128,22 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
           continue;
         }
 
-        Place::from_local(local, self.tcx)
-          .to_string(self.tcx, body)
+        Place::from_local(local, *self.ecx.tcx)
+          .to_string(*self.ecx.tcx, body)
           .unwrap()
       };
 
       let layout = state.layout.get();
 
+      // Ignore dead locals
       let LocalValue::Live(op) = state.value else { continue };
+
       match op {
+        // Ignore uninitialized locals
         Operand::Immediate(Immediate::Uninit) => continue,
+
+        // If a local is Indirect, meaning there exists a pointer to it,
+        // then save its allocation in `MemoryMap::stack_slots`
         Operand::Indirect(mplace) => {
           let mut memory_map = self.memory_map.borrow_mut();
           let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
@@ -144,6 +154,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         _ => {}
       };
 
+      // Read the value of the local
       let op_ty = self.ecx.local_to_op(frame, local, layout)?;
       let value = self.read(&op_ty)?;
 
@@ -162,10 +173,10 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     let body = &frame.body;
     let def_id = frame.instance.def_id();
 
-    let name = self
-      .tcx
-      .def_path_debug_str(def_id)
-      // Strip crate name prefix from debug str
+    let tcx = *self.ecx.tcx;
+    let full_name = tcx.def_path_debug_str(def_id);
+    // Strip crate name prefix from debug str
+    let name = full_name
       .split("::")
       .skip(1)
       .intersperse("::")
@@ -173,8 +184,8 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
     let body_span = Range::from(
       flowistry::source_map::Range::from_span(
-        body_span(self.tcx, frame.instance.def_id(), BodySpanType::Whole),
-        self.tcx.sess.source_map(),
+        body_span(tcx, frame.instance.def_id(), BodySpanType::Whole),
+        tcx.sess.source_map(),
       )
       .unwrap(),
     );
@@ -223,6 +234,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     Ok(Some(MStep { stack, heap }))
   }
 
+  /// Get the stack frames for functions defined in the local crate
   fn local_frames(
     &self,
   ) -> impl Iterator<
@@ -242,6 +254,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     })
   }
 
+  /// Take a single (local) step, internally stepping until we reach a serialization point
   fn step(
     &mut self,
   ) -> InterpResult<'tcx, (Option<MStep<MirLoc<'tcx>>>, bool)> {
@@ -265,7 +278,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
           Ordering::Greater => {
             let (_, frame) = local_frames.last().unwrap();
             let span = body_span(
-              self.tcx,
+              *self.ecx.tcx,
               frame.instance.def_id(),
               BodySpanType::Header,
             );
@@ -291,6 +304,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     }
   }
 
+  /// Evaluate the program to completion, returning a vector of MIR steps for local functions
   pub fn eval(&mut self) -> InterpResult<'tcx, Vec<MStep<MirLoc<'tcx>>>> {
     let mut steps = Vec::new();
     loop {

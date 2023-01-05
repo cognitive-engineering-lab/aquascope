@@ -1,27 +1,33 @@
+//! Rust runtime visualizer using Miri
+
 use anyhow::Result;
 use either::Either;
 use flowistry::mir::utils::SpanExt;
 use rustc_middle::ty::TyCtxt;
 
-mod eval;
-mod mapping;
+mod mapper;
+mod miri_utils;
 mod mvalue;
+mod step;
 
-pub use eval::MStep;
 pub use mvalue::MValue;
+pub use step::MStep;
 
-use crate::{interpreter::mapping::Mapper, Range};
+use crate::{interpreter::mapper::Mapper, Range};
 
 pub(crate) fn interpret(tcx: TyCtxt) -> Result<Vec<MStep<Range>>> {
-  let mut evaluator = eval::VisEvaluator::new(tcx).unwrap();
+  let mut evaluator = step::VisEvaluator::new(tcx).unwrap();
   let mir_steps = evaluator.eval().map_err(|e| {
     e.print_backtrace();
     anyhow::format_err!("{}", e)
   })?;
+
   // eprintln!("{mir_steps:#?}");
+
   let mapper = Mapper::new(&evaluator.ecx);
   let hir_steps =
-    mapping::group_steps(mir_steps, |loc| mapper.abstract_loc(loc));
+    mapper::group_steps(mir_steps, |loc| mapper.abstract_loc(loc));
+
   // for step in &hir_steps {
   //   let (_, hir_body_loc) = step.stack.frames.last().unwrap().location;
   //   eprintln!(
@@ -33,19 +39,19 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<Vec<MStep<Range>>> {
   //   );
   // }
   // eprintln!("{hir_steps:#?}");
-  let src_steps =
-    mapping::group_steps(hir_steps, |(owner_id, hir_body_loc)| {
-      let hir = tcx.hir();
-      let outer_span = hir.span_with_body(owner_id);
-      let span = match hir_body_loc {
-        Either::Left(node_id) => hir.span(node_id).as_local(outer_span)?,
-        Either::Right(span) => span.as_local(outer_span)?,
-      };
-      let range =
-        flowistry::source_map::Range::from_span(span, tcx.sess.source_map())
-          .unwrap();
-      Some(Range::from(range))
-    });
+
+  let src_steps = mapper::group_steps(hir_steps, |(owner_id, hir_body_loc)| {
+    let hir = tcx.hir();
+    let outer_span = hir.span_with_body(owner_id);
+    let span = match hir_body_loc {
+      Either::Left(node_id) => hir.span(node_id).as_local(outer_span)?,
+      Either::Right(span) => span.as_local(outer_span)?,
+    };
+    let range =
+      flowistry::source_map::Range::from_span(span, tcx.sess.source_map())
+        .unwrap();
+    Some(Range::from(range))
+  });
 
   Ok(src_steps)
 }

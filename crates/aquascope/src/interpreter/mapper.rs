@@ -1,3 +1,5 @@
+//! Grouping steps based on source-mapping information
+
 use std::{
   cell::RefCell,
   collections::{HashMap, HashSet},
@@ -11,7 +13,7 @@ use rustc_hir::{intravisit::Visitor, Body, Expr, ExprKind, HirId, Stmt};
 use rustc_middle::{mir::Location, ty::InstanceDef};
 use rustc_span::{BytePos, Span};
 
-use super::eval::{MFrame, MStack, MStep, MirLoc};
+use super::step::{MFrame, MStack, MStep, MirLoc};
 use crate::analysis::ir_mapper::{GatherDepth, GatherMode, IRMapper};
 
 #[derive(Default)]
@@ -64,7 +66,7 @@ impl<'a, 'mir, 'tcx> Mapper<'a, 'mir, 'tcx> {
     finder.visit_body(hir.body(body_id));
 
     let body = self.ecx.load_mir(inst, None).unwrap();
-    eprintln!("{}", body.to_string(tcx).unwrap());
+    log::debug!("{}", body.to_string(tcx).unwrap());
     let mapper = IRMapper::new(tcx, body, GatherMode::All);
 
     let body_mapping = finder
@@ -127,6 +129,20 @@ impl<'a, 'mir, 'tcx> Mapper<'a, 'mir, 'tcx> {
   }
 }
 
+/// Groups an execution trace based on an abstracted program location.
+///
+/// Say we have states S(N) at low-level locations L(N). The abstraction function
+/// maps low-level locations L(N) to high level locations H(M). Then `group_steps`
+/// will group contiguous subsequences of steps that correspond to the same high-level
+/// location, keeping only the last state of the group. For example:
+///
+/// ```text
+///    S1@L1    S2@L2    S3@L3    S4@L4     S5@L5
+///      |        |        |        |         |
+///    S1@H1    S2@H1    S3@H1    S4@H2     S5@H2
+///      ->       ->       |        ->        |
+///                      S3@H2              S5@H2
+/// ```
 pub fn group_steps<Loc1, Loc2: PartialEq + Clone>(
   steps: Vec<MStep<Loc1>>,
   abstract_loc: impl Fn(Loc1) -> Option<Loc2>,
@@ -157,4 +173,42 @@ pub fn group_steps<Loc1, Loc2: PartialEq + Clone>(
     .into_iter()
     .map(|(_, group)| group.last().unwrap())
     .collect()
+}
+
+#[cfg(test)]
+mod test {
+  use crate::{
+    interpreter::step::{MFrame, MHeap, MStack, MStep},
+    Range,
+  };
+
+  fn mk_step<T>(name: &str, location: T) -> MStep<T> {
+    MStep {
+      stack: MStack {
+        frames: vec![MFrame {
+          name: name.to_owned(),
+          body_span: Range::default(),
+          locals: Vec::new(),
+          location,
+        }],
+      },
+      heap: MHeap {
+        locations: Vec::new(),
+      },
+    }
+  }
+
+  #[test]
+  fn test_group_steps() {
+    let steps = vec![mk_step("S0", 0), mk_step("S1", 1), mk_step("S2", 2)];
+    let grouped = super::group_steps(steps, |n| Some(n / 2 * 2));
+    let named_locs = grouped
+      .into_iter()
+      .map(|mut step| {
+        let frame = step.stack.frames.remove(0);
+        (frame.name, frame.location)
+      })
+      .collect::<Vec<_>>();
+    assert_eq!(named_locs, vec![("S1".to_owned(), 0), ("S2".to_owned(), 2)]);
+  }
 }

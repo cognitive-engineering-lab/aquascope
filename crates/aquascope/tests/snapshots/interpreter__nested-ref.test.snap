@@ -1,0 +1,105 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: nested-ref.test
+---
+- stack:
+    frames:
+      - name: main
+        body_span:
+          char_start: 0
+          char_end: 60
+          byte_start: 0
+          byte_end: 60
+          filename: dummy.rs
+        location:
+          char_start: 14
+          char_end: 39
+          byte_start: 14
+          byte_end: 39
+          filename: dummy.rs
+        locals:
+          - - x
+            - type: Array
+              value:
+                type: All
+                value:
+                  - type: Tuple
+                    value:
+                      - type: Int
+                        value: 0
+                      - type: Int
+                        value: 1
+                  - type: Tuple
+                    value:
+                      - type: Int
+                        value: 2
+                      - type: Int
+                        value: 3
+  heap:
+    locations: []
+- stack:
+    frames:
+      - name: main
+        body_span:
+          char_start: 0
+          char_end: 60
+          byte_start: 0
+          byte_end: 60
+          filename: dummy.rs
+        location:
+          char_start: 42
+          char_end: 58
+          byte_start: 42
+          byte_end: 58
+          filename: dummy.rs
+        locals:
+          - - x
+            - type: Array
+              value:
+                type: All
+                value:
+                  - type: Tuple
+                    value:
+                      - type: Int
+                        value: 0
+                      - type: Int
+                        value: 1
+                  - type: Tuple
+                    value:
+                      - type: Int
+                        value: 2
+                      - type: Int
+                        value: 3
+          - - y
+            - type: Pointer
+              value:
+                segment:
+                  type: Stack
+                  value:
+                    frame: 0
+                    local: x
+                parts:
+                  - type: Index
+                    value: 1
+                  - type: Field
+                    value: 1
+  heap:
+    locations: []
+- stack:
+    frames:
+      - name: main
+        body_span:
+          char_start: 0
+          char_end: 60
+          byte_start: 0
+          byte_end: 60
+          filename: dummy.rs
+        location:
+          char_start: 59
+          char_end: 60
+          byte_start: 59
+          byte_end: 60
+          filename: dummy.rs
+        locals: []
+  heap:
+    locations: []
