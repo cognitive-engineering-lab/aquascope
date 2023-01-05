@@ -151,10 +151,14 @@ where
   O: KeyShifter + std::fmt::Debug + Clone + Serialize + TS,
 {
   fn analysis_join(mut self, other: Self) -> Self {
-    let shift_by = self
+    let current_max = self
       .loan_points
       .iter()
-      .fold(LoanKey(1), |acc, (k, _)| std::cmp::max(acc, *k));
+      .fold(LoanKey(0), |acc, (k, _)| std::cmp::max(acc, *k));
+
+    let shift_by = LoanKey(self.loan_points.len() as u32);
+
+    assert!(current_max < shift_by);
 
     // Shift the RHS values to be greater than those currently stored
 
