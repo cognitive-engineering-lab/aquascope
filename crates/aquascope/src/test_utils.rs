@@ -51,7 +51,9 @@ impl From<&str> for Permissions {
     Permissions {
       read: l.contains('r'),
       write: l.contains('w'),
-      drop: l.contains('d'),
+      // we keep 'd' for backwards compatibility from a
+      // time when the front-end permissions showd 'D' for drop.
+      drop: l.contains('d') || l.contains('o'),
     }
   }
 }
@@ -425,12 +427,38 @@ where
   Cb: FnOnce(TyCtxt<'_>),
 {
   fn config(&mut self, config: &mut rustc_interface::Config) {
-    NO_SIMPLIFY.store(true, std::sync::atomic::Ordering::SeqCst);
-    // FIXME: adding this (which should only suppress errors) makes the
-    // tests fail. Investiage this more after higher priority updates are made.
-    // config.parse_sess_created = Some(Box::new(|sess| {
-    //   *sess = rustc_session::parse::ParseSess::with_silent_emitter(None);
-    // }));
+    use std::{io::sink, sync::atomic::Ordering};
+
+    use rustc_error_messages::fallback_fluent_bundle;
+    use rustc_errors::{
+      emitter::EmitterWriter, Handler, DEFAULT_LOCALE_RESOURCES,
+    };
+    config.parse_sess_created = Some(Box::new(|sess| {
+      // Create a new emitter writer which consumes *silently* all
+      // errors. There most certainly is a *better* way to do this,
+      // if you, the reader, know what that is, please open an issue :)
+      //
+      // I decided to not use the SilentEmitter, because it still emitted
+      // something, so it wasn't completely silent.
+      let fallback_bundle =
+        fallback_fluent_bundle(DEFAULT_LOCALE_RESOURCES, false);
+      let emitter = EmitterWriter::new(
+        Box::new(sink()),
+        None,
+        None,
+        fallback_bundle,
+        false,
+        false,
+        false,
+        None,
+        false,
+        false,
+      );
+      let handler = Handler::with_emitter(false, None, Box::new(emitter));
+      sess.span_diagnostic = handler;
+    }));
+
+    NO_SIMPLIFY.store(true, Ordering::SeqCst);
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 

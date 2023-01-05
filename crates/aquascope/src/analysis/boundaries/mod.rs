@@ -93,7 +93,7 @@ impl IntoMany for PathBoundary<'_, '_> {
             .to_place()
             .and_then(|p| p.is_source_visible(tcx, body).then_some(($loc, p)))
         };
-      };
+      }
 
       let mir_locations = mir_locations_opt?
         .values()
