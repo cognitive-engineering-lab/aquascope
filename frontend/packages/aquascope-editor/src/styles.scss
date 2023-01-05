@@ -82,6 +82,8 @@ $monospace: "Source Code Pro", monospace;
   .perm-step-widget {
     display: inline-block;
     color: #ccc;
+    position: relative;
+    top: 0.5em;
   }
 
   .perm-step-table {
@@ -121,11 +123,11 @@ $monospace: "Source Code Pro", monospace;
   }
 
   span.perm-diff-none-high {
-    color: lightgray;
+    color: black;
   }
 
   span.perm-diff-none-low {
-    color: lightgray;
+    color: black;
     // opacity: 0.4;
   }
 
@@ -245,6 +247,7 @@ $monospace: "Source Code Pro", monospace;
       border: 1px solid #ccc;
       border-collapse: collapse;
       font-family: $monospace;
+      display: inline-block;
 
       td {
         border: 1px solid #ccc;

@@ -1,14 +1,15 @@
+//! Interpreting memory as Rust data types
+
 use miri::{
-  AllocMap, Immediate, InterpCx, InterpResult, MPlaceTy, Machine, MemoryKind,
-  OpTy, Value,
+  AllocMap, Immediate, InterpResult, MPlaceTy, MemoryKind, OpTy, Value,
 };
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
 use rustc_middle::{
-  mir::interpret::Provenance,
+  mir::PlaceElem,
   ty::{
     layout::{LayoutOf, TyAndLayout},
-    AdtKind, FieldDef, Ty, TyKind,
+    AdtKind, Ty, TyKind,
   },
 };
 use rustc_target::abi::Size;
@@ -16,7 +17,10 @@ use rustc_type_ir::FloatTy;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::eval::VisEvaluator;
+use super::{
+  miri_utils::{locate_address_in_type, OpTyExt},
+  step::VisEvaluator,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, TS, PartialEq)]
 #[serde(tag = "type", content = "value")]
@@ -92,6 +96,7 @@ pub enum MValue {
 
   // General-purpose composites
   Pointer(MPath),
+  Tuple(Vec<MValue>),
   Struct {
     name: String,
     fields: Vec<(String, MValue)>,
@@ -109,99 +114,88 @@ pub enum MValue {
   Unallocated,
 }
 
-trait OpTyExt<'mir, 'tcx, M: Machine<'mir, 'tcx>>: Sized {
-  fn field_by_name(
-    &self,
-    name: &str,
-    ecx: &InterpCx<'mir, 'tcx, M>,
-  ) -> InterpResult<'tcx, (&FieldDef, Self)>;
-}
-
-impl<'mir, 'tcx, M, Prov: Provenance> OpTyExt<'mir, 'tcx, M>
-  for OpTy<'tcx, Prov>
-where
-  M: Machine<'mir, 'tcx, Provenance = Prov>,
-  'tcx: 'mir,
-{
-  fn field_by_name(
-    &self,
-    name: &str,
-    ecx: &InterpCx<'mir, 'tcx, M>,
-  ) -> InterpResult<'tcx, (&FieldDef, Self)> {
-    let adt_def = self.layout.ty.ty_adt_def().unwrap();
-    let (i, field) = adt_def
-      .all_fields()
-      .enumerate()
-      .find(|(_, field)| field.name.as_str() == name)
-      .unwrap_or_else(|| {
-        panic!(
-          "Could not find field with name `{name}` out of fields: {:?}",
-          adt_def
-            .all_fields()
-            .map(|field| field.name)
-            .collect::<Vec<_>>()
-        )
-      });
-    Ok((field, self.project_field(ecx, i)?))
-  }
-}
-
 impl<'tcx> VisEvaluator<'_, 'tcx> {
   fn get_path_segments(
     &self,
-    layout: TyAndLayout<'tcx>,
-    offset: Size,
+    alloc_size: Size,
+    alloc_layout: TyAndLayout<'tcx>,
+    target: Size,
   ) -> Vec<MPathSegment> {
-    let ty = layout.ty;
-    match ty.kind() {
-      _ if ty.is_str() => {
-        let FieldsShape::Array { stride, .. } = layout.layout.fields() else { unreachable!() };
-        let index = offset.bytes() / stride.bytes();
-        vec![MPathSegment::Index(index as usize)]
-      }
-      _ if offset != Size::ZERO => unimplemented!("{ty:?}"),
-      _ => Vec::new(),
-    }
+    let segments =
+      locate_address_in_type(&self.ecx, alloc_layout, alloc_size, target);
+    segments
+      .into_iter()
+      .map(|segment| match segment {
+        PlaceElem::Field(f, _) => MPathSegment::Field(f.as_usize()),
+        PlaceElem::Index(i) => MPathSegment::Index(i.as_usize()),
+        _ => todo!(),
+      })
+      .collect()
   }
 
-  fn add_alloc(
+  /// Reads a pointer, registering the pointed data for later use.
+  fn read_pointer(
     &self,
     mplace: miri::MPlaceTy<'tcx, miri::Provenance>,
     postprocess: impl FnOnce(
       miri::MPlaceTy<'tcx, miri::Provenance>,
     ) -> InterpResult<'tcx, MValue>,
   ) -> InterpResult<'tcx, MValue> {
-    let addr = mplace.ptr.addr();
+    // Determine the base allocation from the mplace's provenance
     let (alloc_id, offset, _) = self.ecx.ptr_get_alloc_id(mplace.ptr)?;
-    let (memory_kind, _) = self.ecx.memory.alloc_map().get(alloc_id).unwrap();
-    let already_found = self
+
+    // Check if we have seen this allocation before
+    let alloc_discovered = self
       .memory_map
       .borrow()
       .place_to_loc
       .contains_key(&alloc_id);
-    if !already_found {
+
+    if !alloc_discovered {
+      // If we haven't seen this allocation, then use `postprocess` to convert
+      // the raw memory value into an understandable MValue.
       let mvalue = postprocess(mplace)?;
+
+      // Get the kind of memory we're looking at (either stack or heap)
+      // from the allocation metadata.
+      let (memory_kind, _) = self.ecx.memory.alloc_map().get(alloc_id).unwrap();
+
+      // Generate a corresponding `MMemorySegment` that locates the base allocation,
+      // and a `TyAndLayout` that describes the allocation's entire layout.
       let mut memory_map = self.memory_map.borrow_mut();
-      let segment = match memory_kind {
+      let (segment, layout) = match memory_kind {
         MemoryKind::Stack => {
-          let (frame, local) = memory_map.stack_slots[&alloc_id].clone();
-          MMemorySegment::Stack { frame, local }
+          // Look up the stack layout in `MemoryMap::stack_slots` which are generated
+          // in `VisEvaluator::build_heap`.
+          let (frame, local, layout) =
+            memory_map.stack_slots[&alloc_id].clone();
+          (MMemorySegment::Stack { frame, local }, layout)
         }
         MemoryKind::Machine(..) => {
+          // Add this value to the heap, assuming that the layout is the same as `mplace`.
+          //
+          // NOTE: this assumes that a heap value is always first reached via its owner,
+          // versus a reference to e.g. a portion of the heap data. Haven't verified whether
+          // that property always holds.
           let index = memory_map.heap.locations.len();
           memory_map.heap.locations.push(mvalue);
-          MMemorySegment::Heap { index }
+          (MMemorySegment::Heap { index }, mplace.layout)
         }
         _ => unimplemented!(),
       };
-      memory_map.place_to_loc.insert(alloc_id, segment);
+
+      memory_map.place_to_loc.insert(alloc_id, (segment, layout));
     }
 
-    let parts = self.get_path_segments(mplace.layout, offset);
-    let segment = self.memory_map.borrow().place_to_loc[&alloc_id].clone();
-    let path = MPath { segment, parts };
+    let (segment, layout) =
+      self.memory_map.borrow().place_to_loc[&alloc_id].clone();
+    let (alloc_size, _, _) = self.ecx.get_alloc_info(alloc_id);
 
-    Ok(MValue::Pointer(path))
+    // The pointer could point anywhere inside the allocation, so we use
+    // `get_path_segments` to reverse-engineer a path from the memory location.
+    let parts = self.get_path_segments(alloc_size, layout, offset);
+
+    Ok(MValue::Pointer(MPath { segment, parts }))
   }
 
   fn read_unique(
@@ -216,11 +210,14 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
     let (_, nonnull) = op.field_by_name("pointer", &self.ecx)?;
     let (_, ptr) = nonnull.field_by_name("pointer", &self.ecx)?;
 
+    // This may be unallocated e.g. if a value containing a vector is partially initialized.
+    // For example, `let x = (0, vec![1])` will have the vector temporarily invalid, but with
+    // space allocated on the stack. So we ensure that doesn't fail.
     let Ok(mplace) = self.ecx.deref_operand(&ptr) else {
       return Ok(MValue::Unallocated);
     };
 
-    self.add_alloc(mplace, postprocess)
+    self.read_pointer(mplace, postprocess)
   }
 
   fn read_array(
@@ -248,7 +245,7 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
   ) -> InterpResult<'tcx, MValue> {
     let (_, ptr) = op.field_by_name("ptr", &self.ecx)?;
     self.read_unique(&ptr, |base| {
-      let mut array =
+      let array =
         self.read_array(base, base.layout.size, len, base.layout.ty)?;
       Ok(match postprocess {
         Some(f) => f(array),
@@ -264,7 +261,11 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
   ) -> InterpResult<'tcx, MValue> {
     let (_, buf) = op.field_by_name("buf", &self.ecx)?;
     let (_, len) = op.field_by_name("len", &self.ecx)?;
-    let MValue::Uint(len) = self.read(&len)? else { unreachable!() };
+    let len = match self.read(&len) {
+      Err(_) => return Ok(MValue::Unallocated),
+      Ok(MValue::Uint(len)) => len,
+      _ => unreachable!(),
+    };
     self.read_raw_vec(&buf, len, postprocess)
   }
 
@@ -280,9 +281,20 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
         self.read_unique(&unique, |mplace| self.read(&OpTy::from(mplace)))?
       }
 
-      TyKind::Adt(adt_def, _subst) => {
+      TyKind::Tuple(tys) => {
+        let fields = (0 .. tys.len())
+          .map(|i| {
+            let field_op = op.project_field(&self.ecx, i)?;
+            self.read(&field_op)
+          })
+          .collect::<InterpResult<'tcx, Vec<_>>>()?;
+
+        MValue::Tuple(fields)
+      }
+
+      TyKind::Adt(adt_def, _) => {
         let def_id = adt_def.did();
-        let name = self.tcx.item_name(def_id).to_ident_string();
+        let name = self.ecx.tcx.item_name(def_id).to_ident_string();
         match adt_def.adt_kind() {
           AdtKind::Struct => match name.as_str() {
             "String" => {
@@ -372,11 +384,11 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
         self.read_array(base, *stride, *count, *el_ty)?
       }
 
-      _ if ty.is_str() => {
+      TyKind::Str => {
         let mplace = op.assert_mem_place();
-        self.add_alloc(mplace, |mplace| {
-          let length = mplace.meta.unwrap_meta().to_u64()?;
-          eprintln!("{length}");
+        self.read_pointer(mplace, |mplace| {
+          // let length = mplace.meta.unwrap_meta().to_u64()?;
+          // eprintln!("{length}");
           let s = self.ecx.read_str(&mplace)?;
           let chars = s.chars().collect::<Vec<_>>();
           let abbrev =
@@ -386,8 +398,8 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
       }
 
       _ if ty.is_any_ptr() => {
-        let mplace = self.ecx.deref_operand(op)?;
-        self.add_alloc(mplace, |mplace| self.read(&OpTy::from(mplace)))?
+        let Ok(mplace) = self.ecx.deref_operand(op) else { return Ok(MValue::Unallocated) };
+        self.read_pointer(mplace, |mplace| self.read(&OpTy::from(mplace)))?
       }
 
       kind => todo!("{:?} / {:?}", **op, kind),

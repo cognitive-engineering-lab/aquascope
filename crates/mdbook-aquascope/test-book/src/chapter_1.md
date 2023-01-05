@@ -2,15 +2,9 @@
 
 ```aquascope,interpreter
 fn main() {
-    let m1 = String::from("Hello");
-    let m2 = String::from("world");`[]`
-    greet(&m1, &m2);`[]` // note the ampersands
-    let n = m1.len() + m2.len();
-}
-
-fn greet(g1: &String, g2: &String) { // note the ampersands
-    `[]`println!("{} {}!", g1, g2);
-}
+    let s = [(0, 1), (2, 3)];
+    let x = &s[1].0;
+}  
 ```
 
 <!-- ```aquascope,interpreter
