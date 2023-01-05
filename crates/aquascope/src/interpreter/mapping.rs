@@ -8,10 +8,7 @@ use flowistry::mir::utils::BodyExt;
 use itertools::Itertools;
 use miri::InterpCx;
 use rustc_hir::{intravisit::Visitor, Body, Expr, ExprKind, HirId, Stmt};
-use rustc_middle::{
-  mir::Location,
-  ty::{InstanceDef, TyCtxt},
-};
+use rustc_middle::{mir::Location, ty::InstanceDef};
 use rustc_span::{BytePos, Span};
 
 use super::eval::{MFrame, MStack, MStep, MirLoc};
@@ -39,43 +36,36 @@ impl Visitor<'_> for FindSteppableNodes {
 
 pub(crate) type HirLoc = (HirId, Either<HirId, Span>);
 
-pub struct Mapper<'a, 'mir, 'tcx> {
-  pub tcx: TyCtxt<'tcx>,
-  pub ecx: &'a InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>,
-  pub mapping:
-    RefCell<HashMap<InstanceDef<'tcx>, (HirId, HashMap<Location, HirId>)>>,
+struct MapperEntry {
+  owner_id: HirId,
+  body_mapping: HashMap<Location, HirId>,
 }
 
-impl<'tcx> Mapper<'_, '_, 'tcx> {
-  // pub fn build<'mir, 'tcx>(
-  //   tcx: TyCtxt<'tcx>,
-  //   ecx: &InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>,
-  // ) -> Self {
-  //   let hir = tcx.hir();
-  //   let mapping = find_bodies(tcx)
-  //     .into_iter()
-  //     .map(|(_, body_id)| {
-  //       let owner_id = hir.body_owner(body_id);
-  //       let def_id = hir.body_owner_def_id(body_id);
-  //       let body = ecx.load_mir()
-  //       (def_id, (owner_id, Self::build_body_mapping(tcx, def_id)))
-  //     })
-  //     .collect::<HashMap<_, _>>();
-  //   Mapper { mapping }
-  // }
+pub struct Mapper<'a, 'mir, 'tcx> {
+  ecx: &'a InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>,
+  mapping: RefCell<HashMap<InstanceDef<'tcx>, MapperEntry>>,
+}
 
-  fn build_body_mapping(
-    &self,
-    inst: InstanceDef<'tcx>,
-  ) -> (HirId, HashMap<Location, HirId>) {
+impl<'a, 'mir, 'tcx> Mapper<'a, 'mir, 'tcx> {
+  pub fn new(
+    ecx: &'a InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>,
+  ) -> Self {
+    Mapper {
+      ecx,
+      mapping: RefCell::default(),
+    }
+  }
+
+  fn build_body_mapping(&self, inst: InstanceDef<'tcx>) -> MapperEntry {
     let mut finder = FindSteppableNodes::default();
-    let hir = self.tcx.hir();
+    let tcx = *self.ecx.tcx;
+    let hir = tcx.hir();
     let body_id = hir.body_owned_by(inst.def_id().expect_local());
     finder.visit_body(hir.body(body_id));
 
     let body = self.ecx.load_mir(inst, None).unwrap();
-    eprintln!("{}", body.to_string(self.tcx).unwrap());
-    let mapper = IRMapper::new(self.tcx, body, GatherMode::All);
+    eprintln!("{}", body.to_string(tcx).unwrap());
+    let mapper = IRMapper::new(tcx, body, GatherMode::All);
 
     let body_mapping = finder
       .nodes
@@ -93,7 +83,10 @@ impl<'tcx> Mapper<'_, '_, 'tcx> {
       .flatten()
       .collect();
 
-    (hir.body_owner(body_id), body_mapping)
+    MapperEntry {
+      owner_id: hir.body_owner(body_id),
+      body_mapping,
+    }
   }
 
   fn is_cleanup(
@@ -102,7 +95,7 @@ impl<'tcx> Mapper<'_, '_, 'tcx> {
     inst: InstanceDef<'tcx>,
     location: Location,
   ) -> Option<Span> {
-    let body_span = self.tcx.hir().span_with_body(owner_id);
+    let body_span = self.ecx.tcx.hir().span_with_body(owner_id);
     let end_brace = body_span.with_lo(body_span.hi() - BytePos(1));
     let body = self.ecx.load_mir(inst, None).unwrap();
     let loc_span = body.source_info(location).span;
@@ -114,7 +107,10 @@ impl<'tcx> Mapper<'_, '_, 'tcx> {
     (inst, loc_or_span): MirLoc<'tcx>,
   ) -> Option<HirLoc> {
     let mut mapping = self.mapping.borrow_mut();
-    let (owner_id, body_mapping) = mapping
+    let MapperEntry {
+      owner_id,
+      body_mapping,
+    } = mapping
       .entry(inst)
       .or_insert_with(|| self.build_body_mapping(inst));
     let hir_body_loc = match loc_or_span {

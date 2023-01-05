@@ -34,7 +34,7 @@ interface InterpreterConfig {
 
 let ConfigContext = React.createContext<InterpreterConfig>({});
 let CodeContext = React.createContext("");
-let PathContext = React.createContext("");
+let PathContext = React.createContext<string[]>([]);
 
 let codeRange = (code: string, range: Range) => {
   return code.slice(range.char_start, range.char_end);
@@ -60,14 +60,19 @@ let AbbreviatedView = <T,>({
   renderEl: (t: T) => JSX.Element;
   sep?: string;
 }) => {
-  let path = useContext(PathContext);
+  let pathCtx = useContext(PathContext);
   let IndexedContainer: React.FC<
     React.PropsWithChildren<{ index: number }>
-  > = ({ children, index }) => (
-    <span className={`${path}-index-${index}`} data-connector="bottom">
-      {children}
-    </span>
-  );
+  > = ({ children, index }) => {
+    let path = [...pathCtx, "index", index.toString()];
+    return (
+      <PathContext.Provider value={path}>
+        <span className={path.join("-")} data-connector="bottom">
+          {children}
+        </span>
+      </PathContext.Provider>
+    );
+  };
   // TODO: handle indexes into abbreviated + end regions
   return value.type == "All" ? (
     <>
@@ -94,85 +99,123 @@ let AbbreviatedView = <T,>({
   );
 };
 
-let ValueView = ({ value }: { value: MValue }) => (
-  <>
-    {value.type == "Bool" ||
-    value.type == "Char" ||
-    value.type == "Uint" ||
-    value.type == "Int" ||
-    value.type == "Float" ? (
-      value.value.toString()
-    ) : value.type == "Struct" ? (
-      <>
-        {value.value.name}
-        <table>
-          <tbody>
-            {value.value.fields.map(([k, v]) => (
-              <tr key={k}>
-                <td>{k}</td>
-                <td>
-                  <ValueView value={v} />
-                </td>
+let ValueView = ({ value }: { value: MValue }) => {
+  let pathCtx = useContext(PathContext);
+  return (
+    <>
+      {value.type == "Bool" ||
+      value.type == "Char" ||
+      value.type == "Uint" ||
+      value.type == "Int" ||
+      value.type == "Float" ? (
+        value.value.toString()
+      ) : value.type == "Tuple" ? (
+        <>
+          <table>
+            <tbody>
+              <tr>
+                {value.value.map((v, i) => {
+                  let path = [...pathCtx, "field", i.toString()];
+                  return (
+                    <td key={i} className={path.join("-")}>
+                      <PathContext.Provider value={path}>
+                        <ValueView value={v} />
+                      </PathContext.Provider>
+                    </td>
+                  );
+                })}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </>
-    ) : value.type == "Enum" ? (
-      <>
-        {value.value.name} ({value.value.variant})
-        <table>
-          <tbody>
-            {value.value.fields.map(([k, v]) => (
-              <tr key={k}>
-                <td>{k}</td>
-                <td>
-                  <ValueView value={v} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </>
-    ) : value.type == "Pointer" ? (
-      (() => {
-        let ptr = value.value;
-        let segment =
-          ptr.segment.type == "Heap"
-            ? `heap-${ptr.segment.value.index}`
-            : `stack-${ptr.segment.value.frame}-${ptr.segment.value.local}`;
-        let parts = ptr.parts.map(part =>
-          part.type == "Index" ? `index-${part.value}` : `field-${part.value}`
-        );
-        let pointTo = [segment, ...parts].join("-");
-        return (
-          <span className="pointer" data-point-to={pointTo}>
-            ●
-          </span>
-        );
-      })()
-    ) : value.type == "Array" ? (
-      <>
-        [
+            </tbody>
+          </table>
+        </>
+      ) : value.type == "Struct" ? (
+        <>
+          {value.value.name}
+          <table>
+            <tbody>
+              {value.value.fields.map(([k, v], i) => {
+                let path = [...pathCtx, "field", i.toString()];
+                return (
+                  <tr key={k}>
+                    <td>{k}</td>
+                    <td className={path.join("-")}>
+                      <PathContext.Provider value={path}>
+                        <ValueView value={v} />
+                      </PathContext.Provider>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      ) : value.type == "Enum" ? (
+        <>
+          {value.value.name} ({value.value.variant})
+          <table>
+            <tbody>
+              {value.value.fields.map(([k, v], i) => {
+                let path = [...pathCtx, "field", i.toString()];
+                return (
+                  <tr key={k}>
+                    <td>{k}</td>
+                    <td className={path.join("-")}>
+                      <PathContext.Provider value={path}>
+                        <ValueView value={v} />
+                      </PathContext.Provider>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      ) : value.type == "Pointer" ? (
+        (() => {
+          let ptr = value.value;
+          let segment =
+            ptr.segment.type == "Heap"
+              ? `heap-${ptr.segment.value.index}`
+              : `stack-${ptr.segment.value.frame}-${ptr.segment.value.local}`;
+          let parts = ptr.parts.map(part =>
+            part.type == "Index" ? `index-${part.value}` : `field-${part.value}`
+          );
+
+          // Small hack so pointers to beginning of arrays point to the cell instead of
+          // the first element
+          let lastPart = _.last(parts);
+          if (lastPart && lastPart == "index-0") parts.pop();
+
+          let pointTo = [segment, ...parts].join("-");
+          return (
+            <span className="pointer" data-point-to={pointTo}>
+              ●
+            </span>
+          );
+        })()
+      ) : value.type == "Array" ? (
+        <>
+          [
+          <AbbreviatedView
+            value={value.value}
+            renderEl={el => <ValueView value={el} />}
+          />
+          ]
+        </>
+      ) : value.type == "String" ? (
         <AbbreviatedView
           value={value.value}
-          renderEl={el => <ValueView value={el} />}
+          renderEl={el => <>{String.fromCharCode(Number(el))}</>}
+          sep={""}
         />
-        ]
-      </>
-    ) : value.type == "String" ? (
-      <AbbreviatedView
-        value={value.value}
-        renderEl={el => <>{String.fromCharCode(Number(el))}</>}
-        sep={""}
-      />
-    ) : value.type == "Unallocated" ? (
-      <>X</>
-    ) : (
-      <>TODO</>
-    )}
-  </>
-);
+      ) : value.type == "Unallocated" ? (
+        <>X</>
+      ) : (
+        <>TODO</>
+      )}
+    </>
+  );
+};
 
 let LocalsView = ({
   index,
@@ -187,11 +230,11 @@ let LocalsView = ({
     <table>
       <tbody>
         {locals.map(([key, value], i) => {
-          let path = `stack-${index}-${key}`;
+          let path = ["stack", index.toString(), key];
           return (
             <tr key={i}>
               <td>{key}</td>
-              <td className={path} data-connector="right">
+              <td className={path.join("-")} data-connector="right">
                 <PathContext.Provider value={path}>
                   <ValueView value={value} />
                 </PathContext.Provider>
@@ -242,10 +285,10 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
     <table>
       <tbody>
         {heap.locations.map((value, i) => {
-          let path = `heap-${i}`;
+          let path = ["heap", i.toString()];
           return (
             <tr key={i}>
-              <td className={path} data-connector="left">
+              <td className={path.join("-")} data-connector="left">
                 <PathContext.Provider value={path}>
                   <ValueView value={value} />
                 </PathContext.Provider>

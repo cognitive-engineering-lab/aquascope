@@ -1,0 +1,4 @@
+fn main() {
+  let mut x = (0, String::from("Hello"));
+  x.0 += 1;
+}

@@ -40,9 +40,11 @@ fn strip_markers(code: &str) -> String {
 impl AquascopePreprocessor {
   fn process_code(
     &self,
-    operation: &str,
-    kvs: &[(String, String)],
-    code: &str,
+    AquascopeBlock {
+      operation,
+      config,
+      code,
+    }: AquascopeBlock,
   ) -> Result<String> {
     let tempdir = tempdir()?;
     let root = tempdir.path();
@@ -56,11 +58,11 @@ impl AquascopePreprocessor {
       bail!("Cargo failed");
     }
 
-    let cleaned = strip_markers(code);
+    let cleaned = strip_markers(&code);
     fs::write(root.join("example/src/main.rs"), &cleaned)?;
 
     let output = Command::new("cargo")
-      .args(["aquascope", operation])
+      .args(["aquascope", &operation])
       .env("SYSROOT", &self.miri_sysroot)
       .env("DYLD_LIBRARY_PATH", &self.target_libdir)
       .env("RUST_BACKTRACE", "1")
@@ -86,10 +88,13 @@ impl AquascopePreprocessor {
       )
     };
 
-    add_data("code", &serde_json::to_string(code)?)?;
-    add_data("operation", operation)?;
+    add_data("code", &serde_json::to_string(&code)?)?;
+    add_data("operation", &operation)?;
     add_data("response", response.trim_end())?;
-    let config = kvs.iter().map(|(k, v)| (k, v)).collect::<HashMap<_, _>>();
+    let config = config
+      .iter()
+      .map(|(k, v)| (k, v))
+      .collect::<HashMap<_, _>>();
     add_data("config", &serde_json::to_string(&config)?)?;
 
     write!(html, "></div>")?;
@@ -98,9 +103,15 @@ impl AquascopePreprocessor {
   }
 }
 
+struct AquascopeBlock {
+  operation: String,
+  config: Vec<(String, String)>,
+  code: String,
+}
+
 fn parse_aquascope_block(
   i: LocatedSpan<&str>,
-) -> IResult<LocatedSpan<&str>, (String, Vec<(String, String)>, String)> {
+) -> IResult<LocatedSpan<&str>, AquascopeBlock> {
   fn parse_sym(i: LocatedSpan<&str>) -> IResult<LocatedSpan<&str>, String> {
     let (i, v) = many0(none_of(",=\n"))(i)?;
     Ok((i, v.into_iter().collect::<String>()))
@@ -116,9 +127,13 @@ fn parse_aquascope_block(
     take_until("```"),
     tag("```"),
   ));
-  let (i, (_, operation, kvs, code, _)) = parser(i)?;
+  let (i, (_, operation, config, code, _)) = parser(i)?;
   let code = code.fragment().trim().to_string();
-  Ok((i, (operation, kvs, code)))
+  Ok((i, AquascopeBlock {
+    operation,
+    config,
+    code,
+  }))
 }
 
 impl SimplePreprocessor for AquascopePreprocessor {
@@ -147,7 +162,7 @@ impl SimplePreprocessor for AquascopePreprocessor {
     let rustc = PathBuf::from(output);
 
     let output = run_and_get_output(
-      Command::new(&rustc).args(["--print", "target-libdir"]),
+      Command::new(rustc).args(["--print", "target-libdir"]),
     )?;
     let target_libdir = PathBuf::from(output);
 
@@ -165,10 +180,9 @@ impl SimplePreprocessor for AquascopePreprocessor {
     let mut content = LocatedSpan::new(content);
     let mut to_process = Vec::new();
     loop {
-      if let Ok((next, (operation, kvs, code))) = parse_aquascope_block(content)
-      {
+      if let Ok((next, block)) = parse_aquascope_block(content) {
         let range = content.location_offset() .. next.location_offset();
-        to_process.push((range, operation, kvs, code));
+        to_process.push((range, block));
         content = next;
       } else {
         match anychar::<_, nom::error::Error<LocatedSpan<&str>>>(content) {
@@ -182,8 +196,8 @@ impl SimplePreprocessor for AquascopePreprocessor {
 
     let replacements = to_process
       .into_par_iter()
-      .map(|(range, operation, kvs, code)| {
-        let html = self.process_code(&operation, &kvs, &code)?;
+      .map(|(range, block)| {
+        let html = self.process_code(block)?;
         Ok((range, html))
       })
       .collect::<Result<Vec<_>>>()?;

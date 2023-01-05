@@ -14,13 +14,12 @@ use crate::{interpreter::mapping::Mapper, Range};
 
 pub(crate) fn interpret(tcx: TyCtxt) -> Result<Vec<MStep<Range>>> {
   let mut evaluator = eval::VisEvaluator::new(tcx).unwrap();
-  let mir_steps = evaluator.eval().map_err(|e| anyhow::format_err!("{}", e))?;
+  let mir_steps = evaluator.eval().map_err(|e| {
+    e.print_backtrace();
+    anyhow::format_err!("{}", e)
+  })?;
   // eprintln!("{mir_steps:#?}");
-  let mapper = Mapper {
-    tcx,
-    ecx: &evaluator.ecx,
-    mapping: Default::default(),
-  };
+  let mapper = Mapper::new(&evaluator.ecx);
   let hir_steps =
     mapping::group_steps(mir_steps, |loc| mapper.abstract_loc(loc));
   // for step in &hir_steps {

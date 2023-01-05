@@ -212,7 +212,7 @@ class PermissionStepTableWidget extends WidgetType {
       maxLineLen = Math.max(maxLineLen, line.length);
     }
     let padding = 2 + maxLineLen - doc.lineAt(this.pos).length;
-    let spaces = " " + "_".repeat(padding);
+    let spaces = " " + "―".repeat(padding);
 
     let table = (
       <table className="perm-step-table">

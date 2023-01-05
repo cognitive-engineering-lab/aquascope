@@ -10,15 +10,14 @@ use miri::{
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{Body, ClearCrossCrate, LocalInfo, Location, Place, RETURN_PLACE},
-  ty::{InstanceDef, TyCtxt},
+  ty::{layout::TyAndLayout, InstanceDef, TyCtxt},
 };
 use rustc_session::CtfeBacktrace;
 use rustc_span::Span;
-use rustc_target::abi::Size;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::mvalue::{MMemorySegment, MPath, MValue};
+use super::mvalue::{MMemorySegment, MValue};
 use crate::Range;
 
 #[derive(Serialize, Deserialize, Debug, TS)]
@@ -52,16 +51,17 @@ pub struct MStep<L> {
 }
 
 #[derive(Default)]
-pub(crate) struct MemoryMap {
+pub(crate) struct MemoryMap<'tcx> {
   pub(crate) heap: MHeap,
-  pub(crate) place_to_loc: HashMap<AllocId, MMemorySegment>,
-  pub(crate) stack_slots: HashMap<AllocId, (usize, String)>,
+  pub(crate) place_to_loc:
+    HashMap<AllocId, (MMemorySegment, TyAndLayout<'tcx>)>,
+  pub(crate) stack_slots: HashMap<AllocId, (usize, String, TyAndLayout<'tcx>)>,
 }
 
 pub struct VisEvaluator<'mir, 'tcx> {
   pub(super) tcx: TyCtxt<'tcx>,
   pub(super) ecx: InterpCx<'mir, 'tcx, MiriMachine<'mir, 'tcx>>,
-  pub(super) memory_map: RefCell<MemoryMap>,
+  pub(super) memory_map: RefCell<MemoryMap<'tcx>>,
 }
 
 enum BodySpanType {
@@ -107,51 +107,50 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     index: usize,
     body: &Body<'tcx>,
   ) -> InterpResult<'tcx, Vec<(String, MValue)>> {
-    frame
-      .locals
-      .iter_enumerated()
-      .filter_map(|(local, state)| {
-        let decl = &body.local_decls[local];
-        let name = if local == RETURN_PLACE {
-          if decl.ty.is_unit() {
-            return None;
-          }
+    let mut locals = Vec::new();
+    for (local, state) in frame.locals.iter_enumerated() {
+      let decl = &body.local_decls[local];
+      let name = if local == RETURN_PLACE {
+        if decl.ty.is_unit() {
+          continue;
+        }
 
-          "(return)".into()
-        } else {
-          if !matches!(
-            decl.local_info,
-            Some(box LocalInfo::User(ClearCrossCrate::Set(_)))
-          ) {
-            return None;
-          }
+        "(return)".into()
+      } else {
+        if !matches!(
+          decl.local_info,
+          Some(box LocalInfo::User(ClearCrossCrate::Set(_)))
+        ) {
+          continue;
+        }
 
-          Place::from_local(local, self.tcx)
-            .to_string(self.tcx, body)
-            .unwrap()
-        };
+        Place::from_local(local, self.tcx)
+          .to_string(self.tcx, body)
+          .unwrap()
+      };
 
-        let LocalValue::Live(op) = state.value else { return None };
-        match op {
-          Operand::Immediate(Immediate::Uninit) => return None,
-          Operand::Indirect(mplace) => {
-            let mut memory_map = self.memory_map.borrow_mut();
-            let (alloc_id, _, _) =
-              self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
-            memory_map
-              .stack_slots
-              .insert(alloc_id, (index, name.clone()));
-          }
-          _ => {}
-        };
-        let value = (|| {
-          let op_ty = self.ecx.local_to_op(frame, local, state.layout.get())?;
-          let value = self.read(&op_ty)?;
-          Ok(value)
-        })();
-        Some(value.map(move |value| (name, value)))
-      })
-      .collect()
+      let layout = state.layout.get();
+
+      let LocalValue::Live(op) = state.value else { continue };
+      match op {
+        Operand::Immediate(Immediate::Uninit) => continue,
+        Operand::Indirect(mplace) => {
+          let mut memory_map = self.memory_map.borrow_mut();
+          let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
+          memory_map
+            .stack_slots
+            .insert(alloc_id, (index, name.clone(), layout.unwrap()));
+        }
+        _ => {}
+      };
+
+      let op_ty = self.ecx.local_to_op(frame, local, layout)?;
+      let value = self.read(&op_ty)?;
+
+      locals.push((name, value));
+    }
+
+    Ok(locals)
   }
 
   fn build_frame(
