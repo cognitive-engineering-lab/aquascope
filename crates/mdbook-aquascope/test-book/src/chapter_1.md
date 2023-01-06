@@ -2,9 +2,11 @@
 
 ```aquascope,interpreter
 fn main() {
-    let s = [(0, 1), (2, 3)];
-    let x = &s[1].0;
-}  
+    let x = Box::new(1);
+    let v = vec![1, 2, 3];
+    let s = String::from("Hello world");
+    let s2 = &s[5..];`[]`
+}
 ```
 
 <!-- ```aquascope,interpreter
