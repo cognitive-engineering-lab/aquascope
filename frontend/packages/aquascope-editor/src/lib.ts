@@ -1,5 +1,5 @@
 import { rust } from "@codemirror/lang-rust";
-import { indentUnit } from "@codemirror/language";
+import { codeFolding, foldEffect, indentUnit } from "@codemirror/language";
 import {
   Compartment,
   EditorState,
@@ -7,7 +7,12 @@ import {
   StateEffect,
   StateField,
 } from "@codemirror/state";
-import { DecorationSet, EditorView, ViewUpdate } from "@codemirror/view";
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  ViewUpdate,
+} from "@codemirror/view";
 import _ from "lodash";
 
 import { renderInterpreter } from "./editor-utils/interpreter";
@@ -15,8 +20,10 @@ import {
   IconField,
   LoanFacts,
   generateAnalysisDecorationFacts,
+  hideLines,
   loanFactsField,
   loanFactsStateType,
+  quietFoldExt,
 } from "./editor-utils/misc";
 import {
   copiedValueHover,
@@ -52,15 +59,14 @@ type ServerResponse = {
 };
 
 export const defaultCodeExample: string = `
-fn main() {
+# fn main() {
   \`[let n = 5;]\`
   \`[let y = plus_one(n);]\` \`(step:focus,.*[n].*)\`
   println!("The value of y is: {y}");
-}
-
-\`[fn plus_one(x: i32)]\` -> i32 {
-  x + 1
-}
+# }
+# \`[fn plus_one(x: i32)]\` -> i32 {
+#   x + 1
+# }
 `.trim();
 
 let readOnly = new Compartment();
@@ -129,11 +135,44 @@ let parseWithDelimiters = (
   return { type: "ok", code: outputCode.join(""), ranges };
 };
 
+let parseWithMatch = (code: string, delimiter: string): ParseResult => {
+  let r = new RegExp(`^${_.escapeRegExp(delimiter)}`);
+  let makeCheck = (s: string) => {
+    let match = s.match(r);
+    return match ? match[0].length : null;
+  };
+  let ranges: Range[] = [];
+  let outputCode: string[] = [];
+  let index = 0;
+  let i = 0;
+  while (i < code.length) {
+    let n = makeCheck(code.substring(i));
+    if (n) {
+      ranges.push({
+        char_start: index,
+        char_end: index + n,
+        byte_start: 0,
+        byte_end: 0,
+        filename: "",
+      });
+      i += n;
+      continue;
+    }
+    outputCode.push(code[i]);
+    i += 1;
+    index += 1;
+  }
+
+  return { type: "ok", code: outputCode.join(""), ranges };
+};
+
 let buildStepperConfig = (config: StepperConfig) => {
   config.focusedCharPos = [];
   config.focusedPaths = new Map();
   return (toks: string[], range: Range): boolean => {
-    let hasTag = toks.length >= 5 && toks.slice(0, 5).join("") === "step:";
+    let s = "step:";
+    let n = s.length;
+    let hasTag = toks.length >= 5 && toks.slice(0, n).join("") == s;
     if (!hasTag) return true;
 
     let remaining = toks.slice(5).join("");
@@ -193,8 +232,12 @@ export class Editor {
       }
     );
 
+    let hiddenLinesResult = parseWithMatch(parseResult.code, "# ");
+    if (hiddenLinesResult.type == "err")
+      throw new Error(hiddenLinesResult.error);
+
     let initialState = EditorState.create({
-      doc: parseResult.code,
+      doc: hiddenLinesResult.code,
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
@@ -202,6 +245,8 @@ export class Editor {
         setup,
         rust(),
         indentUnit.of("  "),
+        quietFoldExt(),
+
         copiedValueHover,
         insufficientTypeHover,
         loanFactsField,
@@ -225,6 +270,8 @@ export class Editor {
 
     this.editorContainer = dom;
     this.view = initialView;
+
+    hideLines(this.view, hiddenLinesResult.ranges);
   }
 
   public getCurrentCode(): string {

@@ -6,6 +6,7 @@ import {
   ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
+import classNames from "classnames";
 import _ from "lodash";
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
@@ -181,15 +182,13 @@ let stepLocation = (step: PermissionsStateStep): number => {
   return step.location.char_end;
 };
 
-let StepTable = ({ rows }: { rows: [string, PermissionsDataDiff][] }) => {
-  return (
-    <table className="perm-step-table">
-      {rows.map(([path, diffs], i: number) => (
-        <PermDiffRow key={i} path={path} diffs={diffs} />
-      ))}
-    </table>
-  );
-};
+let StepTable = ({ rows }: { rows: [string, PermissionsDataDiff][] }) => (
+  <table className="perm-step-table">
+    {rows.map(([path, diffs], i: number) => (
+      <PermDiffRow key={i} path={path} diffs={diffs} />
+    ))}
+  </table>
+);
 
 let StepTableWidget = ({
   spaces,
@@ -207,11 +206,13 @@ let StepTableWidget = ({
   let arrowOut = "»";
   let arrowIn = "«";
 
+  let displayAllIco = displayAll ? "minus" : "ellipsis-h";
+
   let hiddenDropdown =
     hidden.length > 0 ? (
       <>
         <div className="step-table-dropdown">
-          <i className={displayAll ? "fa fa-minus" : "fa fa-ellipsis-h"} />
+          <i className={classNames({ [`fa fa-${displayAllIco}`]: true })} />
         </div>
         <div className={displayAll ? "" : " hidden-height"}>
           <StepTable rows={hidden} />
@@ -226,7 +227,9 @@ let StepTableWidget = ({
       </span>
 
       <div
-        className={"step-widget-container" + (display ? "" : " hidden-width")}
+        className={classNames("step-widget-container", {
+          "hidden-width": !display,
+        })}
       >
         {spaces}
         <div

@@ -1,4 +1,6 @@
+import { codeFolding, foldEffect } from "@codemirror/language";
 import {
+  Line,
   Range,
   RangeSet,
   StateEffect,
@@ -6,6 +8,7 @@ import {
   StateField,
 } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
+import * as _ from "lodash";
 
 import {
   AnalysisFacts,
@@ -195,3 +198,74 @@ export function generateAnalysisDecorationFacts<T>(
 
   return [facts, stateFacts];
 }
+
+export let quietFoldExt = () => {
+  const emptyDiv = document.createElement("div");
+  return codeFolding({
+    placeholderDOM: (_view: EditorView, _onclick: any) => emptyDiv,
+  });
+};
+
+export let hideLines = (view: EditorView, ranges: RangeT[]) => {
+  const hideLine = StateEffect.define<{ lineStart: number }>({
+    map: ({ lineStart }, change) => ({ lineStart: change.mapPos(lineStart) }),
+  });
+
+  const hideField = StateField.define<DecorationSet>({
+    create() {
+      return Decoration.none;
+    },
+    update(hidden, tr) {
+      hidden = hidden.map(tr.changes);
+      for (let e of tr.effects)
+        if (e.is(hideLine)) {
+          let { lineStart } = e.value;
+          let line = view.state.doc.lineAt(lineStart);
+          console.log(`hiding line:`);
+          console.log(line);
+          if (line.text.length > 0) {
+            hidden = hidden.update({
+              add: [Decoration.replace({}).range(line.from, line.to)],
+            });
+          }
+        }
+      return hidden;
+    },
+    provide: f => EditorView.decorations.from(f),
+  });
+
+  view.dispatch({
+    effects: [StateEffect.appendConfig.of([hideField])],
+  });
+
+  let hideEffects = ranges.map(r => hideLine.of({ lineStart: r.char_start }));
+
+  let linesToFold = _.sortBy(
+    ranges.map(r => view.state.doc.lineAt(r.char_start)),
+    l => l.number
+  );
+
+  let groupedLines = linesToFold.reduce((r: Line[][], line: Line) => {
+    const lastSubArray = r[r.length - 1];
+    if (
+      !lastSubArray ||
+      lastSubArray[lastSubArray.length - 1].number !== line.number - 1
+    ) {
+      r.push([]);
+    }
+    r[r.length - 1].push(line);
+    return r;
+  }, []);
+
+  let foldEffects = groupedLines.map(ls => {
+    let first = ls[0]!;
+    let last = ls[ls.length - 1]!;
+    return foldEffect.of({ from: first.from, to: last.to });
+  });
+
+  // XXX: I don't think we really need the "hide" effects if
+  // we already fold the code.
+  view.dispatch({
+    effects: [...foldEffects],
+  });
+};
