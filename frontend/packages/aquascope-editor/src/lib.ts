@@ -4,9 +4,10 @@ import {
   Compartment,
   EditorState,
   Extension,
+  StateEffect,
   StateField,
 } from "@codemirror/state";
-import { DecorationSet, EditorView } from "@codemirror/view";
+import { DecorationSet, EditorView, ViewUpdate } from "@codemirror/view";
 import _ from "lodash";
 
 import { renderInterpreter } from "./editor-utils/interpreter";
@@ -22,7 +23,7 @@ import {
   insufficientTypeHover,
   receiverPermissionsField,
 } from "./editor-utils/permission-boundaries";
-import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
+import { StepperConfig, renderSteps } from "./editor-utils/stepper";
 import "./styles.scss";
 import {
   AnalysisFacts,
@@ -34,7 +35,6 @@ import {
 } from "./types";
 
 export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
-export { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 export * as types from "./types";
 
 const DEFAULT_SERVER_URL = new URL("http://127.0.0.1:8008");
@@ -51,84 +51,10 @@ type ServerResponse = {
   stderr: string;
 };
 
-// export const defaultCodeExample: string = `
-// #[derive(Debug, Default)]
-// struct Box {
-//     value: i32,
-// }
-
-// impl Box {
-//     fn inc(&mut self) {
-//         self.value += 1;
-//     }
-
-//     fn destroy(mut self) {}
-// }
-
-// fn bar() {
-//     let b = Box::default();
-//     let refine_all = &mut b.value;
-//     b.inc();
-//     println!("{refine_all}");
-//     b.inc();
-// }
-
-// fn foo(v: &mut Vec<i32>) {
-//   for (i, t) in v.iter().enumerate().rev() {
-//     if *t == 0 {
-//       v.remove(i);
-//     }
-//   }
-// }
-
-// fn main() {
-
-//     let v1 = vec![1, 2, 3];
-//     v1.push(0);
-
-//     let v2 = &mut vec![1, 2, 3];
-//     v2.push(0);
-
-//     let b1 = &Box::default();
-//     b1.inc();
-
-//     let mut b2 = Box::default();
-//     b2.inc();
-
-//     Box::default().destroy();
-
-//     println!("Gruëzi, Weltli");
-// }
-// `;
-
-// `
-// fn main() {
-//   let mut a = Box::new(2);
-//   *a += 1;
-//   let b = a;
-//   println!("{b}");
-// }
-// `
-
-// `
-// fn main() {
-//   let n = 5;
-//   // L1
-//   let y = plus_one(n);
-//   // L3
-//   println!("The value of y is: {y}");
-// }
-
-// fn plus_one(x: i32) -> i32 {
-//   // L2
-//   x + 1
-// }
-// `
-
 export const defaultCodeExample: string = `
 fn main() {
   \`[let n = 5;]\`
-  \`[let y = plus_one(n);]\`
+  \`[let y = plus_one(n);]\` \`(step:focus,.*[n].*)\`
   println!("The value of y is: {y}");
 }
 
@@ -146,7 +72,8 @@ type ParseResult =
 
 let parseWithDelimiters = (
   code: string,
-  delimiters: [string, string][]
+  delimiters: [string, string][],
+  retainMatched: (toks: string[], range: Range) => boolean = _ => true
 ): ParseResult => {
   let [open, close] = _.unzip(delimiters);
   let makeCheck = (arr: string[]) => {
@@ -157,6 +84,11 @@ let parseWithDelimiters = (
     };
   };
   let [openCheck, closeCheck] = [makeCheck(open), makeCheck(close)];
+  let popN = <T>(arr: T[], n: number) => {
+    while (n-- > 0) {
+      arr.pop();
+    }
+  };
 
   let index = 0;
   let inSeq = null;
@@ -174,14 +106,19 @@ let parseWithDelimiters = (
     } else {
       let n = closeCheck(code.substring(i));
       if (n) {
-        i += n;
-        ranges.push({
+        let seqN = index - inSeq!;
+        let range = {
           char_start: inSeq!,
           char_end: index,
           byte_start: 0,
           byte_end: 0,
           filename: "",
-        });
+        };
+        if (!retainMatched(outputCode.slice(-seqN), range)) {
+          popN(outputCode, seqN);
+        }
+        i += n;
+        ranges.push(range);
         inSeq = null;
         continue;
       }
@@ -195,13 +132,41 @@ let parseWithDelimiters = (
   return { type: "ok", code: outputCode.join(""), ranges };
 };
 
+let buildStepperConfig = (config: StepperConfig) => {
+  config.focusedCharPos = config.focusedCharPos ?? [];
+  config.focusedPaths = config.focusedPaths ?? new Map();
+  return (toks: string[], range: Range): boolean => {
+    let hasTag = toks.length >= 5 && toks.slice(0, 5).join("") === "step:";
+    return (
+      !hasTag ||
+      (() => {
+        let remaining = toks.slice(5).join("");
+        let commaSep = remaining.split(",", 2).map(s => s.trim());
+        console.log(commaSep);
+        if (commaSep.includes("focus")) {
+          console.log("included focus");
+          config.focusedCharPos!.push(range.char_start);
+          commaSep.splice(commaSep.indexOf("focus"), 1);
+        }
+        if (commaSep[0]) {
+          console.log(`RegExp at ${range.char_start} ${commaSep[0]}`);
+          config.focusedPaths!.set(range.char_start, commaSep[0]);
+        }
+        return false;
+      })()
+    );
+  };
+};
+
 export class Editor {
   private view: EditorView;
   private interpreterContainer: HTMLDivElement;
+  private editorContainer: HTMLDivElement;
   private markedRanges: Range[];
+  private focusStepConfigs: StepperConfig;
 
   public constructor(
-    dom: HTMLElement,
+    dom: HTMLDivElement,
     readonly setup: Extension,
     supportedFields: Array<StateField<DecorationSet>>,
     readonly reportStdErr: (err: BackendError) => void = function (err) {
@@ -212,15 +177,31 @@ export class Editor {
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false
   ) {
-    let parseResult = parseWithDelimiters(initialCode, [["`[", "]`"]]);
-    if (parseResult.type == "err") throw new Error(parseResult.error);
+    let interpParseResult = parseWithDelimiters(initialCode, [["`[", "]`"]]);
+    if (interpParseResult.type == "err")
+      throw new Error(interpParseResult.error);
 
-    let resetMarkedRangesOnEdit = EditorView.updateListener.of(() => {
-      this.markedRanges = [];
-    });
+    this.focusStepConfigs = {};
+    let stepParseResult = parseWithDelimiters(
+      interpParseResult.code,
+      [["`(", ")`"]],
+      buildStepperConfig(this.focusStepConfigs)
+    );
+    if (stepParseResult.type == "err") throw new Error(stepParseResult.error);
+
+    let cleanedCode = stepParseResult.code;
+
+    let resetMarkedRangesOnEdit = EditorView.updateListener.of(
+      (upd: ViewUpdate) => {
+        if (upd.docChanged) {
+          this.markedRanges = [];
+          this.focusStepConfigs = {};
+        }
+      }
+    );
 
     let initialState = EditorState.create({
-      doc: parseResult.code,
+      doc: cleanedCode,
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
@@ -235,7 +216,7 @@ export class Editor {
       ],
     });
 
-    this.markedRanges = parseResult.ranges;
+    this.markedRanges = interpParseResult.ranges;
     console.debug("Marked ranges:", this.markedRanges);
 
     let editorContainer = document.createElement("div");
@@ -249,6 +230,7 @@ export class Editor {
     dom.appendChild(editorContainer);
     dom.appendChild(this.interpreterContainer);
 
+    this.editorContainer = dom;
     this.view = initialView;
   }
 
@@ -334,11 +316,12 @@ export class Editor {
         config
       );
     } else if (operation == "permission-diffs") {
-      let emptyFacts = {
-        loanPoints: {},
-        loanRegions: {},
-      };
-      this.addPermissionsField(coarsePermissionDiffs, result, emptyFacts);
+      renderSteps(
+        this.view,
+        this.editorContainer,
+        result,
+        this.focusStepConfigs
+      );
     } else if (operation == "receiver-types") {
       let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
       this.addAnalysisFacts(loanFacts);
