@@ -7,7 +7,7 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import _ from "lodash";
-import React from "react";
+import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import {
@@ -28,18 +28,6 @@ import {
 export interface StepperConfig {
   focusedCharPos?: number[];
   focusedPaths?: Map<number, string>;
-}
-
-function partition<T>(
-  predicate: (val: T) => boolean,
-  arr: Array<T>
-): [Array<T>, Array<T>] {
-  const partitioned: [Array<T>, Array<T>] = [[], []];
-  arr.forEach((val: T) => {
-    const partitionIndex: 0 | 1 = predicate(val) ? 0 : 1;
-    partitioned[partitionIndex].push(val);
-  });
-  return partitioned;
 }
 
 let PermDiffRow = ({
@@ -193,9 +181,67 @@ let stepLocation = (step: PermissionsStateStep): number => {
   return step.location.char_end;
 };
 
+let StepTable = ({ rows }: { rows: [string, PermissionsDataDiff][] }) => {
+  return (
+    <table className="perm-step-table">
+      {rows.map(([path, diffs], i: number) => (
+        <PermDiffRow key={i} path={path} diffs={diffs} />
+      ))}
+    </table>
+  );
+};
+
+let StepTableWidget = ({
+  spaces,
+  focused,
+  hidden,
+  init,
+}: {
+  spaces: string;
+  focused: [string, PermissionsDataDiff][];
+  hidden: [string, PermissionsDataDiff][];
+  init: boolean;
+}): JSX.Element => {
+  let [display, setDisplay] = useState(init);
+  let [displayAll, setDisplayAll] = useState(false);
+  let arrowOut = "»";
+  let arrowIn = "«";
+
+  let hiddenDropdown =
+    hidden.length > 0 ? (
+      <>
+        <div className="step-table-dropdown">
+          <i className={displayAll ? "fa fa-minus" : "fa fa-ellipsis-h"} />
+        </div>
+        <div className={displayAll ? "" : " hidden-height"}>
+          <StepTable rows={hidden} />
+        </div>
+      </>
+    ) : null;
+
+  return (
+    <div className="perm-step-widget">
+      <span onClick={() => setDisplay(!display)}>
+        {display ? arrowIn : arrowOut}
+      </span>
+
+      <div
+        className={"step-widget-container" + (display ? "" : " hidden-width")}
+      >
+        {spaces}
+        <div
+          className="step-table-container"
+          onClick={() => setDisplayAll(!displayAll)}
+        >
+          <StepTable rows={focused} />
+          {hiddenDropdown}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 class PermissionStepTableWidget extends WidgetType {
-  pathsHidden: boolean;
-  tableHidden: boolean;
   line: Line;
   rowHTML?: string;
   constructor(
@@ -206,8 +252,6 @@ class PermissionStepTableWidget extends WidgetType {
     readonly focusedPaths: Map<number, RegExp>
   ) {
     super();
-    this.pathsHidden = true;
-    this.tableHidden = false;
     this.line = view.state.doc.lineAt(stepLocation(step));
   }
 
@@ -221,97 +265,31 @@ class PermissionStepTableWidget extends WidgetType {
 
     let doc = this.view.state.doc;
     let pos = stepLocation(this.step);
+    let currLine = this.line;
+    let initDisplay = this.focusedLines.includes(currLine.number);
     let maxLineLen = 0;
 
     for (let line of doc.iterLines()) {
       maxLineLen = Math.max(maxLineLen, line.length);
     }
-    let currLine = this.line;
-    let hideTable = !this.focusedLines.includes(currLine.number);
-    this.tableHidden = hideTable;
 
     let padding = 2 + maxLineLen - currLine.length;
     let spaces = " " + "_".repeat(padding);
 
-    let arrowOut = "»";
-    let arrowIn = "«";
-
-    let toggleHiddenPaths = (_e: any) => {
-      this.pathsHidden = !this.pathsHidden;
-      let content = container.querySelector<HTMLDivElement>(
-        ".step-table-content"
-      );
-      let dropdown = container.querySelector<HTMLDivElement>(
-        ".step-table-dropdown"
-      );
-      if (content) {
-        content.style.height = this.pathsHidden ? "0px" : "auto";
-      }
-      if (dropdown) {
-        dropdown.innerHTML = this.pathsHidden ? "..." : "";
-      }
-    };
-
-    let toggleWidget = (_e: any) => {
-      this.tableHidden = !this.tableHidden;
-      let contents = container.querySelector<HTMLDivElement>(
-        ".step-widget-contents"
-      );
-      let btn = container.querySelector<HTMLSpanElement>(
-        ".step-table-collapse"
-      );
-
-      if (contents) {
-        contents.style.width = this.tableHidden ? "0px" : "auto";
-      }
-      if (btn) {
-        btn.innerHTML = this.tableHidden ? arrowOut : arrowIn;
-      }
-    };
     let matchAll = new RegExp("(.*)?");
     let r = this.focusedPaths.get(currLine.number) ?? matchAll;
-    let [focusedDiffs, hiddenDiffs] = partition(
-      ([path, _]) => !!path.match(r),
-      this.step.state
+    let [focusedDiffs, hiddenDiffs] = _.partition(
+      this.step.state,
+      ([path, _]) => !!path.match(r)
     );
 
-    let hiddenDropdown =
-      hiddenDiffs.length > 0 ? (
-        <>
-          <div className="step-table-dropdown">...</div>
-          <div className="step-table-content">
-            <table className="perm-step-table">
-              {hiddenDiffs.map(([path, diffs]) => (
-                <PermDiffRow path={path} diffs={diffs} />
-              ))}
-            </table>
-          </div>
-        </>
-      ) : null;
-
-    let rowStyle = {
-      width: hideTable ? "0px" : "auto",
-    };
-
     ReactDOM.createRoot(container).render(
-      <div className="perm-step-widget">
-        <span className="step-table-collapse" onClick={toggleWidget}>
-          {hideTable ? arrowOut : arrowIn}
-        </span>
-        <div className="step-widget-contents" style={rowStyle}>
-          {spaces}
-          <div className="step-table-container" onClick={toggleHiddenPaths}>
-            <div className="step-table-parent">
-              <table className="perm-step-table">
-                {focusedDiffs.map(([path, diffs]) => (
-                  <PermDiffRow path={path} diffs={diffs} />
-                ))}
-              </table>
-              {hiddenDropdown}
-            </div>
-          </div>
-        </div>
-      </div>
+      <StepTableWidget
+        spaces={spaces}
+        focused={focusedDiffs}
+        hidden={hiddenDiffs}
+        init={initDisplay}
+      />
     );
 
     return container;
@@ -332,7 +310,7 @@ export function renderSteps(
   let doc = view.state.doc;
   let focusedPaths = new Map<number, RegExp>();
   let focusedLines =
-    !config.focusedCharPos || config.focusedCharPos.length == 0
+    !config || !config.focusedCharPos || config.focusedCharPos.length == 0
       ? Array.from({ length: doc.lines }, (value, key) => key + 1)
       : config.focusedCharPos!.map(pos => doc.lineAt(pos).number);
 
@@ -357,18 +335,18 @@ export function renderSteps(
     deco => deco.from
   );
 
-  let display = true;
   let plugin = ViewPlugin.fromClass(
     class {
+      display: boolean = true;
       update(upd: ViewUpdate) {
         if (upd.docChanged) {
-          display = false;
+          this.display = false;
         }
       }
     },
     {
-      decorations: () => {
-        if (display) {
+      decorations: v => {
+        if (v.display) {
           return Decoration.set(decos);
         } else {
           return Decoration.set([]);

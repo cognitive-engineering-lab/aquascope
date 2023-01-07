@@ -77,23 +77,17 @@ let parseWithDelimiters = (
 ): ParseResult => {
   let [open, close] = _.unzip(delimiters);
   let makeCheck = (arr: string[]) => {
-    let r = new RegExp(`^${arr.map(s => _.escapeRegExp(s)).join("|")}`);
+    let r = new RegExp(`^(${arr.map(s => _.escapeRegExp(s)).join("|")})`);
     return (s: string) => {
       let match = s.match(r);
       return match ? match[0].length : null;
     };
   };
   let [openCheck, closeCheck] = [makeCheck(open), makeCheck(close)];
-  let popN = <T>(arr: T[], n: number) => {
-    while (n-- > 0) {
-      arr.pop();
-    }
-  };
-
   let index = 0;
   let inSeq = null;
   let ranges: Range[] = [];
-  let outputCode = [];
+  let outputCode: string[] = [];
   let i = 0;
   while (i < code.length) {
     if (inSeq === null) {
@@ -114,11 +108,14 @@ let parseWithDelimiters = (
           byte_end: 0,
           filename: "",
         };
+
         if (!retainMatched(outputCode.slice(-seqN), range)) {
-          popN(outputCode, seqN);
+          outputCode = outputCode.slice(0, -seqN);
+        } else {
+          ranges.push(range);
         }
+
         i += n;
-        ranges.push(range);
         inSeq = null;
         continue;
       }
@@ -137,30 +134,31 @@ let buildStepperConfig = (config: StepperConfig) => {
   config.focusedPaths = new Map();
   return (toks: string[], range: Range): boolean => {
     let hasTag = toks.length >= 5 && toks.slice(0, 5).join("") === "step:";
-    return (
-      !hasTag ||
-      (() => {
-        let remaining = toks.slice(5).join("");
-        let commaSep = remaining.split(",", 2).map(s => s.trim());
-        if (commaSep.includes("focus")) {
-          config.focusedCharPos!.push(range.char_start);
-          commaSep.splice(commaSep.indexOf("focus"), 1);
-        }
-        if (commaSep[0]) {
-          config.focusedPaths!.set(range.char_start, commaSep[0]);
-        }
-        return false;
-      })()
-    );
+    if (!hasTag) return true;
+
+    let remaining = toks.slice(5).join("");
+    let commaSep = remaining.split(",", 2).map(s => s.trim());
+    if (commaSep.includes("focus")) {
+      config.focusedCharPos!.push(range.char_start);
+      commaSep.splice(commaSep.indexOf("focus"), 1);
+    }
+    if (commaSep[0]) {
+      config.focusedPaths!.set(range.char_start, commaSep[0]);
+    }
+    return false;
   };
 };
+
+interface AnnotationConfig {
+  stepsCfg?: StepperConfig;
+  markedRanges: Range[];
+}
 
 export class Editor {
   private view: EditorView;
   private interpreterContainer: HTMLDivElement;
   private editorContainer: HTMLDivElement;
-  private markedRanges: Range[];
-  private focusStepConfigs: StepperConfig;
+  private cfg: AnnotationConfig;
 
   public constructor(
     dom: HTMLDivElement,
@@ -174,31 +172,29 @@ export class Editor {
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false
   ) {
-    let interpParseResult = parseWithDelimiters(initialCode, [["`[", "]`"]]);
-    if (interpParseResult.type == "err")
-      throw new Error(interpParseResult.error);
+    let emptyCfg = { markedRanges: [], stepsCfg: {} };
+    this.cfg = emptyCfg;
 
-    this.focusStepConfigs = {};
-    let stepParseResult = parseWithDelimiters(
-      interpParseResult.code,
-      [["`(", ")`"]],
-      buildStepperConfig(this.focusStepConfigs)
+    let parseResult = parseWithDelimiters(
+      initialCode,
+      [
+        ["`[", "]`"],
+        ["`(", ")`"],
+      ],
+      buildStepperConfig(this.cfg.stepsCfg!)
     );
-    if (stepParseResult.type == "err") throw new Error(stepParseResult.error);
-
-    let cleanedCode = stepParseResult.code;
+    if (parseResult.type == "err") throw new Error(parseResult.error);
 
     let resetMarkedRangesOnEdit = EditorView.updateListener.of(
       (upd: ViewUpdate) => {
         if (upd.docChanged) {
-          this.markedRanges = [];
-          this.focusStepConfigs = {};
+          this.cfg = emptyCfg;
         }
       }
     );
 
     let initialState = EditorState.create({
-      doc: cleanedCode,
+      doc: parseResult.code,
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
@@ -213,8 +209,8 @@ export class Editor {
       ],
     });
 
-    this.markedRanges = interpParseResult.ranges;
-    console.debug("Marked ranges:", this.markedRanges);
+    this.cfg.markedRanges = parseResult.ranges;
+    console.debug("Marked ranges:", this.cfg.markedRanges);
 
     let editorContainer = document.createElement("div");
     let initialView = new EditorView({
@@ -309,16 +305,11 @@ export class Editor {
         this.interpreterContainer,
         result,
         this.view.state.doc.toJSON().join("\n"),
-        this.markedRanges,
+        this.cfg.markedRanges,
         config
       );
     } else if (operation == "permission-diffs") {
-      renderSteps(
-        this.view,
-        this.editorContainer,
-        result,
-        this.focusStepConfigs
-      );
+      renderSteps(this.view, this.editorContainer, result, this.cfg.stepsCfg!);
     } else if (operation == "receiver-types") {
       let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
       this.addAnalysisFacts(loanFacts);

@@ -79,13 +79,21 @@ $monospace: "Source Code Pro", monospace;
   }
 
   /* Permission Steps */
+  .hidden-width {
+    width: 0px;
+  }
+
+  .hidden-height {
+    height: 0px;
+  }
+
   .perm-step-widget {
     display: inline-block;
     color: #ccc;
     height: auto;
   }
 
-  .step-widget-contents {
+  .step-widget-container {
     overflow: hidden;
     display: inline-flex;
     justify-content: start;
@@ -100,30 +108,13 @@ $monospace: "Source Code Pro", monospace;
   .step-table-container {
     overflow: hidden;
     display: inline-flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: flex-start;
 
     background-color: whitesmoke;
     border-color: gainsboro;
     border: 2px solid;
     border-radius: 4px;
-  }
-
-  .step-table-parent {
-    overflow: hidden;
-    display: inline-flex;
-    flex-direction: column;
-    align-items: flex-start;
-
-    background-color: whitesmoke;
-  }
-
-  .step-table-content {
-    display: inline-block;
-    border-radius: 5px;
-    bottom: 0px;
-    height: 0px;
-    transition: height 1s linear;
   }
 
   .perm-step-table {
