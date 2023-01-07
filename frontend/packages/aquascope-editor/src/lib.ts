@@ -133,8 +133,8 @@ let parseWithDelimiters = (
 };
 
 let buildStepperConfig = (config: StepperConfig) => {
-  config.focusedCharPos = config.focusedCharPos ?? [];
-  config.focusedPaths = config.focusedPaths ?? new Map();
+  config.focusedCharPos = [];
+  config.focusedPaths = new Map();
   return (toks: string[], range: Range): boolean => {
     let hasTag = toks.length >= 5 && toks.slice(0, 5).join("") === "step:";
     return (
@@ -142,14 +142,11 @@ let buildStepperConfig = (config: StepperConfig) => {
       (() => {
         let remaining = toks.slice(5).join("");
         let commaSep = remaining.split(",", 2).map(s => s.trim());
-        console.log(commaSep);
         if (commaSep.includes("focus")) {
-          console.log("included focus");
           config.focusedCharPos!.push(range.char_start);
           commaSep.splice(commaSep.indexOf("focus"), 1);
         }
         if (commaSep[0]) {
-          console.log(`RegExp at ${range.char_start} ${commaSep[0]}`);
           config.focusedPaths!.set(range.char_start, commaSep[0]);
         }
         return false;

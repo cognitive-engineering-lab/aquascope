@@ -254,7 +254,6 @@ class PermissionStepTableWidget extends WidgetType {
 
     let toggleWidget = (_e: any) => {
       this.tableHidden = !this.tableHidden;
-      console.log("toggling widget");
       let contents = container.querySelector<HTMLDivElement>(
         ".step-widget-contents"
       );
