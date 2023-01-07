@@ -212,8 +212,7 @@ export class Editor {
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false
   ) {
-    let emptyCfg = { markedRanges: [], stepsCfg: {} };
-    this.cfg = emptyCfg;
+    this.cfg = { markedRanges: [], stepsCfg: {} };
 
     let parseResult = parseWithDelimiters(
       initialCode,
@@ -228,7 +227,7 @@ export class Editor {
     let resetMarkedRangesOnEdit = EditorView.updateListener.of(
       (upd: ViewUpdate) => {
         if (upd.docChanged) {
-          this.cfg = emptyCfg;
+          this.cfg = { markedRanges: [], stepsCfg: {} };
         }
       }
     );
