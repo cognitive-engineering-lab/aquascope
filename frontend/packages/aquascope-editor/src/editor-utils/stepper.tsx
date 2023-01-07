@@ -205,16 +205,16 @@ let StepTableWidget = ({
   let [displayAll, setDisplayAll] = useState(false);
   let arrowOut = "»";
   let arrowIn = "«";
-
   let displayAllIco = displayAll ? "minus" : "ellipsis-h";
+  let icoName = `fa fa-${displayAllIco}`;
 
   let hiddenDropdown =
     hidden.length > 0 ? (
       <>
         <div className="step-table-dropdown">
-          <i className={classNames({ [`fa fa-${displayAllIco}`]: true })} />
+          <i className={icoName} />
         </div>
-        <div className={displayAll ? "" : " hidden-height"}>
+        <div className={classNames({ "hidden-height": !displayAll })}>
           <StepTable rows={hidden} />
         </div>
       </>
