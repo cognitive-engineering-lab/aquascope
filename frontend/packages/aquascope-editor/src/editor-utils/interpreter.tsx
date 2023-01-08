@@ -31,6 +31,7 @@ const DEBUG: boolean = false;
 interface InterpreterConfig {
   horizontal?: boolean;
   concreteTypes?: boolean;
+  hideCode?: boolean;
 }
 
 let ConfigContext = React.createContext<InterpreterConfig>({});
@@ -58,7 +59,7 @@ let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) => {
 
   // TODO: handle indexes into abbreviated + end regions
   return (
-    <table>
+    <table className="array">
       <tbody>
         <tr>
           {value.type == "All" ? (
@@ -305,9 +306,9 @@ let LocalsView = ({
   locals: [string, MValue][];
 }) =>
   locals.length == 0 ? (
-    <div className="empty-frame">(empty frame)</div>
+    <div className="locals empty-frame">(empty frame)</div>
   ) : (
-    <table>
+    <table className="locals">
       <tbody>
         {locals.map(([key, value], i) => {
           let path = ["stack", index.toString(), key];
@@ -403,9 +404,10 @@ let StepView = ({
       return dst;
     };
     let pointers = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
-    let color = getComputedStyle(document.body).getPropertyValue("--inline-code-color")
-      ? "var(--inline-code-color)"
-      : "black";
+    let mdbookEmbed = getComputedStyle(document.body).getPropertyValue(
+      "--inline-code-color"
+    );
+    let color = mdbookEmbed ? "var(--inline-code-color)" : "black";
     let lines = Array.from(pointers)
       .map(src => {
         try {
@@ -422,7 +424,7 @@ let StepView = ({
                 width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
                 height: 2,
                 y: "100%",
-                fillColor: "red",
+                fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
               })
             : dstSel.startsWith("stack")
             ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
@@ -571,6 +573,10 @@ export function renderInterpreter(
   markedRanges: Range[],
   config: InterpreterConfig = {}
 ) {
+  if (config.hideCode) {
+    view.destroy();
+  }
+
   let root = ReactDOM.createRoot(container);
   if (markedRanges.length > 0) {
     let [sortedRanges, filteredSteps] = filterSteps(steps, markedRanges);

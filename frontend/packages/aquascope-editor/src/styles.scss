@@ -123,7 +123,7 @@ $monospace: "Source Code Pro", monospace;
     color: rgb(255, 66, 68);
   }
 
-  spen.perm-diff-none {
+  span.perm-diff-none {
     color: black;
   }
 
@@ -257,11 +257,37 @@ $monospace: "Source Code Pro", monospace;
       font-size: 0.8em;
     }
 
+    table.locals, .heap > table {
+      border: 2px solid #ccc;
+
+      > tbody > tr > td {
+        border-width: 2px;
+        padding: 4px 6px;
+      }
+    }
+
     table {
       border: 1px solid #ccc;
       border-collapse: collapse;
       font-family: $monospace;
       // display: inline-block;
+
+      &.array {
+        border: none;
+
+        td {
+          border-top: none;
+          border-bottom: none;
+
+          &:first-child {
+            border-left: none;
+          }
+
+          &:last-child {
+            border-right: none;
+          }
+        }
+      }
 
       td {
         border: 1px solid #ccc;

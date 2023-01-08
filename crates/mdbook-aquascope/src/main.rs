@@ -104,6 +104,8 @@ impl AquascopePreprocessor {
       .map(|(k, v)| (k, v))
       .collect::<HashMap<_, _>>();
     add_data("config", &serde_json::to_string(&config)?)?;
+    // TODO: make this configurable?
+    add_data("no-interact", "true")?;
 
     write!(html, "></div>")?;
 

@@ -61,6 +61,10 @@
       padding: 1px 4px;
     }
   }
+
+  span.perm-diff-none, span.perm-diff-none-high, span.perm-diff-none-low  {
+    color: var(--fg);
+  }
 }
 
 .step-marker {

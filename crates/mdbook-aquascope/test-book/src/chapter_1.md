@@ -1,8 +1,11 @@
 # Chapter 1
 
-```aquascope,interpreter,concreteTypes=true
+```aquascope,receiver-types
 fn main() {
-    let v = (0, String::from("Hi"));`[]`
+    let mut x = 1;
+    let y = &x;
+    x += 1;
+    println!("{} = {}", x, *y);
 }
 ```
 
