@@ -8,7 +8,7 @@ import {
   StateField,
 } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
-import * as _ from "lodash";
+import _ from "lodash";
 
 import {
   AnalysisFacts,
@@ -207,62 +207,26 @@ export let quietFoldExt = () => {
 };
 
 export let hideLines = (view: EditorView, lines: Line[]) => {
-  const hideLine = StateEffect.define<{ lineStart: number }>({
-    map: ({ lineStart }, change) => ({ lineStart: change.mapPos(lineStart) }),
-  });
-
-  const hideField = StateField.define<DecorationSet>({
-    create() {
-      return Decoration.none;
-    },
-    update(hidden, tr) {
-      hidden = hidden.map(tr.changes);
-      for (let e of tr.effects)
-        if (e.is(hideLine)) {
-          let { lineStart } = e.value;
-          let line = view.state.doc.lineAt(lineStart);
-          console.log(`hiding line:`);
-          console.log(line);
-          if (line.text.length > 0) {
-            hidden = hidden.update({
-              add: [Decoration.replace({}).range(line.from, line.to)],
-            });
-          }
-        }
-      return hidden;
-    },
-    provide: f => EditorView.decorations.from(f),
-  });
-
-  view.dispatch({
-    effects: [StateEffect.appendConfig.of([hideField])],
-  });
-
-  let hideEffects = lines.map(l => hideLine.of({ lineStart: l.from }));
-
   let linesToFold = _.sortBy(lines, l => l.number);
 
   let groupedLines = linesToFold.reduce((r: Line[][], line: Line) => {
-    const lastSubArray = r[r.length - 1];
-    if (
-      !lastSubArray ||
-      lastSubArray[lastSubArray.length - 1].number !== line.number - 1
-    ) {
+    const lastSubArray = _.last(r);
+    if (!lastSubArray || _.last(lastSubArray)!.number !== line.number - 1) {
       r.push([]);
     }
-    r[r.length - 1].push(line);
+    _.last(r)!.push(line);
     return r;
   }, []);
 
   let foldEffects = groupedLines.map(ls => {
     let first = ls[0]!;
-    let last = ls[ls.length - 1]!;
+    let last = _.last(ls)!;
     return foldEffect.of({ from: first.from, to: last.to });
   });
 
   // XXX: I don't think we really need the "hide" effects if
   // we already fold the code.
   view.dispatch({
-    effects: [...foldEffects],
+    effects: foldEffects,
   });
 };
