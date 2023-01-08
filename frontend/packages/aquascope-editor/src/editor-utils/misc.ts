@@ -206,7 +206,7 @@ export let quietFoldExt = () => {
   });
 };
 
-export let hideLines = (view: EditorView, ranges: RangeT[]) => {
+export let hideLines = (view: EditorView, lines: Line[]) => {
   const hideLine = StateEffect.define<{ lineStart: number }>({
     map: ({ lineStart }, change) => ({ lineStart: change.mapPos(lineStart) }),
   });
@@ -238,12 +238,9 @@ export let hideLines = (view: EditorView, ranges: RangeT[]) => {
     effects: [StateEffect.appendConfig.of([hideField])],
   });
 
-  let hideEffects = ranges.map(r => hideLine.of({ lineStart: r.char_start }));
+  let hideEffects = lines.map(l => hideLine.of({ lineStart: l.from }));
 
-  let linesToFold = _.sortBy(
-    ranges.map(r => view.state.doc.lineAt(r.char_start)),
-    l => l.number
-  );
+  let linesToFold = _.sortBy(lines, l => l.number);
 
   let groupedLines = linesToFold.reduce((r: Line[][], line: Line) => {
     const lastSubArray = r[r.length - 1];

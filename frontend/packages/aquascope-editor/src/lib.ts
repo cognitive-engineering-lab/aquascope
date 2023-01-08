@@ -77,17 +77,22 @@ type ParseResult =
   | { type: "ok"; code: string; ranges: Range[] }
   | { type: "err"; error: string };
 
+type MaybeProcessor = undefined | ((toks: string[], range: Range) => boolean);
+
 let parseWithDelimiters = (
   code: string,
-  delimiters: [string, string][],
-  retainMatched: (toks: string[], range: Range) => boolean = _ => true
+  delimiters: [string, string, MaybeProcessor][]
 ): ParseResult => {
-  let [open, close] = _.unzip(delimiters);
+  let [openA, closeA, processorsA] = _.unzip(delimiters);
+  let open = openA as string[];
+  let close = closeA as string[];
+  let processors = processorsA as MaybeProcessor[];
+  let associatedPs = _.zipObject(open, processors);
   let makeCheck = (arr: string[]) => {
     let r = new RegExp(`^(${arr.map(s => _.escapeRegExp(s)).join("|")})`);
-    return (s: string) => {
+    return (s: string): null | [number, MaybeProcessor] => {
       let match = s.match(r);
-      return match ? match[0].length : null;
+      return match ? [match[0].length, associatedPs[match[0]]] : null;
     };
   };
   let [openCheck, closeCheck] = [makeCheck(open), makeCheck(close)];
@@ -95,18 +100,23 @@ let parseWithDelimiters = (
   let inSeq = null;
   let ranges: Range[] = [];
   let outputCode: string[] = [];
+  let defaultProcessor = (_f: any, _s: any) => true;
+  let retainMatched = defaultProcessor;
   let i = 0;
   while (i < code.length) {
     if (inSeq === null) {
-      let n = openCheck(code.substring(i));
-      if (n) {
+      let match = openCheck(code.substring(i));
+      if (match) {
+        let [n, processor] = match;
+        retainMatched = processor ?? defaultProcessor;
         i += n;
         inSeq = index;
         continue;
       }
     } else {
-      let n = closeCheck(code.substring(i));
-      if (n) {
+      let match = closeCheck(code.substring(i));
+      if (match) {
+        let [n, _] = match;
         let seqN = index - inSeq!;
         let range = {
           char_start: inSeq!,
@@ -116,8 +126,10 @@ let parseWithDelimiters = (
           filename: "",
         };
 
-        if (!retainMatched(outputCode.slice(-seqN), range)) {
-          outputCode = outputCode.slice(0, -seqN);
+        let codeInSeq = seqN == 0 ? [] : outputCode.slice(-seqN);
+        if (!retainMatched(codeInSeq, range)) {
+          if (seqN > 0) outputCode = outputCode.slice(0, -seqN);
+          index -= seqN;
         } else {
           ranges.push(range);
         }
@@ -136,47 +148,16 @@ let parseWithDelimiters = (
   return { type: "ok", code: outputCode.join(""), ranges };
 };
 
-let parseWithMatch = (code: string, delimiter: string): ParseResult => {
-  let r = new RegExp(`^${_.escapeRegExp(delimiter)}`);
-  let makeCheck = (s: string) => {
-    let match = s.match(r);
-    return match ? match[0].length : null;
-  };
-  let ranges: Range[] = [];
-  let outputCode: string[] = [];
-  let index = 0;
-  let i = 0;
-  while (i < code.length) {
-    let n = makeCheck(code.substring(i));
-    if (n) {
-      ranges.push({
-        char_start: index,
-        char_end: index + n,
-        byte_start: 0,
-        byte_end: 0,
-        filename: "",
-      });
-      i += n;
-      continue;
-    }
-    outputCode.push(code[i]);
-    i += 1;
-    index += 1;
-  }
-
-  return { type: "ok", code: outputCode.join(""), ranges };
-};
-
 let buildStepperConfig = (config: StepperConfig) => {
   config.focusedCharPos = [];
   config.focusedPaths = new Map();
   return (toks: string[], range: Range): boolean => {
     let s = "step:";
     let n = s.length;
-    let hasTag = toks.length >= 5 && toks.slice(0, n).join("") == s;
+    let hasTag = toks.length >= n && toks.slice(0, n).join("") == s;
     if (!hasTag) return true;
 
-    let remaining = toks.slice(5).join("");
+    let remaining = toks.slice(n).join("");
     let commaSep = remaining.split(",", 2).map(s => s.trim());
     if (commaSep.includes("focus")) {
       config.focusedCharPos!.push(range.char_start);
@@ -185,6 +166,19 @@ let buildStepperConfig = (config: StepperConfig) => {
     if (commaSep[0]) {
       config.focusedPaths!.set(range.char_start, commaSep[0]);
     }
+    return false;
+  };
+};
+
+let buildHiddenRanges = (ranges: Range[]) => {
+  ranges.length = 0;
+  return (toks: string[], range: Range): boolean => {
+    // avoid matching Rust attributes
+    let s = "";
+    let n = s.length;
+    let hasTag = toks.length >= n && toks.slice(0, n).join("") == s;
+    if (!hasTag) return true;
+    ranges.push(range);
     return false;
   };
 };
@@ -214,14 +208,13 @@ export class Editor {
   ) {
     this.cfg = { markedRanges: [], stepsCfg: {} };
 
-    let parseResult = parseWithDelimiters(
-      initialCode,
-      [
-        ["`[", "]`"],
-        ["`(", ")`"],
-      ],
-      buildStepperConfig(this.cfg.stepsCfg!)
-    );
+    let hiddenRanges = new Array<Range>();
+
+    let parseResult = parseWithDelimiters(initialCode, [
+      ["`[", "]`", undefined],
+      ["`(", ")`", buildStepperConfig(this.cfg.stepsCfg!)],
+      ["#|", "#", buildHiddenRanges(hiddenRanges)],
+    ]);
     if (parseResult.type == "err") throw new Error(parseResult.error);
 
     let resetMarkedRangesOnEdit = EditorView.updateListener.of(
@@ -232,12 +225,8 @@ export class Editor {
       }
     );
 
-    let hiddenLinesResult = parseWithMatch(parseResult.code, "# ");
-    if (hiddenLinesResult.type == "err")
-      throw new Error(hiddenLinesResult.error);
-
     let initialState = EditorState.create({
-      doc: hiddenLinesResult.code,
+      doc: parseResult.code,
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
@@ -271,7 +260,10 @@ export class Editor {
     this.editorContainer = dom;
     this.view = initialView;
 
-    hideLines(this.view, hiddenLinesResult.ranges);
+    hideLines(
+      this.view,
+      hiddenRanges.map(r => this.view.state.doc.lineAt(r.char_start))
+    );
   }
 
   public getCurrentCode(): string {
@@ -304,7 +296,6 @@ export class Editor {
     facts: AnalysisFacts
   ) {
     let newEffects = methodCallPoints.map(v => f.fromOutput(v, facts));
-    console.log(newEffects);
     this.view.dispatch({
       effects: [f.effectType.of(newEffects)],
     });

@@ -281,6 +281,7 @@ class PermissionStepTableWidget extends WidgetType {
 
     let matchAll = new RegExp("(.*)?");
     let r = this.focusedPaths.get(currLine.number) ?? matchAll;
+    console.log(`regex for line ${currLine.number} :: ${r}`);
     let [focusedDiffs, hiddenDiffs] = _.partition(
       this.step.state,
       ([path, _]) => !!path.match(r)
