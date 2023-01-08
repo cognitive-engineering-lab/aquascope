@@ -31,7 +31,7 @@ export { MFrame } from "./bindings/MFrame";
 export { MStack } from "./bindings/MStack";
 export { MHeap } from "./bindings/MHeap";
 export { MStep } from "./bindings/MStep";
-export { MLocation } from "./bindings/MLocation";
+export { MHeapAllocKind } from "./bindings/MHeapAllocKind";
 export { Abbreviated } from "./bindings/Abbreviated";
 
 interface BuildError {

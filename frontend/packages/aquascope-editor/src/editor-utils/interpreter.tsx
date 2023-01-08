@@ -11,8 +11,8 @@ import React, {
   CSSProperties,
   useContext,
   useEffect,
-  useMemo,
   useRef,
+  useState,
 } from "react";
 import ReactDOM from "react-dom/client";
 
@@ -30,6 +30,8 @@ const DEBUG: boolean = false;
 
 interface InterpreterConfig {
   horizontal?: boolean;
+  concreteTypes?: boolean;
+  hideCode?: boolean;
 }
 
 let ConfigContext = React.createContext<InterpreterConfig>({});
@@ -40,26 +42,7 @@ let codeRange = (code: string, range: Range) => {
   return code.slice(range.char_start, range.char_end);
 };
 
-let intersperse = <T,>(arr: T[], sep: T): T[] => {
-  let outp = [];
-  for (let i = 0; i < arr.length; ++i) {
-    outp.push(arr[i]);
-    if (i != arr.length - 1) {
-      outp.push(sep);
-    }
-  }
-  return outp;
-};
-
-let AbbreviatedView = <T,>({
-  value,
-  renderEl,
-  sep = ",",
-}: {
-  value: Abbreviated<T>;
-  renderEl: (t: T) => JSX.Element;
-  sep?: string;
-}) => {
+let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) => {
   let pathCtx = useContext(PathContext);
   let IndexedContainer: React.FC<
     React.PropsWithChildren<{ index: number }>
@@ -67,35 +50,185 @@ let AbbreviatedView = <T,>({
     let path = [...pathCtx, "index", index.toString()];
     return (
       <PathContext.Provider value={path}>
-        <span className={path.join("-")} data-connector="bottom">
+        <td className={path.join("-")} data-connector="bottom">
           {children}
-        </span>
+        </td>
       </PathContext.Provider>
     );
   };
+
   // TODO: handle indexes into abbreviated + end regions
-  return value.type == "All" ? (
+  return (
+    <table className="array">
+      <tbody>
+        <tr>
+          {value.type == "All" ? (
+            value.value.map((el, i) => (
+              <IndexedContainer key={i} index={i}>
+                <ValueView value={el} />
+              </IndexedContainer>
+            ))
+          ) : (
+            <>
+              {value.value[0].map((el, i) => (
+                <IndexedContainer key={i} index={i}>
+                  <ValueView value={el} />
+                </IndexedContainer>
+              ))}
+              <td>...</td>
+              <IndexedContainer index={100}>
+                <ValueView value={value.value[1]} />
+              </IndexedContainer>
+            </>
+          )}
+        </tr>
+      </tbody>
+    </table>
+  );
+};
+
+type MValueStruct = MValue & { type: "Struct" };
+type MStruct = MValueStruct["value"];
+
+type MValuePointer = MValue & { type: "Pointer" };
+type MPointer = MValuePointer["value"];
+
+let StructView = ({ value }: { value: MStruct }) => {
+  let pathCtx = useContext(PathContext);
+  let config = useContext(ConfigContext);
+
+  if (value.alloc_kind !== null && !config.concreteTypes) {
+    let alloc_type = value.alloc_kind.type;
+
+    let read_field = (v: MStruct, k: string): MStruct => {
+      let field = v.fields.find(([k2]) => k == k2);
+      if (!field) {
+        let v_pretty = JSON.stringify(v, undefined, 2);
+        throw new Error(`Could not find field "${k}" in struct: ${v_pretty}`);
+      }
+      return (field[1] as MValueStruct).value;
+    };
+
+    let read_unique = (unique: MStruct): MStruct => {
+      let non_null = read_field(unique, "pointer");
+      return non_null;
+    };
+
+    let read_vec = (vec: MStruct): MStruct => {
+      let raw_vec = read_field(vec, "buf");
+      let unique = read_field(raw_vec, "ptr");
+      return read_unique(unique);
+    };
+
+    let non_null: MStruct;
+    if (alloc_type == "String") {
+      let vec = read_field(value, "vec");
+      non_null = read_vec(vec);
+    } else if (alloc_type == "Vec") {
+      non_null = read_vec(value);
+    } else if (alloc_type == "Box") {
+      let unique = read_field(value, "0");
+      non_null = read_unique(unique);
+    } else {
+      throw new Error(`Unimplemented alloc type: ${alloc_type}`);
+    }
+
+    let ptr = non_null.fields[0][1];
+
+    return <ValueView value={ptr} />;
+  }
+
+  if (value.fields.length == 1) {
+    let path = [...pathCtx, "field", "0"];
+    return (
+      <span className={path.join("-")}>
+        <PathContext.Provider value={path}>
+          {value.name} /&nbsp;
+          <ValueView value={value.fields[0][1]} />
+        </PathContext.Provider>
+      </span>
+    );
+  }
+
+  return (
     <>
-      {intersperse(
-        value.value.map((el, i) => (
-          <IndexedContainer index={i}>{renderEl(el)}</IndexedContainer>
-        )),
-        <>{sep}</>
-      )}
+      {value.name}
+      <table>
+        <tbody>
+          {value.fields.map(([k, v], i) => {
+            let path = [...pathCtx, "field", i.toString()];
+            return (
+              <tr key={k}>
+                <td>{k}</td>
+                <td className={path.join("-")}>
+                  <PathContext.Provider value={path}>
+                    <ValueView value={v} />
+                  </PathContext.Provider>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </>
+  );
+};
+
+let PointerView = ({ value: { path, range } }: { value: MPointer }) => {
+  let config = useContext(ConfigContext);
+
+  let segment =
+    path.segment.type == "Heap"
+      ? `heap-${path.segment.value.index}`
+      : `stack-${path.segment.value.frame}-${path.segment.value.local}`;
+
+  let parts = [...path.parts];
+  let lastPart = _.last(parts);
+  let slice =
+    lastPart && lastPart.type == "Subslice" ? lastPart.value : undefined;
+  if (lastPart && lastPart.type == "Index" && lastPart.value == 0) parts.pop();
+  let partClass = parts.map(part =>
+    part.type == "Index"
+      ? `index-${part.value}`
+      : part.type == "Field"
+      ? `field-${part.value}`
+      : part.type == "Subslice"
+      ? `index-${part.value[0]}`
+      : ""
+  );
+
+  let attrs: { [key: string]: string } = {
+    ["data-point-to"]: [segment, ...partClass].join("-"),
+  };
+  if (slice) {
+    attrs["data-point-to-range"] = [
+      segment,
+      ...partClass.slice(0, -1),
+      `index-${slice[1]}`,
+    ].join("-");
+  }
+
+  let ptrView = (
+    <span className="pointer" {...attrs}>
+      ●
+    </span>
+  );
+
+  return config.concreteTypes && range ? (
+    <table>
+      <tbody>
+        <tr>
+          <td>ptr</td>
+          <td>{ptrView}</td>
+        </tr>
+        <tr>
+          <td>len</td>
+          <td>{range.toString()}</td>
+        </tr>
+      </tbody>
+    </table>
   ) : (
-    <>
-      {intersperse(
-        value.value[0].map((el, i) => (
-          <IndexedContainer index={i}>{renderEl(el)}</IndexedContainer>
-        )),
-        <>{sep}</>
-      )}
-      {sep}...{sep}
-      <IndexedContainer index={100}>
-        {renderEl(value.value[1])}
-      </IndexedContainer>
-    </>
+    ptrView
   );
 };
 
@@ -104,11 +237,12 @@ let ValueView = ({ value }: { value: MValue }) => {
   return (
     <>
       {value.type == "Bool" ||
-      value.type == "Char" ||
       value.type == "Uint" ||
       value.type == "Int" ||
       value.type == "Float" ? (
         value.value.toString()
+      ) : value.type == "Char" ? (
+        String.fromCharCode(value.value).replace(" ", "\u00A0")
       ) : value.type == "Tuple" ? (
         <>
           <table>
@@ -129,26 +263,7 @@ let ValueView = ({ value }: { value: MValue }) => {
           </table>
         </>
       ) : value.type == "Struct" ? (
-        <>
-          {value.value.name}
-          <table>
-            <tbody>
-              {value.value.fields.map(([k, v], i) => {
-                let path = [...pathCtx, "field", i.toString()];
-                return (
-                  <tr key={k}>
-                    <td>{k}</td>
-                    <td className={path.join("-")}>
-                      <PathContext.Provider value={path}>
-                        <ValueView value={v} />
-                      </PathContext.Provider>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </>
+        <StructView value={value.value} />
       ) : value.type == "Enum" ? (
         <>
           {value.value.name} ({value.value.variant})
@@ -171,43 +286,9 @@ let ValueView = ({ value }: { value: MValue }) => {
           </table>
         </>
       ) : value.type == "Pointer" ? (
-        (() => {
-          let ptr = value.value;
-          let segment =
-            ptr.segment.type == "Heap"
-              ? `heap-${ptr.segment.value.index}`
-              : `stack-${ptr.segment.value.frame}-${ptr.segment.value.local}`;
-          let parts = ptr.parts.map(part =>
-            part.type == "Index" ? `index-${part.value}` : `field-${part.value}`
-          );
-
-          // Small hack so pointers to beginning of arrays point to the cell instead of
-          // the first element
-          let lastPart = _.last(parts);
-          if (lastPart && lastPart == "index-0") parts.pop();
-
-          let pointTo = [segment, ...parts].join("-");
-          return (
-            <span className="pointer" data-point-to={pointTo}>
-              ●
-            </span>
-          );
-        })()
+        <PointerView value={value.value} />
       ) : value.type == "Array" ? (
-        <>
-          [
-          <AbbreviatedView
-            value={value.value}
-            renderEl={el => <ValueView value={el} />}
-          />
-          ]
-        </>
-      ) : value.type == "String" ? (
-        <AbbreviatedView
-          value={value.value}
-          renderEl={el => <>{String.fromCharCode(Number(el))}</>}
-          sep={""}
-        />
+        <AbbreviatedView value={value.value} />
       ) : value.type == "Unallocated" ? (
         <>X</>
       ) : (
@@ -225,9 +306,9 @@ let LocalsView = ({
   locals: [string, MValue][];
 }) =>
   locals.length == 0 ? (
-    <div className="empty-frame">(empty frame)</div>
+    <div className="locals empty-frame">(empty frame)</div>
   ) : (
-    <table>
+    <table className="locals">
       <tbody>
         {locals.map(([key, value], i) => {
           let path = ["stack", index.toString(), key];
@@ -301,6 +382,8 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
   </div>
 );
 
+(LeaderLine as any).positionByWindowResize = false;
+
 let StepView = ({
   container,
   step,
@@ -311,45 +394,78 @@ let StepView = ({
   index: number;
 }) => {
   let ref = useRef<HTMLDivElement>(null);
+  let configCtx = useContext(ConfigContext);
   useEffect(() => {
     let stepContainer = ref.current!;
-    let pointers = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
-    let color = getComputedStyle(document.body).getPropertyValue("--fg")
-      ? "var(--fg)"
-      : "black";
-    let lines = Array.from(pointers).map(src => {
-      let dstSel = src.dataset.pointTo!;
-      let dst = stepContainer.querySelector<HTMLElement>("." + dstSel);
+    let query = (sel: string): HTMLElement => {
+      let dst = stepContainer.querySelector<HTMLElement>("." + sel);
       if (!dst)
-        throw new Error(
-          `Could not find endpoint for pointer selector: ${dstSel}`
-        );
-      let endSocket = dst.dataset.connector as LeaderLine.SocketType;
-      let dstAnchor = dstSel.startsWith("stack")
-        ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
-        : dst;
-      return new LeaderLine(src, dstAnchor, {
-        color,
-        size: 1,
-        endPlugSize: 2,
-        startSocket: "right",
-        endSocket,
-        // path: "grid",
-      });
-    });
+        throw new Error(`Could not find endpoint for pointer selector: ${sel}`);
+      return dst;
+    };
+    let pointers = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
+
+    // TODO: this should be configurable from the embed script, not directly
+    // inside aquascope-editor
+    let mdbookEmbed = getComputedStyle(document.body).getPropertyValue(
+      "--inline-code-color"
+    );
+    let color = mdbookEmbed ? "var(--inline-code-color)" : "black";
+
+    let lines = Array.from(pointers)
+      .map(src => {
+        try {
+          let dstSel = src.dataset.pointTo!;
+          let dst = query(dstSel);
+          let dstRange = src.dataset.pointToRange
+            ? query(src.dataset.pointToRange)
+            : undefined;
+          let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+
+          let dstAnchor = dstRange
+            ? LeaderLine.areaAnchor(dst, {
+                shape: "rect",
+                width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
+                height: 2,
+                y: "100%",
+                fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
+              })
+            : dstSel.startsWith("stack")
+            ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
+            : dst;
+
+          let line = new LeaderLine(src, dstAnchor, {
+            color,
+            size: 1,
+            endPlugSize: 2,
+            startSocket: "right",
+            endSocket,
+          });
+          return line;
+        } catch (e: any) {
+          console.error("Leader line failed to render", e.stack);
+          return undefined;
+        }
+      })
+      .filter(l => l) as LeaderLine[];
 
     let reposition = () => lines.forEach(line => line.position());
-    window.addEventListener("resize", reposition);
 
-    let interpreterContainer = container.current!;
-    interpreterContainer.addEventListener("scroll", reposition);
+    let lastPos = stepContainer.getBoundingClientRect();
+    let interval = setInterval(() => {
+      let curPos = stepContainer.getBoundingClientRect();
+      if (curPos.x != lastPos.x || curPos.y != lastPos.y) reposition();
+      lastPos = curPos;
+    }, 300);
+    let timeout = setTimeout(() => reposition(), 300);
 
     return () => {
-      window.removeEventListener("resize", reposition);
-      interpreterContainer.removeEventListener("scroll", reposition);
+      clearInterval(interval);
+      clearTimeout(timeout);
       lines.forEach(line => line.remove());
     };
-  }, []);
+  }, [configCtx.concreteTypes]);
+
   return (
     <div className="step">
       <div className="step-header">
@@ -363,19 +479,44 @@ let StepView = ({
   );
 };
 
-let InterpreterView = ({ steps }: { steps: MStep<Range>[] }) => {
+let InterpreterView = ({
+  steps,
+  config,
+}: {
+  steps: MStep<Range>[];
+  config: InterpreterConfig;
+}) => {
   let ref = useRef<HTMLDivElement>(null);
-  let config = useContext(ConfigContext);
+  let [concreteTypes, setConcreteTypes] = useState(
+    config.concreteTypes || false
+  );
+  let [buttonVisible, setButtonVisible] = useState(false);
+
   let flexDirection: CSSProperties["flexDirection"] = config.horizontal
     ? "row"
     : "column";
 
   return (
-    <div ref={ref} className="interpreter" style={{ flexDirection }}>
-      {steps.map((step, i) => (
-        <StepView key={i} index={i} step={step} container={ref} />
-      ))}
-    </div>
+    <ConfigContext.Provider value={{ ...config, concreteTypes: concreteTypes }}>
+      <div
+        ref={ref}
+        className="interpreter"
+        style={{ flexDirection }}
+        onMouseEnter={() => setButtonVisible(true)}
+        onMouseLeave={() => setButtonVisible(false)}
+      >
+        <button
+          className="concrete-types"
+          onClick={() => setConcreteTypes(!concreteTypes)}
+          style={{ opacity: buttonVisible ? "1" : "0" }}
+        >
+          <i className={`fa fa-${concreteTypes ? "eye-slash" : "eye"}`} />
+        </button>
+        {steps.map((step, i) => (
+          <StepView key={i} index={i} step={step} container={ref} />
+        ))}
+      </div>
+    </ConfigContext.Provider>
   );
 };
 
@@ -436,6 +577,10 @@ export function renderInterpreter(
   markedRanges: Range[],
   config: InterpreterConfig = {}
 ) {
+  if (config.hideCode) {
+    view.destroy();
+  }
+
   let root = ReactDOM.createRoot(container);
   if (markedRanges.length > 0) {
     let [sortedRanges, filteredSteps] = filterSteps(steps, markedRanges);
@@ -460,9 +605,7 @@ export function renderInterpreter(
 
   root.render(
     <CodeContext.Provider value={contents}>
-      <ConfigContext.Provider value={config}>
-        <InterpreterView steps={steps} />
-      </ConfigContext.Provider>
+      <InterpreterView steps={steps} config={config} />
     </CodeContext.Provider>
   );
 }

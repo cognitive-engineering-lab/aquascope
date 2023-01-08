@@ -1,10 +1,12 @@
 # Chapter 1
 
-```aquascope,interpreter
+```aquascope,receiver-types
 fn main() {
-    let s = [(0, 1), (2, 3)];
-    let x = &s[1].0;
-}  
+    let mut x = 1;
+    let y = &x;
+    x += 1;
+    println!("{} = {}", x, *y);
+}
 ```
 
 <!-- ```aquascope,interpreter

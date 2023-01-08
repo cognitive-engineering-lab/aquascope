@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - dev
   pull_request:
     branches:
       - "**"
@@ -13,11 +14,13 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
+      - uses: davidB/rust-cargo-make@v1
       - uses: actions-rs/install@v0.1
         with:
           crate: cargo-insta
           version: latest
           use-tool-cache: true
+      - run: cargo make init-bindings
       - run: npm install -g graco && cd frontend && graco prepare
       - run: cargo miri setup
       - uses: actions-rs/cargo@v1

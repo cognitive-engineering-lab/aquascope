@@ -5,6 +5,9 @@ default_to_workspace = false
 [tasks.watch-front]
 script = "cargo watch -x 'install --path crates/aquascope_front --offline'"
 
+[tasks.watch-front-debug]
+script = "cargo watch -x 'install --path crates/aquascope_front --offline --debug'"
+
 [tasks.watch-mdbook]
 script = "cargo watch -x 'install --path crates/mdbook-aquascope --debug --offline'"
 

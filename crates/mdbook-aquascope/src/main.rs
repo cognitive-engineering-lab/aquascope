@@ -74,8 +74,14 @@ impl AquascopePreprocessor {
     }
 
     let response = String::from_utf8(output.stdout)?;
-    // let logs = String::from_utf8(output.stderr)?;
-    // eprintln!("{logs}");
+    let response_json: serde_json::Value = serde_json::from_str(&response)?;
+    if let Some(err) = response_json.get("Err") {
+      let stderr = String::from_utf8(output.stderr)?;
+      bail!(
+        "Aquascope failed for program:\n{cleaned}\nwith error: {}\n{stderr}",
+        err.as_str().unwrap()
+      )
+    }
 
     let mut html = String::from(r#"<div class="aquascope-embed""#);
 
@@ -96,6 +102,9 @@ impl AquascopePreprocessor {
       .map(|(k, v)| (k, v))
       .collect::<HashMap<_, _>>();
     add_data("config", &serde_json::to_string(&config)?)?;
+
+    // TODO: make this configurable?
+    add_data("no-interact", "true")?;
 
     write!(html, "></div>")?;
 

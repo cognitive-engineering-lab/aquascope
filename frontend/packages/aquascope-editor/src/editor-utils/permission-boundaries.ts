@@ -166,14 +166,19 @@ class BoundaryPointWidget extends WidgetType {
     wrap.style.position = "relative";
     wrap.style.top = `${(icons.length - 1) * 4}px`;
 
+    // TODO: this should be configurable from the embed script, not directly
+    // inside aquascope-editor
+    let bgVar = getComputedStyle(document.body).getPropertyValue("--bg");
+    let hollowColor = bgVar !== "" ? "var(--bg)" : whiteColor.toString();
+
     icons.forEach((icoI: SinglePermIcon, idx: number) => {
       let ico: HTMLElement = icoI.toDOM();
       let y = (idx / icons.length) * 100 + 100 / icons.length - 5;
       ico.setAttribute("text-anchor", "middle");
       ico.setAttribute("x", "50%");
       ico.setAttribute("y", `${y}%`);
-      let fillColor: Color = icoI.actual ? icoI.color : whiteColor;
-      ico.setAttribute("fill", fillColor.toString());
+      let fillColor = icoI.actual ? icoI.color.toString() : hollowColor;
+      ico.setAttribute("fill", fillColor);
       ico.setAttribute("stroke", icoI.color.toString());
       ico.dataset.bufferPos = this.pos.toString();
 

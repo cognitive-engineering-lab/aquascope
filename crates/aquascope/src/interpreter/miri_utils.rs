@@ -1,5 +1,6 @@
 use miri::{
-  interpret::Provenance, InterpCx, InterpResult, Machine, OpTy, Value,
+  interpret::Provenance, InterpCx, InterpResult, MPlaceTy, Machine,
+  MemPlaceMeta, OpTy, Value,
 };
 use rustc_abi::FieldsShape;
 use rustc_middle::{
@@ -53,6 +54,10 @@ struct AddressLocator<'a, 'mir, 'tcx> {
 
 impl<'tcx> AddressLocator<'_, '_, 'tcx> {
   fn locate(&mut self, layout: TyAndLayout<'tcx>, mut offset: u64) {
+    if offset == self.target {
+      return;
+    }
+
     let ty = layout.ty;
     match ty.kind() {
       TyKind::Adt(adt_def, _) => {
@@ -112,11 +117,7 @@ impl<'tcx> AddressLocator<'_, '_, 'tcx> {
       }
 
       _ if ty.is_primitive() || ty.is_any_ptr() => {
-        debug_assert!(
-          offset == self.target,
-          "offset {offset} != target {}",
-          self.target
-        )
+        panic!("offset {offset} != target {}", self.target)
       }
 
       ty => unimplemented!("{ty:#?}"),
@@ -128,24 +129,39 @@ pub fn locate_address_in_type<'mir, 'tcx>(
   ecx: &InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>,
   alloc_layout: TyAndLayout<'tcx>,
   alloc_size: Size,
+  mplace: MPlaceTy<'tcx, miri::Provenance>,
   target: Size,
 ) -> Vec<PlaceElem<'tcx>> {
+  // dbg!((alloc_layout, alloc_size, mplace, target));
   let mut locator = AddressLocator {
     ecx,
     target: target.bytes(),
     segments: Vec::new(),
   };
 
+  let mut offset = 0;
   if alloc_layout.size.bytes() < alloc_size.bytes() {
-    let array_elem_size = alloc_size.bytes();
-    let array_elem_offset =
-      target.bytes() * (array_elem_size - 1) / array_elem_size;
-    let index = array_elem_offset / array_elem_size;
-    locator
-      .segments
-      .push(PlaceElem::Index(Local::from_usize(index as usize)));
+    let array_elem_size = alloc_layout.size.bytes();
+    offset = target.bytes() / array_elem_size * array_elem_size;
+    let index = offset / array_elem_size;
+    // dbg!((array_elem_size, offset, index));
+
+    let segment = match mplace.meta {
+      MemPlaceMeta::Meta(meta) => {
+        let end_offset = meta.to_u64().unwrap();
+        let to = index + end_offset / array_elem_size - 1;
+        PlaceElem::Subslice {
+          from: index,
+          to,
+          from_end: false,
+        }
+      }
+      MemPlaceMeta::None => PlaceElem::Index(Local::from_usize(index as usize)),
+    };
+
+    locator.segments.push(segment);
   }
 
-  locator.locate(alloc_layout, 0);
+  locator.locate(alloc_layout, offset);
   locator.segments
 }

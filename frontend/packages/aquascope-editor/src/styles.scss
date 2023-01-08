@@ -1,4 +1,18 @@
 $monospace: "Source Code Pro", monospace;
+
+@mixin button {
+  opacity: 0;
+  font-size: 14px;
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 4px;
+  padding: 3px 5px;
+  margin: 0px 5px;
+  transition: 100ms;
+  transition-property: color, border-color, background-color, opacity;
+  cursor: pointer;
+}
+
 .aquascope {
   position: relative;
   height: 100%;
@@ -42,16 +56,7 @@ $monospace: "Source Code Pro", monospace;
   }
 
   .cm-button {
-    opacity: 0;
-    font-size: 14px;
-    border-style: solid;
-    border-width: 1px;
-    border-radius: 4px;
-    padding: 3px 5px;
-    margin: 0px 5px;
-    transition: 100ms;
-    transition-property: color, border-color, background-color, opacity;
-    cursor: pointer;
+    @include button;
   }
 
   &:hover .cm-button {
@@ -90,7 +95,8 @@ $monospace: "Source Code Pro", monospace;
   .perm-step-widget {
     display: inline-block;
     color: #ccc;
-    height: auto;
+    position: relative;
+    top: 0.5em;
   }
 
   .step-widget-container {
@@ -139,7 +145,7 @@ $monospace: "Source Code Pro", monospace;
     color: rgb(255, 66, 68);
   }
 
-  spen.perm-diff-none {
+  span.perm-diff-none {
     color: black;
   }
 
@@ -187,6 +193,15 @@ $monospace: "Source Code Pro", monospace;
   gap: 30px;
   flex-wrap: wrap;
   overflow-x: auto;
+  position: relative;
+
+  .concrete-types {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+
+    @include button;
+  }
 
   .step {
     // border: 1px solid #ccc;
@@ -264,14 +279,40 @@ $monospace: "Source Code Pro", monospace;
       font-size: 0.8em;
     }
 
+    table.locals, .heap > table {
+      border: 2px solid #ccc;
+
+      > tbody > tr > td {
+        border-width: 2px;
+        padding: 4px 6px;
+      }
+    }
+
     table {
       border: 1px solid #ccc;
       border-collapse: collapse;
       font-family: $monospace;
-      display: inline-block;
+
+      &.array {
+        border: none;
+
+        td {
+          border-top: none;
+          border-bottom: none;
+
+          &:first-child {
+            border-left: none;
+          }
+
+          &:last-child {
+            border-right: none;
+          }
+        }
+      }
 
       td {
         border: 1px solid #ccc;
+        transition: width 1s, height 1s;
       }
     }
   }
