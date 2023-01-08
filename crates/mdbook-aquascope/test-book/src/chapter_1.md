@@ -2,11 +2,17 @@
 
 ```aquascope,receiver-types
 fn main() {
+<<<<<<< HEAD
     let mut x = 1;
     let y = &x;
     x += 1;
     println!("{} = {}", x, *y);
 }
+=======
+    let s = [(0, 1), (2, 3)];
+    let x = &s[1].0;
+}
+>>>>>>> upstream/main
 ```
 
 <!-- ```aquascope,interpreter

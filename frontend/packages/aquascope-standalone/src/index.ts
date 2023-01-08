@@ -22,7 +22,8 @@ window.addEventListener("load", () => {
     "vimKeybindings"
   ) as HTMLInputElement;
 
-  const editorElement = document.querySelector<HTMLElement>(".static-editor")!;
+  const editorElement =
+    document.querySelector<HTMLDivElement>(".static-editor")!;
   const tabs = document.querySelectorAll<HTMLElement>(".tab");
   const stdErr = document.querySelector<HTMLElement>(".aquascope-stderr")!;
 
@@ -46,10 +47,7 @@ window.addEventListener("load", () => {
     editor: new Ed.Editor(
       editorElement,
       basicSetup,
-      [
-        Ed.receiverPermissionsField.stateField,
-        Ed.coarsePermissionDiffs.stateField,
-      ],
+      [Ed.receiverPermissionsField.stateField],
       (err: Ed.types.BackendError) => {
         if (err.type === "FileNotFound") {
           alert("A backend problem occurred!");

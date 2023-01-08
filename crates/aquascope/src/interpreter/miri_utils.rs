@@ -140,9 +140,7 @@ pub fn locate_address_in_type<'mir, 'tcx>(
   };
 
   let mut offset = 0;
-  if alloc_layout.size.bytes() < alloc_size.bytes()
-  //&& !matches!(mplace.layout.ty.kind(), TyKind::Uint(UintTy::U8))
-  {
+  if alloc_layout.size.bytes() < alloc_size.bytes() {
     let array_elem_size = alloc_layout.size.bytes();
     offset = target.bytes() / array_elem_size * array_elem_size;
     let index = offset / array_elem_size;

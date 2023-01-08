@@ -463,15 +463,6 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
       TyKind::Str => {
         let mplace = op.assert_mem_place();
-        /* , |mplace| {
-          // let length = mplace.meta.unwrap_meta().to_u64()?;
-          // eprintln!("{length}");
-          let s = self.ev.ecx.read_str(&mplace)?;
-          let chars = s.chars().collect::<Vec<_>>();
-          let abbrev =
-            Abbreviated::new(s.len() as u64, |i| Ok(chars[i as usize] as u64))?;
-          Ok(MValue::String(abbrev))
-        }*/
         self.read_pointer(mplace)?
       }
 

@@ -3,4 +3,8 @@ import type { Abbreviated } from "./Abbreviated";
 import type { MHeapAllocKind } from "./MHeapAllocKind";
 import type { MPath } from "./MPath";
 
+<<<<<<< HEAD
 export type MValue = { type: "Bool", value: boolean } | { type: "Char", value: number } | { type: "Uint", value: bigint } | { type: "Int", value: bigint } | { type: "Float", value: number } | { type: "Tuple", value: Array<MValue> } | { type: "Array", value: Abbreviated<MValue> } | { type: "Struct", value: { name: string, fields: Array<[string, MValue]>, alloc_kind: MHeapAllocKind | null, } } | { type: "Enum", value: { name: string, variant: string, fields: Array<[string, MValue]>, } } | { type: "Pointer", value: { path: MPath, range: bigint | null, } } | { type: "Unallocated" };
+=======
+export type MValue = { type: "Bool", value: boolean } | { type: "Char", value: string } | { type: "Uint", value: bigint } | { type: "Int", value: bigint } | { type: "Float", value: number } | { type: "Pointer", value: MPath } | { type: "Tuple", value: Array<MValue> } | { type: "Struct", value: { name: string, fields: Array<[string, MValue]>, } } | { type: "Enum", value: { name: string, variant: string, fields: Array<[string, MValue]>, } } | { type: "String", value: Abbreviated<bigint> } | { type: "Array", value: Abbreviated<MValue> } | { type: "Unallocated" };
+>>>>>>> upstream/main
