@@ -45,12 +45,14 @@ description: stackref.test
           - - y
             - type: Pointer
               value:
-                segment:
-                  type: Stack
-                  value:
-                    frame: 0
-                    local: x
-                parts: []
+                path:
+                  segment:
+                    type: Stack
+                    value:
+                      frame: 0
+                      local: x
+                  parts: []
+                range: ~
   heap:
     locations: []
 - stack:
@@ -75,12 +77,14 @@ description: stackref.test
           - - y
             - type: Pointer
               value:
-                segment:
-                  type: Stack
-                  value:
-                    frame: 0
-                    local: x
-                parts: []
+                path:
+                  segment:
+                    type: Stack
+                    value:
+                      frame: 0
+                      local: x
+                  parts: []
+                range: ~
   heap:
     locations: []
 - stack:

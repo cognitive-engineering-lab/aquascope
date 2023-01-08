@@ -23,26 +23,72 @@ description: tuple.test
               value:
                 - type: Int
                   value: 0
-                - type: Pointer
+                - type: Struct
                   value:
-                    segment:
-                      type: Heap
+                    name: String
+                    fields:
+                      - - vec
+                        - type: Struct
+                          value:
+                            name: Vec
+                            fields:
+                              - - buf
+                                - type: Struct
+                                  value:
+                                    name: RawVec
+                                    fields:
+                                      - - ptr
+                                        - type: Struct
+                                          value:
+                                            name: Unique
+                                            fields:
+                                              - - pointer
+                                                - type: Struct
+                                                  value:
+                                                    name: NonNull
+                                                    fields:
+                                                      - - pointer
+                                                        - type: Pointer
+                                                          value:
+                                                            path:
+                                                              segment:
+                                                                type: Heap
+                                                                value:
+                                                                  index: 0
+                                                              parts:
+                                                                - type: Index
+                                                                  value: 0
+                                                            range: ~
+                                                    alloc_kind: ~
+                                            alloc_kind: ~
+                                      - - cap
+                                        - type: Uint
+                                          value: 5
+                                    alloc_kind: ~
+                              - - len
+                                - type: Uint
+                                  value: 5
+                            alloc_kind: ~
+                    alloc_kind:
+                      type: String
                       value:
-                        index: 0
-                    parts:
-                      - type: Index
-                        value: 0
+                        len: 5
   heap:
     locations:
-      - type: String
+      - type: Array
         value:
           type: All
           value:
-            - 72
-            - 101
-            - 108
-            - 108
-            - 111
+            - type: Char
+              value: 72
+            - type: Char
+              value: 101
+            - type: Char
+              value: 108
+            - type: Char
+              value: 108
+            - type: Char
+              value: 111
 - stack:
     frames:
       - name: main
@@ -64,26 +110,72 @@ description: tuple.test
               value:
                 - type: Int
                   value: 1
-                - type: Pointer
+                - type: Struct
                   value:
-                    segment:
-                      type: Heap
+                    name: String
+                    fields:
+                      - - vec
+                        - type: Struct
+                          value:
+                            name: Vec
+                            fields:
+                              - - buf
+                                - type: Struct
+                                  value:
+                                    name: RawVec
+                                    fields:
+                                      - - ptr
+                                        - type: Struct
+                                          value:
+                                            name: Unique
+                                            fields:
+                                              - - pointer
+                                                - type: Struct
+                                                  value:
+                                                    name: NonNull
+                                                    fields:
+                                                      - - pointer
+                                                        - type: Pointer
+                                                          value:
+                                                            path:
+                                                              segment:
+                                                                type: Heap
+                                                                value:
+                                                                  index: 0
+                                                              parts:
+                                                                - type: Index
+                                                                  value: 0
+                                                            range: ~
+                                                    alloc_kind: ~
+                                            alloc_kind: ~
+                                      - - cap
+                                        - type: Uint
+                                          value: 5
+                                    alloc_kind: ~
+                              - - len
+                                - type: Uint
+                                  value: 5
+                            alloc_kind: ~
+                    alloc_kind:
+                      type: String
                       value:
-                        index: 0
-                    parts:
-                      - type: Index
-                        value: 0
+                        len: 5
   heap:
     locations:
-      - type: String
+      - type: Array
         value:
           type: All
           value:
-            - 72
-            - 101
-            - 108
-            - 108
-            - 111
+            - type: Char
+              value: 72
+            - type: Char
+              value: 101
+            - type: Char
+              value: 108
+            - type: Char
+              value: 108
+            - type: Char
+              value: 111
 - stack:
     frames:
       - name: main
@@ -102,4 +194,3 @@ description: tuple.test
         locals: []
   heap:
     locations: []
-

@@ -73,16 +73,18 @@ description: nested-ref.test
           - - y
             - type: Pointer
               value:
-                segment:
-                  type: Stack
-                  value:
-                    frame: 0
-                    local: x
-                parts:
-                  - type: Index
-                    value: 1
-                  - type: Field
-                    value: 1
+                path:
+                  segment:
+                    type: Stack
+                    value:
+                      frame: 0
+                      local: x
+                  parts:
+                    - type: Index
+                      value: 1
+                    - type: Field
+                      value: 1
+                range: ~
   heap:
     locations: []
 - stack:

@@ -19,13 +19,34 @@ description: box.test
           filename: dummy.rs
         locals:
           - - x
-            - type: Pointer
+            - type: Struct
               value:
-                segment:
-                  type: Heap
-                  value:
-                    index: 0
-                parts: []
+                name: Box
+                fields:
+                  - - "0"
+                    - type: Struct
+                      value:
+                        name: Unique
+                        fields:
+                          - - pointer
+                            - type: Struct
+                              value:
+                                name: NonNull
+                                fields:
+                                  - - pointer
+                                    - type: Pointer
+                                      value:
+                                        path:
+                                          segment:
+                                            type: Heap
+                                            value:
+                                              index: 0
+                                          parts: []
+                                        range: ~
+                                alloc_kind: ~
+                        alloc_kind: ~
+                alloc_kind:
+                  type: Box
   heap:
     locations:
       - type: Int
@@ -47,13 +68,34 @@ description: box.test
           filename: dummy.rs
         locals:
           - - x
-            - type: Pointer
+            - type: Struct
               value:
-                segment:
-                  type: Heap
-                  value:
-                    index: 0
-                parts: []
+                name: Box
+                fields:
+                  - - "0"
+                    - type: Struct
+                      value:
+                        name: Unique
+                        fields:
+                          - - pointer
+                            - type: Struct
+                              value:
+                                name: NonNull
+                                fields:
+                                  - - pointer
+                                    - type: Pointer
+                                      value:
+                                        path:
+                                          segment:
+                                            type: Heap
+                                            value:
+                                              index: 0
+                                          parts: []
+                                        range: ~
+                                alloc_kind: ~
+                        alloc_kind: ~
+                alloc_kind:
+                  type: Box
   heap:
     locations:
       - type: Int
@@ -75,21 +117,63 @@ description: box.test
           filename: dummy.rs
         locals:
           - - x
-            - type: Pointer
+            - type: Struct
               value:
-                segment:
-                  type: Heap
-                  value:
-                    index: 0
-                parts: []
+                name: Box
+                fields:
+                  - - "0"
+                    - type: Struct
+                      value:
+                        name: Unique
+                        fields:
+                          - - pointer
+                            - type: Struct
+                              value:
+                                name: NonNull
+                                fields:
+                                  - - pointer
+                                    - type: Pointer
+                                      value:
+                                        path:
+                                          segment:
+                                            type: Heap
+                                            value:
+                                              index: 0
+                                          parts: []
+                                        range: ~
+                                alloc_kind: ~
+                        alloc_kind: ~
+                alloc_kind:
+                  type: Box
           - - y
-            - type: Pointer
+            - type: Struct
               value:
-                segment:
-                  type: Heap
-                  value:
-                    index: 0
-                parts: []
+                name: Box
+                fields:
+                  - - "0"
+                    - type: Struct
+                      value:
+                        name: Unique
+                        fields:
+                          - - pointer
+                            - type: Struct
+                              value:
+                                name: NonNull
+                                fields:
+                                  - - pointer
+                                    - type: Pointer
+                                      value:
+                                        path:
+                                          segment:
+                                            type: Heap
+                                            value:
+                                              index: 0
+                                          parts: []
+                                        range: ~
+                                alloc_kind: ~
+                        alloc_kind: ~
+                alloc_kind:
+                  type: Box
   heap:
     locations:
       - type: Int
