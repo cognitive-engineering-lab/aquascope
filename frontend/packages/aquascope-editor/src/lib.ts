@@ -1,12 +1,18 @@
 import { rust } from "@codemirror/lang-rust";
-import { indentUnit } from "@codemirror/language";
+import { codeFolding, foldEffect, indentUnit } from "@codemirror/language";
 import {
   Compartment,
   EditorState,
   Extension,
+  StateEffect,
   StateField,
 } from "@codemirror/state";
-import { DecorationSet, EditorView } from "@codemirror/view";
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  ViewUpdate,
+} from "@codemirror/view";
 import _ from "lodash";
 
 import { renderInterpreter } from "./editor-utils/interpreter";
@@ -14,15 +20,17 @@ import {
   IconField,
   LoanFacts,
   generateAnalysisDecorationFacts,
+  hideLines,
   loanFactsField,
   loanFactsStateType,
+  quietFoldExt,
 } from "./editor-utils/misc";
 import {
   copiedValueHover,
   insufficientTypeHover,
   receiverPermissionsField,
 } from "./editor-utils/permission-boundaries";
-import { coarsePermissionDiffs } from "./editor-utils/permission-steps";
+import { StepperConfig, renderSteps } from "./editor-utils/stepper";
 import "./styles.scss";
 import {
   AnalysisFacts,
@@ -34,7 +42,6 @@ import {
 } from "./types";
 
 export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
-export { coarsePermissionDiffs } from "./editor-utils/permission-steps";
 export * as types from "./types";
 
 const DEFAULT_SERVER_URL = new URL("http://127.0.0.1:8008");
@@ -51,84 +58,10 @@ type ServerResponse = {
   stderr: string;
 };
 
-// export const defaultCodeExample: string = `
-// #[derive(Debug, Default)]
-// struct Box {
-//     value: i32,
-// }
-
-// impl Box {
-//     fn inc(&mut self) {
-//         self.value += 1;
-//     }
-
-//     fn destroy(mut self) {}
-// }
-
-// fn bar() {
-//     let b = Box::default();
-//     let refine_all = &mut b.value;
-//     b.inc();
-//     println!("{refine_all}");
-//     b.inc();
-// }
-
-// fn foo(v: &mut Vec<i32>) {
-//   for (i, t) in v.iter().enumerate().rev() {
-//     if *t == 0 {
-//       v.remove(i);
-//     }
-//   }
-// }
-
-// fn main() {
-
-//     let v1 = vec![1, 2, 3];
-//     v1.push(0);
-
-//     let v2 = &mut vec![1, 2, 3];
-//     v2.push(0);
-
-//     let b1 = &Box::default();
-//     b1.inc();
-
-//     let mut b2 = Box::default();
-//     b2.inc();
-
-//     Box::default().destroy();
-
-//     println!("Gruëzi, Weltli");
-// }
-// `;
-
-// `
-// fn main() {
-//   let mut a = Box::new(2);
-//   *a += 1;
-//   let b = a;
-//   println!("{b}");
-// }
-// `
-
-// `
-// fn main() {
-//   let n = 5;
-//   // L1
-//   let y = plus_one(n);
-//   // L3
-//   println!("The value of y is: {y}");
-// }
-
-// fn plus_one(x: i32) -> i32 {
-//   // L2
-//   x + 1
-// }
-// `
-
 export const defaultCodeExample: string = `
 fn main() {
   \`[let n = 5;]\`
-  \`[let y = plus_one(n);]\`
+  \`[let y = plus_one(n);]\` \`(step:focus,.*[n].*)\`
   println!("The value of y is: {y}");
 }
 
@@ -144,44 +77,64 @@ type ParseResult =
   | { type: "ok"; code: string; ranges: Range[] }
   | { type: "err"; error: string };
 
+type MaybeProcessor = undefined | ((toks: string[], range: Range) => boolean);
+
 let parseWithDelimiters = (
   code: string,
-  delimiters: [string, string][]
+  delimiters: [string, string, MaybeProcessor][]
 ): ParseResult => {
-  let [open, close] = _.unzip(delimiters);
+  let [openA, closeA, processorsA] = _.unzip(delimiters);
+  let open = openA as string[];
+  let close = closeA as string[];
+  let processors = processorsA as MaybeProcessor[];
+  let associatedPs = _.zipObject(open, processors);
   let makeCheck = (arr: string[]) => {
-    let r = new RegExp(`^${arr.map(s => _.escapeRegExp(s)).join("|")}`);
-    return (s: string) => {
+    let r = new RegExp(`^(${arr.map(s => _.escapeRegExp(s)).join("|")})`);
+    return (s: string): null | [number, MaybeProcessor] => {
       let match = s.match(r);
-      return match ? match[0].length : null;
+      return match ? [match[0].length, associatedPs[match[0]]] : null;
     };
   };
   let [openCheck, closeCheck] = [makeCheck(open), makeCheck(close)];
-
   let index = 0;
   let inSeq = null;
   let ranges: Range[] = [];
-  let outputCode = [];
+  let outputCode: string[] = [];
+  let defaultProcessor = (_f: any, _s: any) => true;
+  let retainMatched = defaultProcessor;
   let i = 0;
   while (i < code.length) {
     if (inSeq === null) {
-      let n = openCheck(code.substring(i));
-      if (n) {
+      let match = openCheck(code.substring(i));
+      if (match) {
+        let [n, processor] = match;
+        retainMatched = processor ?? defaultProcessor;
         i += n;
         inSeq = index;
         continue;
       }
     } else {
-      let n = closeCheck(code.substring(i));
-      if (n) {
-        i += n;
-        ranges.push({
+      let match = closeCheck(code.substring(i));
+      if (match) {
+        let [n, _] = match;
+        let seqN = index - inSeq!;
+        let range = {
           char_start: inSeq!,
           char_end: index,
           byte_start: 0,
           byte_end: 0,
           filename: "",
-        });
+        };
+
+        let codeInSeq = seqN == 0 ? [] : outputCode.slice(-seqN);
+        if (!retainMatched(codeInSeq, range)) {
+          if (seqN > 0) outputCode = outputCode.slice(0, -seqN);
+          index -= seqN;
+        } else {
+          ranges.push(range);
+        }
+
+        i += n;
         inSeq = null;
         continue;
       }
@@ -195,13 +148,54 @@ let parseWithDelimiters = (
   return { type: "ok", code: outputCode.join(""), ranges };
 };
 
+let buildStepperConfig = (config: StepperConfig) => {
+  config.focusedCharPos = [];
+  config.focusedPaths = new Map();
+  return (toks: string[], range: Range): boolean => {
+    let s = "step:";
+    let n = s.length;
+    let hasTag = toks.length >= n && toks.slice(0, n).join("") == s;
+    if (!hasTag) return true;
+
+    let remaining = toks.slice(n).join("");
+    let commaSep = remaining.split(",", 2).map(s => s.trim());
+    if (commaSep.includes("focus")) {
+      config.focusedCharPos!.push(range.char_start);
+      commaSep.splice(commaSep.indexOf("focus"), 1);
+    }
+    if (commaSep[0]) {
+      config.focusedPaths!.set(range.char_start, commaSep[0]);
+    }
+    return false;
+  };
+};
+
+let buildHiddenRanges = (ranges: Range[]) => {
+  ranges.length = 0;
+  return (toks: string[], range: Range): boolean => {
+    // avoid matching Rust attributes
+    let s = "";
+    let n = s.length;
+    let hasTag = toks.length >= n && toks.slice(0, n).join("") == s;
+    if (!hasTag) return true;
+    ranges.push(range);
+    return false;
+  };
+};
+
+interface AnnotationConfig {
+  stepsCfg?: StepperConfig;
+  markedRanges: Range[];
+}
+
 export class Editor {
   private view: EditorView;
   private interpreterContainer: HTMLDivElement;
-  private markedRanges: Range[];
+  private editorContainer: HTMLDivElement;
+  private cfg: AnnotationConfig;
 
   public constructor(
-    dom: HTMLElement,
+    dom: HTMLDivElement,
     readonly setup: Extension,
     supportedFields: Array<StateField<DecorationSet>>,
     readonly reportStdErr: (err: BackendError) => void = function (err) {
@@ -212,12 +206,24 @@ export class Editor {
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false
   ) {
-    let parseResult = parseWithDelimiters(initialCode, [["`[", "]`"]]);
+    this.cfg = { markedRanges: [], stepsCfg: {} };
+
+    let hiddenRanges = new Array<Range>();
+
+    let parseResult = parseWithDelimiters(initialCode, [
+      ["`[", "]`", undefined],
+      ["`(", ")`", buildStepperConfig(this.cfg.stepsCfg!)],
+      ["#|", "#", buildHiddenRanges(hiddenRanges)],
+    ]);
     if (parseResult.type == "err") throw new Error(parseResult.error);
 
-    let resetMarkedRangesOnEdit = EditorView.updateListener.of(() => {
-      this.markedRanges = [];
-    });
+    let resetMarkedRangesOnEdit = EditorView.updateListener.of(
+      (upd: ViewUpdate) => {
+        if (upd.docChanged) {
+          this.cfg = { markedRanges: [], stepsCfg: {} };
+        }
+      }
+    );
 
     let initialState = EditorState.create({
       doc: parseResult.code,
@@ -228,6 +234,8 @@ export class Editor {
         setup,
         rust(),
         indentUnit.of("  "),
+        quietFoldExt(),
+
         copiedValueHover,
         insufficientTypeHover,
         loanFactsField,
@@ -235,8 +243,8 @@ export class Editor {
       ],
     });
 
-    this.markedRanges = parseResult.ranges;
-    console.debug("Marked ranges:", this.markedRanges);
+    this.cfg.markedRanges = parseResult.ranges;
+    console.debug("Marked ranges:", this.cfg.markedRanges);
 
     let editorContainer = document.createElement("div");
     let initialView = new EditorView({
@@ -249,7 +257,13 @@ export class Editor {
     dom.appendChild(editorContainer);
     dom.appendChild(this.interpreterContainer);
 
+    this.editorContainer = dom;
     this.view = initialView;
+
+    hideLines(
+      this.view,
+      hiddenRanges.map(r => this.view.state.doc.lineAt(r.char_start))
+    );
   }
 
   public getCurrentCode(): string {
@@ -282,7 +296,6 @@ export class Editor {
     facts: AnalysisFacts
   ) {
     let newEffects = methodCallPoints.map(v => f.fromOutput(v, facts));
-    console.log(newEffects);
     this.view.dispatch({
       effects: [f.effectType.of(newEffects)],
     });
@@ -330,15 +343,11 @@ export class Editor {
         this.interpreterContainer,
         result,
         this.view.state.doc.toJSON().join("\n"),
-        this.markedRanges,
+        this.cfg.markedRanges,
         config
       );
     } else if (operation == "permission-diffs") {
-      let emptyFacts = {
-        loanPoints: {},
-        loanRegions: {},
-      };
-      this.addPermissionsField(coarsePermissionDiffs, result, emptyFacts);
+      renderSteps(this.view, this.editorContainer, result, this.cfg.stepsCfg!);
     } else if (operation == "receiver-types") {
       let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
       this.addAnalysisFacts(loanFacts);

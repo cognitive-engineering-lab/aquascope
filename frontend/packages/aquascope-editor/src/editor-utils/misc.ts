@@ -1,4 +1,6 @@
+import { codeFolding, foldEffect } from "@codemirror/language";
 import {
+  Line,
   Range,
   RangeSet,
   StateEffect,
@@ -6,6 +8,7 @@ import {
   StateField,
 } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
+import _ from "lodash";
 
 import {
   AnalysisFacts,
@@ -195,3 +198,35 @@ export function generateAnalysisDecorationFacts<T>(
 
   return [facts, stateFacts];
 }
+
+export let quietFoldExt = () => {
+  const emptyDiv = document.createElement("div");
+  return codeFolding({
+    placeholderDOM: (_view: EditorView, _onclick: any) => emptyDiv,
+  });
+};
+
+export let hideLines = (view: EditorView, lines: Line[]) => {
+  let linesToFold = _.sortBy(lines, l => l.number);
+
+  let groupedLines = linesToFold.reduce((r: Line[][], line: Line) => {
+    const lastSubArray = _.last(r);
+    if (!lastSubArray || _.last(lastSubArray)!.number !== line.number - 1) {
+      r.push([]);
+    }
+    _.last(r)!.push(line);
+    return r;
+  }, []);
+
+  let foldEffects = groupedLines.map(ls => {
+    let first = ls[0]!;
+    let last = _.last(ls)!;
+    return foldEffect.of({ from: first.from, to: last.to });
+  });
+
+  // XXX: I don't think we really need the "hide" effects if
+  // we already fold the code.
+  view.dispatch({
+    effects: foldEffects,
+  });
+};

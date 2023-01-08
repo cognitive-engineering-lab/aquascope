@@ -1,8 +1,4 @@
-import {
-  Editor,
-  coarsePermissionDiffs,
-  receiverPermissionsField,
-} from "aquascope-editor";
+import { Editor, receiverPermissionsField } from "aquascope-editor";
 
 import { setup } from "./setup";
 import "./styles.scss";
@@ -23,59 +19,61 @@ import "./styles.scss";
 // be *read only* (because no-interact is true).
 let initEditors = () => {
   // embedded aquascope editors should be <div> tags with the class 'aquascope'
-  document.querySelectorAll<HTMLElement>(".aquascope-embed").forEach(elem => {
-    elem.classList.remove("aquascope-embed");
-    elem.classList.add("aquascope");
+  document
+    .querySelectorAll<HTMLDivElement>(".aquascope-embed")
+    .forEach(elem => {
+      elem.classList.remove("aquascope-embed");
+      elem.classList.add("aquascope");
 
-    // container for the button
-    let btnWrap = document.createElement("div");
-    btnWrap.classList.add("top-right");
+      // container for the button
+      let btnWrap = document.createElement("div");
+      btnWrap.classList.add("top-right");
 
-    // button for computing the receiver permissions
-    let computePermBtn = document.createElement("button");
-    computePermBtn.className = "fa fa-refresh cm-button";
+      // button for computing the receiver permissions
+      let computePermBtn = document.createElement("button");
+      computePermBtn.className = "fa fa-refresh cm-button";
 
-    let initialCode = JSON.parse(elem.dataset.code!);
+      let initialCode = JSON.parse(elem.dataset.code!);
 
-    btnWrap.appendChild(computePermBtn);
-    elem.appendChild(btnWrap);
+      btnWrap.appendChild(computePermBtn);
+      elem.appendChild(btnWrap);
 
-    let serverUrl = elem.dataset.serverUrl
-      ? new URL(elem.dataset.serverUrl)
-      : undefined;
-    let readOnly = elem.dataset.noInteract! == "true";
-
-    let ed = new Editor(
-      elem,
-      setup,
-      [receiverPermissionsField.stateField, coarsePermissionDiffs.stateField],
-      err => {
-        if (err.type == "BuildError") console.error(err.error);
-        else if (err.type == "AnalysisError") console.error(err.error);
-        else console.error(err);
-      },
-      initialCode,
-      serverUrl,
-      readOnly
-    );
-
-    let operation = elem.dataset.operation;
-    if (operation) {
-      let response = elem.dataset.response
-        ? JSON.parse(elem.dataset.response)
+      let serverUrl = elem.dataset.serverUrl
+        ? new URL(elem.dataset.serverUrl)
         : undefined;
+      let readOnly = elem.dataset.noInteract! == "true";
 
-      let config = elem.dataset.config
-        ? JSON.parse(elem.dataset.config)
-        : undefined;
+      let ed = new Editor(
+        elem,
+        setup,
+        [receiverPermissionsField.stateField],
+        err => {
+          if (err.type == "BuildError") console.error(err.error);
+          else if (err.type == "AnalysisError") console.error(err.error);
+          else console.error(err);
+        },
+        initialCode,
+        serverUrl,
+        readOnly
+      );
 
-      ed.renderOperation(operation, response, config);
+      let operation = elem.dataset.operation;
+      if (operation) {
+        let response = elem.dataset.response
+          ? JSON.parse(elem.dataset.response)
+          : undefined;
 
-      computePermBtn.addEventListener("click", _ => {
-        ed.renderOperation(operation!);
-      });
-    }
-  });
+        let config = elem.dataset.config
+          ? JSON.parse(elem.dataset.config)
+          : undefined;
+
+        ed.renderOperation(operation, response, config);
+
+        computePermBtn.addEventListener("click", _ => {
+          ed.renderOperation(operation!);
+        });
+      }
+    });
 };
 
 window.addEventListener("load", initEditors, false);

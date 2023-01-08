@@ -79,25 +79,46 @@ $monospace: "Source Code Pro", monospace;
   }
 
   /* Permission Steps */
+  .hidden-width {
+    width: 0px;
+  }
+
+  .hidden-height {
+    height: 0px;
+  }
+
   .perm-step-widget {
     display: inline-block;
     color: #ccc;
-    position: relative;
-    top: 0.5em;
+    height: auto;
+  }
+
+  .step-widget-container {
+    overflow: hidden;
+    display: inline-flex;
+    justify-content: start;
+  }
+
+  .step-table-dropdown {
+    display: inline-block;
+    font-size: 0.6em;
+    max-height: 15px;
+  }
+
+  .step-table-container {
+    overflow: hidden;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+
+    background-color: whitesmoke;
+    border-color: gainsboro;
+    border: 2px solid;
+    border-radius: 4px;
   }
 
   .perm-step-table {
-    background-color: whitesmoke;
-    display: inline-block;
-
-    border: 2px solid;
-    border-color: gainsboro;
-    border-radius: 4px;
     color: black;
-
-    margin-bottom: 5px;
-    position: relative;
-    bottom: 3px;
   }
 
   table.perm-step-table {
