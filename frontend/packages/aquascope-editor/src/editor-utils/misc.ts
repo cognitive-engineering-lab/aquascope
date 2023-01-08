@@ -48,20 +48,6 @@ export interface IconField<C, T> {
 export class RGB {
   constructor(readonly r: number, readonly g: number, readonly b: number) {}
 
-  static fromVar(cssVar: string, fallback: [number, number, number]): RGB {
-    let hex = getComputedStyle(document.body).getPropertyValue(cssVar);
-    if (!hex) return new RGB(...fallback);
-    let rgb = hex
-      .replace(
-        /^#?([a-f\d])([a-f\d])([a-f\d])$/i,
-        (m, r, g, b) => "#" + r + r + g + g + b + b
-      )
-      .substring(1)
-      .match(/.{2}/g)!
-      .map(x => parseInt(x, 16)) as [number, number, number];
-    return new RGB(...rgb);
-  }
-
   toString(): string {
     return `rgb(${this.r},${this.g},${this.b})`;
   }
@@ -92,7 +78,7 @@ export const softGreen: RGB = new RGB(93, 202, 54);
 export const softBlue: RGB = new RGB(78, 190, 239);
 export const softYellow: RGB = new RGB(238, 238, 155);
 export const softOrange: RGB = new RGB(245, 202, 123);
-export const whiteColor: RGB = RGB.fromVar("--bg", [255, 255, 255]);
+export const whiteColor: RGB = new RGB(255, 255, 255);
 
 export const dropColor = softRed;
 export const readColor = softGreen;
