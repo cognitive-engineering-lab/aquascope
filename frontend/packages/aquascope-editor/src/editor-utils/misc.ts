@@ -50,7 +50,6 @@ export interface IconField<C, T> {
 
 export class RGB {
   constructor(readonly r: number, readonly g: number, readonly b: number) {}
-
   toString(): string {
     return `rgb(${this.r},${this.g},${this.b})`;
   }

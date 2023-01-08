@@ -404,10 +404,14 @@ let StepView = ({
       return dst;
     };
     let pointers = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
+
+    // TODO: this should be configurable from the embed script, not directly
+    // inside aquascope-editor
     let mdbookEmbed = getComputedStyle(document.body).getPropertyValue(
       "--inline-code-color"
     );
     let color = mdbookEmbed ? "var(--inline-code-color)" : "black";
+
     let lines = Array.from(pointers)
       .map(src => {
         try {

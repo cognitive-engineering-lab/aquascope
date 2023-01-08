@@ -166,6 +166,8 @@ class BoundaryPointWidget extends WidgetType {
     wrap.style.position = "relative";
     wrap.style.top = `${(icons.length - 1) * 4}px`;
 
+    // TODO: this should be configurable from the embed script, not directly
+    // inside aquascope-editor
     let bgVar = getComputedStyle(document.body).getPropertyValue("--bg");
     let hollowColor = bgVar !== "" ? "var(--bg)" : whiteColor.toString();
 

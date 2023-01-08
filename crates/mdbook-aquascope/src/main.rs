@@ -82,8 +82,6 @@ impl AquascopePreprocessor {
         err.as_str().unwrap()
       )
     }
-    // let logs = String::from_utf8(output.stderr)?;
-    // eprintln!("{logs}");
 
     let mut html = String::from(r#"<div class="aquascope-embed""#);
 
@@ -104,6 +102,7 @@ impl AquascopePreprocessor {
       .map(|(k, v)| (k, v))
       .collect::<HashMap<_, _>>();
     add_data("config", &serde_json::to_string(&config)?)?;
+
     // TODO: make this configurable?
     add_data("no-interact", "true")?;
 

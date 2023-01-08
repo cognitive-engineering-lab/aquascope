@@ -25,23 +25,27 @@ let initEditors = () => {
       elem.classList.remove("aquascope-embed");
       elem.classList.add("aquascope");
 
-    // // container for the button
-    // let btnWrap = document.createElement("div");
-    // btnWrap.classList.add("top-right");
+      let readOnly = elem.dataset.noInteract! == "true";
 
-    // button for computing the receiver permissions
-    // let computePermBtn = document.createElement("button");
-    // computePermBtn.className = "fa fa-refresh cm-button";
+      let computePermBtn: HTMLButtonElement | undefined;
+      if (!readOnly) {
+        // container for the button
+        let btnWrap = document.createElement("div");
+        btnWrap.classList.add("top-right");
 
-    // btnWrap.appendChild(computePermBtn);
-    // elem.appendChild(btnWrap);
+        // button for computing the receiver permissions
+        computePermBtn = document.createElement("button");
+        computePermBtn.className = "fa fa-refresh cm-button";
 
-    let initialCode = JSON.parse(elem.dataset.code!);
+        btnWrap.appendChild(computePermBtn);
+        elem.appendChild(btnWrap);
+      }
+
+      let initialCode = JSON.parse(elem.dataset.code!);
 
       let serverUrl = elem.dataset.serverUrl
         ? new URL(elem.dataset.serverUrl)
         : undefined;
-      let readOnly = elem.dataset.noInteract! == "true";
 
       let ed = new Editor(
         elem,
@@ -69,11 +73,11 @@ let initEditors = () => {
 
         ed.renderOperation(operation, response, config);
 
-      // computePermBtn.addEventListener("click", _ => {
-      //   ed.renderOperation(operation!);
-      // });
-    }
-  });
+        computePermBtn?.addEventListener("click", _ => {
+          ed.renderOperation(operation!);
+        });
+      }
+    });
 };
 
 window.addEventListener("load", initEditors, false);
