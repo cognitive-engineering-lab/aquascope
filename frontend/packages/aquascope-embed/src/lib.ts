@@ -27,18 +27,18 @@ let initEditors = () => {
     elem.classList.remove("aquascope-embed");
     elem.classList.add("aquascope");
 
-    // container for the button
-    let btnWrap = document.createElement("div");
-    btnWrap.classList.add("top-right");
+    // // container for the button
+    // let btnWrap = document.createElement("div");
+    // btnWrap.classList.add("top-right");
 
     // button for computing the receiver permissions
-    let computePermBtn = document.createElement("button");
-    computePermBtn.className = "fa fa-refresh cm-button";
+    // let computePermBtn = document.createElement("button");
+    // computePermBtn.className = "fa fa-refresh cm-button";
+
+    // btnWrap.appendChild(computePermBtn);
+    // elem.appendChild(btnWrap);
 
     let initialCode = JSON.parse(elem.dataset.code!);
-
-    btnWrap.appendChild(computePermBtn);
-    elem.appendChild(btnWrap);
 
     let serverUrl = elem.dataset.serverUrl
       ? new URL(elem.dataset.serverUrl)
@@ -71,9 +71,9 @@ let initEditors = () => {
 
       ed.renderOperation(operation, response, config);
 
-      computePermBtn.addEventListener("click", _ => {
-        ed.renderOperation(operation!);
-      });
+      // computePermBtn.addEventListener("click", _ => {
+      //   ed.renderOperation(operation!);
+      // });
     }
   });
 };

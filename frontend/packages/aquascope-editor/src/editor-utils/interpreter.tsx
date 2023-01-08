@@ -41,17 +41,6 @@ let codeRange = (code: string, range: Range) => {
   return code.slice(range.char_start, range.char_end);
 };
 
-let intersperse = <T,>(arr: T[], sep: T): T[] => {
-  let outp = [];
-  for (let i = 0; i < arr.length; ++i) {
-    outp.push(arr[i]);
-    if (i != arr.length - 1) {
-      outp.push(sep);
-    }
-  }
-  return outp;
-};
-
 let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) => {
   let pathCtx = useContext(PathContext);
   let IndexedContainer: React.FC<
@@ -98,13 +87,16 @@ let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) => {
 };
 
 type MValueStruct = MValue & { type: "Struct" };
-type MStruct = (MValue & { type: "Struct" })["value"];
+type MStruct = MValueStruct["value"];
+
+type MValuePointer = MValue & { type: "Pointer" };
+type MPointer = MValuePointer["value"];
 
 let StructView = ({ value }: { value: MStruct }) => {
   let pathCtx = useContext(PathContext);
-  let configCtx = useContext(ConfigContext);
+  let config = useContext(ConfigContext);
 
-  if (value.alloc_kind !== null && !configCtx.concreteTypes) {
+  if (value.alloc_kind !== null && !config.concreteTypes) {
     let alloc_type = value.alloc_kind.type;
 
     let read_field = (v: MStruct, k: string): MStruct => {
@@ -148,12 +140,12 @@ let StructView = ({ value }: { value: MStruct }) => {
   if (value.fields.length == 1) {
     let path = [...pathCtx, "field", "0"];
     return (
-      <div className={path.join("-")}>
+      <span className={path.join("-")}>
         <PathContext.Provider value={path}>
           {value.name} /&nbsp;
           <ValueView value={value.fields[0][1]} />
         </PathContext.Provider>
-      </div>
+      </span>
     );
   }
 
@@ -178,6 +170,64 @@ let StructView = ({ value }: { value: MStruct }) => {
         </tbody>
       </table>
     </>
+  );
+};
+
+let PointerView = ({ value: { path, range } }: { value: MPointer }) => {
+  let config = useContext(ConfigContext);
+
+  let segment =
+    path.segment.type == "Heap"
+      ? `heap-${path.segment.value.index}`
+      : `stack-${path.segment.value.frame}-${path.segment.value.local}`;
+
+  let parts = [...path.parts];
+  let lastPart = _.last(parts);
+  let slice =
+    lastPart && lastPart.type == "Subslice" ? lastPart.value : undefined;
+  if (lastPart && lastPart.type == "Index" && lastPart.value == 0) parts.pop();
+  let partClass = parts.map(part =>
+    part.type == "Index"
+      ? `index-${part.value}`
+      : part.type == "Field"
+      ? `field-${part.value}`
+      : part.type == "Subslice"
+      ? `index-${part.value[0]}`
+      : ""
+  );
+
+  let attrs: { [key: string]: string } = {
+    ["data-point-to"]: [segment, ...partClass].join("-"),
+  };
+  if (slice) {
+    attrs["data-point-to-range"] = [
+      segment,
+      ...partClass.slice(0, -1),
+      `index-${slice[1]}`,
+    ].join("-");
+  }
+
+  let ptrView = (
+    <span className="pointer" {...attrs}>
+      ●
+    </span>
+  );
+
+  return config.concreteTypes && range ? (
+    <table>
+      <tbody>
+        <tr>
+          <td>ptr</td>
+          <td>{ptrView}</td>
+        </tr>
+        <tr>
+          <td>len</td>
+          <td>{range.toString()}</td>
+        </tr>
+      </tbody>
+    </table>
+  ) : (
+    ptrView
   );
 };
 
@@ -235,50 +285,7 @@ let ValueView = ({ value }: { value: MValue }) => {
           </table>
         </>
       ) : value.type == "Pointer" ? (
-        (() => {
-          let ptr = value.value;
-          let segment =
-            ptr.segment.type == "Heap"
-              ? `heap-${ptr.segment.value.index}`
-              : `stack-${ptr.segment.value.frame}-${ptr.segment.value.local}`;
-
-          let lastPart = _.last(ptr.parts);
-          let slice =
-            lastPart && lastPart.type == "Subslice"
-              ? lastPart.value
-              : undefined;
-          let partClass = ptr.parts.map(part =>
-            part.type == "Index"
-              ? `index-${part.value}`
-              : part.type == "Field"
-              ? `field-${part.value}`
-              : part.type == "Subslice"
-              ? `index-${part.value[0]}`
-              : ""
-          );
-
-          // // Small hack so pointers to beginning of arrays point to the cell instead of
-          // // the first element
-          //
-          // if (lastPart && lastPart == "index-0") parts.pop();
-
-          let attrs: { [key: string]: string } = {
-            ["data-point-to"]: [segment, ...partClass].join("-"),
-          };
-          if (slice) {
-            attrs["data-point-to-range"] = [
-              segment,
-              ...partClass.slice(0, -1),
-              `index-${slice[1]}`,
-            ].join("-");
-          }
-
-          return (
-            <span className="pointer" {...attrs}>
-              ●
-            </span>
-          );
-        })()
+        <PointerView value={value.value} />
       ) : value.type == "Array" ? (
         <AbbreviatedView value={value.value} />
       ) : value.type == "Unallocated" ? (
@@ -396,31 +403,31 @@ let StepView = ({
       return dst;
     };
     let pointers = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
-    let color = getComputedStyle(document.body).getPropertyValue("--fg")
-      ? "var(--fg)"
+    let color = getComputedStyle(document.body).getPropertyValue("--inline-code-color")
+      ? "var(--inline-code-color)"
       : "black";
     let lines = Array.from(pointers)
       .map(src => {
-        let dstSel = src.dataset.pointTo!;
-        let dst = query(dstSel);
-        let dstRange = src.dataset.pointToRange
-          ? query(src.dataset.pointToRange)
-          : undefined;
-        let endSocket = dst.dataset.connector as LeaderLine.SocketType;
-
-        let dstAnchor = dstRange
-          ? LeaderLine.areaAnchor(dst, {
-              shape: "rect",
-              width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
-              height: 2,
-              y: "100%",
-              fillColor: "red",
-            })
-          : dstSel.startsWith("stack")
-          ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
-          : dst;
-
         try {
+          let dstSel = src.dataset.pointTo!;
+          let dst = query(dstSel);
+          let dstRange = src.dataset.pointToRange
+            ? query(src.dataset.pointToRange)
+            : undefined;
+          let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+
+          let dstAnchor = dstRange
+            ? LeaderLine.areaAnchor(dst, {
+                shape: "rect",
+                width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
+                height: 2,
+                y: "100%",
+                fillColor: "red",
+              })
+            : dstSel.startsWith("stack")
+            ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
+            : dst;
+
           let line = new LeaderLine(src, dstAnchor, {
             color,
             size: 1,

@@ -54,6 +54,10 @@ struct AddressLocator<'a, 'mir, 'tcx> {
 
 impl<'tcx> AddressLocator<'_, '_, 'tcx> {
   fn locate(&mut self, layout: TyAndLayout<'tcx>, mut offset: u64) {
+    if offset == self.target {
+      return;
+    }
+
     let ty = layout.ty;
     match ty.kind() {
       TyKind::Adt(adt_def, _) => {
@@ -113,11 +117,7 @@ impl<'tcx> AddressLocator<'_, '_, 'tcx> {
       }
 
       _ if ty.is_primitive() || ty.is_any_ptr() => {
-        debug_assert!(
-          offset == self.target,
-          "offset {offset} != target {}",
-          self.target
-        )
+        panic!("offset {offset} != target {}", self.target)
       }
 
       ty => unimplemented!("{ty:#?}"),

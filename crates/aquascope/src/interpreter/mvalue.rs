@@ -1,7 +1,8 @@
 //! Interpreting memory as Rust data types
 
 use miri::{
-  AllocMap, Immediate, InterpResult, MPlaceTy, MemoryKind, OpTy, Value,
+  AllocMap, Immediate, InterpError, InterpErrorInfo, InterpResult, MPlaceTy,
+  MemPlaceMeta, MemoryKind, OpTy, UndefinedBehaviorInfo, Value,
 };
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
@@ -103,11 +104,10 @@ pub enum MValue {
   Uint(u64),
   Int(i64),
   Float(f64),
-  Array(Abbreviated<MValue>),
 
-  // General-purpose composites
-  Pointer(MPath),
+  // Composites
   Tuple(Vec<MValue>),
+  Array(Abbreviated<MValue>),
   Struct {
     name: String,
     fields: Vec<(String, MValue)>,
@@ -117,6 +117,10 @@ pub enum MValue {
     name: String,
     variant: String,
     fields: Vec<(String, MValue)>,
+  },
+  Pointer {
+    path: MPath,
+    range: Option<u64>,
   },
 
   Unallocated,
@@ -238,8 +242,14 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
     // `get_path_segments` to reverse-engineer a path from the memory location.
     let parts =
       self.get_path_segments(alloc_size, alloc_layout, mplace, offset);
+    let path = MPath { segment, parts };
 
-    Ok(MValue::Pointer(MPath { segment, parts }))
+    let range = match mplace.meta {
+      MemPlaceMeta::Meta(meta) => Some(meta.to_u64()?),
+      MemPlaceMeta::None => None,
+    };
+
+    Ok(MValue::Pointer { path, range })
   }
 
   /*
@@ -289,7 +299,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
   ) -> InterpResult<'tcx, Option<u64>> {
     let (_, len) = op.field_by_name("len", &self.ev.ecx)?;
     let len = match self.read(&len) {
-      Err(_) => return Ok(None),
+      Ok(MValue::Unallocated) => return Ok(None),
       Ok(MValue::Uint(len)) => len,
       _ => unreachable!(),
     };
@@ -406,7 +416,20 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       }
 
       _ if ty.is_primitive() => {
-        let imm = self.ev.ecx.read_immediate(op)?;
+        let imm = match self.ev.ecx.read_immediate(op) {
+          Ok(imm) => imm,
+
+          // It's possible to read uninitialized data if a data structure
+          // is partially initialized, e.g. a tuple `(a, b)` where only `a`
+          // is initialized. Therefore we have to handle this case by returning
+          // MValue::Unallocated instead of throwing an error.
+          Err(e) => match e.into_kind() {
+            InterpError::UndefinedBehavior(
+              UndefinedBehaviorInfo::InvalidUninitBytes(..),
+            ) => return Ok(MValue::Unallocated),
+            e => return Err(InterpErrorInfo::from(e)),
+          },
+        };
         let scalar = match &*imm {
           Immediate::Scalar(scalar) => scalar,
           _ => unreachable!(),

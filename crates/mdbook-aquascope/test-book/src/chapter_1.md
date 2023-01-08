@@ -1,11 +1,8 @@
 # Chapter 1
 
-```aquascope,interpreter
+```aquascope,interpreter,concreteTypes=true
 fn main() {
-    let x = Box::new(1);
-    let v = vec![1, 2, 3];
-    let s = String::from("Hello world");
-    let s2 = &s[5..];`[]`
+    let v = (0, String::from("Hi"));`[]`
 }
 ```
 
