@@ -1,4 +1,4 @@
-use flowistry::mir::utils::PlaceExt;
+use flowistry::mir::utils::{PlaceExt, SpanExt};
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
 use rustc_borrowck::{
   borrow_set::{BorrowData, BorrowSet},
@@ -95,7 +95,10 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   pub fn location_to_span(&self, l: Location) -> Span {
-    self.body_with_facts.body.source_info(l).span
+    let span = self.body_with_facts.body.source_info(l).span;
+    span
+      .as_local(self.body_with_facts.body.span)
+      .unwrap_or(span)
   }
 
   // Predicates

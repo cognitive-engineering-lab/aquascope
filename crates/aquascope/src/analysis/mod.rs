@@ -400,7 +400,13 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     // is included in the returned ranges.
     let loan_spans = loan_spans
       .into_iter()
-      .filter(|span| min_span.lo() <= span.lo() && span.hi() <= max_span.hi())
+      .filter_map(|span| {
+        (min_span.lo() <= span.lo() && span.hi() <= max_span.hi()).then(|| {
+          span
+            .as_local(self.permissions.body_with_facts.body.span)
+            .unwrap_or(span)
+        })
+      })
       .collect::<Vec<_>>();
 
     Self::smooth_spans(loan_spans)
