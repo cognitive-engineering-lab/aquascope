@@ -83,13 +83,25 @@ $monospace: "Source Code Pro", monospace;
     overflow: auto;
   }
 
+  .cm-line.hidden-line {
+    display: none;
+  }
+
   /* Permission Steps */
   .hidden-width {
-    width: 0px;
+    display: none !important;
   }
 
   .hidden-height {
     height: 0px;
+  }
+
+  .step-widget-toggle {
+    cursor: pointer;
+
+    &:hover {
+      color: black;
+    }
   }
 
   .perm-step-widget {
@@ -106,16 +118,18 @@ $monospace: "Source Code Pro", monospace;
   }
 
   .step-table-dropdown {
-    display: inline-block;
-    font-size: 0.6em;
+    font-size: 0.7em;
     max-height: 15px;
+    text-align: center;
+    width: 100%;
+    cursor: pointer;
   }
 
   .step-table-container {
     overflow: hidden;
-    display: inline-flex;
     flex-direction: column;
     align-items: flex-start;
+    display: inline-flex;
 
     background-color: whitesmoke;
     border-color: gainsboro;
@@ -259,6 +273,7 @@ $monospace: "Source Code Pro", monospace;
           gap: 15px;
 
           .frame-header {
+            display: inline-block;
             font-family: $monospace;
           }
 

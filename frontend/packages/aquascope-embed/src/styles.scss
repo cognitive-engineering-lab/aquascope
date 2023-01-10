@@ -52,7 +52,7 @@
     color: var(--table-header-bg);
   }
 
-  .perm-step-table {
+  .perm-step-table, .step-table-container {
     color: var(--sidebar-fg);
     background-color: var(--sidebar-bg);
     border-color: var(--table-header-bg);
@@ -64,6 +64,16 @@
 
   span.perm-diff-none, span.perm-diff-none-high, span.perm-diff-none-low  {
     color: var(--fg);
+  }
+
+  .step-widget-toggle {
+    &:hover {
+      color: var(--fg);
+    }
+  }
+
+  .step-table-dropdown {
+    color: var(--table-header-bg);
   }
 }
 

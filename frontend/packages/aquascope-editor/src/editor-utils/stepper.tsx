@@ -13,8 +13,10 @@ import ReactDOM from "react-dom/client";
 
 import {
   AnalysisFacts,
+  AquascopeAnnotations,
   PermissionsDataDiff,
   PermissionsStateStep,
+  StepperAnnotations,
   ValueStep,
 } from "../types";
 import {
@@ -25,11 +27,6 @@ import {
   readChar,
   writeChar,
 } from "./misc";
-
-export interface StepperConfig {
-  focusedCharPos?: number[];
-  focusedPaths?: Map<number, string>;
-}
 
 let PermDiffRow = ({
   path,
@@ -205,14 +202,12 @@ let StepTableWidget = ({
   let [displayAll, setDisplayAll] = useState(false);
   let arrowOut = "»";
   let arrowIn = "«";
-  let displayAllIco = displayAll ? "minus" : "ellipsis-h";
-  let icoName = `fa fa-${displayAllIco}`;
 
   let hiddenDropdown =
     hidden.length > 0 ? (
       <>
-        <div className="step-table-dropdown">
-          <i className={icoName} />
+        <div className="step-table-dropdown step-widget-toggle">
+          ● ● ●
         </div>
         <div className={classNames({ "hidden-height": !displayAll })}>
           <StepTable rows={hidden} />
@@ -221,11 +216,13 @@ let StepTableWidget = ({
     ) : null;
 
   return (
-    <div className="perm-step-widget">
-      <span onClick={() => setDisplay(!display)}>
+    <div
+      className="perm-step-widget"
+    >
+      {" "}
+      <span className="step-widget-toggle" onClick={() => setDisplay(!display)}>
         {display ? arrowIn : arrowOut}
       </span>
-
       <div
         className={classNames("step-widget-container", {
           "hidden-width": !display,
@@ -249,10 +246,8 @@ class PermissionStepTableWidget extends WidgetType {
   rowHTML?: string;
   constructor(
     readonly view: EditorView,
-    readonly config: StepperConfig,
     readonly step: PermissionsStateStep,
-    readonly focusedLines: number[],
-    readonly focusedPaths: Map<number, RegExp>
+    readonly annotations?: StepperAnnotations
   ) {
     super();
     this.line = view.state.doc.lineAt(stepLocation(step));
@@ -269,7 +264,10 @@ class PermissionStepTableWidget extends WidgetType {
     let doc = this.view.state.doc;
     let pos = stepLocation(this.step);
     let currLine = this.line;
-    let initDisplay = this.focusedLines.includes(currLine.number);
+    let initDisplay =
+      this.annotations && this.annotations.focused_lines.length > 0
+        ? this.annotations.focused_lines.includes(currLine.number)
+        : true;
     let maxLineLen = 0;
 
     for (let line of doc.iterLines()) {
@@ -277,10 +275,11 @@ class PermissionStepTableWidget extends WidgetType {
     }
 
     let padding = 2 + maxLineLen - currLine.length;
-    let spaces = " " + "_".repeat(padding);
+    let spaces = "―".repeat(padding);
 
-    let matchAll = new RegExp("(.*)?");
-    let r = this.focusedPaths.get(currLine.number) ?? matchAll;
+    let r = new RegExp(
+      this.annotations?.focused_paths[currLine.number] ?? "(.*)?"
+    );
     console.log(`regex for line ${currLine.number} :: ${r}`);
     let [focusedDiffs, hiddenDiffs] = _.partition(
       this.step.state,
@@ -306,34 +305,13 @@ class PermissionStepTableWidget extends WidgetType {
 
 export function renderSteps(
   view: EditorView,
-  container: HTMLDivElement,
   stateSteps: PermissionsStateStep[],
-  config: StepperConfig
+  annotations?: StepperAnnotations
 ) {
-  // Normalize the config
-  let doc = view.state.doc;
-  let focusedPaths = new Map<number, RegExp>();
-  let focusedLines =
-    !config || !config.focusedCharPos || config.focusedCharPos.length == 0
-      ? Array.from({ length: doc.lines }, (value, key) => key + 1)
-      : config.focusedCharPos!.map(pos => doc.lineAt(pos).number);
-
-  // Insert the regex for a specified char pos
-  config.focusedPaths?.forEach((re: string, pos: number) => {
-    let line = doc.lineAt(pos).number;
-    focusedPaths.set(line, new RegExp(re));
-  });
-
   let decos = _.sortBy(
     stateSteps.map(step =>
       Decoration.widget({
-        widget: new PermissionStepTableWidget(
-          view,
-          config,
-          step,
-          focusedLines,
-          focusedPaths
-        ),
+        widget: new PermissionStepTableWidget(view, step, annotations),
       }).range(stepLocation(step))
     ),
     deco => deco.from

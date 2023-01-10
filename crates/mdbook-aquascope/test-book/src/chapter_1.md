@@ -1,15 +1,14 @@
 # Chapter 1
 
-```aquascope,receiver-types
-fn main() {
-    let mut x = 1;
-    let y = &x;
-    x += 1;
-    println!("{} = {}", x, *y);
-}
+```aquascope,permission-diffs
+# fn main() {
+let mut x = 1;
+let y = &x;
+println!("{} = {}", x, *y);`(focus,paths:x)`
+#}
 ```
 
-<!-- ```aquascope,interpreter
+```aquascope,interpreter,concreteTypes=true
 fn main() {
     let n = Box::new(1);`[]`
     let y = plus_one(&n);`[]`
@@ -19,7 +18,7 @@ fn main() {
 fn plus_one(x: &i32) -> i32 {
     `[]`*x + 1
 }
-``` -->
+```
 
 <!-- ```aquascope,interpreter
 fn main() {

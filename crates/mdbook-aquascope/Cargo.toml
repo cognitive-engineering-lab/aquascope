@@ -13,5 +13,12 @@ anyhow = "1"
 tempfile = "3"
 html-escape = "0.2"
 serde_json = "1"
+serde = { version = "1.0", features = ["derive"] }
+ts-rs = "6.2"
 rayon = "1"
 aquascope_workspace_utils = { path = "../aquascope_workspace_utils" }
+regex = "1"
+
+
+[dev-dependencies]
+maplit = "*"
