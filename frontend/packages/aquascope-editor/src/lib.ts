@@ -24,7 +24,6 @@ import {
   hideLine,
   loanFactsField,
   loanFactsStateType,
-  quietFoldExt,
 } from "./editor-utils/misc";
 import {
   copiedValueHover,
@@ -198,7 +197,7 @@ export class Editor {
       response?: Result<any>;
       config?: any;
       annotations?: AquascopeAnnotations;
-    }
+    } = {}
   ) {
     if (!response) {
       let serverResponse = await this.callBackendWithCode(operation);
