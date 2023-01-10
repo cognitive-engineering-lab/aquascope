@@ -140,7 +140,7 @@ let y = 2;
     },
     stepper: StepperAnnotations {
       focused_lines: vec![LinePos(2)],
-      focused_paths: maplit::hashmap! { LinePos(1) => "x".into() }
+      focused_paths: maplit::hashmap! { LinePos(2) => "x".into() }
     }
   });
 }
