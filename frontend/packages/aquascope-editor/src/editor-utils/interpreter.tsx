@@ -18,6 +18,7 @@ import ReactDOM from "react-dom/client";
 
 import {
   Abbreviated,
+  InterpAnnotations,
   MFrame,
   MHeap,
   MStack,
@@ -331,7 +332,7 @@ let Header: React.FC<React.PropsWithChildren<{ className: string }>> = ({
   children,
   className,
 }) => (
-  <div className={`header ${className || ""}`}>
+  <div className={`header ${className ?? ""}`}>
     <div className="header-text">{children}</div>
     <div className="header-bg" />
   </div>
@@ -484,15 +485,15 @@ let InterpreterView = ({
   config,
 }: {
   steps: MStep<Range>[];
-  config: InterpreterConfig;
+  config?: InterpreterConfig;
 }) => {
   let ref = useRef<HTMLDivElement>(null);
   let [concreteTypes, setConcreteTypes] = useState(
-    config.concreteTypes || false
+    config?.concreteTypes ?? false
   );
   let [buttonVisible, setButtonVisible] = useState(false);
 
-  let flexDirection: CSSProperties["flexDirection"] = config.horizontal
+  let flexDirection: CSSProperties["flexDirection"] = config?.horizontal
     ? "row"
     : "column";
 
@@ -510,7 +511,7 @@ let InterpreterView = ({
           onClick={() => setConcreteTypes(!concreteTypes)}
           style={{ opacity: buttonVisible ? "1" : "0" }}
         >
-          <i className={`fa fa-${concreteTypes ? "eye-slash" : "eye"}`} />
+          <i className={`fa fa-${concreteTypes ? "binoculars" : "binoculars"}`} />
         </button>
         {steps.map((step, i) => (
           <StepView key={i} index={i} step={step} container={ref} />
@@ -522,28 +523,27 @@ let InterpreterView = ({
 
 let filterSteps = (
   steps: MStep<Range>[],
-  ranges: Range[]
-): [Range[], MStep<Range>[]] => {
+  marks: number[]
+): [number[], MStep<Range>[]] => {
   let stepsRev = [...steps].reverse();
-  let indexedRanges: [number, Range, MStep<Range>][] = ranges.map(range => {
+  let indexedMarks: [number, number, MStep<Range>][] = marks.map(idx => {
     let stepRevIdx = stepsRev.findIndex((step, i) => {
       let frame = _.last(step.stack.frames)!;
-      let rangeInFrame =
-        frame.body_span.char_start <= range.char_start &&
-        range.char_end <= frame.body_span.char_end;
-      let rangeAfterLoc = range.char_end > frame.location.char_start;
-      return rangeInFrame && rangeAfterLoc;
+      let markInFrame =
+        frame.body_span.char_start <= idx && idx <= frame.body_span.char_end;
+      let markAfterLoc = idx > frame.location.char_start;
+      return markInFrame && markAfterLoc;
     });
     if (stepRevIdx == -1)
       throw new Error(
-        `Could not find step for range: ${JSON.stringify(range, undefined, 2)}`
+        `Could not find step for range: ${JSON.stringify(idx, undefined, 2)}`
       );
-    return [steps.length - stepRevIdx, range, stepsRev[stepRevIdx]];
+    return [steps.length - stepRevIdx, idx, stepsRev[stepRevIdx]];
   });
-  let sortedRanges = _.sortBy(indexedRanges, ([idx]) => idx);
+  let sortedMarks = _.sortBy(indexedMarks, ([idx]) => idx);
   return [
-    sortedRanges.map(([_stepIdx, range]) => range),
-    sortedRanges.map(([_stepIdx, _range, step]) => step),
+    sortedMarks.map(([_stepIdx, mark]) => mark),
+    sortedMarks.map(([_stepIdx, _mark, step]) => step),
   ];
 };
 
@@ -574,23 +574,24 @@ export function renderInterpreter(
   container: HTMLDivElement,
   steps: MStep<Range>[],
   contents: string,
-  markedRanges: Range[],
-  config: InterpreterConfig = {}
+  config?: InterpreterConfig,
+  annotations?: InterpAnnotations
 ) {
-  if (config.hideCode) {
+  if (config && config.hideCode) {
     view.destroy();
   }
 
   let root = ReactDOM.createRoot(container);
-  if (markedRanges.length > 0) {
-    let [sortedRanges, filteredSteps] = filterSteps(steps, markedRanges);
+  let marks = annotations?.state_locations || [];
+  if (marks.length > 0) {
+    let [sortedMarks, filteredSteps] = filterSteps(steps, marks);
     steps = filteredSteps;
 
     let decos = _.sortBy(
-      sortedRanges.map((range, i) =>
+      sortedMarks.map((mark, i) =>
         Decoration.widget({
           widget: new StepMarkerWidget(i),
-        }).range(range.char_start)
+        }).range(mark)
       ),
       deco => deco.from
     );

@@ -20,7 +20,8 @@ import {
   IconField,
   LoanFacts,
   generateAnalysisDecorationFacts,
-  hideLines,
+  hiddenLines,
+  hideLine,
   loanFactsField,
   loanFactsStateType,
   quietFoldExt,
@@ -30,11 +31,12 @@ import {
   insufficientTypeHover,
   receiverPermissionsField,
 } from "./editor-utils/permission-boundaries";
-import { StepperConfig, renderSteps } from "./editor-utils/stepper";
+import { renderSteps } from "./editor-utils/stepper";
 import "./styles.scss";
 import {
   AnalysisFacts,
   AnalysisOutput,
+  AquascopeAnnotations,
   BackendError,
   PermissionsBoundary,
   PermissionsDiffOutput,
@@ -46,7 +48,7 @@ export * as types from "./types";
 
 const DEFAULT_SERVER_URL = new URL("http://127.0.0.1:8008");
 
-type Result<T> = { Ok: T } | { Err: BackendError };
+export type Result<T> = { Ok: T } | { Err: BackendError };
 
 // XXX this extra server response type is really
 // annoying and I'd like to get rid of it. This change would
@@ -73,126 +75,10 @@ fn main() {
 let readOnly = new Compartment();
 let mainKeybinding = new Compartment();
 
-type ParseResult =
-  | { type: "ok"; code: string; ranges: Range[] }
-  | { type: "err"; error: string };
-
-type MaybeProcessor = undefined | ((toks: string[], range: Range) => boolean);
-
-let parseWithDelimiters = (
-  code: string,
-  delimiters: [string, string, MaybeProcessor][]
-): ParseResult => {
-  let [openA, closeA, processorsA] = _.unzip(delimiters);
-  let open = openA as string[];
-  let close = closeA as string[];
-  let processors = processorsA as MaybeProcessor[];
-  let associatedPs = _.zipObject(open, processors);
-  let makeCheck = (arr: string[]) => {
-    let r = new RegExp(`^(${arr.map(s => _.escapeRegExp(s)).join("|")})`);
-    return (s: string): null | [number, MaybeProcessor] => {
-      let match = s.match(r);
-      return match ? [match[0].length, associatedPs[match[0]]] : null;
-    };
-  };
-  let [openCheck, closeCheck] = [makeCheck(open), makeCheck(close)];
-  let index = 0;
-  let inSeq = null;
-  let ranges: Range[] = [];
-  let outputCode: string[] = [];
-  let defaultProcessor = (_f: any, _s: any) => true;
-  let retainMatched = defaultProcessor;
-  let i = 0;
-  while (i < code.length) {
-    if (inSeq === null) {
-      let match = openCheck(code.substring(i));
-      if (match) {
-        let [n, processor] = match;
-        retainMatched = processor ?? defaultProcessor;
-        i += n;
-        inSeq = index;
-        continue;
-      }
-    } else {
-      let match = closeCheck(code.substring(i));
-      if (match) {
-        let [n, _] = match;
-        let seqN = index - inSeq!;
-        let range = {
-          char_start: inSeq!,
-          char_end: index,
-          byte_start: 0,
-          byte_end: 0,
-          filename: "",
-        };
-
-        let codeInSeq = seqN == 0 ? [] : outputCode.slice(-seqN);
-        if (!retainMatched(codeInSeq, range)) {
-          if (seqN > 0) outputCode = outputCode.slice(0, -seqN);
-          index -= seqN;
-        } else {
-          ranges.push(range);
-        }
-
-        i += n;
-        inSeq = null;
-        continue;
-      }
-    }
-
-    index += 1;
-    outputCode.push(code[i]);
-    i += 1;
-  }
-
-  return { type: "ok", code: outputCode.join(""), ranges };
-};
-
-let buildStepperConfig = (config: StepperConfig) => {
-  config.focusedCharPos = [];
-  config.focusedPaths = new Map();
-  return (toks: string[], range: Range): boolean => {
-    let s = "step:";
-    let n = s.length;
-    let hasTag = toks.length >= n && toks.slice(0, n).join("") == s;
-    if (!hasTag) return true;
-
-    let remaining = toks.slice(n).join("");
-    let commaSep = remaining.split(",", 2).map(s => s.trim());
-    if (commaSep.includes("focus")) {
-      config.focusedCharPos!.push(range.char_start);
-      commaSep.splice(commaSep.indexOf("focus"), 1);
-    }
-    if (commaSep[0]) {
-      config.focusedPaths!.set(range.char_start, commaSep[0]);
-    }
-    return false;
-  };
-};
-
-let buildHiddenRanges = (ranges: Range[]) => {
-  ranges.length = 0;
-  return (toks: string[], range: Range): boolean => {
-    // avoid matching Rust attributes
-    let s = "";
-    let n = s.length;
-    let hasTag = toks.length >= n && toks.slice(0, n).join("") == s;
-    if (!hasTag) return true;
-    ranges.push(range);
-    return false;
-  };
-};
-
-interface AnnotationConfig {
-  stepsCfg?: StepperConfig;
-  markedRanges: Range[];
-}
-
 export class Editor {
   private view: EditorView;
   private interpreterContainer: HTMLDivElement;
   private editorContainer: HTMLDivElement;
-  private cfg: AnnotationConfig;
 
   public constructor(
     dom: HTMLDivElement,
@@ -202,31 +88,20 @@ export class Editor {
       console.log("An error occurred: ");
       console.log(err);
     },
-    initialCode: string = defaultCodeExample,
+    code: string = defaultCodeExample,
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false
   ) {
-    this.cfg = { markedRanges: [], stepsCfg: {} };
-
-    let hiddenRanges = new Array<Range>();
-
-    let parseResult = parseWithDelimiters(initialCode, [
-      ["`[", "]`", undefined],
-      ["`(", ")`", buildStepperConfig(this.cfg.stepsCfg!)],
-      ["#|", "#", buildHiddenRanges(hiddenRanges)],
-    ]);
-    if (parseResult.type == "err") throw new Error(parseResult.error);
-
     let resetMarkedRangesOnEdit = EditorView.updateListener.of(
       (upd: ViewUpdate) => {
         if (upd.docChanged) {
-          this.cfg = { markedRanges: [], stepsCfg: {} };
+          // this.cfg = { markedRanges: [], stepsCfg: {} };
         }
       }
     );
 
     let initialState = EditorState.create({
-      doc: parseResult.code,
+      doc: code,
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
@@ -234,7 +109,7 @@ export class Editor {
         setup,
         rust(),
         indentUnit.of("  "),
-        quietFoldExt(),
+        hiddenLines,
 
         copiedValueHover,
         insufficientTypeHover,
@@ -243,8 +118,8 @@ export class Editor {
       ],
     });
 
-    this.cfg.markedRanges = parseResult.ranges;
-    console.debug("Marked ranges:", this.cfg.markedRanges);
+    // this.cfg.markedRanges = []; //parseResult.ranges;
+    // console.debug("Marked ranges:", this.cfg.markedRanges);
 
     let editorContainer = document.createElement("div");
     let initialView = new EditorView({
@@ -259,11 +134,6 @@ export class Editor {
 
     this.editorContainer = dom;
     this.view = initialView;
-
-    hideLines(
-      this.view,
-      hiddenRanges.map(r => this.view.state.doc.lineAt(r.char_start))
-    );
   }
 
   public getCurrentCode(): string {
@@ -318,11 +188,22 @@ export class Editor {
     return serverResponse;
   }
 
-  async renderOperation(operation: string, out?: Result<any>, config?: any) {
-    if (!out) {
+  async renderOperation(
+    operation: string,
+    {
+      response,
+      config,
+      annotations,
+    }: {
+      response?: Result<any>;
+      config?: any;
+      annotations?: AquascopeAnnotations;
+    }
+  ) {
+    if (!response) {
       let serverResponse = await this.callBackendWithCode(operation);
       if (serverResponse.success) {
-        out = JSON.parse(serverResponse.stdout);
+        response = JSON.parse(serverResponse.stdout);
         this.reportStdErr({
           type: "BuildError",
           error: serverResponse.stderr,
@@ -335,7 +216,13 @@ export class Editor {
       }
     }
 
-    let result = (out as any).Ok;
+    let result = (response as any).Ok;
+
+    if (annotations?.hidden_lines) {
+      this.view.dispatch({
+        effects: annotations.hidden_lines.map(line => hideLine.of({ line })),
+      });
+    }
 
     if (operation == "interpreter") {
       renderInterpreter(
@@ -343,11 +230,11 @@ export class Editor {
         this.interpreterContainer,
         result,
         this.view.state.doc.toJSON().join("\n"),
-        this.cfg.markedRanges,
-        config
+        config,
+        annotations?.interp
       );
     } else if (operation == "permission-diffs") {
-      renderSteps(this.view, this.editorContainer, result, this.cfg.stepsCfg!);
+      renderSteps(this.view, result, annotations?.stepper);
     } else if (operation == "receiver-types") {
       let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
       this.addAnalysisFacts(loanFacts);

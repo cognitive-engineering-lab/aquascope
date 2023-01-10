@@ -1,3 +1,5 @@
+#![feature(iter_intersperse)]
+
 use std::{
   collections::HashMap,
   fmt::Write,
@@ -33,10 +35,6 @@ struct AquascopePreprocessor {
   target_libdir: PathBuf,
 }
 
-fn strip_markers(code: &str) -> String {
-  code.replace("`[", "").replace("]`", "")
-}
-
 impl AquascopePreprocessor {
   fn process_code(
     &self,
@@ -58,8 +56,8 @@ impl AquascopePreprocessor {
       bail!("Cargo failed");
     }
 
-    let cleaned = strip_markers(&code);
-    fs::write(root.join("example/src/main.rs"), &cleaned)?;
+    let (cleaned, annot) = mdbook_aquascope::parse_annotations(&code)?;
+    fs::write(root.join("example/src/main.rs"), &*cleaned)?;
 
     let output = Command::new("cargo")
       .args(["aquascope", &operation])
@@ -94,7 +92,8 @@ impl AquascopePreprocessor {
       )
     };
 
-    add_data("code", &serde_json::to_string(&code)?)?;
+    add_data("code", &serde_json::to_string(&cleaned)?)?;
+    add_data("annotations", &serde_json::to_string(&annot)?)?;
     add_data("operation", &operation)?;
     add_data("response", response.trim_end())?;
     let config = config

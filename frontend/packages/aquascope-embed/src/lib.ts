@@ -1,4 +1,9 @@
-import { Editor, receiverPermissionsField } from "aquascope-editor";
+import {
+  Editor,
+  Result,
+  receiverPermissionsField,
+  types,
+} from "aquascope-editor";
 
 import { setup } from "./setup";
 import "./styles.scss";
@@ -41,7 +46,11 @@ let initEditors = () => {
         elem.appendChild(btnWrap);
       }
 
-      let initialCode = JSON.parse(elem.dataset.code!);
+      let maybeParseJson = <T>(s: string | undefined): T | undefined =>
+        s ? JSON.parse(s) : undefined;
+
+      let initialCode = maybeParseJson<string>(elem.dataset.code);
+      if (!initialCode) throw new Error("Missing data-code attribute");
 
       let serverUrl = elem.dataset.serverUrl
         ? new URL(elem.dataset.serverUrl)
@@ -62,21 +71,23 @@ let initEditors = () => {
       );
 
       let operation = elem.dataset.operation;
-      if (operation) {
-        let response = elem.dataset.response
-          ? JSON.parse(elem.dataset.response)
-          : undefined;
+      if (!operation) throw new Error("Missing data-operation attribute");
 
-        let config = elem.dataset.config
-          ? JSON.parse(elem.dataset.config)
-          : undefined;
+      let response = maybeParseJson<Result<any>>(elem.dataset.response);
+      let config = maybeParseJson<any>(elem.dataset.config);
+      let annotations = maybeParseJson<types.AquascopeAnnotations>(
+        elem.dataset.annotations
+      );
 
-        ed.renderOperation(operation, response, config);
+      ed.renderOperation(operation, {
+        response,
+        config,
+        annotations,
+      });
 
-        computePermBtn?.addEventListener("click", _ => {
-          ed.renderOperation(operation!);
-        });
-      }
+      computePermBtn?.addEventListener("click", _ => {
+        ed.renderOperation(operation!, {});
+      });
     });
 };
 

@@ -34,6 +34,12 @@ export { MStep } from "./bindings/MStep";
 export { MHeapAllocKind } from "./bindings/MHeapAllocKind";
 export { Abbreviated } from "./bindings/Abbreviated";
 
+export { CharPos } from "./bindings/CharPos";
+export { LinePos } from "./bindings/LinePos";
+export { StepperAnnotations } from "./bindings/StepperAnnotations";
+export { InterpAnnotations } from "./bindings/InterpAnnotations";
+export { AquascopeAnnotations } from "./bindings/AquascopeAnnotations";
+
 interface BuildError {
   type: "BuildError";
   error: string;
