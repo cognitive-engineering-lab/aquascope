@@ -8,8 +8,8 @@ export let globals: {
 };
 
 window.addEventListener("load", () => {
-  const showRcvrTypesButton = document.getElementById(
-    "showReceiverTypes"
+  const showBoundariesButton = document.getElementById(
+    "showBoundaries"
   ) as HTMLInputElement;
   const permStepsButton = document.getElementById(
     "showPermSteps"
@@ -47,7 +47,6 @@ window.addEventListener("load", () => {
     editor: new Ed.Editor(
       editorElement,
       basicSetup,
-      [Ed.receiverPermissionsField.stateField],
       (err: Ed.types.BackendError) => {
         if (err.type === "FileNotFound") {
           alert("A backend problem occurred!");
@@ -68,14 +67,14 @@ window.addEventListener("load", () => {
 
   vimKeybindingToggle.addEventListener("click", toggleVim);
 
-  showRcvrTypesButton.addEventListener("click", _ => {
-    return globals.editor.renderOperation("receiver-types");
+  showBoundariesButton.addEventListener("click", _ => {
+    return globals.editor.renderOperation("boundaries");
   });
 
   permStepsButton.addEventListener("click", _ => {
-    // return globals.editor.computeReceiverPermissions();
-    return globals.editor.renderOperation("permission-diffs");
+    return globals.editor.renderOperation("stepper");
   });
+
   interpretButton.addEventListener("click", () =>
     globals.editor.renderOperation("interpreter")
   );

@@ -1,9 +1,17 @@
 # Chapter 1
 
-```aquascope,permission-diffs
+```aquascope,stepper
 # fn main() {
 let mut x = 1;
 let y = &x;
+println!("{} = {}", x, *y);`(focus,paths:x)`
+#}
+```
+
+```aquascope,boundaries
+# fn main() {
+let mut x = 1;
+let y = &mut x;
 println!("{} = {}", x, *y);`(focus,paths:x)`
 #}
 ```

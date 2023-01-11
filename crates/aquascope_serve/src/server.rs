@@ -27,8 +27,8 @@ pub(crate) async fn serve(cfg: Config) {
                 "HELLO!"
             }),
         )
-        .route("/receiver-types", post(receiver_types))
-        .route("/permission-diffs", post(permission_diffs))
+        .route("/boundaries", post(receiver_types))
+        .route("/stepper", post(permission_diffs))
         .route("/interpreter", post(interpreter));
 
     app = app.layer({

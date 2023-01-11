@@ -12,21 +12,12 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import {
-  AnalysisFacts,
-  AquascopeAnnotations,
   PermissionsDataDiff,
   PermissionsStateStep,
   StepperAnnotations,
   ValueStep,
 } from "../types";
-import {
-  IconField,
-  ReactIcon,
-  dropChar,
-  genStateField,
-  readChar,
-  writeChar,
-} from "./misc";
+import { dropChar, readChar, writeChar } from "./misc";
 
 let PermDiffRow = ({
   path,
@@ -206,9 +197,7 @@ let StepTableWidget = ({
   let hiddenDropdown =
     hidden.length > 0 ? (
       <>
-        <div className="step-table-dropdown step-widget-toggle">
-          ● ● ●
-        </div>
+        <div className="step-table-dropdown step-widget-toggle">● ● ●</div>
         <div className={classNames({ "hidden-height": !displayAll })}>
           <StepTable rows={hidden} />
         </div>
@@ -216,9 +205,7 @@ let StepTableWidget = ({
     ) : null;
 
   return (
-    <div
-      className="perm-step-widget"
-    >
+    <div className="perm-step-widget">
       {" "}
       <span className="step-widget-toggle" onClick={() => setDisplay(!display)}>
         {display ? arrowIn : arrowOut}
@@ -262,7 +249,6 @@ class PermissionStepTableWidget extends WidgetType {
     let container = document.createElement("span");
 
     let doc = this.view.state.doc;
-    let pos = stepLocation(this.step);
     let currLine = this.line;
     let initDisplay =
       this.annotations && this.annotations.focused_lines.length > 0

@@ -1,14 +1,9 @@
-import {
-  Editor,
-  Result,
-  receiverPermissionsField,
-  types,
-} from "aquascope-editor";
+import { Editor, Result, types } from "aquascope-editor";
 
 import { setup } from "./setup";
 import "./styles.scss";
 
-const AQUSCOPE_NAME = "aquascope";
+const AQUASCOPE_NAME = "aquascope";
 const EMBED_NAME = "aquascope-embed";
 
 let initEditors = () => {
@@ -46,7 +41,6 @@ let initEditors = () => {
     let ed = new Editor(
       elem,
       setup,
-      [receiverPermissionsField.stateField],
       err => {
         if (err.type == "BuildError") console.error(err.error);
         else if (err.type == "AnalysisError") console.error(err.error);
