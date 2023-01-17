@@ -202,9 +202,9 @@ pub fn compute_permissions<'a, 'tcx>(
 
     let permissions = permissions::compute(tcx, body_id, body_with_facts);
 
-    if cfg!(debug_assertions) {
-      permissions::utils::dump_permissions_with_mir(&permissions);
-    }
+    // if cfg!(debug_assertions) {
+    permissions::utils::dump_permissions_with_mir(&permissions);
+    // }
 
     permissions
   })

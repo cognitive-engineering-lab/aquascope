@@ -1,7 +1,7 @@
 //! A smattering of utilities not yet (or that won't ever be) upstreamed to Flowistry.
 
 use rustc_middle::{
-  mir::{Body, Place},
+  mir::{BasicBlockData, Body, Place},
   ty::TyCtxt,
 };
 
