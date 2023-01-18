@@ -9,8 +9,6 @@ import {
   Decoration,
   DecorationSet,
   EditorView,
-  ViewPlugin,
-  ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
 import classNames from "classnames";
@@ -29,7 +27,6 @@ import { dropChar, readChar, writeChar } from "./misc";
 let PermChar = ({
   content,
   names,
-  exp,
   act,
   x,
   y,
@@ -38,7 +35,6 @@ let PermChar = ({
 }: {
   content: string;
   names: string[];
-  exp: boolean;
   act: boolean;
   x: string;
   y: string;
@@ -82,7 +78,6 @@ let PermRow = ({ content }: { content: [ValueStep<boolean>, string][] }) => {
           key={content}
           x={w(i)}
           y="95%"
-          exp={true}
           act={true}
           showit={nullF}
           hideit={nullF}

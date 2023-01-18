@@ -78,7 +78,6 @@ import {
 let PermChar = ({
   content,
   names,
-  exp,
   act,
   x,
   y,
@@ -87,7 +86,6 @@ let PermChar = ({
 }: {
   content: string;
   names: string[];
-  exp: boolean;
   act: boolean;
   x: string;
   y: string;
