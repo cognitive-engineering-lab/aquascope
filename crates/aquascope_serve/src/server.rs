@@ -27,8 +27,8 @@ pub(crate) async fn serve(cfg: Config) {
                 "HELLO!"
             }),
         )
-        .route("/boundaries", post(receiver_types))
-        .route("/stepper", post(permission_diffs))
+        .route("/boundaries", post(boundaries))
+        .route("/stepper", post(stepper))
         .route("/interpreter", post(interpreter));
 
     app = app.layer({
@@ -53,14 +53,14 @@ pub(crate) async fn serve(cfg: Config) {
 
 // TODO get rid of the `AquascopeResult` from the return type
 // this can be coerced into our Server types here (build error, etc).
-async fn receiver_types(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
+async fn boundaries(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
     log::trace!("Received request for receiver types");
 
     let json = with_container(
         req,
         |knt, req| {
             async move {
-                let v = knt.receiver_types(req).await;
+                let v = knt.boundaries(req).await;
                 if let Err(e) = knt.cleanup().await {
                     log::warn!("Error cleaning up container: {:?}", e);
                 }
@@ -78,14 +78,14 @@ async fn receiver_types(Json(req): Json<SingleFileRequest>) -> Result<Json<Serve
     json
 }
 
-async fn permission_diffs(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
+async fn stepper(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
     log::trace!("Received requeset for permission differences");
 
     let json = with_container(
         req,
         |knt, req| {
             async move {
-                let v = knt.permission_differences(req).await;
+                let v = knt.stepper(req).await;
                 if let Err(e) = knt.cleanup().await {
                     log::warn!("Error cleaning up container: {:?}", e);
                 }

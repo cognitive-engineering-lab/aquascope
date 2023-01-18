@@ -7,6 +7,7 @@ import {
 } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import _ from "lodash";
+import classNames from "classnames";
 
 import {
   AnalysisFacts,

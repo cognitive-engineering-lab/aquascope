@@ -4,13 +4,8 @@ $boundaries-color: #4ebeef;
 
 // Colors for permission stacks
 $read-color: #4ebeef;
-
-// $write-color: #758e4f;
 $write-color: #5dca36;
-
-// $drop-color: #f6ae2d;
 $drop-color: #ff4244;
-
 $glyph-width: 14px;
 
 @mixin button {
@@ -133,51 +128,78 @@ $glyph-width: 14px;
   /* Permission Boundaries */
 
   .permission-stack {
-    display: inline-flex;
-    flex-direction: column;
-    justify-content: flex-end;
-
-    position: relative;
-    width: 20px;
-
-    &.double-stacked {
-      top: -$glyph-width;
-      height: 3 * $glyph-width;
-    }
+    display: inline-block;
   }
 
   svg.permission {
     stroke-width: 2;
     paint-order: stroke;
-
-    width: 22px;
-    height: 16px;
-
-    &.read {
-      stroke: $read-color;
-      fill: $read-color;
-    }
-
-    &.write {
-      stroke: $write-color;
-      fill: $write-color;
-    }
-
-    &.drop {
-      stroke: $drop-color;
-      fill: $drop-color;
-    }
-
-    &.missing {
-      stroke-width: 1;
-      font-weight: bolder;
-      fill: rgba($transparent-color, 0) !important;
-    }
+    width: $glyph-width + 10px;
+    height: 2 * $glyph-width;
 
     > text {
       font-family: "Verdana";
       font-weight: bold;
       font-size: $glyph-width;
+
+      &.read {
+        stroke: $read-color;
+        fill: $read-color;
+      }
+
+      &.write {
+        stroke: $write-color;
+        fill: $write-color;
+      }
+
+      &.drop {
+        stroke: $drop-color;
+        fill: $drop-color;
+      }
+
+      &.missing {
+        stroke-width: 1;
+        fill: rgba($transparent-color, 0) !important;
+      }
+    }
+  }
+
+  svg.permission-row {
+    stroke-width: 2;
+    paint-order: stroke;
+    width: 3 * $glyph-width + 10px;
+    height: $glyph-width + 5px;
+
+    > text {
+      font-family: "Verdana";
+      font-size: $glyph-width;
+      stroke-width: 1;
+
+      // Specific to the step tables
+      &.perm-diff-add {
+        stroke: rgb(93, 202, 54);
+        fill: rgb(93, 202, 54);
+      }
+
+      &.perm-diff-sub {
+        stroke: rgb(255, 66, 68);
+        fill: rgb(255, 66, 68);
+      }
+
+      &.perm-diff-none {
+        stroke: black;
+        fill: black;
+      }
+
+      &perm-diff-none-high {
+        stroke: black;
+        fill: black;
+      }
+
+      &.perm-diff-none-low {
+        stroke: black;
+        fill: black;
+      }
     }
   }
 

@@ -1,6 +1,13 @@
-import { Line, StateEffect } from "@codemirror/state";
+import {
+  Line,
+  Range,
+  RangeSet,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import {
   Decoration,
+  DecorationSet,
   EditorView,
   ViewPlugin,
   ViewUpdate,
@@ -18,6 +25,73 @@ import {
   ValueStep,
 } from "../types";
 import { dropChar, readChar, writeChar } from "./misc";
+
+let PermChar = ({
+  content,
+  names,
+  exp,
+  act,
+  x,
+  y,
+  showit,
+  hideit,
+}: {
+  content: string;
+  names: string[];
+  exp: boolean;
+  act: boolean;
+  x: string;
+  y: string;
+  showit: () => void;
+  hideit: () => void;
+}) => (
+  <text
+    className={classNames(...names, { missing: !act })}
+    textAnchor="end"
+    x={x}
+    y={y}
+    onMouseEnter={showit}
+    onMouseLeave={hideit}
+  >
+    {content}
+  </text>
+);
+
+let PermRow = ({ content }: { content: [ValueStep<boolean>, string][] }) => {
+  let getClassAndContent = ([diff, content]: [ValueStep<boolean>, string]) =>
+    diff.type == "High"
+      ? { content: content, names: ["perm-diff-add"] }
+      : diff.type == "Low"
+      ? { content: content, names: ["perm-diff-sub"] }
+      : diff.type === "None" && diff.value
+      ? { content: content, names: ["perm-diff-none-high"] }
+      : diff.type === "None" && !diff.value
+      ? { content: "‒", names: ["perm-diff-none-low"] }
+      : null;
+
+  let w = (idx: number) =>
+    (idx / content.length) * 100 + 100 / content.length - 5 + "%";
+  let nullF = () => {
+    return;
+  };
+
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="permission-row">
+      {content.map(([diff, content], i: number) => (
+        <PermChar
+          key={content}
+          x={w(i)}
+          y="95%"
+          exp={true}
+          act={true}
+          showit={nullF}
+          hideit={nullF}
+          {...getClassAndContent([diff, content])!}
+        />
+      ))}
+    </svg>
+  );
+};
 
 let PermDiffRow = ({
   path,
@@ -137,31 +211,13 @@ let PermDiffRow = ({
 
   let pathCol = <td className="perm-step-path">{path}</td>;
 
-  let permSpans = perms.map(([diff, content]) =>
-    diff.type == "High" ? (
-      <span key={content} className="perm-diff-add">
-        {content}
-      </span>
-    ) : diff.type == "Low" ? (
-      <span key={content} className="perm-diff-sub">
-        {content}
-      </span>
-    ) : diff.type === "None" && diff.value ? (
-      <span key={content} className="perm-diff-none-high">
-        {content}
-      </span>
-    ) : diff.type === "None" && !diff.value ? (
-      <span key={content} className="perm-diff-none-low">
-        -
-      </span>
-    ) : null
-  );
-
   return (
     <tr>
       {pathCol}
       <td>{ico}</td>
-      <td>{permSpans}</td>
+      <td>
+        <PermRow content={perms} />
+      </td>
     </tr>
   );
 };
@@ -289,6 +345,24 @@ class PermissionStepTableWidget extends WidgetType {
   }
 }
 
+let stepEffect = StateEffect.define<Range<Decoration>[]>();
+
+export let stepField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+
+  update(values, trs) {
+    for (let e of trs.effects) {
+      if (e.is(stepEffect)) {
+        return RangeSet.of(e.value, true);
+      }
+    }
+
+    return trs.docChanged ? RangeSet.of([]) : values;
+  },
+
+  provide: f => EditorView.decorations.from(f),
+});
+
 export function renderSteps(
   view: EditorView,
   stateSteps: PermissionsStateStep[],
@@ -303,27 +377,7 @@ export function renderSteps(
     deco => deco.from
   );
 
-  let plugin = ViewPlugin.fromClass(
-    class {
-      display: boolean = true;
-      update(upd: ViewUpdate) {
-        if (upd.docChanged) {
-          this.display = false;
-        }
-      }
-    },
-    {
-      decorations: v => {
-        if (v.display) {
-          return Decoration.set(decos);
-        } else {
-          return Decoration.set([]);
-        }
-      },
-    }
-  );
-
   view.dispatch({
-    effects: [StateEffect.appendConfig.of(plugin)],
+    effects: [stepEffect.of(decos)],
   });
 }

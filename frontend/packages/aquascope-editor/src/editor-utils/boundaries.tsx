@@ -80,6 +80,8 @@ let PermChar = ({
   names,
   exp,
   act,
+  x,
+  y,
   showit,
   hideit,
 }: {
@@ -87,21 +89,22 @@ let PermChar = ({
   names: string[];
   exp: boolean;
   act: boolean;
+  x: string;
+  y: string;
   showit: () => void;
   hideit: () => void;
-}) =>
-  exp ? (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className={classNames(...names, { missing: !act })}
-      onMouseEnter={showit}
-      onMouseLeave={hideit}
-    >
-      <text textAnchor="middle" x="50%" y="100%">
-        {content}
-      </text>
-    </svg>
-  ) : null;
+}) => (
+  <text
+    className={classNames(...names, { missing: !act })}
+    textAnchor="middle"
+    x={x}
+    y={y}
+    onMouseEnter={showit}
+    onMouseLeave={hideit}
+  >
+    {content}
+  </text>
+);
 
 let PermStack = ({
   facts,
@@ -111,45 +114,44 @@ let PermStack = ({
   boundary: PermissionsBoundary;
 }) => {
   const data = boundary.actual;
-  let readIco = (
-    <PermChar
-      content={readChar}
-      names={["permission", "read"]}
-      exp={boundary.expected.read}
-      act={data.permissions.read}
-      showit={() => showLoanRegion(facts, data.loan_read_refined, ["read"])}
-      hideit={() => hideLoanRegion(facts, data.loan_read_refined, ["read"])}
-    />
-  );
 
-  let writeIco = (
-    <PermChar
-      content={writeChar}
-      names={["permission", "write"]}
-      exp={boundary.expected.write}
-      act={data.permissions.write}
-      showit={() => showLoanRegion(facts, data.loan_write_refined, ["write"])}
-      hideit={() => hideLoanRegion(facts, data.loan_write_refined, ["write"])}
-    />
-  );
+  let allIcons = [
+    {
+      content: readChar,
+      names: ["permission", "read"],
+      exp: boundary.expected.read,
+      act: data.permissions.read,
+      showit: () => showLoanRegion(facts, data.loan_read_refined, ["read"]),
+      hideit: () => hideLoanRegion(facts, data.loan_read_refined, ["read"]),
+    },
+    {
+      content: writeChar,
+      names: ["permission", "write"],
+      exp: boundary.expected.write,
+      act: data.permissions.write,
+      showit: () => showLoanRegion(facts, data.loan_write_refined, ["write"]),
+      hideit: () => hideLoanRegion(facts, data.loan_write_refined, ["write"]),
+    },
+    {
+      content: dropChar,
+      names: ["permission", "drop"],
+      exp: boundary.expected.drop,
+      act: data.permissions.drop,
+      showit: () => showLoanRegion(facts, data.loan_drop_refined, ["drop"]),
+      hideit: () => hideLoanRegion(facts, data.loan_drop_refined, ["drop"]),
+    },
+  ];
 
-  let dropIco = (
-    <PermChar
-      content={dropChar}
-      names={["permission", "drop"]}
-      exp={boundary.expected.drop}
-      act={data.permissions.drop}
-      showit={() => showLoanRegion(facts, data.loan_drop_refined, ["drop"])}
-      hideit={() => hideLoanRegion(facts, data.loan_drop_refined, ["drop"])}
-    />
-  );
+  let icons = allIcons.filter(i => i.exp);
+  let h = (idx: number) =>
+    (idx / icons.length) * 100 + 100 / icons.length - 5 + "%";
 
   return (
-    <>
-      {readIco}
-      {writeIco}
-      {dropIco}
-    </>
+    <svg xmlns="http://www.w3.org/2000/svg" className="permission">
+      {icons.map((info, i: number) => (
+        <PermChar key={info.content} x="50%" y={h(i)} {...info} />
+      ))}
+    </svg>
   );
 };
 
@@ -176,9 +178,6 @@ class BoundaryPointWidget extends WidgetType {
   toDOM(_view: EditorView): HTMLElement {
     let container = document.createElement("div");
     container.classList.add("permission-stack");
-    if (this.numDisplayed === 2) {
-      container.classList.add("double-stacked");
-    }
     ReactDOM.createRoot(container).render(
       <PermStack facts={this.facts} boundary={this.boundary} />
     );

@@ -15,7 +15,7 @@ import {
   loanFactsField,
   loanFactsStateType,
 } from "./editor-utils/misc";
-import { renderSteps } from "./editor-utils/stepper";
+import { renderSteps, stepField } from "./editor-utils/stepper";
 import "./styles.scss";
 import { AnalysisFacts, AquascopeAnnotations, BackendError } from "./types";
 
@@ -88,6 +88,7 @@ export class Editor {
         hiddenLines,
         loanFactsField,
         boundaryField,
+        stepField,
       ],
     });
 
