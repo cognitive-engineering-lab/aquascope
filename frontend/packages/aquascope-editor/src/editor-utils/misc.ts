@@ -1,6 +1,4 @@
-import { codeFolding, foldEffect } from "@codemirror/language";
 import {
-  Line,
   Range,
   RangeSet,
   StateEffect,
@@ -24,7 +22,6 @@ import {
 export const readChar = "R";
 export const writeChar = "W";
 export const dropChar = "O";
-export const glyphWidth = 12;
 
 // ----------
 // Interfaces
@@ -216,3 +213,49 @@ export let hiddenLines = StateField.define<DecorationSet>({
   },
   provide: f => EditorView.decorations.from(f),
 });
+
+let forCustomTag = (tag: string, callback: (e: HTMLElement) => void) => {
+  Array.from(
+    document.getElementsByTagName(tag) as HTMLCollectionOf<HTMLElement>
+  ).forEach(callback);
+};
+
+export let showLoanRegion = (
+  facts: AnalysisFacts,
+  key?: LoanKey,
+  names: string[] = []
+) => {
+  if (key !== undefined) {
+    const loanTag = facts.loanPoints[key];
+    const regionTag = facts.loanRegions[key];
+
+    forCustomTag(loanTag, elem => {
+      elem.classList.add("show-hidden");
+      names.forEach((n: string) => elem.classList.add(n));
+    });
+    forCustomTag(regionTag, elem => {
+      elem.classList.add("show-hidden");
+      names.forEach((n: string) => elem.classList.add(n));
+    });
+  }
+};
+
+export let hideLoanRegion = (
+  facts: AnalysisFacts,
+  key?: LoanKey,
+  names: string[] = []
+) => {
+  if (key !== undefined) {
+    const loanTag = facts.loanPoints[key];
+    const regionTag = facts.loanRegions[key];
+
+    forCustomTag(loanTag, elem => {
+      elem.classList.remove("show-hidden");
+      names.forEach((n: string) => elem.classList.remove(n));
+    });
+    forCustomTag(regionTag, elem => {
+      elem.classList.remove("show-hidden");
+      names.forEach((n: string) => elem.classList.remove(n));
+    });
+  }
+};

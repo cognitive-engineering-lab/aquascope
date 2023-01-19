@@ -511,7 +511,9 @@ let InterpreterView = ({
           onClick={() => setConcreteTypes(!concreteTypes)}
           style={{ opacity: buttonVisible ? "1" : "0" }}
         >
-          <i className={`fa fa-${concreteTypes ? "binoculars" : "binoculars"}`} />
+          <i
+            className={`fa fa-${concreteTypes ? "binoculars" : "binoculars"}`}
+          />
         </button>
         {steps.map((step, i) => (
           <StepView key={i} index={i} step={step} container={ref} />

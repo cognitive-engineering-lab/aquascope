@@ -34,12 +34,12 @@ pub struct AquascopePluginArgs {
 
 #[derive(Debug, Subcommand, Serialize, Deserialize)]
 enum AquascopeCommand {
-  ReceiverTypes {
+  Boundaries {
     #[clap(last = true)]
     flags: Vec<String>,
   },
 
-  PermissionDiffs {
+  Stepper {
     #[clap(long)]
     steps_include_mode: Option<PermIncludeMode>,
 
@@ -102,8 +102,8 @@ impl RustcPlugin for AquascopePlugin {
     };
 
     let flags = match &args.command {
-      ReceiverTypes { flags } => flags,
-      PermissionDiffs { flags, .. } => flags,
+      Boundaries { flags } => flags,
+      Stepper { flags, .. } => flags,
       Interpreter { flags } => flags,
       _ => unreachable!(),
     };
@@ -124,11 +124,11 @@ impl RustcPlugin for AquascopePlugin {
     match plugin_args.command {
       // TODO rename the command because it will eventually show *all* permissions
       // and not just those for method calls.
-      ReceiverTypes { .. } => postprocess(run(
+      Boundaries { .. } => postprocess(run(
         crate::permissions::permission_boundaries,
         &compiler_args,
       )),
-      PermissionDiffs {
+      Stepper {
         steps_include_mode, ..
       } => {
         let mode = steps_include_mode.unwrap_or(PermIncludeMode::Changes);

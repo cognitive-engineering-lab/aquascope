@@ -337,10 +337,10 @@ impl Container {
             .context(BollardSnafu)
     }
 
-    pub async fn receiver_types(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
+    pub async fn boundaries(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
         self.write_source_code(&req.code).await?;
 
-        let mut cmd = self.receiver_types_command();
+        let mut cmd = self.boundaries_command();
 
         let (stdout, stderr) = self.exec_output(&mut cmd).await?;
 
@@ -355,10 +355,10 @@ impl Container {
         })
     }
 
-    pub async fn permission_differences(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
+    pub async fn stepper(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
         self.write_source_code(&req.code).await?;
 
-        let mut cmd = self.permission_differences_command();
+        let mut cmd = self.stepper_command();
 
         let (stdout, stderr) = self.exec_output(&mut cmd).await?;
 
@@ -394,11 +394,11 @@ impl Container {
     // -------------
     // Commands
 
-    fn receiver_types_command(&self) -> Command {
+    fn boundaries_command(&self) -> Command {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
-        cmd.args(["--quiet", "aquascope", "receiver-types"])
+        cmd.args(["--quiet", "aquascope", "boundaries"])
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {
@@ -408,11 +408,11 @@ impl Container {
         cmd
     }
 
-    fn permission_differences_command(&self) -> Command {
+    fn stepper_command(&self) -> Command {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
-        cmd.args(["--quiet", "aquascope", "permission-diffs"])
+        cmd.args(["--quiet", "aquascope", "stepper"])
             .current_dir(cwd);
 
         if cfg!(feature = "no-docker") {

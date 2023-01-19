@@ -1,20 +1,10 @@
 import { rust } from "@codemirror/lang-rust";
-import { codeFolding, foldEffect, indentUnit } from "@codemirror/language";
-import {
-  Compartment,
-  EditorState,
-  Extension,
-  StateEffect,
-  StateField,
-} from "@codemirror/state";
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  ViewUpdate,
-} from "@codemirror/view";
+import { indentUnit } from "@codemirror/language";
+import { Compartment, EditorState, Extension } from "@codemirror/state";
+import { EditorView, ViewUpdate } from "@codemirror/view";
 import _ from "lodash";
 
+import { boundaryField, renderBoundaries } from "./editor-utils/boundaries";
 import { renderInterpreter } from "./editor-utils/interpreter";
 import {
   IconField,
@@ -25,24 +15,10 @@ import {
   loanFactsField,
   loanFactsStateType,
 } from "./editor-utils/misc";
-import {
-  copiedValueHover,
-  insufficientTypeHover,
-  receiverPermissionsField,
-} from "./editor-utils/permission-boundaries";
-import { renderSteps } from "./editor-utils/stepper";
+import { renderSteps, stepField } from "./editor-utils/stepper";
 import "./styles.scss";
-import {
-  AnalysisFacts,
-  AnalysisOutput,
-  AquascopeAnnotations,
-  BackendError,
-  PermissionsBoundary,
-  PermissionsDiffOutput,
-  Range,
-} from "./types";
+import { AnalysisFacts, AquascopeAnnotations, BackendError } from "./types";
 
-export { receiverPermissionsField } from "./editor-utils/permission-boundaries";
 export * as types from "./types";
 
 const DEFAULT_SERVER_URL = new URL("http://127.0.0.1:8008");
@@ -61,13 +37,15 @@ type ServerResponse = {
 
 export const defaultCodeExample: string = `
 fn main() {
-  \`[let n = 5;]\`
-  \`[let y = plus_one(n);]\` \`(step:focus,.*[n].*)\`
-  println!("The value of y is: {y}");
+  let mut s = String::from("hello, ");
+  let b = &mut s;
+  s.push_str("world!");
+  hi_world(b);
+  println!("{s} {b}");
 }
 
-\`[fn plus_one(x: i32)]\` -> i32 {
-  x + 1
+fn hi_world(s: &mut String) {
+  s.push_str("world!");
 }
 `.trim();
 
@@ -82,7 +60,6 @@ export class Editor {
   public constructor(
     dom: HTMLDivElement,
     readonly setup: Extension,
-    supportedFields: Array<StateField<DecorationSet>>,
     readonly reportStdErr: (err: BackendError) => void = function (err) {
       console.log("An error occurred: ");
       console.log(err);
@@ -109,16 +86,11 @@ export class Editor {
         rust(),
         indentUnit.of("  "),
         hiddenLines,
-
-        copiedValueHover,
-        insufficientTypeHover,
         loanFactsField,
-        ...supportedFields,
+        boundaryField,
+        stepField,
       ],
     });
-
-    // this.cfg.markedRanges = []; //parseResult.ranges;
-    // console.debug("Marked ranges:", this.cfg.markedRanges);
 
     let editorContainer = document.createElement("div");
     let initialView = new EditorView({
@@ -232,12 +204,12 @@ export class Editor {
         config,
         annotations?.interp
       );
-    } else if (operation == "permission-diffs") {
+    } else if (operation == "stepper") {
       renderSteps(this.view, result, annotations?.stepper);
-    } else if (operation == "receiver-types") {
+    } else if (operation == "boundaries") {
       let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
       this.addAnalysisFacts(loanFacts);
-      this.addPermissionsField(receiverPermissionsField, result.values, facts);
+      renderBoundaries(this.view, facts, result.values);
     }
   }
 }

@@ -1,4 +1,12 @@
 $monospace: "Source Code Pro", monospace;
+$transparent-color: #fff;
+$boundaries-color: #4ebeef;
+
+// Colors for permission stacks
+$read-color: #4ebeef;
+$write-color: #5dca36;
+$drop-color: #ff4244;
+$glyph-width: 14px;
 
 @mixin button {
   opacity: 0;
@@ -17,17 +25,6 @@ $monospace: "Source Code Pro", monospace;
   position: relative;
   height: 100%;
   width: 100%;
-
-  .aquascope-loan {
-    text-decoration: underline 3px rgba(255, 255, 255, 0);
-    transition: 1s all;
-  }
-
-  .aquascope-live-region {
-    background-color: rgba(255, 255, 255, 0);
-    border-radius: 5px;
-    transition: 1s all;
-  }
 
   .aquascope-stderr {
     padding: 15px;
@@ -85,6 +82,125 @@ $monospace: "Source Code Pro", monospace;
 
   .cm-line.hidden-line {
     display: none;
+  }
+
+  /* Loan Highlighting */
+
+  .aquascope-loan {
+    text-decoration: underline 3px rgba($transparent-color, 0);
+    transition: 1s all;
+
+    &.show-hidden {
+      &.read {
+        text-decoration: underline 3px $read-color !important;
+      }
+
+      &.write {
+        text-decoration: underline 3px $write-color !important;
+      }
+
+      &.drop {
+        text-decoration: underline 3px $drop-color !important;
+      }
+    }
+  }
+
+  .aquascope-live-region {
+    background-color: rgba($transparent-color, 0);
+    border-radius: 5px;
+    transition: 1s all;
+
+    &.show-hidden {
+      &.read {
+        background-color: rgba($read-color, 0.4) !important;
+      }
+
+      &.write {
+        background-color: rgba($write-color, 0.4) !important;
+      }
+
+      &.drop {
+        background-color: rgba($drop-color, 0.4) !important;
+      }
+    }
+  }
+
+  /* Permission Boundaries */
+
+  .permission-stack {
+    display: inline-block;
+  }
+
+  svg.permission {
+    stroke-width: 2;
+    paint-order: stroke;
+    width: $glyph-width + 10px;
+    height: 2 * $glyph-width;
+
+    > text {
+      font-family: "Verdana";
+      font-weight: bold;
+      font-size: $glyph-width;
+
+      &.read {
+        stroke: $read-color;
+        fill: $read-color;
+      }
+
+      &.write {
+        stroke: $write-color;
+        fill: $write-color;
+      }
+
+      &.drop {
+        stroke: $drop-color;
+        fill: $drop-color;
+      }
+
+      &.missing {
+        stroke-width: 1;
+        fill: rgba($transparent-color, 0) !important;
+      }
+    }
+  }
+
+  svg.permission-row {
+    stroke-width: 2;
+    paint-order: stroke;
+    width: 3 * $glyph-width + 10px;
+    height: $glyph-width + 5px;
+
+    > text {
+      font-family: "Verdana";
+      font-size: $glyph-width;
+      stroke-width: 1;
+
+      // Specific to the step tables
+      &.perm-diff-add {
+        stroke: rgb(93, 202, 54);
+        fill: rgb(93, 202, 54);
+      }
+
+      &.perm-diff-sub {
+        stroke: rgb(255, 66, 68);
+        fill: rgb(255, 66, 68);
+      }
+
+      &.perm-diff-none {
+        stroke: black;
+        fill: black;
+      }
+
+      &perm-diff-none-high {
+        stroke: black;
+        fill: black;
+      }
+
+      &.perm-diff-none-low {
+        stroke: black;
+        fill: black;
+      }
+    }
   }
 
   /* Permission Steps */
@@ -294,7 +410,8 @@ $monospace: "Source Code Pro", monospace;
       font-size: 0.8em;
     }
 
-    table.locals, .heap > table {
+    table.locals,
+    .heap > table {
       border: 2px solid #ccc;
 
       > tbody > tr > td {
