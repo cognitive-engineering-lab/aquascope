@@ -408,8 +408,10 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirPermDiffFlow<'a, 'tcx> {
     // (specifically inside the "then branch") for the whole let.
     let mut added_barrier = false;
 
-    if let Some(place) = self.ir_mapper.local_assigned_place(local) {
-      self.step_barriers.push(place);
+    let places = self.ir_mapper.local_assigned_place(local);
+
+    if !places.is_empty() {
+      self.step_barriers.extend(places);
       added_barrier = true;
     }
 

@@ -21,7 +21,7 @@ use rustc_middle::{
 };
 
 pub struct IRMapper<'a, 'tcx> {
-  // flowistry::Spanner
+  pub(crate) cleaned_graph: CleanedBody<'a, 'tcx>,
   tcx: TyCtxt<'tcx>,
   body: &'a Body<'tcx>,
   hir_to_mir: HashMap<HirId, HashSet<Location>>,
@@ -132,6 +132,8 @@ where
   ) -> Self {
     let dominators = body.basic_blocks.dominators();
     let control_dependencies = PostDominators::build(body);
+    let cleaned_graph = CleanedBody::make(body);
+
     let mut ir_map = IRMapper {
       tcx,
       body,
@@ -139,6 +141,7 @@ where
       post_dominators: control_dependencies,
       hir_to_mir: HashMap::default(),
       gather_mode,
+      cleaned_graph,
     };
 
     ir_map.visit_body(body);
@@ -155,25 +158,25 @@ where
     ir_map
   }
 
-  pub fn local_assigned_place(
-    &self,
-    local: &hir::Local,
-  ) -> Option<Place<'tcx>> {
+  pub fn local_assigned_place(&self, local: &hir::Local) -> Vec<Place<'tcx>> {
     use either::Either;
     use mir::{FakeReadCause as FRC, StatementKind as SK};
     let id = local.hir_id;
-    if let Some(mol) = self.get_mir_locations(id, GatherDepth::Outer) {
-      for loc in mol.values() {
-        match self.body.stmt_at(loc) {
-          Either::Left(mir::Statement {
-            kind: SK::FakeRead(box (FRC::ForLet(_), place)),
-            ..
-          }) => return Some(*place),
-          _ => continue,
-        }
-      }
-    }
-    None
+    self
+      .get_mir_locations(id, GatherDepth::Outer)
+      .map(|mol| {
+        mol
+          .values()
+          .filter_map(|loc| match self.body.stmt_at(loc) {
+            Either::Left(mir::Statement {
+              kind: SK::FakeRead(box (FRC::ForLet(_), place)),
+              ..
+            }) => Some(*place),
+            _ => None,
+          })
+          .collect::<Vec<_>>()
+      })
+      .unwrap_or_else(|| Vec::default())
   }
 
   // Determines whether or not a block was inserted solely as a
@@ -197,7 +200,7 @@ where
   /// This works under the assumption that there exists a global
   /// maximum in the (post-)dominator lattice.
   ///
-  /// See: https://en.wikipedia.org/wiki/Dominator_(graph_theory)
+  /// See: <https://en.wikipedia.org/wiki/Dominator_(graph_theory)>
   pub fn get_mir_locations(
     &self,
     hir_id: HirId,
@@ -205,9 +208,7 @@ where
   ) -> Option<MirOrderedLocations> {
     let empty_set = &HashSet::default();
     let outer = self.hir_to_mir.get(&hir_id).unwrap_or(empty_set);
-
     let mut locations = outer.clone();
-
     match depth {
       GatherDepth::Outer => (),
       // Gather all the mir locations for every HirId nested under this one.
@@ -345,24 +346,6 @@ impl<'tcx> MirVisitor<'tcx> for IRMapper<'_, 'tcx> {
 //
 // See:
 // https://github.com/willcrichton/flowistry/blob/5eb8f457e953c1b009e0b197adf1769b7dded590/crates/flowistry/src/mir/control_dependencies.rs#L98
-
-// pub trait FilteredGraph<'graph>: DirectedGraph
-// where
-//   Self: GraphSuccessors<'graph, Item = Self::Node>
-//     + GraphPredecessors<'graph, Item = Self::Node>,
-// {
-//   fn filtered_successors(
-//     &self,
-//     node: Self::Node,
-//   ) -> Box<dyn Iterator<Item = BasicBlock> + 'graph>;
-
-//   fn filtered_predecessors(
-//     &self,
-//     node: Self::Node,
-//   ) -> Box<dyn Iterator<Item = BasicBlock> + 'graph>;
-// }
-
-// ------------------------------------------------
 
 struct BodyReversed<'a, 'tcx> {
   body: &'a Body<'tcx>,
@@ -522,16 +505,34 @@ impl PostDominators<BasicBlock> {
   }
 }
 
-/// Graph representation for working with the MIR. Ignoring
-/// bits of control flow that aren't relevant for source level mapping,
-/// i.e. cleanup and unreachable blocks.
+/// A /cleaned/ graph representation for working with the MIR.
+///
+/// A `CleanedBody` represents MIR locations that are reachable via
+/// regular control-flow. This removes cleanup blocks or those which
+/// fall in unwind paths. When mapping back to source-level constructs
+/// this is almost certainly what you want to use.
 pub(crate) struct CleanedBody<'a, 'tcx: 'a> {
   body: &'a Body<'tcx>,
+  doms: Option<Dominators<BasicBlock>>,
+  pdoms: PostDominators<BasicBlock>,
 }
 
 impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
-  pub fn make(body: &'a Body<'tcx>) -> CleanedBody<'a, 'tcx> {
-    Self { body }
+  fn make(body: &'a Body<'tcx>) -> Self {
+    let mut g = CleanedBody {
+      body,
+      doms: None,
+      pdoms: PostDominators::build(body),
+    };
+
+    let doms = dominators::dominators(&g);
+    g.doms = Some(doms);
+
+    g
+  }
+
+  pub fn body(&self) -> &'a Body<'tcx> {
+    &self.body
   }
 
   pub fn vertices(&self) -> Vec<BasicBlock> {
@@ -543,14 +544,15 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
       .collect::<Vec<_>>()
   }
 
-  pub(crate) fn dominators(&self) -> Dominators<BasicBlock> {
-    dominators::dominators(self)
+  pub(crate) fn dominators(&self) -> &Dominators<BasicBlock> {
+    self.doms.as_ref().unwrap()
   }
 
-  pub(crate) fn post_dominators(&self) -> PostDominators<BasicBlock> {
-    PostDominators::build(self.body)
+  pub(crate) fn post_dominators(&self) -> &PostDominators<BasicBlock> {
+    &self.pdoms
   }
 
+  // TODO: cache the results
   pub(crate) fn paths_from_to(
     &self,
     from: BasicBlock,
@@ -559,18 +561,36 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
     DFSFinder::find_paths_from_to(self, from, to)
   }
 
-  pub(crate) fn location_predecessors(
+  /// Compute the locations successor.
+  ///
+  /// If the specified location lies in the middle of a `BasicBlock`,
+  /// the successor location is simply the Location with the next statement index.
+  /// When analyzing terminators, if the jump location is not clear, `None` will
+  /// be returned. (NOTE: jump locations are computed based on the cleaned graph).
+  pub(crate) fn location_successor(
     &self,
     location: Location,
-  ) -> Vec<Location> {
+  ) -> Option<Location> {
     let b = location.block;
     let si = location.statement_index;
     let bbd = &self.body.basic_blocks[b];
 
-    if si != bbd.statements.len() {
-      vec![location.successor_within_block()]
+    if si < bbd.statements.len() {
+      Some(location.successor_within_block())
     } else {
-      todo!()
+      // The location is a terminator. If there exists
+      // only a singular block successor in the cleaned graph,
+      // then we can take the first statement in the block,
+      // otherwise we just give up.
+      let nexts = self.successors(location.block).collect::<Vec<_>>();
+      if nexts.len() == 1 {
+        Some(Location {
+          block: nexts[0],
+          statement_index: 0,
+        })
+      } else {
+        None
+      }
     }
   }
 
@@ -594,7 +614,7 @@ impl WithStartNode for CleanedBody<'_, '_> {
 
 impl<'tcx> WithNumNodes for CleanedBody<'_, 'tcx> {
   fn num_nodes(&self) -> usize {
-    self.vertices().len()
+    self.body.basic_blocks.len()
   }
 }
 
@@ -657,7 +677,7 @@ where
       graph,
       paths: vec![],
       stack: vec![],
-      visited: BitSet::new_empty(graph.num_nodes() + 1),
+      visited: BitSet::new_empty(graph.num_nodes()),
     }
   }
 
@@ -672,7 +692,6 @@ where
   }
 
   fn search(&mut self, from: G::Node, to: G::Node) {
-    log::debug!("searching from {from:?} to {to:?}");
     if !self.visited.insert(from) {
       return;
     }

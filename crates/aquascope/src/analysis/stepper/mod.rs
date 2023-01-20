@@ -52,7 +52,7 @@ pub struct PermissionsStateStep {
   pub state: Vec<(String, PermissionsDataDiff)>,
 }
 
-#[derive(Clone, Debug, Serialize, TS)]
+#[derive(Clone, Serialize, TS)]
 #[serde(tag = "type")]
 #[ts(export)]
 pub enum ValueStep<A>
@@ -67,6 +67,19 @@ where
   },
 }
 
+impl<A> std::fmt::Debug for ValueStep<A>
+where
+  A: Clone + std::fmt::Debug + Serialize + TS,
+{
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      ValueStep::High => write!(f, "↑"),
+      ValueStep::Low => write!(f, "↓"),
+      ValueStep::None { value } => write!(f, "―<{value:?}>―"),
+    }
+  }
+}
+
 // A handy macro for making difference types with only BoolStep fields
 // TODO(gavinleroy): a diff type should be automatically generated if all the fields
 // in a macro can ge diffed, but I'll save that for later. Below is mostly a syntactic
@@ -76,7 +89,7 @@ where
 // the default BoolStep can be taken.
 macro_rules! make_diff {
   ($base:ident => $diff:ident { $($i:ident),* }) => {
-    #[derive(Clone, Debug, Serialize, TS)]
+    #[derive(Clone, Serialize, TS)]
     #[ts(export)]
     pub struct $diff {
       $( pub $i: ValueStep<bool>, )*
@@ -94,7 +107,13 @@ make_diff!(Permissions => PermissionsDiff {
    read, write, drop
 });
 
-#[derive(Clone, Debug, Serialize, TS)]
+impl std::fmt::Debug for PermissionsDiff {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{:?}R   {:?}W   {:?}D", self.read, self.write, self.drop)
+  }
+}
+
+#[derive(Clone, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsDataDiff {
   pub is_live: ValueStep<bool>,
@@ -105,6 +124,20 @@ pub struct PermissionsDataDiff {
   pub loan_write_refined: ValueStep<LoanKey>,
   pub loan_drop_refined: ValueStep<LoanKey>,
   pub permissions: PermissionsDiff,
+}
+
+impl std::fmt::Debug for PermissionsDataDiff {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "\nPermissions Data Step\n")?;
+    write!(f, "  Permissions:          {:?}\n", self.permissions)?;
+    write!(f, "    is_live:            {:?}\n", self.is_live)?;
+    write!(f, "    type_droppable:     {:?}\n", self.type_droppable)?;
+    write!(f, "    type_writeable:     {:?}\n", self.type_writeable)?;
+    write!(f, "    path_moved:         {:?}\n", self.path_moved)?;
+    write!(f, "    loan_write_refined: {:?}\n", self.loan_write_refined)?;
+    write!(f, "    loan_drop_refined:  {:?}\n", self.loan_drop_refined)?;
+    Ok(())
+  }
 }
 
 impl PermissionsDataDiff {

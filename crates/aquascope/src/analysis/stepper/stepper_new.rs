@@ -1,3 +1,25 @@
+//! Core analysis for creating Permission Steps.
+//!
+//! # Overview
+//!
+//! A *permissions step* is the difference in permissions between two MIR `Point`s.
+//!
+//! At a high-level, the strategy is to partition the MIR into pieces
+//! (referred to as segments), such that each piece represents a single
+//! permission step. This means, that (theoretically) after the graph has been partitioned the
+//! differences are taken in isolation. It isn't quite this straightforward so additional details are
+//! provided below.
+//!
+//! # Splitting Strategy
+//!
+//! TODO
+//!
+//! # Finalizing Differences
+//!
+//! TODO
+//!
+//!
+
 use std::collections::hash_map::Entry;
 
 use anyhow::{anyhow, bail, Result};
@@ -14,7 +36,7 @@ use rustc_hir::{
 };
 use rustc_middle::{
   hir::nested_filter,
-  mir::{BasicBlock, BasicBlocks, Body, Location, Place, Successors},
+  mir::{BasicBlock, BasicBlocks, Body, Local, Location, Place, Successors},
 };
 use rustc_span::Span;
 
@@ -47,7 +69,7 @@ where
   let mut hir_visitor = HirStepPoints::make(ctxt);
   hir_visitor.visit_nested_body(ctxt.body_id);
 
-  log::debug!("Hir Visitor {hir_visitor:?}");
+  log::debug!("Final tree\n{:?}", hir_visitor.mir_segments);
 
   prettify_permission_steps(
     ctxt,
@@ -147,18 +169,153 @@ fn prettify_permission_steps<'tcx>(
     .collect::<Vec<_>>()
 }
 
-// NOTE: there must exist a path from location_1 -> location_2
+// ------------------------------------------------
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct MirSegment {
   from: Location,
   to: Location,
 }
 
+#[derive(Clone)]
+enum SplitType {
+  /// A split of a segment that is not due to control flow.
+  /// Example, after each `Stmt` a step is created, this is simply
+  /// a step in a linear sequence.
+  Linear {
+    first: Box<SegmentTree>,
+    second: Box<SegmentTree>,
+  },
+
+  /// Split of a complex control flow.
+  /// For example, the `split_segments` of an `ExprKind::If` would be the segments
+  /// from the if condition, to the start of the then / else blocks.
+  /// The `join_segments` are all the those that end at the same join point.
+  ControlFlow {
+    splits: Vec<SegmentTree>,
+    joins: Vec<SegmentTree>,
+  },
+}
+
+#[derive(Clone)]
+/// A `SegmentTree` represents the control flow graph of a MIR `Body`.
+/// It's used to keep track of the entire graph as it is sliced during
+/// the permission steps analysis.
+enum SegmentTree {
+  /// An inner tree node with children.
+  Split {
+    segments: SplitType,
+    reach: MirSegment,
+    attached: Vec<Local>,
+  },
+
+  /// A leaf segment that is expected to be split again later.
+  Single {
+    segment: MirSegment,
+    span: Span,
+    attached: Vec<Local>,
+  },
+}
+
+#[derive(Clone, Debug)]
+enum SegmentSearchResult<'a> {
+  Enclosing(&'a SegmentTree),
+  StepExisits(MirSegment, Span),
+  NotFound,
+}
+
+// ------------------------------------------------
+// Debugging pretty printers
+
 impl std::fmt::Debug for MirSegment {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "MirSegment({:?} -> {:?})", self.from, self.to)
   }
 }
+
+impl std::fmt::Debug for SegmentTree {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn print_loop(
+      f: &mut std::fmt::Formatter,
+      tree: &SegmentTree,
+      spaces: usize,
+    ) -> std::fmt::Result {
+      let indent_size = 4;
+      match tree {
+        SegmentTree::Single {
+          segment, attached, ..
+        } => {
+          write!(
+            f,
+            "{}SegmentTree::Single: {segment:?}\n",
+            " ".repeat(spaces)
+          )?;
+          write!(
+            f,
+            "{}  locals attached to end {:?}\n",
+            " ".repeat(spaces),
+            attached,
+          )
+        }
+        SegmentTree::Split {
+          segments: SplitType::Linear { first, second },
+          reach,
+          attached,
+          ..
+        } => {
+          write!(
+            f,
+            "{}SegmentTree::Split [LINEAR]: {reach:?}\n",
+            " ".repeat(spaces)
+          )?;
+          write!(
+            f,
+            "{}  locals attached to end {:?}\n",
+            " ".repeat(spaces),
+            attached,
+          )?;
+          print_loop(f, first, spaces + indent_size)?;
+          write!(f, "\n")?;
+          print_loop(f, second, spaces + indent_size)?;
+          write!(f, "\n")?;
+
+          Ok(())
+        }
+
+        SegmentTree::Split {
+          segments: SplitType::ControlFlow { splits, joins },
+          reach,
+          ..
+        } => {
+          write!(
+            f,
+            "{}SegmentTree::Split [CF]: {reach:?}\n",
+            " ".repeat(spaces)
+          )?;
+          write!(f, "{}Splits:\n", " ".repeat(spaces))?;
+          for tree in splits.iter() {
+            print_loop(f, tree, spaces + indent_size)?;
+            write!(f, "\n")?;
+          }
+          write!(f, "\n")?;
+
+          write!(f, "{}Joins:\n", " ".repeat(spaces))?;
+          for tree in joins.iter() {
+            print_loop(f, tree, spaces + indent_size)?;
+            write!(f, "\n")?;
+          }
+
+          Ok(())
+        }
+      }
+    }
+
+    print_loop(f, self, 0)
+  }
+}
+
+// ------------------------------------------------
+// Impls
 
 impl MirSegment {
   fn new(l1: Location, l2: Location) -> Self {
@@ -197,10 +354,9 @@ impl MirSegment {
     graph.paths_from_to(self.from.block, self.to.block)
   }
 
-  fn spanned_locations(&self, body: &Body) -> HashSet<Location> {
-    let graph = CleanedBody::make(body);
+  fn spanned_locations(&self, graph: &CleanedBody) -> HashSet<Location> {
     let block_paths = self.paths_along_segment(&graph);
-
+    let body = graph.body();
     block_paths
       .into_iter()
       .flat_map(|path| {
@@ -208,68 +364,135 @@ impl MirSegment {
       })
       .collect::<HashSet<_>>()
   }
+}
 
-  fn is_valid_segment(&self, graph: &CleanedBody) -> bool {
-    let dominators = graph.dominators();
-    let post_dominators = graph.post_dominators();
-    let vertices =
-      iterate::post_order_from_to(graph, self.from.block, Some(self.to.block));
+impl SegmentTree {
+  fn new(body: MirSegment, span: Span) -> Self {
+    Self::Single {
+      segment: body,
+      span,
+      attached: vec![],
+    }
+  }
 
-    log::debug!("Validating the segment {self:?} ...");
-    log::debug!("path vertices {vertices:#?}");
+  /// Find a [`SegmentTree::Single`] node which matches *exactly* the given segment.
+  fn find_single(&mut self, segment: MirSegment) -> Option<&mut SegmentTree> {
+    let node = &mut *self;
 
-    let valid_entry = vertices.iter().all(|&b2| {
-      self.from.block == b2 || dominators.is_dominated_by(b2, self.from.block)
-    });
+    match node {
+      SegmentTree::Single { segment: seg, .. } if *seg == segment => Some(node),
+      SegmentTree::Single { .. } => None,
+      SegmentTree::Split {
+        segments: SplitType::ControlFlow { splits, joins },
+        ..
+      } => {
+        for s in splits.iter_mut().chain(joins.iter_mut()) {
+          let r = s.find_single(segment);
+          if r.is_some() {
+            return r;
+          }
+        }
 
-    let valid_exit = vertices.iter().all(|&b2| {
-      self.to.block == b2
-        || post_dominators.is_postdominated_by(b2, self.to.block)
-    });
+        None
+      }
 
-    if !valid_entry {
-      log::error!("the segment start does not dominate the segment blocks.");
+      SegmentTree::Split {
+        segments: SplitType::Linear { first, second },
+        ..
+      } => first
+        .as_mut()
+        .find_single(segment)
+        .or_else(|| second.as_mut().find_single(segment)),
+    }
+  }
+
+  /// Replace a [`SegmentTree::Single`] node which matches *exactly* the given segment.
+  /// The subtree must fragment the [`MirSegment`] correctly, otherwise the tree
+  /// will enter an invalid state.
+  fn replace_single(
+    &mut self,
+    to_replace: MirSegment,
+    subtree: SegmentTree,
+  ) -> Result<()> {
+    // TODO better error handling here.
+    let node = self.find_single(to_replace);
+
+    if node.is_none() {
+      bail!("the provided mir segment to replace doesn't exist {to_replace:?}");
     }
 
-    if !valid_exit {
-      log::error!("the segment end does not post-dominate the segment blocks.");
+    let node = node.unwrap();
+
+    if let SegmentTree::Single { segment, .. } = node {
+      assert_eq!(to_replace, *segment);
+    } else {
+      bail!("SegmentTree::find_single can only return a Single variant. This is an implementation bug");
     }
 
-    valid_entry && valid_exit
+    *node = subtree;
+
+    Ok(())
+  }
+
+  fn subtree_contains(&self, location: Location, graph: &CleanedBody) -> bool {
+    let segment = match self {
+      SegmentTree::Split { reach, .. } => reach,
+      SegmentTree::Single { segment, .. } => segment,
+    };
+    let locs = segment.spanned_locations(graph);
+    locs.contains(&location)
+  }
+
+  /// Find the /leaf/ [`MirSegment`] and it's corresponding `Span` that enclose
+  /// `location`. The `location` is expected to be used as the end of step.
+  fn find_segment_for_end<'a>(
+    &'a self,
+    location: Location,
+    graph: &CleanedBody,
+  ) -> SegmentSearchResult<'a> {
+    match self {
+      SegmentTree::Single { segment, span, .. } if segment.to != location => {
+        SegmentSearchResult::Enclosing(self)
+      }
+
+      SegmentTree::Single { segment, span, .. } => {
+        SegmentSearchResult::StepExisits(*segment, *span)
+      }
+
+      SegmentTree::Split {
+        segments: SplitType::Linear { first, second },
+        ..
+      } => {
+        if first.subtree_contains(location, graph) {
+          first.find_segment_for_end(location, graph)
+        } else {
+          second.find_segment_for_end(location, graph)
+        }
+      }
+
+      SegmentTree::Split {
+        segments: SplitType::ControlFlow { splits, joins },
+        ..
+      } => splits
+        .iter()
+        .chain(joins)
+        .find(|s| s.subtree_contains(location, graph))
+        .map(|next| next.find_segment_for_end(location, graph))
+        .unwrap_or(SegmentSearchResult::NotFound),
+    }
   }
 }
 
-// Fragmented paths, along the segment via the specified paths.
-#[derive(Clone)]
-struct Fragmentation {
-  segment: MirSegment,
-  paths: Vec<Vec<BasicBlock>>,
-  staged_changes: HashMap<(HirId, Span), Vec<MirSegment>>,
-}
-
-/// Associated data for making permission steps.
-/// The sole purpose of this structure is to register between
-/// which two points in the MIR we would like to make a step, this is
-/// driven by the entry / exit locations of a single HIR node.
+/// Visitor for creating permission steps in the HIR.
+///
+/// Visits the HIR in a Nested order, splitting the MIR and accumulating permission steps.
 struct HirStepPoints<'a, 'tcx>
 where
   'tcx: 'a,
 {
   ctxt: &'a PermissionsCtxt<'a, 'tcx>,
   ir_mapper: IRMapper<'a, 'tcx>,
-  graph: CleanedBody<'a, 'tcx>,
-  body_segment: MirSegment,
-  // A single HirId may have multiple step points.
-  diffs_on_hir: HashMap<HirId, HashSet<Span>>,
-  // A single span may hay have multiple steps associated with it,
-  // a span may also be associated with multiple HIR nodes.
-  // XXX: the location represents the *end* location of a step.
-  // If it is registered here, there should exist a step in the
-  // mir_segments which ends at this location.
-  diffs_on_span: HashMap<(HirId, Span), Vec<MirSegment>>,
-  // XXX: when combined, the segments cover the entrie MIR.
-  mir_segments: HashSet<MirSegment>,
-  fragmented_state: Option<Fragmentation>,
+  mir_segments: Box<SegmentTree>,
 }
 
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
@@ -278,8 +501,9 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     let hir = tcx.hir();
     let body = &ctxt.body_with_facts.body;
     let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
-    let graph = CleanedBody::make(body);
-    let body_hir_id = hir.body(ctxt.body_id).value.hir_id;
+    let body = &hir.body(ctxt.body_id);
+    let body_hir_id = body.value.hir_id;
+    let body_span = body.value.span;
     // FIXME: this really shouldn't ever fail but having to
     // `unwrap`s feels dirty.
     let (from, to) = ir_mapper
@@ -289,176 +513,199 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       .unwrap();
 
     let body_segment = MirSegment::new(from, to);
-    let mut mir_segments = HashSet::default();
-    mir_segments.insert(body_segment);
-
-    log::debug!("The body segment for searching: {body_segment:?}");
+    let mir_segments = Box::new(SegmentTree::new(body_segment, body_span));
 
     HirStepPoints {
       ctxt,
       ir_mapper,
-      graph,
-      body_segment,
       mir_segments,
-      diffs_on_hir: HashMap::default(),
-      diffs_on_span: HashMap::default(),
-      fragmented_state: None,
     }
   }
 }
 
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
-  fn assert_non_fragmented(&mut self) -> Result<()> {
-    if let Some(state) = self.fragmented_state.take() {
-      if !state.paths.is_empty() {
-        self.fragmented_state.replace(state);
-        bail!(
-          "the HirStepPoints State has remaining fragmented paths {:?}",
-          self.fragmented_state,
-        );
-      }
-
-      self
-        .diffs_on_span
-        .iter_mut()
-        .for_each(|(_, vs)| vs.retain(|seg| *seg != state.segment));
-
-      for ((id, span), ds) in state.staged_changes.into_iter() {
-        self.diffs_on_hir.entry(id).or_default().insert(span);
-        self.diffs_on_span.entry((id, span)).or_default().extend(ds);
-      }
-    }
-    Ok(())
-  }
-
-  fn insert_step_at(
+  fn insert_linear_step_at(
     &mut self,
-    id: HirId,
     span: Span,
     location: Location,
+    attached_here: Vec<Local>,
   ) -> Result<()> {
-    log::debug!("inserting a step! {self:?}");
+    log::debug!("inserting linear step {location:?}");
 
-    let body = &self.ctxt.body_with_facts.body;
-    if self.fragmented_state.is_none() {
-      // We aren't in a fragmented state. So let's create one!
-      log::debug!("inserting location step into a valid state {location:?}");
-      let enclosing_segments = self
-        .mir_segments
-        .drain_filter(|s| Self::segment_contains(body, *s, location))
-        .collect::<Vec<_>>();
+    let enclosing_segment = self
+      .mir_segments
+      .as_ref()
+      .find_segment_for_end(location, &self.ir_mapper.cleaned_graph);
 
-      log::debug!(
-        "location {location:?} enclosed in segment\n{enclosing_segments:?}"
-      );
+    match enclosing_segment {
+      SegmentSearchResult::NotFound => unreachable!("{location:?} should always be enclosed in the graph. This is an implementation bug."),
+      SegmentSearchResult::StepExisits(segment, ..) => bail!("linear steps should not conflict at step locations {location:?} at {segment:?}"),
 
-      if enclosing_segments
-        .iter()
-        .all(|seg| location == seg.from || location == seg.to)
-      {
-        self.mir_segments.extend(enclosing_segments);
-        // HACK FIXME:
-        return Ok(());
+      SegmentSearchResult::Enclosing(SegmentTree::Single {
+        segment, span: old_span, attached,
+      }) => {
+        let mut paths = segment.paths_along_segment(&self.ir_mapper.cleaned_graph);
+
+        let first_step = SegmentTree::Single {
+          segment: MirSegment::new(segment.from, location),
+          attached: attached_here,
+          span,
+        };
+
+        let second_step = SegmentTree::Single {
+          segment: MirSegment::new(location, segment.to),
+          attached: vec![],
+          span: *old_span,
+        };
+
+        log::debug!("\nSlicing range [{:?} -> {:?}] into:\n  {first_step:?}\n  {second_step:?}", segment.from, segment.to);
+
+        let _ = paths
+          .drain_filter(|path| path.contains(&location.block))
+          .collect::<Vec<_>>();
+
+        if !paths.is_empty() {
+          bail!("Inserting a linear segment should not result in fragmentation.\nSplitting segment: {segment:?} at {location:?}. Remaining paths: {paths:#?}");
+        }
+
+        let subtree = SegmentTree::Split {
+          segments: SplitType::Linear {
+            first: Box::new(first_step),
+            second: Box::new(second_step),
+          },
+          reach: *segment,
+          attached: attached.to_vec(),
+        };
+
+        let segment = *segment;
+        self.mir_segments.as_mut().replace_single(segment, subtree)
       }
 
-      let segment = enclosing_segments.first().ok_or_else(|| {
-        anyhow!("no enclosing span found for slice point {location:?}")
-      })?;
-
-      assert_eq!(enclosing_segments.len(), 1);
-
-      let paths = segment.paths_along_segment(&self.graph);
-      let fs = Fragmentation {
-        segment: *segment,
-        paths,
-        staged_changes: HashMap::default(),
-      };
-      self.fragmented_state.replace(fs);
-    } else {
-      log::debug!(
-        "inserting location step into a fragmented state {location:?}"
-      );
+      _ => unreachable!(),
     }
-
-    let fragmentation = self.fragmented_state.as_mut().unwrap();
-    let MirSegment { from, to } = fragmentation.segment;
-
-    let first_step = MirSegment::new(from, location);
-    let second_step = MirSegment::new(location, to);
-
-    log::debug!("\nSlicing range [{from:?} -> {to:?}] into:\n  {first_step:?}\n  {second_step:?}");
-
-    // [INACCURATE] The new segmented paths need to maintaint the invariant that
-    // there exists a dominator / post-dominator for every segment.
-    //
-    // FIXME: how do we want to validate steps? It isn't accurate to say that
-    // each segment is valid. Example,
-    //
-    //       ⬤ [l1]
-    //     /   \
-    //   ⬤ [l2] ⬤ [l3]
-    //    \   /
-    //     ⬤ [l4]
-    //
-    // the segments l1 -> l3 and l1 -> l2 are *invalid*
-    // that is, l2 is not a post-dominator of l1. the sum of
-    // all the segments is valid, but having these invalid steps
-    // is common when slicing up `if`s and `match`es.
-    // let f = first_step.is_valid_segment(&self.graph);
-    // let s = second_step.is_valid_segment(&self.graph);
-
-    // XXX: these probably shouldn't be bails, I bet we could handle this in some way.
-    // if !f {
-    //   bail!(
-    //     "the new beginning segment from {from:?} -> {location:?} is not valid"
-    //   );
-    // }
-
-    // if !s {
-    //   bail!("the new end segment from {location:?} -> {to:?} is not valid");
-    // }
-
-    let removed_paths = fragmentation
-      .paths
-      .drain_filter(|path| path.contains(&location.block));
-
-    log::debug!(
-      "Adding step {from:?} -> {location:?} -> {to:?} removed these paths:"
-    );
-    for path in removed_paths {
-      log::debug!("\n  {path:?}");
-    }
-
-    self.mir_segments.insert(first_step);
-    self.mir_segments.insert(second_step);
-
-    // Update the previous step
-    let old_key_opt = self.diffs_on_span.keys().find(|k| {
-      self
-        .diffs_on_span
-        .get(k)
-        .unwrap()
-        .contains(&fragmentation.segment)
-    });
-
-    if let Some(k) = old_key_opt {
-      fragmentation
-        .staged_changes
-        .entry(*k)
-        .or_default()
-        .push(second_step);
-    }
-
-    fragmentation
-      .staged_changes
-      .entry((id, span))
-      .or_default()
-      .push(first_step);
-
-    Ok(())
   }
 
-  // HACK: using this isn't right ...
+  /// Split a segment into a series of split / join segments for a piece of control flow.
+  ///
+  /// Example, a simple `if ... { ... } else { ... }` expression will produce a diamond shaped CFG.
+  ///
+  /// ```text
+  ///       ⬤ l1
+  ///     /  \
+  ///    ⬤ l2 ⬤ l3
+  ///     \  /
+  ///      ⬤ l4
+  /// ```
+  ///
+  /// In this diagram, the initial `MirSegment` is `l1` -> `l4`. To produce a well-formed
+  /// `SegmentTree::Split` node, the locations `[l2,  l3]` should be provided as arguments.
+  ///
+  /// The specified locations for splitting should satisfy the following properties.
+  /// 1. All locations are enclosed by the same MirSegment, (in the above example `(l1, l4)`).
+  /// 2. Each location should correspond to a single path through the control flow. In the above
+  ///    example, the two possible paths are `[l1, l2, l4]` and `[l1, l3, l4]`.
+  /// 3. The locations should be bijective wrt the possible control-flow paths.
+  ///
+  /// The above example would produce a SegmentTree with the following shape:
+  ///
+  /// ```text
+  /// SegmentTree::Split {
+  ///   segments: SegmentType::ControlFlow {
+  ///     splits: vec![
+  ///       MirSegment::new(l1, l2),
+  ///       MirSegment::new(l1, l3)
+  ///     ],
+  ///     joins: vec![
+  ///       MirSegment::new(l2, l4),
+  ///       MirSegment::new(l3, l4)
+  ///     ],
+  ///   },
+  ///   reach: ...,
+  ///   span: ...,
+  /// }
+  /// ```
+  fn insert_cf_step_at(&mut self, steps: Vec<(Location, Span)>) -> Result<()> {
+    log::debug!("inserting a step! {:?}", self.mir_segments);
+
+    if steps.is_empty() {
+      return Ok(());
+    }
+
+    let graph = &self.ir_mapper.cleaned_graph;
+
+    let enclosings = steps
+      .iter()
+      .filter_map(|(location, _)| {
+        let res = self.mir_segments.find_segment_for_end(*location, graph);
+        if let SegmentSearchResult::Enclosing(SegmentTree::Single {
+          segment,
+          span,
+          attached,
+        }) = res
+        {
+          Some((*segment, *span, attached.clone()))
+        } else {
+          log::error!(
+            "searching for {location:?} came up with no result {res:?}"
+          );
+          None
+        }
+      })
+      .collect::<Vec<_>>();
+
+    if enclosings.len() < steps.len() {
+      bail!("not every locations step had an enclosing segment.");
+    }
+
+    let (segment, old_span, attached) = enclosings.first().unwrap();
+
+    if !enclosings.iter().all(|(s, _, _)| s == segment) {
+      bail!("not all provided locations map to the same enclosing segment: {enclosings:#?}");
+    }
+
+    let mut paths = segment.paths_along_segment(&self.ir_mapper.cleaned_graph);
+
+    let mut splits = Vec::default();
+    let mut joins = Vec::default();
+
+    for (location, span) in steps.into_iter() {
+      if paths.is_empty() {
+        bail!("no remaining paths for {location:?} to cover");
+      }
+
+      let split_step = SegmentTree::Single {
+        segment: MirSegment::new(segment.from, location),
+        attached: vec![],
+        span,
+      };
+
+      let join_step = SegmentTree::Single {
+        segment: MirSegment::new(location, segment.to),
+        attached: attached.clone(),
+        span: *old_span,
+      };
+
+      let removed_paths = paths
+        .drain_filter(|path| path.contains(&location.block))
+        .collect::<Vec<_>>();
+
+      if removed_paths.is_empty() {
+        bail!("location {location:?} didn't cover any new paths");
+      }
+
+      splits.push(split_step);
+      joins.push(join_step);
+    }
+
+    let subtree = SegmentTree::Split {
+      segments: SplitType::ControlFlow { splits, joins },
+      reach: *segment,
+      attached: vec![],
+    };
+
+    self.mir_segments.replace_single(*segment, subtree)
+  }
+
   fn span_of(&self, id: HirId) -> Span {
     let hir = self.ctxt.tcx.hir();
     let span = hir.span(id);
@@ -466,11 +713,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       .as_local(self.ctxt.body_with_facts.body.span)
       .unwrap_or(span);
     sanitized
-  }
-  fn segment_contains(body: &Body, segment: MirSegment, loc: Location) -> bool {
-    let locs = segment.spanned_locations(body);
-    log::debug!("segment {segment:?} contains {loc:?}?\n{locs:#?}");
-    locs.contains(&loc)
   }
 
   fn body_value_id(&self) -> HirId {
@@ -503,170 +745,167 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   fn finalize_diffs(
     self,
   ) -> HashMap<Span, HashMap<Place<'tcx>, PermissionsDataDiff>> {
-    if cfg!(debug_assertions) {
-      self.check_total_coverage();
-    }
-
     let body_hir_id = self.body_value_id();
     let body_open_brace = self.span_of(body_hir_id).shrink_to_lo();
-    let first_point = self.ctxt.location_to_point(self.body_segment.from);
+    let first_point = self.ctxt.location_to_point(self.body_segment().from);
     let first_domain = &self.ctxt.permissions_domain_at_point(first_point);
     let empty_domain = &self.domain_bottom();
-
-    let id_span = self
-      .diffs_on_hir
-      .into_iter()
-      .flat_map(|(id, spans)| spans.into_iter().map(move |span| (id, span)));
-
-    let mut diffs = id_span
-      .flat_map(|(id, span)| {
-        let segments = self.diffs_on_span.get(&(id, span)).unwrap();
-
-        // assert_eq!(segments.len(), 1);
-
-        segments
-          .into_iter()
-          .filter_map(move |MirSegment { from, to }| {
-            (from != to).then(|| {
-              let p0 = self.ctxt.location_to_point(*from);
-              let p1 = self.ctxt.location_to_point(*to);
-              let before = self
-                .ctxt
-                .permissions_domain_after_point_effect(p0)
-                .unwrap_or_else(|| self.ctxt.permissions_domain_at_point(p0));
-              let before = &before;
-              let after = &self.ctxt.permissions_domain_at_point(p1);
-              (span, before.diff(after))
-            })
-          })
-      })
-      .collect::<HashMap<_, _>>();
 
     // Upon entry, the function parameters are already "live". But we want to
     // special case this, and show that they "come alive" at the opening brace.
     let first_diff = empty_domain.diff(first_domain);
+
+    fn diff_subtree<'tcx>(
+      ctxt: &PermissionsCtxt<'_, 'tcx>,
+      tree: &SegmentTree,
+      result: &mut HashMap<Span, HashMap<Place<'tcx>, PermissionsDataDiff>>,
+      attached_at: &mut HashMap<Local, Location>,
+    ) {
+      let mut insert_segment = |MirSegment { from, to }: MirSegment,
+                                span: Span| {
+        if from != to {
+          let p0 = ctxt.location_to_point(from);
+          let p1 = ctxt.location_to_point(to);
+          let before = &ctxt.permissions_domain_at_point(p0);
+          let after = &ctxt.permissions_domain_at_point(p1);
+          let mut diff = before.diff(after);
+
+          let removed = diff
+            .drain_filter(|place, _| {
+              attached_at
+                .get(&place.local)
+                .map(|l| *l != to)
+                .unwrap_or(false)
+            })
+            .collect::<Vec<_>>();
+
+          log::debug!(
+            "removed domain places due to attached filter at {to:?} {removed:?}"
+          );
+
+          result.insert(span, diff);
+        }
+      };
+
+      match tree {
+        SegmentTree::Single { segment, span, .. } => {
+          insert_segment(*segment, *span)
+        }
+        SegmentTree::Split {
+          segments,
+          attached,
+          reach,
+          ..
+        } => {
+          for local in attached.iter() {
+            log::debug!(
+              "filtering Local {local:?} not attached to {:?}",
+              reach.to
+            );
+
+            let old = attached_at.insert(*local, reach.to);
+            assert!(old.is_none());
+          }
+
+          match segments {
+            SplitType::Linear { first, second } => {
+              diff_subtree(ctxt, first, result, attached_at);
+              diff_subtree(ctxt, second, result, attached_at);
+            }
+            SplitType::ControlFlow { splits, joins } => {
+              for subtree in splits.into_iter() {
+                diff_subtree(ctxt, subtree, result, attached_at);
+              }
+
+              for subtree in joins.into_iter() {
+                diff_subtree(ctxt, subtree, result, attached_at);
+              }
+            }
+          }
+
+          for local in attached.iter() {
+            attached_at.remove(local);
+          }
+        }
+      }
+    }
+
+    let mut diffs = HashMap::default();
+    let mut attached_at = HashMap::default();
     diffs.insert(body_open_brace, first_diff);
+
+    diff_subtree(&self.ctxt, &self.mir_segments, &mut diffs, &mut attached_at);
 
     diffs
   }
 
-  fn check_total_coverage(&self) {
-    log::warn!("checking the total coverage of the sliced mir segments");
-    let body = &self.ctxt.body_with_facts.body;
-    let total_domain = self.body_segment.spanned_locations(body);
-
-    let mut locations = HashSet::default();
-    let mut raw_locations = HashSet::default();
-
-    locations.extend(total_domain);
-
-    log::warn!("checking stored mir segment coverage");
-
-    for segment in self.mir_segments.iter() {
-      raw_locations.extend(segment.spanned_locations(body));
+  fn body_segment(&self) -> &MirSegment {
+    match self.mir_segments.as_ref() {
+      SegmentTree::Split { reach, .. } => reach,
+      SegmentTree::Single { segment, .. } => segment,
     }
-
-    assert_eq!(raw_locations.len(), locations.len());
-    raw_locations.iter().for_each(|loc| {
-      assert!(locations.contains(loc));
-    });
-
-    let _ = raw_locations.drain();
-
-    log::warn!("checking visible saved spans coverage");
-
-    for (_, segments) in self.diffs_on_span.iter() {
-      for segment in segments.iter() {
-        raw_locations.extend(segment.spanned_locations(body));
-      }
-    }
-
-    assert_eq!(raw_locations.len(), locations.len());
-    raw_locations.iter().for_each(|loc| {
-      assert!(locations.contains(loc));
-    });
   }
 }
 
-impl std::fmt::Debug for Fragmentation {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "Fragmented along: {:?}\n", self.segment)?;
-    write!(f, "  remaining paths\n")?;
-    for p in self.paths.iter() {
-      write!(f, "    {:?}", p)?;
-    }
-    write!(f, "\n")
-  }
-}
-
-impl std::fmt::Debug for HirStepPoints<'_, '_> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "\n\n--- HirStepPoints ---\n")?;
-    write!(f, "  in state: {:?}\n", self.fragmented_state)?;
-    for (id, spans) in self.diffs_on_hir.iter() {
-      write!(f, "Attached to {:?}:\n", id.local_id)?;
-      for span in spans.iter() {
-        write!(f, "  diffs at span: {span:?}\n")?;
-        let e = &Vec::default();
-        let diffs = self.diffs_on_span.get(&(*id, *span)).unwrap_or(e);
-        for l in diffs.iter() {
-          write!(f, "    step end at {l:?}\n")?;
-        }
-      }
-      write!(f, "\n")?;
-    }
-    write!(f, "\nstorage mir segments \n")?;
-    for segment in self.mir_segments.iter() {
-      write!(f, "  {segment:?}\n")?;
-    }
-    write!(f, "\n")?;
-    Ok(())
-  }
-}
-
-macro_rules! open_control_flow {
-  ($this:tt, $id:expr, $span:expr) => {
-    open_constrol_flow!($this, $id, "")
+macro_rules! split_with_control_flow {
+  ($this:tt, $ids:expr) => {
+    split_with_control_flow!($this, $ids, "splitting control flow")
   };
 
-  ($this:tt, $id:expr, $span:expr, $msg:expr) => {
-    $this
-      .ir_mapper
-      .get_mir_locations($id, GatherDepth::Nested)
-      .and_then(|mir_order| {
-        mir_order.entry_location().map(|entry| {
-          $this.insert_step_at($id, $span, entry).expect("");
-        })
+  ($this:tt, $ids:expr, $msg:expr) => {
+    $ids
+      .into_iter()
+      .map(|id| {
+        $this
+          .ir_mapper
+          .get_mir_locations(id, GatherDepth::Nested)
+          .and_then(|mir_order| {
+            mir_order.entry_location().map(|entry| {
+              let span = $this.span_of(id).shrink_to_lo();
+              (entry, span)
+            })
+          })
       })
-      .unwrap_or_else(|| {
-        if cfg!(debug_assertions) {
-          panic!(
-            "Expected entry / exit locations but none were found: {:?}",
-            $msg
-          );
+      .fold(Some(Vec::default()), |acc, step| {
+        if let (Some(mut acc), Some(step)) = (acc, step) {
+          acc.push(step);
+          Some(acc)
         } else {
-          log::error!(
-            "Expected entry / exit locations but none were found: {:?}",
-            $msg
-          );
+          None
         }
+      })
+      .and_then(|steps| $this.insert_cf_step_at(steps).ok())
+      .unwrap_or_else(|| {
+        unreachable!("splitting control flow failed");
+        // log::error!();
       });
   };
 }
 
-macro_rules! expect_no_fragmentation {
-  ($this:tt, $id:expr, $span:expr) => {
-    expect_no_fragmentation!($this, $id, "")
+macro_rules! split_with_linear {
+  ($this:tt, $id:expr) => {
+    split_with_linear!($this, $id, "splitting linearly")
   };
 
-  ($this:tt, $id:expr, $span:expr, $msg:expr) => {
+  ($this:tt, $id:expr, $msg:expr) => {
+    split_with_linear!($this, $id, $msg, vec![])
+  };
+
+  ($this:tt, $id:expr, $msg:expr, $attached:expr) => {
     $this
       .ir_mapper
       .get_mir_locations($id, GatherDepth::Nested)
       .and_then(|mir_order| {
         mir_order.exit_location().map(|exit| {
-          $this.insert_step_at($id, $span, exit).expect("");
-          $this.assert_non_fragmented().expect("");
+          let span = $this.span_of($id);
+          let exit = $this
+            .ir_mapper
+            .cleaned_graph
+            .location_successor(exit)
+            .unwrap_or(exit);
+          $this
+            .insert_linear_step_at(span, exit, $attached)
+            .expect("");
         })
       })
       .unwrap_or_else(|| {
@@ -693,14 +932,23 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   }
 
   fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt) {
+    use rustc_hir::StmtKind as SK;
     let hir = self.nested_visit_map();
-    let span = self.span_of(stmt.hir_id);
     let error_msg =
       format!("Analyzing statement : {}", hir.node_to_string(stmt.hir_id));
-
     log::debug!("looking at a stmt!");
 
-    expect_no_fragmentation!(self, stmt.hir_id, span, error_msg);
+    match stmt.kind {
+      SK::Local(local) => {
+        log::debug!("pattern: {:?}", local.pat);
+        let places = self.ir_mapper.local_assigned_place(local);
+        let locals = places.into_iter().map(|p| p.local).collect::<Vec<_>>();
+        split_with_linear!(self, stmt.hir_id, error_msg, locals);
+      }
+      _ => {
+        split_with_linear!(self, stmt.hir_id, error_msg);
+      }
+    }
 
     intravisit::walk_stmt(self, stmt);
   }
@@ -713,11 +961,9 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
     }
 
     if let Some(expr) = block.expr {
-      let id = expr.hir_id;
-      let span = self.span_of(id);
       let error_msg =
-        format!("end-of-statement expr: {}", hir.node_to_string(id));
-      expect_no_fragmentation!(self, id, span, error_msg);
+        format!("end-of-statement expr: {}", hir.node_to_string(expr.hir_id));
+      split_with_linear!(self, expr.hir_id, error_msg);
       self.visit_expr(expr);
     }
   }
@@ -775,29 +1021,20 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
     let hir = self.ctxt.tcx.hir();
 
+    let error_msg =
+      format!("splitting expr segment {}", hir.node_to_string(expr.hir_id));
+
     match expr.kind {
       EK::If(cnd, then, else_opt) => {
         intravisit::walk_expr(self, cnd);
 
-        let then_span = self.span_of(then.hir_id).shrink_to_lo();
-        let error_msg = format!(
-          "expecting fragmentation in THEN block: {}",
-          hir.node_to_string(then.hir_id)
-        );
-        open_control_flow!(self, then.hir_id, then_span, error_msg);
+        let ids = [Some(then), else_opt]
+          .iter()
+          .flatten()
+          .map(|n| n.hir_id)
+          .collect::<Vec<_>>();
 
-        if let Some(els) = else_opt {
-          let else_span = self.span_of(els.hir_id).shrink_to_lo();
-          let error_msg = format!(
-            "expecting fragmentation in ELSE block: {}",
-            hir.node_to_string(els.hir_id)
-          );
-          open_control_flow!(self, els.hir_id, else_span, error_msg);
-        }
-
-        self
-          .assert_non_fragmented()
-          .expect("remaining fragmentation when closing IF");
+        split_with_control_flow!(self, ids, error_msg);
 
         intravisit::walk_expr(self, then);
         if let Some(els) = else_opt {
@@ -808,18 +1045,17 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
       EK::Match(swtch, arms, _source) => {
         intravisit::walk_expr(self, swtch);
 
-        for arm in arms.iter() {
-          let arm_span = self.span_of(arm.body.hir_id).shrink_to_lo();
-          let error_msg = format!(
-            "expecting fragmentation in MATCH ARM {}",
-            hir.node_to_string(arm.hir_id)
-          );
-          open_control_flow!(self, arm.hir_id, arm_span, error_msg);
-        }
+        let ids = arms
+          .iter()
+          .map(|arm| {
+            // FIXME: this should get turned into an analysis error,
+            // we aren't supporting guards currently.
+            assert!(arm.guard.is_none());
+            arm.body.hir_id
+          })
+          .collect::<Vec<_>>();
 
-        self
-          .assert_non_fragmented()
-          .expect("remaining fragmentation when closing IF");
+        split_with_control_flow!(self, ids, error_msg);
 
         for arm in arms.iter() {
           intravisit::walk_arm(self, arm);
