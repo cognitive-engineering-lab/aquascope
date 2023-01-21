@@ -1,33 +1,198 @@
-//! Core analysis for creating Permission Steps.
+//! Core analysis for creating permission steps.
 //!
 //! # Overview
 //!
 //! A *permissions step* is the difference in permissions between two MIR `Point`s.
+//! Specifically, a step represents the changes needing to happen to reach a subsequent
+//! state in the permissions static analysis.
 //!
-//! At a high-level, the strategy is to partition the MIR into pieces
-//! (referred to as segments), such that each piece represents a single
-//! permission step. This means, that (theoretically) after the graph has been partitioned the
-//! differences are taken in isolation. It isn't quite this straightforward so additional details are
-//! provided below.
+//! At a high-level, the strategy is to partition the MIR into pieces (referred to as segments),
+//! such that each piece represents a single permission step. This means, that (theoretically)
+//! after the graph has been partitioned the differences are taken in isolation.
+//! It isn't quite this straightforward so additional details are provided below.
 //!
 //! # Splitting Strategy
 //!
-//! TODO
+//! The main goal of the permission stepper is to provide steps that map to logical "steps" in
+//! the source code. First, the steps will be determined using HIR language constructs, which are
+//! subsequently lowered to fit the more granular MIR language constructs.
+//! Starting with the HIR, a so-called "logical step" is roughly defined to be a [`Stmt`](rustc_hir::Stmt).
+//! Typically statements fall on their own line and they mark the beginning and end
+//! of some potentially permissions-altering operation. This makes up the first loose rule for
+//! finding permissions steps.
+//!
+//! Statements however, do not cover how permissions change in a control-flow sensitive setting.
+//! For example, the statements at the beginning of the then and else branch might execute with
+//! different permissions, this sudden change of permissions needs to be communicated to the user.
+//! This leads to another rule, namely, a branch in control flow can also be a permissions-altering
+//! "operation". The full rules for tracking permissions steps at each respective level of granularity
+//! are outlined below.
+//!
+//! ## Source to HIR
+//!
+//! In the source code, we'd like a permissions step to be shown after each line and at the
+//! opening brace (`{`) of a new block. This requires us to take a permissions step at the
+//! following HIR locations.
+//!
+//! * After each [`Stmt`](rustc_hir::Stmt).
+//! * After the `expr` of a [`Block`](rustc_hir::Block).
+//! * *Before* the expression of a branch. This includes the block expression of an `if`'s then and else
+//!   branches, or the `body` of a `match`'s [`Arm`](rustc_hir::Arm).
+//!
+//! Each item in the HIR generates several MIR items. For information on how to map between the
+//! two see the [`IRMapper`]. Important for the stepper, is the ability to find the first, and
+//! last, MIR [`Location`] which came from a HIR item. First and last are used in the sense of
+//! a [dominator](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) and [post-dominator](https://en.wikipedia.org/wiki/Dominator_(graph_theory)#Postdominance)
+//! respectively. These locations will be used later (described below) when slicing the MIR graph.
+//!
+//! ## HIR to MIR
+//!
+//! When forming permission steps in the MIR, the most crucial invariant is that the permissions steps
+//! form a total cover of the control-flow graph. This invariant remains to ensure that no change in
+//! permissions is *missed*. If a change in permissions is not shown (at the source-level), this should
+//! be the result of stepping in the wrong place, not a [`Location`] slipping through the cracks.
+//! Because of this invariant, the stepper uses a strategy to "slice" the MIR into segments, such that
+//! these segments always form a total cover.
+//!
+//! ### Data Structures and Invariants
+//!
+//! The key data structures involvled are the [`MirSegment`] and [`SegmentTree`]. To summarize their
+//! invariants, a `MirSegment` is a segment of the control-flow graph such that the entry dominates
+//! all locations until the exit. The corresponding exit should also post-dominate all locations.
+//! Put simply, if control-flow enters the `from` location, it will leave via the `to` location.
+//!
+//! The [`SegmentTree`] (not to be confused with a [segment tree](https://en.wikipedia.org/wiki/Segment_tree))
+//! holds all of the [`MirSegment`]s required to form a total cover.
+//!
+//! ### Slicing
+//!
+//! The core operation performed on the [`SegmentTree`] is taking a *slice*. There are two kinds of
+//! slices:
+//!
+//! 1. linear slices, those that **do not** span several branches of control-flow.
+//! 2. control-flow slices, those that **do** span several branches of control-flow.
+//!
+//! These two slices exist to maintain the invariants of the [`MirSegment`] and [`SegmentTree`].
+//! Fundamentally, these slices work on different *shapes* of the underlying graph. A *linear slice*
+//! would slice a portion of the graph which forms a line.
+//!
+//! Example:
+//! ```text
+//! before slice:
+//!
+//!             slice point
+//!               |
+//! [segment 1]   |
+//! ⬤ [l1] ----> ⬤ [l2] ----> ⬤ [l3]
+//!               |
+//!               |
+//!
+//!
+//! after slice:
+//!
+//! [segment 1]
+//! ⬤ [l1] ----> ⬤ [l2]
+//!
+//! [segment 2]
+//! ⬤ [l2] ----> ⬤ [l3]
+//!
+//! ```
+//! In the above example there exists a linear sequence of control-flow from `l1 ⟶ l2 ⟶ l3`.
+//! Depicted, is a *linear slice* of this segment at location `l2`. Linear slices *always*
+//! split a single segment, into two new segments which maintain the [`MirSegment`] invariant.
+//! These slices are used after [`Stmt`s](rustc_hir::Stmt) and the end of a [`Block` expression](rustc_hir::Block).
+//!
+//! A *control-flow* slice, then does not slice a linear sequence of locations but multiple that
+//! /span across/ branches of control flow.
+//!
+//! Example:
+//! ```text
+//! before slice:
+//!
+//!                     slice point
+//!                        |
+//!                        |
+//!                        |
+//!               ------> ⬤ [l2] -------
+//!               |        |            |
+//! [segment 1]   |        |            v
+//!        ----> ⬤ [l1]    |            ⬤ [l4] ---->
+//!               |        |            ^
+//!               |        |            |
+//!               ------> ⬤ [l3] -------
+//!                        |
+//!                        |
+//!                        |
+//!
+//!
+//! after slice:
+//!
+//! [segment 1]
+//! ⬤ [l1] ----> ⬤ [l2]
+//!
+//! [segment 2]
+//! ⬤ [l1] ----> ⬤ [l3]
+//!
+//! [segment 3]
+//! ⬤ [l2] ----> ⬤ [l4]
+//!
+//! [segment 4]
+//! ⬤ [l3] ----> ⬤ [l4]
+//!
+//! ```
+//! Before the slice in segment 1 there is a graph which rougly captures the shape
+//! of an if expression. location `l1` would be the branch point (corresponding
+//! to a `SwitchInt`), `l2` and `l3` would be the then and else branches. Here these
+//! branches are abstracted to a single point, but in practice they can be any valid
+//! [`MirSegment`]. Then location `l4` joins the branches and control flow continues
+//! again linearly.
+//!
+//! In order to slice a control-flow segment properly, a set of locations is required
+//! and the function mapping a location to a control-flow path must be bijective.
+//! In the above example, the possible paths through this segment (the usliced segment 1) are:
+//! 1. `l1`, `l2`, `l4`
+//! 2. `l1`, `l3`, `l4`
+//!
+//! Therefore, in order to perform a proper slice, the set (`l2`, `l3`) is provided.
+//! Luckily, these locations are easy to obtain from the structure of the HIR and correspond
+//! to the opening block of each branch.
+//!
+//! After slicing, the result is four segments that form a total cover of the original
+//! segment, and each has a clear entry / exit point for *it's specific control flow*.
+//!
+//! NOTE: one small semantic difference between the resulting segments. The segments
+//! which form the so-called "split set" (segments 1 and 2 in the above example) *cannot*
+//! be further split. They are treated as **atomic**. TODO: (elaborate) in practice they currently
+//! wouldn't ever be split again, but if the analysis changes they need to remain that way.
 //!
 //! # Finalizing Differences
 //!
-//! TODO
+//! Slicing the MIR into segments is the core task for the stepper and results
+//! in a proper [`SegmentTree`]. The last task of the stepper engine is to take the
+//! permissions difference between the domain after the segment, and that before.
+//! See the [`PermissionsCtxt`] for more information about computing a [`PermissionsDomain`].
 //!
+//! When computing the differences however, there are two edge cases to be handled. First,
+//! as a result of the generated MIR, it's possible for the left-hand-side of an assignment
+//! to gain permissions before it seems it should. This occurs when the initializer expression
+//! is more complex (e.g. an [`If`](rustc_hir::Expr) or [`Block`](rustc_hir::Expr) expression).
+//! An example of this is demonstrated in the following section.
+//!
+//! The second case is TODO: NOT YET HANDLED.
+//!
+//! (but here's the scoop if you're still reading)
+//! The second case is the join points of a sliced control-flow segment. This results in multiple
+//! steps being placed on the same span, however semantically represent different steps. This can
+//! either be resolved visually, e.g. by placing multiple tables at the end of a join and
+//! differentiating them somehow. Another option would be to ignore the control-flow specific
+//! steps and only show the step from the beginning of the control-flow to the join point.
 //!
 
-use std::collections::hash_map::Entry;
-
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use flowistry::mir::utils::{PlaceExt as FlowistryPlaceExt, SpanExt};
 use rustc_data_structures::{
-  captures::Captures,
+  self,
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
-  graph::{self, iterate},
 };
 use rustc_hir::{
   self as hir,
@@ -36,7 +201,7 @@ use rustc_hir::{
 };
 use rustc_middle::{
   hir::nested_filter,
-  mir::{BasicBlock, BasicBlocks, Body, Local, Location, Place, Successors},
+  mir::{BasicBlock, BasicBlocks, Local, Location, Place},
 };
 use rustc_span::Span;
 
@@ -45,7 +210,7 @@ use crate::{
   analysis::{
     ir_mapper::{CleanedBody, GatherDepth, GatherMode, IRMapper},
     permissions::{
-      Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain, Point,
+      Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
     },
   },
   errors,
