@@ -336,12 +336,17 @@ fn prettify_permission_steps<'tcx>(
 
 // ------------------------------------------------
 
+/// A `MirSegment` represents a segment of the MIR control-flow graph.
+///
+/// A `MirSegment` corresponds directly to locations where a [`PermissionStateStep`]
+/// will be made. However, a segment is also control-flow specific.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct MirSegment {
   from: Location,
   to: Location,
 }
 
+/// The types of splits that can be performed on a [`SegmentTre::Single`].
 #[derive(Clone)]
 enum SplitType {
   /// A split of a segment that is not due to control flow.
@@ -356,21 +361,25 @@ enum SplitType {
   /// For example, the `split_segments` of an `ExprKind::If` would be the segments
   /// from the if condition, to the start of the then / else blocks.
   /// The `join_segments` are all the those that end at the same join point.
+  ///
+  /// NOTE: any segment stored in the `splits` of a SplitType::ControlFlow
+  /// can not be split again, these are *atomic*.
   ControlFlow {
     splits: Vec<SegmentTree>,
     joins: Vec<SegmentTree>,
   },
 }
 
-#[derive(Clone)]
 /// A `SegmentTree` represents the control flow graph of a MIR `Body`.
 /// It's used to keep track of the entire graph as it is sliced during
 /// the permission steps analysis.
+#[derive(Clone)]
 enum SegmentTree {
   /// An inner tree node with children.
   Split {
     segments: SplitType,
     reach: MirSegment,
+    span: Span,
     attached: Vec<Local>,
   },
 
@@ -417,7 +426,7 @@ impl std::fmt::Debug for SegmentTree {
           )?;
           write!(
             f,
-            "{}  locals attached to end {:?}\n",
+            "{}-locals attached to end {:?}\n",
             " ".repeat(spaces),
             attached,
           )
@@ -435,7 +444,7 @@ impl std::fmt::Debug for SegmentTree {
           )?;
           write!(
             f,
-            "{}  locals attached to end {:?}\n",
+            "{}-locals attached to end {:?}\n",
             " ".repeat(spaces),
             attached,
           )?;
@@ -450,12 +459,19 @@ impl std::fmt::Debug for SegmentTree {
         SegmentTree::Split {
           segments: SplitType::ControlFlow { splits, joins },
           reach,
+          attached,
           ..
         } => {
           write!(
             f,
             "{}SegmentTree::Split [CF]: {reach:?}\n",
             " ".repeat(spaces)
+          )?;
+          write!(
+            f,
+            "{}-locals attached to end {:?}\n",
+            " ".repeat(spaces),
+            attached,
           )?;
           write!(f, "{}Splits:\n", " ".repeat(spaces))?;
           for tree in splits.iter() {
@@ -528,6 +544,17 @@ impl MirSegment {
         self.squash_block_path(&body.basic_blocks, path.into_iter())
       })
       .collect::<HashSet<_>>()
+  }
+
+  fn into_diff<'tcx>(
+    &self,
+    ctxt: &PermissionsCtxt<'_, 'tcx>,
+  ) -> HashMap<Place<'tcx>, PermissionsDataDiff> {
+    let p0 = ctxt.location_to_point(self.from);
+    let p1 = ctxt.location_to_point(self.to);
+    let before = &ctxt.permissions_domain_at_point(p0);
+    let after = &ctxt.permissions_domain_at_point(p1);
+    before.diff(after)
   }
 }
 
@@ -689,14 +716,33 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 }
 
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
+  /// Split an already linear segment into two segments.
+  ///
+  /// Example, a block of statements will produce a graph with the following shape:
+  ///
+  /// ```text
+  ///       ⬤ l1 --> ⬤ l2 --> ⬤ l3
+  /// ```
+  ///
+  /// The above linear sequence could be split at any of the location `l1, l2, l3` and it
+  /// would produce two valid segments. For example, splitting the above at `l2` would produce:
+  ///
+  /// ```text
+  /// SegmentTree::Split {
+  ///   segments: SplitType::Linear {
+  ///     first: MirSegment(l1, l2),
+  ///     second: MirSegment(l2, l3),
+  ///   },
+  ///   reach: MirSegment(l1, l3),
+  ///   ...
+  /// }
+  /// ```
   fn insert_linear_step_at(
     &mut self,
     span: Span,
     location: Location,
     attached_here: Vec<Local>,
   ) -> Result<()> {
-    log::debug!("inserting linear step {location:?}");
-
     let enclosing_segment = self
       .mir_segments
       .as_ref()
@@ -704,7 +750,9 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 
     match enclosing_segment {
       SegmentSearchResult::NotFound => unreachable!("{location:?} should always be enclosed in the graph. This is an implementation bug."),
-      SegmentSearchResult::StepExisits(segment, ..) => bail!("linear steps should not conflict at step locations {location:?} at {segment:?}"),
+      SegmentSearchResult::StepExisits(segment, ..) =>
+        Ok(()),
+        // bail!("linear steps should not conflict at step locations {location:?} at {segment:?}"),
 
       SegmentSearchResult::Enclosing(SegmentTree::Single {
         segment, span: old_span, attached,
@@ -723,8 +771,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
           span: *old_span,
         };
 
-        log::debug!("\nSlicing range [{:?} -> {:?}] into:\n  {first_step:?}\n  {second_step:?}", segment.from, segment.to);
-
         let _ = paths
           .drain_filter(|path| path.contains(&location.block))
           .collect::<Vec<_>>();
@@ -739,6 +785,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
             second: Box::new(second_step),
           },
           reach: *segment,
+          span: *old_span,
           attached: attached.to_vec(),
         };
 
@@ -790,8 +837,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   /// }
   /// ```
   fn insert_cf_step_at(&mut self, steps: Vec<(Location, Span)>) -> Result<()> {
-    log::debug!("inserting a step! {:?}", self.mir_segments);
-
     if steps.is_empty() {
       return Ok(());
     }
@@ -846,7 +891,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 
       let join_step = SegmentTree::Single {
         segment: MirSegment::new(location, segment.to),
-        attached: attached.clone(),
+        attached: vec![],
         span: *old_span,
       };
 
@@ -865,7 +910,8 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     let subtree = SegmentTree::Split {
       segments: SplitType::ControlFlow { splits, joins },
       reach: *segment,
-      attached: vec![],
+      span: *old_span,
+      attached: attached.to_vec(),
     };
 
     self.mir_segments.replace_single(*segment, subtree)
@@ -885,6 +931,9 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     hir.body(self.ctxt.body_id).value.hir_id
   }
 
+  /// The [`PermissionDomain`] ⊥.
+  ///
+  /// No permissions, anywhere.
   fn domain_bottom(&self) -> PermissionsDomain<'tcx> {
     self
       .ctxt
@@ -907,6 +956,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       .into()
   }
 
+  /// Convert the current [`SegmentTree`] into permission steps.
   fn finalize_diffs(
     self,
   ) -> HashMap<Span, HashMap<Place<'tcx>, PermissionsDataDiff>> {
@@ -926,26 +976,34 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       result: &mut HashMap<Span, HashMap<Place<'tcx>, PermissionsDataDiff>>,
       attached_at: &mut HashMap<Local, Location>,
     ) {
-      let mut insert_segment = |MirSegment { from, to }: MirSegment,
-                                span: Span| {
-        if from != to {
-          let p0 = ctxt.location_to_point(from);
-          let p1 = ctxt.location_to_point(to);
+      log::trace!(
+        "\ndiff_subtree\n[FILTERS]:\n{attached_at:?}\n[TREE]:{tree:?}"
+      );
+
+      macro_rules! is_attached {
+        ($set:expr, $place:expr, $loc:expr) => {
+          $set.get(&$place.local).map(|l| *l == $loc).unwrap_or(false)
+        };
+      }
+
+      let mut insert_segment = |segment: MirSegment, span: Span| {
+        if segment.from != segment.to {
+          let p0 = ctxt.location_to_point(segment.from);
+          let p1 = ctxt.location_to_point(segment.to);
           let before = &ctxt.permissions_domain_at_point(p0);
           let after = &ctxt.permissions_domain_at_point(p1);
           let mut diff = before.diff(after);
 
           let removed = diff
             .drain_filter(|place, _| {
-              attached_at
-                .get(&place.local)
-                .map(|l| *l != to)
-                .unwrap_or(false)
+              is_attached!(attached_at, place, segment.to)
             })
             .collect::<Vec<_>>();
 
           log::debug!(
-            "removed domain places due to attached filter at {to:?} {removed:?}"
+            "removed domain places due to attached filter at {:?} {:?}",
+            segment.to,
+            removed
           );
 
           result.insert(span, diff);
@@ -960,8 +1018,9 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
           segments,
           attached,
           reach,
-          ..
+          span,
         } => {
+          // Add the attached places filter
           for local in attached.iter() {
             log::debug!(
               "filtering Local {local:?} not attached to {:?}",
@@ -982,12 +1041,55 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
                 diff_subtree(ctxt, subtree, result, attached_at);
               }
 
+              let mut joined_diff = HashMap::default();
+              let mut entire_diff = reach.into_diff(ctxt);
+
+              // Rules for joining two domain differences.
+              // 1. We always insert the attached locals.
+              let attached_here = entire_diff
+                .drain_filter(|place, _| {
+                  is_attached!(attached_at, place, reach.to)
+                })
+                .collect::<HashMap<_, _>>();
+
+              // 2. Differences not found in *any* of the join segments are ignored
               for subtree in joins.into_iter() {
-                diff_subtree(ctxt, subtree, result, attached_at);
+                let mut temp = HashMap::default();
+
+                diff_subtree(ctxt, subtree, &mut temp, attached_at);
+
+                temp.get(&span).map(|diff_here| {
+                  entire_diff.drain_filter(|place, diff| {
+                    !diff.is_empty()
+                      && diff_here
+                        .get(place)
+                        .map(|perm_diff| perm_diff.is_empty())
+                        .unwrap_or(false)
+                  })
+                });
+
+                // HACK: remove any differences that were attached to this span.
+                temp.remove(span);
+
+                // HACK: manually remove any attached places which got added.
+                for (_, diffs) in temp.iter_mut() {
+                  diffs
+                    .drain_filter(|place, _| attached_here.contains_key(place));
+                }
+
+                joined_diff.extend(temp);
               }
+
+              let to_insert = attached_here.into_iter().chain(entire_diff);
+              result.entry(*span).or_default().extend(to_insert);
+
+              assert!(joined_diff.get(span).is_none());
+
+              result.extend(joined_diff);
             }
           }
 
+          // Remove the attached places filter.
           for local in attached.iter() {
             attached_at.remove(local);
           }
@@ -1133,56 +1235,8 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
     }
   }
 
-  // // A Local of the form:
-  // //
-  // // ```
-  // // let symbol = Δ ∪ {symbol} expr else { ⟦ block ⟧ };
-  // // ```
-  // fn visit_local(&mut self, local: &'tcx hir::Local) {
-  //   let id = local.hir_id;
-  //   let hir = self.ctxt.tcx.hir();
-
-  //   log::debug!("Visiting LOCAL: {}", hir.node_to_string(id));
-
-  //   // NOTE: We add a "step barrier" for local assignments to make sure the permissions
-  //   // for an assigned local don't come alive too early. Consider the following:
-  //   // ```
-  //   // let x = if <cnd> {
-  //   //   <expr:1>
-  //   // } else {
-  //   //   <expr:2>
-  //   // }
-  //   // ```
-  //   // Due to how the MIR is generated, the MIR statement assigning to `x`,
-  //   // happens at the end of the block <expr:1>. This means, that if we don't
-  //   // pull those permissions out to the assignment, they will only occur once
-  //   // (specifically inside the "then branch") for the whole let.
-  //   let mut added_barrier = false;
-
-  //   if let Some(place) = self.ir_mapper.local_assigned_place(local) {
-  //     self.step_barriers.push(place);
-  //     added_barrier = true;
-  //   }
-
-  //   let pre_visibility_ctxt = self.visibility_scopes.clone();
-
-  //   if let Some(expr) = local.init {
-  //     self.visit_expr(expr);
-  //   }
-
-  //   if let Some(_block) = local.els {
-  //     // TODO:
-  //     self.visibility_scopes = pre_visibility_ctxt;
-  //     unimplemented!("Locals with else branch");
-  //   }
-
-  //   if added_barrier {
-  //     self.step_barriers.pop();
-  //   }
-  // }
-
   fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
-    use hir::ExprKind as EK;
+    use hir::{ExprKind as EK, LoopSource};
 
     let hir = self.ctxt.tcx.hir();
 
@@ -1190,6 +1244,14 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
       format!("splitting expr segment {}", hir.node_to_string(expr.hir_id));
 
     match expr.kind {
+      EK::Loop(block, _label, LoopSource::While, _) => {
+        todo!("while loops aren't working yet, sorry!")
+      }
+
+      EK::Loop(block, _label, LoopSource::ForLoop, _) => {
+        todo!("for loops aren't working yet, sorry!")
+      }
+
       EK::If(cnd, then, else_opt) => {
         intravisit::walk_expr(self, cnd);
 

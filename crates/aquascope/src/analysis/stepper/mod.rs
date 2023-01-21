@@ -52,12 +52,17 @@ pub struct PermissionsStateStep {
   pub state: Vec<(String, PermissionsDataDiff)>,
 }
 
-#[derive(Clone, Serialize, TS)]
+#[derive(Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
 #[ts(export)]
 pub enum ValueStep<A>
 where
-  A: Clone + std::fmt::Debug + Serialize + TS,
+  A: Clone
+    + std::fmt::Debug
+    + std::cmp::PartialEq
+    + std::cmp::Eq
+    + Serialize
+    + TS,
 {
   High,
   Low,
@@ -69,7 +74,12 @@ where
 
 impl<A> std::fmt::Debug for ValueStep<A>
 where
-  A: Clone + std::fmt::Debug + Serialize + TS,
+  A: Clone
+    + std::fmt::Debug
+    + std::cmp::PartialEq
+    + std::cmp::Eq
+    + Serialize
+    + TS,
 {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
@@ -89,7 +99,7 @@ where
 // the default BoolStep can be taken.
 macro_rules! make_diff {
   ($base:ident => $diff:ident { $($i:ident),* }) => {
-    #[derive(Clone, Serialize, TS)]
+    #[derive(Clone, PartialEq, Eq, Serialize, TS)]
     #[ts(export)]
     pub struct $diff {
       $( pub $i: ValueStep<bool>, )*
@@ -113,7 +123,7 @@ impl std::fmt::Debug for PermissionsDiff {
   }
 }
 
-#[derive(Clone, Serialize, TS)]
+#[derive(Clone, Serialize, TS, PartialEq, Eq)]
 #[ts(export)]
 pub struct PermissionsDataDiff {
   pub is_live: ValueStep<bool>,
@@ -161,7 +171,7 @@ impl Difference for bool {
 
 impl<T> ValueStep<T>
 where
-  T: Clone + std::fmt::Debug + Serialize + TS,
+  T: Clone + std::fmt::Debug + std::cmp::PartialEq + Eq + Serialize + TS,
 {
   fn is_empty(&self) -> bool {
     matches!(self, Self::None { .. })
