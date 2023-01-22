@@ -18,9 +18,9 @@ window.addEventListener("load", () => {
     "showInterpret"
   ) as HTMLInputElement;
 
-  const vimKeybindingToggle = document.getElementById(
-    "vimKeybindings"
-  ) as HTMLInputElement;
+  // const vimKeybindingToggle = document.getElementById(
+  //   "vimKeybindings"
+  // ) as HTMLInputElement;
 
   const editorElement =
     document.querySelector<HTMLDivElement>(".static-editor")!;
@@ -53,19 +53,21 @@ window.addEventListener("load", () => {
         } else {
           stdErr.textContent = err.error;
         }
-      }
+      },
+      Ed.defaultCodeExample,
+      new URL("http://aquascope.willcrichton.net:8008/")
     ),
   };
 
-  let toggleVim = (_: any) => {
-    let extensions = vimKeybindingToggle?.checked ? [vim()] : [];
-    globals.editor.reconfigure(extensions);
-  };
+  // let toggleVim = (_: any) => {
+  //   let extensions = vimKeybindingToggle?.checked ? [vim()] : [];
+  //   globals.editor.reconfigure(extensions);
+  // };
 
   // Set the initial state of the VIM bindings
-  toggleVim(0);
+  // toggleVim(0);
 
-  vimKeybindingToggle.addEventListener("click", toggleVim);
+  // vimKeybindingToggle.addEventListener("click", toggleVim);
 
   showBoundariesButton.addEventListener("click", _ => {
     return globals.editor.renderOperation("boundaries");

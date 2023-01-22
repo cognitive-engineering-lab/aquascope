@@ -1,55 +1,57 @@
 <!DOCTYPE html>
+
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content=
+  "width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href=
+  "https://www.w3schools.com/w3css/4/w3.css" type="text/css">
+  <link rel="stylesheet" href=
+  "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css"
+  type="text/css">
+  <link rel="stylesheet" type="text/css" href="./styles.css">
 
-    <link
-      rel="stylesheet"
-      href="https://www.w3schools.com/w3css/4/w3.css"
-      type="text/css"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css"
-      type="text/css"
-    />
-    <link rel="stylesheet" type="text/css" href="./styles.css" />
-    <title>AquascopeDev</title>
-  </head>
-  <body>
-    <script src="./src/index.ts" type="module"></script>
+  <title>AquascopeDev</title>
+</head>
 
+<body>
+  <script src="./src/index.ts" type="module">
+</script>
 
-    <nav>
-      <ul>
-        <li class="nav-item">
-          <label for="vimKeybindings"
-                 ><input type="checkbox" id="vimKeybindings" checked/>VIM
-            Keybindings</label
-                         >
-        </li>
-      </ul>
-    </nav>
+  <div class="center">
+    <div class="blurb">
+      <p>Welcome! <span class="scp"><a href=
+      "https://github.com/cognitive-engineering-lab/aquascope">Aquascope</a></span>
+      is an experimental piece of software that utilizes the static
+      program information of <span class="scp"><a href=
+      "https://www.rust-lang.org/">Rust</a></span> programs to
+      generate visualizations. This tool is under active
+      development, help us improve the tool or squash bugs by
+      <em><a href=
+      "https://github.com/cognitive-engineering-lab/aquascope/issues/new">
+      filing an issue</a></em>.</p>
+    </div>
+  </div>
 
-    <div class="tabs-container">
+  <div class="tabs-container">
+    <ul class="tabs">
+      <li class="tab active" data-tab="0">Code</li>
 
-      <ul class="tabs">
-        <li class="tab active" data-tab="0">Code</li>
-        <li class="tab" data-tab="1">Stderr</li>
-      </ul>
+      <li class="tab" data-tab="1">Stderr</li>
+    </ul>
 
-      <div class="aquascope static-editor tab-pane active" data-pane="0">
-        <div class="top-right">
-          <button class="cm-button" id="showBoundaries">Perm Boundary</button>
-          <button class="cm-button" id="showPermSteps">Perm Step</button>
-          <button class="cm-button" id="showInterpret">Interpret</button>
-        </div>
+    <div class="aquascope static-editor tab-pane active" data-pane=
+    "0">
+      <div class="top-right">
+        <button class="cm-button" id="showBoundaries">Perm
+        Boundary</button> <button class="cm-button" id=
+        "showPermSteps">Perm Step</button> <button class=
+        "cm-button" id="showInterpret">Interpret</button>
       </div>
-
-      <div class="tab-pane aquascope-stderr" data-pane="1"></div>
     </div>
 
-
-  </body>
+    <div class="tab-pane aquascope-stderr" data-pane="1"></div>
+  </div>
+</body>
 </html>
