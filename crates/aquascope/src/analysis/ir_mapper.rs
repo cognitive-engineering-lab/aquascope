@@ -665,7 +665,8 @@ where
   graph: &'graph G,
   paths: Vec<Vec<G::Node>>,
   stack: Vec<G::Node>,
-  visited: BitSet<G::Node>,
+  // visited: BitSet<G::Node>,
+  visited: HashMap<G::Node, u8>,
 }
 
 impl<'graph, G> DFSFinder<'graph, G>
@@ -677,7 +678,8 @@ where
       graph,
       paths: vec![],
       stack: vec![],
-      visited: BitSet::new_empty(graph.num_nodes()),
+      // visited: BitSet::new_empty(graph.num_nodes()),
+      visited: HashMap::default(),
     }
   }
 
@@ -691,8 +693,23 @@ where
     dfs.paths
   }
 
+  fn insert(&mut self, n: G::Node) -> bool {
+    let v = self.visited.entry(n).or_default();
+    if *v >= 2 {
+      return false;
+    }
+    *v += 1;
+    true
+  }
+
+  fn remove(&mut self, n: G::Node) {
+    let v = self.visited.entry(n).or_default();
+    assert!(*v > 0);
+    *v -= 1;
+  }
+
   fn search(&mut self, from: G::Node, to: G::Node) {
-    if !self.visited.insert(from) {
+    if !self.insert(from) {
       return;
     }
 
@@ -700,7 +717,7 @@ where
 
     if from == to {
       self.paths.push(self.stack.clone());
-      self.visited.remove(to);
+      self.remove(to);
       self.stack.pop().unwrap();
       return;
     }
@@ -710,7 +727,7 @@ where
     }
 
     self.stack.pop().unwrap();
-    self.visited.remove(from);
+    self.remove(from);
   }
 }
 

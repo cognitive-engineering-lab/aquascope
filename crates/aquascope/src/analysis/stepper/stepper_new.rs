@@ -34,14 +34,15 @@
 //! opening brace (`{`) of a new block. This requires us to take a permissions step at the
 //! following HIR locations.
 //!
-//! * After each [`Stmt`](rustc_hir::Stmt).
-//! * After the `expr` of a [`Block`](rustc_hir::Block).
-//! * *Before* the expression of a branch. This includes the block expression of an `if`'s then and else
-//!   branches, or the `body` of a `match`'s [`Arm`](rustc_hir::Arm).
+//! * From before to after each [`Stmt`](rustc_hir::Stmt).
+//! * From the last [`Block`](rustc_hir::Block) statement to after the `expr` of a [`Block`](rustc_hir::Block).
+//! * From before a branch to *before* the first expression of a branch target. For example, at the source-level,
+//!   this would map to a step from before an `if` to the directly after the opening `{` of the
+//!   then / else block.
 //!
-//! Each item in the HIR generates several MIR items. For information on how to map between the
+//! Each node in the HIR generates several MIR locationss. For information on how to map between the
 //! two see the [`IRMapper`]. Important for the stepper, is the ability to find the first, and
-//! last, MIR [`Location`] which came from a HIR item. First and last are used in the sense of
+//! last, MIR [`Location`] which came from a HIR node. First and last are used in the sense of
 //! a [dominator](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) and [post-dominator](https://en.wikipedia.org/wiki/Dominator_(graph_theory)#Postdominance)
 //! respectively. These locations will be used later (described below) when slicing the MIR graph.
 //!
@@ -49,20 +50,18 @@
 //!
 //! When forming permission steps in the MIR, the most crucial invariant is that the permissions steps
 //! form a total cover of the control-flow graph. This invariant remains to ensure that no change in
-//! permissions is *missed*. If a change in permissions is not shown (at the source-level), this should
-//! be the result of stepping in the wrong place, not a [`Location`] slipping through the cracks.
+//! permissions is *missed*. If a change in permissions is not shown (at the source-level),
+//! this is due to segmenting steps at the wrong boundaries or at too coarse a granularity.
 //! Because of this invariant, the stepper uses a strategy to "slice" the MIR into segments, such that
 //! these segments always form a total cover.
 //!
 //! ### Data Structures and Invariants
 //!
-//! The key data structures involvled are the [`MirSegment`] and [`SegmentTree`]. To summarize their
-//! invariants, a `MirSegment` is a segment of the control-flow graph such that the entry dominates
-//! all locations until the exit. The corresponding exit should also post-dominate all locations.
-//! Put simply, if control-flow enters the `from` location, it will leave via the `to` location.
+//! The key data structures involvled are the [`MirSegment`] and [`SegmentTree`].
+//! The [`MirSegment`] TODO what even is a segment?
 //!
 //! The [`SegmentTree`] (not to be confused with a [segment tree](https://en.wikipedia.org/wiki/Segment_tree))
-//! holds all of the [`MirSegment`]s required to form a total cover.
+//! is a tree which holds [`MirSegment`]s in its leaves.
 //!
 //! ### Slicing
 //!
@@ -176,7 +175,9 @@
 //! as a result of the generated MIR, it's possible for the left-hand-side of an assignment
 //! to gain permissions before it seems it should. This occurs when the initializer expression
 //! is more complex (e.g. an [`If`](rustc_hir::Expr) or [`Block`](rustc_hir::Expr) expression).
-//! An example of this is demonstrated in the following section.
+//! To ensure initialized places don't gain permissions before the end of the let statement,
+//! these places are marked as /attached/ to a specific MIR location, and they are filtered
+//! from any nested segment step results.
 //!
 //! The second case is TODO: NOT YET HANDLED.
 //!
@@ -186,7 +187,6 @@
 //! either be resolved visually, e.g. by placing multiple tables at the end of a join and
 //! differentiating them somehow. Another option would be to ignore the control-flow specific
 //! steps and only show the step from the beginning of the control-flow to the join point.
-//!
 
 use anyhow::{bail, Result};
 use flowistry::mir::utils::{PlaceExt as FlowistryPlaceExt, SpanExt};
@@ -247,7 +247,6 @@ where
 // Prettify, means:
 // - Remove all places that are not source visible
 // - Remove all tables which are empty
-// - Sanitize spans (mostly for macro invocation)
 // - Convert Spans to Ranges
 fn prettify_permission_steps<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
@@ -280,14 +279,9 @@ fn prettify_permission_steps<'tcx>(
     .fold(
       HashMap::<Span, Vec<(Place<'tcx>, PermissionsDataDiff)>>::default(),
       |mut acc, (span, place_to_diffs)| {
-        // let span = unsanitized_span
-        //   .as_local(ctxt.body_with_facts.body.span)
-        //   .unwrap_or(unsanitized_span);
-
         // Attach the span to the end of the line. Later, all permission
         // steps appearing on the same line will be combined.
         let span = source_map.span_extend_to_line(span).shrink_to_hi();
-
         let entries = place_to_diffs
           .into_iter()
           .filter(|(place, diff)| {
@@ -336,9 +330,9 @@ fn prettify_permission_steps<'tcx>(
 
 // ------------------------------------------------
 
-/// A `MirSegment` represents a segment of the MIR control-flow graph.
+/// Represents a segment of the MIR control-flow graph.
 ///
-/// A `MirSegment` corresponds directly to locations where a [`PermissionStateStep`]
+/// A `MirSegment` corresponds directly to locations where a permissions step
 /// will be made. However, a segment is also control-flow specific.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct MirSegment {
@@ -575,10 +569,12 @@ impl SegmentTree {
       SegmentTree::Single { segment: seg, .. } if *seg == segment => Some(node),
       SegmentTree::Single { .. } => None,
       SegmentTree::Split {
-        segments: SplitType::ControlFlow { splits, joins },
+        segments: SplitType::ControlFlow { joins, .. },
         ..
       } => {
-        for s in splits.iter_mut().chain(joins.iter_mut()) {
+        // NOTE: the split set is regarded as atomic so
+        // it isn't included in the search.
+        for s in joins.iter_mut() {
           let r = s.find_single(segment);
           if r.is_some() {
             return r;
@@ -643,7 +639,7 @@ impl SegmentTree {
     graph: &CleanedBody,
   ) -> SegmentSearchResult<'a> {
     match self {
-      SegmentTree::Single { segment, span, .. } if segment.to != location => {
+      SegmentTree::Single { segment, .. } if segment.to != location => {
         SegmentSearchResult::Enclosing(self)
       }
 
@@ -657,20 +653,25 @@ impl SegmentTree {
       } => {
         if first.subtree_contains(location, graph) {
           first.find_segment_for_end(location, graph)
-        } else {
+        } else if second.subtree_contains(location, graph) {
           second.find_segment_for_end(location, graph)
+        } else {
+          SegmentSearchResult::NotFound
         }
       }
 
       SegmentTree::Split {
-        segments: SplitType::ControlFlow { splits, joins },
+        segments: SplitType::ControlFlow { joins, .. },
         ..
-      } => splits
-        .iter()
-        .chain(joins)
-        .find(|s| s.subtree_contains(location, graph))
-        .map(|next| next.find_segment_for_end(location, graph))
-        .unwrap_or(SegmentSearchResult::NotFound),
+      } =>
+      // NOTE: the split locations are atomic and cannot be split.
+      {
+        joins
+          .iter()
+          .find(|s| s.subtree_contains(location, graph))
+          .map(|next| next.find_segment_for_end(location, graph))
+          .unwrap_or(SegmentSearchResult::NotFound)
+      }
     }
   }
 }
@@ -837,9 +838,13 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   /// }
   /// ```
   fn insert_cf_step_at(&mut self, steps: Vec<(Location, Span)>) -> Result<()> {
+    log::debug!("Current segment tree:\n{:?}", self.mir_segments);
+
     if steps.is_empty() {
       return Ok(());
     }
+
+    log::debug!("inserting steps {steps:?}");
 
     let graph = &self.ir_mapper.cleaned_graph;
 
@@ -875,13 +880,15 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 
     let mut paths = segment.paths_along_segment(&self.ir_mapper.cleaned_graph);
 
+    log::debug!("the paths along the segment {segment:?} are:\n{paths:#?}");
+
     let mut splits = Vec::default();
     let mut joins = Vec::default();
 
     for (location, span) in steps.into_iter() {
-      if paths.is_empty() {
-        bail!("no remaining paths for {location:?} to cover");
-      }
+      // if paths.is_empty() {
+      //   bail!("no remaining paths for {location:?} to cover");
+      // }
 
       let split_step = SegmentTree::Single {
         segment: MirSegment::new(segment.from, location),
@@ -899,9 +906,9 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
         .drain_filter(|path| path.contains(&location.block))
         .collect::<Vec<_>>();
 
-      if removed_paths.is_empty() {
-        bail!("location {location:?} didn't cover any new paths");
-      }
+      // if removed_paths.is_empty() {
+      //   bail!("location {location:?} didn't cover any new paths");
+      // }
 
       splits.push(split_step);
       joins.push(join_step);
@@ -1036,6 +1043,16 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
               diff_subtree(ctxt, first, result, attached_at);
               diff_subtree(ctxt, second, result, attached_at);
             }
+
+            // CF Splits with exactly one branch / join are considered linear
+            // This happens frequently when there is ForLoop desugaring.
+            SplitType::ControlFlow { splits, joins }
+              if splits.len() == 1 && joins.len() == 1 =>
+            {
+              diff_subtree(ctxt, &splits[0], result, attached_at);
+              diff_subtree(ctxt, &joins[0], result, attached_at);
+            }
+
             SplitType::ControlFlow { splits, joins } => {
               for subtree in splits.into_iter() {
                 diff_subtree(ctxt, subtree, result, attached_at);
@@ -1203,11 +1220,9 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
     let hir = self.nested_visit_map();
     let error_msg =
       format!("Analyzing statement : {}", hir.node_to_string(stmt.hir_id));
-    log::debug!("looking at a stmt!");
 
     match stmt.kind {
       SK::Local(local) => {
-        log::debug!("pattern: {:?}", local.pat);
         let places = self.ir_mapper.local_assigned_place(local);
         let locals = places.into_iter().map(|p| p.local).collect::<Vec<_>>();
         split_with_linear!(self, stmt.hir_id, error_msg, locals);
@@ -1236,7 +1251,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   }
 
   fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
-    use hir::{ExprKind as EK, LoopSource};
+    use hir::{ExprKind as EK, LoopSource, MatchSource, StmtKind as SK};
 
     let hir = self.ctxt.tcx.hir();
 
@@ -1244,12 +1259,99 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
       format!("splitting expr segment {}", hir.node_to_string(expr.hir_id));
 
     match expr.kind {
-      EK::Loop(block, _label, LoopSource::While, _) => {
-        todo!("while loops aren't working yet, sorry!")
+      EK::Loop(
+        hir::Block {
+          stmts: [],
+          expr:
+            Some(hir::Expr {
+              kind: EK::If(cnd, then, Some(els)),
+              ..
+            }),
+          ..
+        },
+        _label,
+        LoopSource::While,
+        _loop_span,
+      ) => {
+        self
+          .ir_mapper
+          .get_mir_locations(then.hir_id, GatherDepth::Nested)
+          .and_then(|mir_order| {
+            mir_order.entry_location().map(|then_entry| {
+              self
+                .ir_mapper
+                .get_mir_locations(els.hir_id, GatherDepth::Nested)
+                .and_then(|mir_order| {
+                  mir_order.exit_location().map(|else_exit| {
+                    let loop_end = self.span_of(expr.hir_id).shrink_to_hi();
+                    let if_start = self.span_of(then.hir_id).shrink_to_lo();
+
+                    let ls =
+                      vec![(then_entry, if_start), (else_exit, loop_end)];
+
+                    self.insert_cf_step_at(ls).expect("");
+                  })
+                })
+                .unwrap();
+            })
+          })
+          .unwrap();
+
+        intravisit::walk_expr(self, cnd);
+        intravisit::walk_expr(self, then);
+        // Skip the else block, it only contains the break statement.
       }
 
-      EK::Loop(block, _label, LoopSource::ForLoop, _) => {
-        todo!("for loops aren't working yet, sorry!")
+      EK::Loop(
+        hir::Block {
+          stmts:
+            [hir::Stmt {
+              kind:
+                SK::Expr(hir::Expr {
+                  kind: EK::Match(cnd, [none, some], _),
+                  ..
+                }),
+              ..
+            }],
+          expr: None,
+          ..
+        },
+        _label,
+        LoopSource::ForLoop,
+        _loop_span,
+      ) => {
+        self
+          .ir_mapper
+          .get_mir_locations(some.body.hir_id, GatherDepth::Nested)
+          .and_then(|mir_order| {
+            mir_order.entry_location().map(|then_entry| {
+              self
+                .ir_mapper
+                .get_mir_locations(none.body.hir_id, GatherDepth::Nested)
+                .and_then(|mir_order| {
+                  mir_order.exit_location().map(|else_exit| {
+                    let loop_end = self.span_of(expr.hir_id).shrink_to_hi();
+                    let loop_start =
+                      self.span_of(some.body.hir_id).shrink_to_lo();
+
+                    let ls =
+                      vec![(then_entry, loop_start), (else_exit, loop_end)];
+
+                    self.insert_cf_step_at(ls).expect("");
+                  })
+                })
+                .unwrap();
+            })
+          })
+          .unwrap();
+
+        intravisit::walk_expr(self, cnd);
+        intravisit::walk_arm(self, some);
+        // ignore the none branch as it just contains the break.
+      }
+
+      EK::Loop(_block, _label, LoopSource::Loop, _span) => {
+        todo!("bare loops aren't working yet, sorry!")
       }
 
       EK::If(cnd, then, else_opt) => {
@@ -1275,9 +1377,10 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
         let ids = arms
           .iter()
           .map(|arm| {
-            // FIXME: this should get turned into an analysis error,
-            // we aren't supporting guards currently.
-            assert!(arm.guard.is_none());
+            if let Some(_) = &arm.guard {
+              todo!("Arm guards are not supported, sorry!");
+            }
+
             arm.body.hir_id
           })
           .collect::<Vec<_>>();
