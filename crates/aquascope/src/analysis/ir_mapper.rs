@@ -2,6 +2,7 @@
 use std::fmt;
 
 use flowistry::mir::utils::BodyExt;
+use itertools::Itertools;
 use rustc_data_structures::{
   captures::Captures,
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
@@ -690,7 +691,7 @@ where
   ) -> Vec<Vec<G::Node>> {
     let mut dfs = Self::new(graph);
     dfs.search(from, to);
-    dfs.paths
+    dfs.paths.into_iter().unique().collect::<Vec<_>>()
   }
 
   fn insert(&mut self, n: G::Node) -> bool {
@@ -733,5 +734,47 @@ where
 
 #[cfg(test)]
 mod test {
-  // TODO: write some tests for the path finder
+  use rustc_data_structures::graph::vec_graph::VecGraph;
+
+  use super::*;
+
+  #[test]
+  fn if_shape() {
+    // Diamond shaped IF.
+    let graph = VecGraph::new(6, vec![
+      (0u32, 1u32),
+      (1u32, 2u32),
+      (1u32, 3u32),
+      (2u32, 4u32),
+      (3u32, 4u32),
+      (4u32, 5u32),
+    ]);
+
+    let paths_0_5 = vec![vec![0, 1, 2, 4, 5], vec![0, 1, 3, 4, 5]];
+
+    assert_eq!(DFSFinder::find_paths_from_to(&graph, 0, 5), paths_0_5);
+  }
+
+  #[test]
+  fn while_loop_shape() {
+    // While loop shape:
+    // 0 -> 1 -> 2 -> 3 -> 5
+    //           ^    |
+    //           |    v
+    //           |-- 4
+    let graph = VecGraph::new(6, vec![
+      (0u32, 1u32),
+      (1u32, 2u32),
+      (2u32, 3u32),
+      (3u32, 5u32),
+      (3u32, 4u32),
+      (4u32, 2u32),
+    ]);
+
+    let paths_0_5 = vec![vec![0, 1, 2, 3, 5], vec![0, 1, 2, 3, 4, 2, 3, 5]];
+    let mut paths = DFSFinder::find_paths_from_to(&graph, 0, 5);
+    paths.sort_by(|l, r| l.len().cmp(&r.len()));
+
+    assert_eq!(paths, paths_0_5);
+  }
 }
