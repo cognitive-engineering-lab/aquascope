@@ -21,8 +21,13 @@ use crate::analysis::permissions::{
   PermissionsDomain, Point, Variable,
 };
 
+/// A path as defined in rustc.
 type MoveablePath = <RustcFacts as FactTypes>::Path;
 
+/// The central data structure for working with permissions.
+///
+/// It holds the derived permissions information
+/// and anything necessary to analyze a Rust Body.
 pub struct PermissionsCtxt<'a, 'tcx> {
   pub tcx: TyCtxt<'tcx>,
   pub polonius_input_facts: &'a AllFacts<RustcFacts>,
@@ -50,6 +55,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
   // Conversion helpers
 
+  /// Convert and normalize a rustc [`Place`] into a [`Path`] understood by Aquascope.
   pub fn place_to_path(&self, p: &Place<'tcx>) -> Path {
     let p = p.normalize(self.tcx, self.def_id);
     *self
@@ -140,12 +146,14 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     !self.permissions_output.never_write.contains(&path)
   }
 
+  /// Does a Path's type allow it to be dropped?
+  ///
+  /// .decl never_drop(Path)
+  ///
+  /// never_drop(Path) :-
+  ///    !is_direct(Path).
   pub fn is_path_drop_enabled(&self, path: Path) -> bool {
-    // TODO: experimental, I(gavin) want to get rid of the 'is_never_drop'
-    // relation in the permissions engine, because it uses memory that
-    // doesn't need to be stored.
     !self.path_to_place(path).is_indirect()
-    // !self.permissions_output.never_drop.contains(&path)
   }
 
   // Permission utilities
@@ -328,7 +336,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   // TODO: a much better way to handle this is to include a notion of Before / After for our permissions
   // analysis. This would give us a more principled way to look at it rather than manipulating the
   // location.
-  pub fn permissions_domain_after_point_effect(
+  pub(crate) fn permissions_domain_after_point_effect(
     &self,
     point: Point,
   ) -> Option<PermissionsDomain<'tcx>> {
@@ -356,11 +364,12 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   /// Compute the beginning and end of the live loan region
-  /// using source code location for comparison. We want to get
-  /// rid of this method as it is more of a HACK.
-  pub fn construct_loan_regions(&mut self) {
+  /// using source code location for comparison.
+  ///
+  /// NOTE: this method will soon be deprecated and should not be used.
+  pub(crate) fn construct_loan_regions(&mut self) {
+    // disallow reconstrucution of loan regions.
     if self.loan_regions.is_some() {
-      // disallow reconstrucution of loan regions.
       return;
     }
 

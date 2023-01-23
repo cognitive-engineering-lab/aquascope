@@ -1,4 +1,10 @@
-//! Datalog analysis for Aquascope
+//! Core datalog analysis for Aquascope.
+//!
+//! The permissions analysis directly translates output facts
+//! from [polonius](https://github.com/rust-lang/polonius) into the
+//! core set of Aquascope [`Output`] facts.
+//!
+//! For information about working with these facts see [`PermissionsCtxt`].
 
 use std::time::Instant;
 
@@ -21,9 +27,7 @@ use super::{
   AquascopeFacts, Loan, Path, Point,
 };
 
-// FIXME the HashMap should map to multiple loans, because at a
-// given point a path could be refined my multiple loans even
-// if we only care about a single (more recent).
+/// Aquascope permissions facts output.
 #[derive(Debug)]
 pub struct Output<T>
 where
@@ -32,6 +36,8 @@ where
   // TODO(gavinleroy): I really want to rename cannot_XXX to
   // path_XXX_loan_refined_at which is more explicit that these
   // only hold data referring to a live Loan regions.
+  /// Paths which are *declared* as immutable.
+  ///
   /// .decl never_write(Path)
   ///
   /// never_write(Path) :-
@@ -43,16 +49,10 @@ where
   ///    prefix_of(Prefix, Path),
   ///    is_immut_ref(Prefix).
   ///
-  pub never_write: HashSet<T::Path>,
+  pub(crate) never_write: HashSet<T::Path>,
 
-  /// .decl never_drop(Path)
+  /// A [`Path`] whose read permissions are refiend at [`Point`] due to an active [`Loan`].
   ///
-  /// never_drop(Path) :-
-  ///    !is_direct(Path).
-  ///
-  /// DEPRECATED: TODO remove
-  pub never_drop: HashSet<T::Path>,
-
   /// .decl cannot_read(Path:path, Point:point)
   ///
   /// cannot_read(Path, Loan, Point) :-
@@ -61,8 +61,10 @@ where
   ///    loan_live_at(Loan, Point),
   ///    loan_mutable(Loan).
   ///
-  pub cannot_read: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
+  pub(crate) cannot_read: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
+  /// A [`Path`] whose write permissions are refiend at [`Point`] due to an active [`Loan`].
+  ///
   /// .decl cannot_write(Path:path, Point:point)
   ///
   /// cannot_write(Path, Loan, Point) :-
@@ -70,8 +72,10 @@ where
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point).
   ///
-  pub cannot_write: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
+  pub(crate) cannot_write: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
+  /// A [`Path`] whose drop permissions are refiend at [`Point`] due to an active [`Loan`].
+  ///
   /// .decl cannot_drop(Path, Loan, Point)
   ///
   /// cannot_drop(Path, Loan, Point)
@@ -79,7 +83,7 @@ where
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point).
   ///
-  pub cannot_drop: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
+  pub(crate) cannot_drop: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
   /// .decl path_maybe_uninitialized_on_entry(Point, Path)
   ///
@@ -87,7 +91,8 @@ where
   ///    path_maybe_uninitialized_on_exit(Point0, Path)
   ///    cfg_edge(Point0, Point1)
   ///
-  pub path_maybe_uninitialized_on_entry: HashMap<T::Point, HashSet<T::Path>>,
+  pub(crate) path_maybe_uninitialized_on_entry:
+    HashMap<T::Point, HashSet<T::Path>>,
 }
 
 impl Default for Output<AquascopeFacts> {
@@ -97,13 +102,12 @@ impl Default for Output<AquascopeFacts> {
       cannot_write: HashMap::default(),
       cannot_drop: HashMap::default(),
       path_maybe_uninitialized_on_entry: HashMap::default(),
-      // path_moved_at: HashMap::default(),
       never_write: HashSet::default(),
-      never_drop: HashSet::default(),
     }
   }
 }
 
+/// Populate the [`Output`] facts in the current [`PermissionsCtxt`].
 pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
   let body = &ctxt.body_with_facts.body;
@@ -155,8 +159,6 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
         })
     }
   };
-
-  let is_never_drop = |path: Path| ctxt.path_to_place(path).is_indirect();
 
   // .decl loan_conflicts_with(Loan, Path)
   let loan_conflicts_with: Relation<(Loan, Path)> = Relation::from_iter(
@@ -213,13 +215,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
     .filter_map(|path| is_never_write(*path).then_some(*path))
     .collect::<HashSet<_>>();
 
-  let never_drop = paths
-    .iter()
-    .filter_map(|path| is_never_drop(*path).then_some(*path))
-    .collect::<HashSet<_>>();
-
   ctxt.permissions_output.never_write = never_write;
-  ctxt.permissions_output.never_drop = never_drop;
 
   let cfg_edge: Relation<(Point, Point)> = Relation::from_iter(
     ctxt
@@ -282,6 +278,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
 // ----------
 // Main entry
 
+/// Compute the [`PermissionsCtxt`] for a given body.
 pub fn compute<'a, 'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,

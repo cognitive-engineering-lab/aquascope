@@ -1,3 +1,5 @@
+//! Analysis for finding expected vs actual permission on path usage.
+
 use either::Either;
 use flowistry::mir::utils::{OperandExt, SpanExt};
 use rustc_hir::HirId;

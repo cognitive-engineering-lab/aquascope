@@ -23,6 +23,7 @@ use crate::{
   Range,
 };
 
+/// Permission facts in Aquascope, similar to [`RustcFacts`].
 #[derive(Copy, Clone, Debug)]
 pub struct AquascopeFacts;
 
@@ -57,6 +58,10 @@ pub type Variable = <AquascopeFacts as FactTypes>::Variable;
 // ------------------------------------------------
 // Permission Boundaries
 
+/// Read, Write, and Own permissions.
+///
+/// NOTE: previously, the term *drop* was used instead of *own*
+/// and this terminology remains within the source and internal documentation.
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Serialize, TS)]
 #[ts(export)]
 pub struct Permissions {
@@ -65,39 +70,49 @@ pub struct Permissions {
   pub drop: bool,
 }
 
-// In contrast to Permissions, the PermissionsData stores all relevant
-// information about what factors into the permissions. Things like
-// declared type information, loan refinements, move refinements, etc.
+/// Permissions and first-order provenance for permission refinement.
+///
+/// In contrast to [`Permissions`], the `PermissionsData` stores all relevant
+/// information about what factors into the permissions. Things like
+/// declared type information, loan refinements, move refinements, etc.
+/// `PermissionsData` corresponds to a single [`Place`].
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsData {
-  // Type declaration information
+  /// Was the type declared as droppable (i.e. an owned value)?
   pub type_droppable: bool,
+
+  /// Was the type declared as writeable (i.e. is it `mut`)?
   pub type_writeable: bool,
+
+  /// Is the type copyable (i.e. does it implement the `Copy` trait)?
   pub type_copyable: bool,
 
-  // Liveness information
+  /// Is the [`Place`] currently live?
   pub is_live: bool,
 
   // Initialization information
   // TODO: this should be an Option<MoveKey> once moves are tracked.
+  /// Is the [`Place`] currently uninitialzed due to a move?
   pub path_moved: bool,
 
-  // Refinement information
   #[serde(skip_serializing_if = "Option::is_none")]
+  /// Is a live loan removing `read` permissions?
   pub loan_read_refined: Option<LoanKey>,
 
   #[serde(skip_serializing_if = "Option::is_none")]
+  /// Is a live loan removing `write` permissions?
   pub loan_write_refined: Option<LoanKey>,
 
   #[serde(skip_serializing_if = "Option::is_none")]
+  /// Is a live loan removing `drop` permissions?
   pub loan_drop_refined: Option<LoanKey>,
 
-  // Permissions can be directly derived from the above
-  // information but we don't want that logic duplicated anywhere.
+  /// Computed permissions given the above information.
   pub permissions: Permissions,
 }
 
+/// A permissions refiner. [`Loan`]s and moves can refine permissions.
 #[derive(Debug, Clone, Serialize, PartialEq, TS)]
 #[ts(export)]
 pub enum Refiner {
@@ -105,6 +120,7 @@ pub enum Refiner {
   Move(MoveKey),
 }
 
+/// The live source-level range of a refinement.
 #[derive(Debug, Clone, Serialize, PartialEq, TS)]
 #[ts(export)]
 pub struct RefinementRegion {
@@ -112,8 +128,8 @@ pub struct RefinementRegion {
   pub refined_ranges: Vec<Range>,
 }
 
+/// Permissions data *forall* places in the body under analysis.
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
-/// A representation of the permissions *forall* places in the body under analysis.
 pub struct PermissionsDomain<'tcx>(FxHashMap<Place<'tcx>, PermissionsData>);
 
 // ------------------------------------------------

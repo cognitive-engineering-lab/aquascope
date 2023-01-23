@@ -1,3 +1,5 @@
+//! Various *debugging* utilities for permissions.
+
 use std::{collections::hash_map::Entry, io::Write, path::Path};
 
 use anyhow::{bail, Result};
