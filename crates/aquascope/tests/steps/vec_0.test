@@ -1,0 +1,10 @@
+use std::mem;
+
+fn reverse(v: &mut Vec<i32>) {
+  let n = v.len();
+  for i in 0 .. n / 2 {
+    let a = &mut v[i];
+    let b = &mut v[n - i - 1];
+    mem::swap(a, b);
+  }
+}

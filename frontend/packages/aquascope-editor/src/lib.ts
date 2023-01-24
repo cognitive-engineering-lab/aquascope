@@ -205,7 +205,7 @@ export class Editor {
         annotations?.interp
       );
     } else if (operation == "stepper") {
-      renderSteps(this.view, result, annotations?.stepper);
+      renderSteps(this.view, result.values, annotations?.stepper);
     } else if (operation == "boundaries") {
       let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
       this.addAnalysisFacts(loanFacts);

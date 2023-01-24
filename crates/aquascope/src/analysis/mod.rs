@@ -122,6 +122,12 @@ impl DerefMut for LoanRegions {
   }
 }
 
+impl KeyShifter for LoanKey {
+  fn shift_keys(self, loan_shift: LoanKey) -> Self {
+    self + loan_shift
+  }
+}
+
 // Join two analysis on two separate bodies together!
 pub trait BodyAnalysisJoin {
   fn analysis_join(self, other: Self) -> Self;
@@ -146,6 +152,15 @@ trait KeyShifter {
   fn shift_keys(self, loan_shift: LoanKey) -> Self;
 }
 
+impl<T: KeyShifter> KeyShifter for Vec<T> {
+  fn shift_keys(self, loan_shift: LoanKey) -> Self {
+    self
+      .into_iter()
+      .map(|v| v.shift_keys(loan_shift))
+      .collect::<Vec<_>>()
+  }
+}
+
 impl<O> BodyAnalysisJoin for AnalysisOutput<O>
 where
   O: KeyShifter + std::fmt::Debug + Clone + Serialize + TS,
@@ -158,7 +173,10 @@ where
 
     let shift_by = LoanKey(self.loan_points.len() as u32);
 
-    assert!(current_max < shift_by);
+    log::debug!(
+      "The current_max: {current_max:?} and the shift_by: {shift_by:?}"
+    );
+    assert!(current_max == LoanKey(0) || current_max < shift_by);
 
     // Shift the RHS values to be greater than those currently stored
 
@@ -202,9 +220,7 @@ pub fn compute_permissions<'a, 'tcx>(
 
     let permissions = permissions::compute(tcx, body_id, body_with_facts);
 
-    // if cfg!(debug_assertions) {
     permissions::utils::dump_permissions_with_mir(&permissions);
-    // }
 
     permissions
   })

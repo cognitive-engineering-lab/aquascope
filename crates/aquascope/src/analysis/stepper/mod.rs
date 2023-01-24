@@ -1,21 +1,17 @@
-mod stepper_new;
-mod stepper_old;
+pub(crate) mod stepper;
 
 use std::collections::hash_map::Entry;
 
 use fluid_let::fluid_let;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_middle::mir::Place;
-use rustc_span::Span;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
   analysis::{
-    permissions::{
-      Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
-    },
-    LoanKey,
+    permissions::{Permissions, PermissionsData, PermissionsDomain},
+    AquascopeAnalysis, KeyShifter, LoanKey,
   },
   Range,
 };
@@ -45,11 +41,21 @@ pub trait Difference {
   fn diff(&self, rhs: Self) -> Self::Diff;
 }
 
+/// Table representation of the permissions difference between two locations.
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
-pub struct PermissionsStateStep {
-  pub location: Range,
+pub struct PermissionsStepTable {
+  pub from: Range,
+  pub to: Range,
   pub state: Vec<(String, PermissionsDataDiff)>,
+}
+
+/// A collection of [`PermissionsStepTable`] which are to be shown at the same location.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export)]
+pub struct PermissionsLineDisplay {
+  pub location: Range,
+  pub state: Vec<PermissionsStepTable>,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, TS)]
@@ -156,6 +162,17 @@ impl PermissionsDataDiff {
   }
 }
 
+impl KeyShifter for PermissionsDataDiff {
+  fn shift_keys(self, loan_shift: LoanKey) -> Self {
+    PermissionsDataDiff {
+      loan_read_refined: self.loan_read_refined.shift_keys(loan_shift),
+      loan_write_refined: self.loan_write_refined.shift_keys(loan_shift),
+      loan_drop_refined: self.loan_drop_refined.shift_keys(loan_shift),
+      ..self
+    }
+  }
+}
+
 impl Difference for bool {
   type Diff = ValueStep<bool>;
   fn diff(&self, rhs: bool) -> Self::Diff {
@@ -175,6 +192,26 @@ where
 {
   fn is_empty(&self) -> bool {
     matches!(self, Self::None { .. })
+  }
+}
+
+impl<T> KeyShifter for ValueStep<T>
+where
+  T: KeyShifter
+    + Clone
+    + std::fmt::Debug
+    + std::cmp::PartialEq
+    + Eq
+    + Serialize
+    + TS,
+{
+  fn shift_keys(self, loan_shift: LoanKey) -> Self {
+    match self {
+      ValueStep::None { value: Some(v) } => ValueStep::None {
+        value: Some(v.shift_keys(loan_shift)),
+      },
+      _ => self,
+    }
   }
 }
 
@@ -253,13 +290,36 @@ impl<'tcx> Difference for &PermissionsDomain<'tcx> {
   }
 }
 
+impl KeyShifter for PermissionsStepTable {
+  fn shift_keys(self, loan_shift: LoanKey) -> Self {
+    PermissionsStepTable {
+      state: self
+        .state
+        .into_iter()
+        .map(|(s, dff)| (s, dff.shift_keys(loan_shift)))
+        .collect::<Vec<_>>(),
+      ..self
+    }
+  }
+}
+
+impl KeyShifter for PermissionsLineDisplay {
+  fn shift_keys(self, loan_shift: LoanKey) -> Self {
+    PermissionsLineDisplay {
+      state: self.state.shift_keys(loan_shift),
+      ..self
+    }
+  }
+}
+
 pub fn compute_permission_steps<'a, 'tcx>(
-  ctxt: &PermissionsCtxt<'a, 'tcx>,
-  span_to_range: impl Fn(Span) -> Range,
-) -> Vec<PermissionsStateStep>
+  ctxt: &AquascopeAnalysis<'a, 'tcx>,
+) -> Vec<PermissionsLineDisplay>
 where
   'tcx: 'a,
 {
   let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
-  stepper_new::compute_permission_steps(ctxt, mode, span_to_range)
+  let pctxt = &ctxt.permissions;
+  let span_to_range = |span| ctxt.span_to_range(span);
+  stepper::compute_permission_steps(pctxt, mode, span_to_range)
 }

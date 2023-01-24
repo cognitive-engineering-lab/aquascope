@@ -194,7 +194,7 @@ use rustc_hir::{
 };
 use rustc_middle::{
   hir::nested_filter,
-  mir::{BasicBlock, BasicBlocks, Local, Location, Place},
+  mir::{self, BasicBlock, BasicBlocks, Local, Location, Place},
 };
 use rustc_span::Span;
 
@@ -215,7 +215,7 @@ pub fn compute_permission_steps<'a, 'tcx>(
   ctxt: &PermissionsCtxt<'a, 'tcx>,
   mode: PermIncludeMode,
   span_to_range: impl Fn(Span) -> Range,
-) -> Vec<PermissionsStateStep>
+) -> Vec<PermissionsLineDisplay>
 where
   'tcx: 'a,
 {
@@ -243,10 +243,13 @@ where
 // - Convert Spans to Ranges
 fn prettify_permission_steps<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
-  perm_steps: HashMap<Span, HashMap<Place<'tcx>, PermissionsDataDiff>>,
+  perm_steps: HashMap<
+    Span,
+    (MirSegment, HashMap<Place<'tcx>, PermissionsDataDiff>),
+  >,
   mode: PermIncludeMode,
   span_to_range: impl Fn(Span) -> Range,
-) -> Vec<PermissionsStateStep> {
+) -> Vec<PermissionsLineDisplay> {
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
 
@@ -270,8 +273,8 @@ fn prettify_permission_steps<'tcx>(
   perm_steps
     .into_iter()
     .fold(
-      HashMap::<Span, Vec<(Place<'tcx>, PermissionsDataDiff)>>::default(),
-      |mut acc, (span, place_to_diffs)| {
+      HashMap::<Span, Vec<(MirSegment, Vec<(Place<'tcx>, PermissionsDataDiff)>)>>::default(),
+      |mut acc, (span, (segment, place_to_diffs))| {
         // Attach the span to the end of the line. Later, all permission
         // steps appearing on the same line will be combined.
         let span = source_map.span_extend_to_line(span).shrink_to_hi();
@@ -292,7 +295,7 @@ fn prettify_permission_steps<'tcx>(
           || first_error_span_opt
             .is_some_and(|err_span| err_span.hi() < span.lo()))
         {
-          acc.entry(span).or_default().extend(entries);
+          acc.entry(span).or_default().push((segment, entries));
         }
 
         acc
@@ -303,17 +306,32 @@ fn prettify_permission_steps<'tcx>(
       let range = span_to_range(span);
 
       entries
-        .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
+        .iter_mut()
+        .for_each(|(_, v)| {
+          v.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection))
+        });
 
       let state = entries
         .into_iter()
-        .map(|(place, diff)| {
-          let s = place_to_string!(place);
-          (s, diff)
+        .map(|(MirSegment {from,to}, diffs)| {
+
+          let state = diffs.into_iter().map(|(place, diff)| {
+            let s = place_to_string!(place);
+            (s, diff)
+          }).collect::<Vec<_>>();
+
+          let from = span_to_range(ctxt.location_to_span(from));
+          let to = span_to_range(ctxt.location_to_span(to));
+
+          PermissionsStepTable {
+            from,
+            to,
+            state,
+          }
         })
         .collect::<Vec<_>>();
 
-      PermissionsStateStep {
+      PermissionsLineDisplay {
         location: range,
         state,
       }
@@ -964,7 +982,8 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   /// Convert the current [`SegmentTree`] into permission steps.
   fn finalize_diffs(
     self,
-  ) -> HashMap<Span, HashMap<Place<'tcx>, PermissionsDataDiff>> {
+  ) -> HashMap<Span, (MirSegment, HashMap<Place<'tcx>, PermissionsDataDiff>)>
+  {
     let body_hir_id = self.body_value_id();
     let body_open_brace = self.span_of(body_hir_id).shrink_to_lo();
     let first_point = self.ctxt.location_to_point(self.body_segment().from);
@@ -978,7 +997,10 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     fn diff_subtree<'tcx>(
       ctxt: &PermissionsCtxt<'_, 'tcx>,
       tree: &SegmentTree,
-      result: &mut HashMap<Span, HashMap<Place<'tcx>, PermissionsDataDiff>>,
+      result: &mut HashMap<
+        Span,
+        (MirSegment, HashMap<Place<'tcx>, PermissionsDataDiff>),
+      >,
       attached_at: &mut HashMap<Local, Location>,
     ) {
       log::trace!(
@@ -1011,7 +1033,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
             removed
           );
 
-          result.insert(span, diff);
+          result.insert(span, (segment, diff));
         }
       };
 
@@ -1074,19 +1096,20 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
                 // HACK: remove any differences that were attached to this span.
                 temp.remove(span);
                 // HACK: manually remove any attached places which got added.
-                for (_, diffs) in temp.iter_mut() {
+                for (_, (_, diffs)) in temp.iter_mut() {
                   diffs
                     .drain_filter(|place, _| attached_here.contains_key(place));
                 }
                 joined_diff.extend(temp);
               }
 
-              // let to_insert = attached_here.into_iter().chain(entire_diff);
-
-              result.entry(*span).or_default().extend(attached_here);
-
+              assert!(!result.contains_key(span));
               assert!(joined_diff.get(span).is_none());
 
+              // FIXME: the reach is not the correct set of points here.
+              // But we don't currently have a good semantic model for
+              // what it should be.
+              result.insert(*span, (*reach, attached_here));
               result.extend(joined_diff);
             }
           }
@@ -1101,7 +1124,21 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 
     let mut diffs = HashMap::default();
     let mut attached_at = HashMap::default();
-    diffs.insert(body_open_brace, first_diff);
+    let dummy_loc = Location {
+      block: mir::START_BLOCK,
+      statement_index: 0,
+    };
+
+    diffs.insert(
+      body_open_brace,
+      (
+        MirSegment {
+          from: dummy_loc,
+          to: dummy_loc,
+        },
+        first_diff,
+      ),
+    );
 
     diff_subtree(&self.ctxt, &self.mir_segments, &mut diffs, &mut attached_at);
 

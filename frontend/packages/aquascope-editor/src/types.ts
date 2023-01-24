@@ -19,9 +19,10 @@ export { LoanRegions } from "./bindings/LoanRegions";
 export { Refiner } from "./bindings/Refiner";
 export { RefinementRegion } from "./bindings/RefinementRegion";
 
-export { PermissionsStateStep } from "./bindings/PermissionsStateStep";
-export { PermissionsDiff } from "./bindings/PermissionsDiff";
+export { PermissionsLineDisplay } from "./bindings/PermissionsLineDisplay";
+export { PermissionsStepTable } from "./bindings/PermissionsStepTable";
 export { PermissionsDataDiff } from "./bindings/PermissionsDataDiff";
+export { PermissionsDiff } from "./bindings/PermissionsDiff";
 
 export { MMemorySegment } from "./bindings/MMemorySegment";
 export { MPathSegment } from "./bindings/MPathSegment";
