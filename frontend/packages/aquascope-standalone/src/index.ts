@@ -55,7 +55,7 @@ window.addEventListener("load", () => {
         }
       },
       Ed.defaultCodeExample,
-      new URL("https://aquascope.willcrichton.net:8008")
+      new URL("https://aquascope.willcrichton.net")
     ),
   };
 
