@@ -7,9 +7,6 @@ export { Range } from "./bindings/Range";
 export { Permissions } from "./bindings/Permissions";
 export { PermissionsBoundary } from "./bindings/PermissionsBoundary";
 
-export { PermissionsBoundaryOutput } from "./bindings/PermissionsBoundaryOutput";
-export { PermissionsDiffOutput } from "./bindings/PermissionsDiffOutput";
-
 export { AnalysisOutput } from "./bindings/AnalysisOutput";
 export { ValueStep } from "./bindings/ValueStep";
 export { LoanPoints } from "./bindings/LoanPoints";
