@@ -396,6 +396,10 @@ enum SegmentTree {
   },
 }
 
+/// Search result when trying to find the smallest enclosing segment for a location.
+///
+/// NOTE: this is used under the assumption that the location cannot be the
+/// ending location of a step (this would result in a zero distance step).
 #[derive(Clone, Debug)]
 enum SegmentSearchResult<'a> {
   Enclosing(&'a SegmentTree),
@@ -511,6 +515,7 @@ impl MirSegment {
     MirSegment { from: l1, to: l2 }
   }
 
+  /// Expand the path through the segment to a full set of [`Location`]s.
   fn squash_block_path(
     &self,
     basic_blocks: &BasicBlocks,
@@ -731,7 +736,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   ///
   /// This method is a sort of HACK to avoid picking apart nodes expanded from
   /// macros, while visiting nodes expanded from expected desugarings (e.g. for / while loops).
-  fn should_visit_nested(&self, id: HirId, span: Span) -> bool {
+  fn should_visit_nested(&self, _id: HirId, span: Span) -> bool {
     use rustc_span::hygiene::DesugaringKind as DK;
     !span.from_expansion()
       || span.is_desugaring(DK::ForLoop)
@@ -902,10 +907,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     let mut joins = Vec::default();
 
     for (location, span) in steps.into_iter() {
-      // if paths.is_empty() {
-      //   bail!("no remaining paths for {location:?} to cover");
-      // }
-
       let split_step = SegmentTree::Single {
         segment: MirSegment::new(segment.from, location),
         attached: vec![],
@@ -918,13 +919,9 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
         span: *old_span,
       };
 
-      let removed_paths = paths
+      let _removed_paths = paths
         .drain_filter(|path| path.contains(&location.block))
         .collect::<Vec<_>>();
-
-      // if removed_paths.is_empty() {
-      //   bail!("location {location:?} didn't cover any new paths");
-      // }
 
       splits.push(split_step);
       joins.push(join_step);
@@ -954,7 +951,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     hir.body(self.ctxt.body_id).value.hir_id
   }
 
-  /// The [`PermissionDomain`] ⊥.
+  /// The [`PermissionsDomain`] ⊥.
   ///
   /// No permissions, anywhere.
   fn domain_bottom(&self) -> PermissionsDomain<'tcx> {
@@ -1108,7 +1105,8 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 
               // FIXME: the reach is not the correct set of points here.
               // But we don't currently have a good semantic model for
-              // what it should be.
+              // what it should be. They aren't currently being
+              // displayed by the frontend so this isn't a problem (yet).
               result.insert(*span, (*reach, attached_here));
               result.extend(joined_diff);
             }
@@ -1267,12 +1265,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   }
 
   fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
-    use hir::{ExprKind as EK, LoopSource, MatchSource, StmtKind as SK};
-
-    let hir = self.ctxt.tcx.hir();
-
-    let error_msg =
-      format!("splitting expr segment {}", hir.node_to_string(expr.hir_id));
+    use hir::{ExprKind as EK, LoopSource, StmtKind as SK};
 
     match expr.kind {
       EK::Loop(
