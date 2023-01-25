@@ -49,6 +49,7 @@ extern crate smallvec;
 
 pub mod analysis;
 pub mod errors;
+#[allow(clippy::all)]
 pub mod interpreter;
 pub mod mir;
 #[cfg(feature = "testing")]

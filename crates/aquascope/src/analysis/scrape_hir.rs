@@ -31,6 +31,7 @@ where
   }
 }
 
+#[allow(dead_code)]
 pub fn scrape_expr_data<F, O>(tcx: TyCtxt, body_id: BodyId, f: F) -> Vec<O>
 where
   F: for<'tcx> Fn<(&'tcx Expr<'tcx>,), Output = Option<O>>,

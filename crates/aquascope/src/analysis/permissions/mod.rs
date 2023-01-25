@@ -1,6 +1,8 @@
 mod context;
+#[allow(clippy::all, clippy::pedantic)]
 mod graphviz;
 mod output;
+#[allow(clippy::all, clippy::pedantic)]
 mod places_conflict;
 pub mod utils;
 

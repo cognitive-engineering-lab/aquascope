@@ -368,11 +368,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   ///
   /// NOTE: this method will soon be deprecated and should not be used.
   pub(crate) fn construct_loan_regions(&mut self) {
-    // disallow reconstrucution of loan regions.
-    if self.loan_regions.is_some() {
-      return;
-    }
-
     trait PointExt {
       fn from_point(p: Point) -> Self;
       fn expand(&mut self, p: Point, ctxt: &PermissionsCtxt);
@@ -399,6 +394,11 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
           self.1 = p;
         }
       }
+    }
+
+    // disallow reconstrucution of loan regions.
+    if self.loan_regions.is_some() {
+      return;
     }
 
     let mut hash: HashMap<Loan, (Point, Point)> = HashMap::default();
