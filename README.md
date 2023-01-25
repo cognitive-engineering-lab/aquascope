@@ -1,4 +1,4 @@
-# <p style=""><span>Aquascope</span><img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" style="float: right" height="300" /> </p>
+# <p style=""><span>Aquascope</span><img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" style="float: right border: 1px solid #555;" height="300" /> </p>
 
 [![tests](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml/badge.svg)](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml)
 
@@ -6,11 +6,11 @@
 
 Aquascope is a tool that generates visualizations aiming to further program understanding. It's distributed as a editor embedable into [mdBook](https://rust-lang.github.io/mdBook/) via a preprocessor or you can try it out [in the browser](https://gavinleroy.com/aquascope).
 
-Borrow check information is reformulated in terms of _permissions_, a new pedagogy of ownership to provide learners with a notional machine for this kind of static analysis. Example visualizations and this new pedagogy are demonstrated in the [Rust Book Experiment](https://rust-book.cs.brown.edu/).
+<!-- Borrow check information is reformulated in terms of _permissions_, a new pedagogy of ownership to provide learners with a notional machine for this kind of static analysis. Example visualizations and this new pedagogy are demonstrated in the [Rust Book Experiment](https://rust-book.cs.brown.edu/). -->
 
 > :warning: Aquascope is experimental and under active development!
 
-> TODO insert a gif demonstrating a visualization
+**TODO** insert a gif demonstrating visualizations
 
 ## Installation
 
@@ -109,14 +109,34 @@ fn add_suffix(mut s2: String) -> String {
 
 ### Aquascope Annotations
 
-Aquascope provides a set of annotations for each visualization to allow for slight customization. TODO
+Aquascope provides a set of annotations for each visualization to allow for simple customization. Similar to `mdBook`
+
+#### Stepper Annotations
+
+Visualizing permission steps can be quite intrusive but oftentimes you may want to just focus on a handful of lines, or even specific paths. This can be achieved by providing a _step annotation_ at the end of a line. For example, the annotation `` `(focus,paths:x)` `` indicates that this line should be focused (shown by default) and all paths except `x` are hidden.
+These annotations are line specific. Note, that if no lines are specified to be focused then _all_ lines are focused by default, and a similar rule applies per-line for paths.
+
+<table>
+    <tr>
+        <td>
+<code>
+```aquascope,stepper
+fn main() {
+    let mut x = 1;
+    let y = &mut x; `(focus,paths:x)`
+    println!("{} = {}", x, *y);
+}
+```
+</code>
+        </td>
+        <td>
+        TODO: insert image
+        </td>
+    </tr>
+</table>
+
+### Interpreter Annotations
+
+TODO
 
 ## Limitations
-
-```
-
-```
-
-```
-
-```
