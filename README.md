@@ -4,13 +4,11 @@
 
 ## Looking under the surface of rustc, _at a safe distance_.
 
-<span style="font-variant: small-caps;">_Aquascope_</span> is a tool that generates interactive visualizations from Rust programs. These visualizations aim to help learners intuit correct semantics for the borrow checker and the difference between safe and unsafe programs. Aquascope is distributed as an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor or you can try it out [in the browser](https://gavinleroy.com/aquascope).
+_Aquascope_ is a tool that generates interactive visualizations from Rust programs. These visualizations aim to help learners intuit correct semantics for the borrow checker and the difference between safe and unsafe programs. Aquascope is distributed as an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor or you can try it out [in the browser](https://gavinleroy.com/aquascope).
 
 <!-- Borrow check information is reformulated in terms of _permissions_, a new pedagogy of ownership to provide learners with a notional machine for this kind of static analysis. Example visualizations and this new pedagogy are demonstrated in the [Rust Book Experiment](https://rust-book.cs.brown.edu/). -->
 
 > :warning: Aquascope is experimental and under active development!
-
-**TODO** insert a gif demonstrating visualizations
 
 ## Installation
 
@@ -35,7 +33,7 @@ cargo install --path crates/mdbook-aquascope
 
 ## Usage
 
-### Available Visualizations
+### Available visualizations
 
 Currently, Aquascope supports three types of visualizations:
 
@@ -113,11 +111,11 @@ fn add_suffix(mut s2: String) -> String {
 
 </table>
 
-### Aquascope Annotations
+### Aquascope annotations
 
 Aquascope provides a set of annotations for each visualization to allow for simple customization. Similar to `mdBook`
 
-#### Stepper Annotations
+#### Permission steps
 
 Visualizing permission steps can be quite intrusive but oftentimes you may want to just focus on a handful of lines, or even specific paths. This can be achieved by providing a _step annotation_ at the end of a line. For example, the annotation `` `(focus,paths:x)` `` indicates that this line should be focused (shown by default) and all paths except `x` are hidden.
 These annotations are line specific. Note, that if no lines are specified to be focused then _all_ lines are focused by default, and a similar rule applies per-line for paths.
