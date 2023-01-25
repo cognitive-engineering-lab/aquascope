@@ -1,6 +1,8 @@
-# Aquascope: _looking under the water, at a safe distance_ <img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" height="200" />
+# Aquascope <img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" height="300" />
 
 [![tests](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml/badge.svg)](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml)
+
+## Looking under the surface of rustc, _at a safe distance_.
 
 Aquascope is a tool that generates visualizations aiming to further program understanding. It's distributed as a editor embedable into [mdBook](https://rust-lang.github.io/mdBook/) via a preprocessor or you can try it out [in the browser](https://gavinleroy.com/aquascope).
 
@@ -42,7 +44,7 @@ Currently, Aquascope supports three types of visualizations:
 <table>
     <tr>
         <td>
-        ````
+        <code>
 ```aquascope,boundaries
 fn main() {
     let mut x = 1;
@@ -50,7 +52,7 @@ fn main() {
     println!("{} = {}", x, *y);
 }
 ```
-        ````
+        </code>
         </td>
         <td>
         TODO: insert image
@@ -63,7 +65,7 @@ fn main() {
 <table>
     <tr>
         <td>
-        ````
+        <code>
 ```aquascope,stepper
 fn main() {
     let mut x = 1;
@@ -71,7 +73,7 @@ fn main() {
     println!("{} = {}", x, *y);
 }
 ```
-        ````
+        </code>
         </td>
         <td>
         TODO: insert image
@@ -84,8 +86,8 @@ fn main() {
 <table>
     <tr>
         <td>
-        ````
-``` aquascope,interpreter,concreteTypes=true
+        <code>
+```aquascope,interpreter,concreteTypes=true
 fn main() {
     let n = Box::new(1);
     let y = plus_one(&n);
@@ -95,8 +97,9 @@ fn main() {
 fn plus_one(x: &i32) -> i32 {
     *x + 1
 }
+
 ```
-        ````
+        </code>
         </td>
         <td>
         TODO: insert image
@@ -110,6 +113,8 @@ fn plus_one(x: &i32) -> i32 {
 Aquascope provides a set of annotations for each visualization to allow for slight customization. TODO
 
 ## Limitations
+
+```
 
 ```
 
