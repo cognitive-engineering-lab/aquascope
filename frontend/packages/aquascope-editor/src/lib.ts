@@ -37,15 +37,10 @@ type ServerResponse = {
 
 export const defaultCodeExample: string = `
 fn main() {
-  let mut s = String::from("hello, ");
-  let b = &mut s;
-  s.push_str("world!");
-  hi_world(b);
-  println!("{s} {b}");
-}
-
-fn hi_world(s: &mut String) {
-  s.push_str("world!");
+  let mut v = vec![1, 2, 3];
+  let n = &v[0];
+  v.push(0);
+  let x = *n;
 }
 `.trim();
 
@@ -171,6 +166,8 @@ export class Editor {
       annotations?: AquascopeAnnotations;
     } = {}
   ) {
+    console.debug(`Rendering operation: ${operation}`);
+
     if (!response) {
       let serverResponse = await this.callBackendWithCode(operation);
       if (serverResponse.success) {

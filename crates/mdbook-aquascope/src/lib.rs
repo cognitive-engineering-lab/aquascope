@@ -65,9 +65,9 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
         idx += $s.len();
       };
     }
-    if line.starts_with("#") {
+    if let Some(suffix) = line.strip_prefix('#') {
       annots.hidden_lines.push(line_pos);
-      add_fragment!(&line[1 ..]);
+      add_fragment!(suffix);
     } else {
       while let Some(cap) = re.captures(line) {
         let matched = cap.get(0).unwrap();
@@ -82,8 +82,8 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
 
         let interior = cap.name(match_type).unwrap();
         let mut config = HashMap::new();
-        for s in interior.as_str().split(",").filter(|s| *s != "") {
-          match s.split_once(":") {
+        for s in interior.as_str().split(',').filter(|s| *s != "") {
+          match s.split_once(':') {
             Some((s1, s2)) => config.insert(s1, s2),
             None => config.insert(s, ""),
           };

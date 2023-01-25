@@ -123,7 +123,9 @@ pub enum MValue {
     range: Option<u64>,
   },
 
-  Unallocated,
+  Unallocated {
+    alloc_id: Option<u64>,
+  },
 }
 
 struct Reader<'a, 'mir, 'tcx> {
@@ -215,7 +217,14 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
           // Look up the stack layout in `MemoryMap::stack_slots` which are generated
           // in `VisEvaluator::build_heap`.
           let (frame, local, layout) =
-            memory_map.stack_slots[&alloc_id].clone();
+            match memory_map.stack_slots.get(&alloc_id) {
+              Some(t) => t.clone(),
+              None => {
+                return Ok(MValue::Unallocated {
+                  alloc_id: Some(alloc_id.0.get()),
+                })
+              }
+            };
           (MMemorySegment::Stack { frame, local }, layout)
         }
         MemoryKind::Machine(..) => {
@@ -252,30 +261,6 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
     Ok(MValue::Pointer { path, range })
   }
 
-  /*
-  fn read_unique(
-    &mut self,
-    op: &OpTy<'tcx, miri::Provenance>,
-    postprocess: impl FnOnce(
-      miri::MPlaceTy<'tcx, miri::Provenance>,
-    ) -> InterpResult<'tcx, MValue>,
-  ) -> InterpResult<'tcx, MValue> {
-    debug_assert!(op.layout.ty.is_adt());
-
-    let (_, nonnull) = op.field_by_name("pointer", &self.ev.ecx)?;
-    let (_, ptr) = nonnull.field_by_name("pointer", &self.ev.ecx)?;
-
-    // This may be unallocated e.g. if a value containing a vector is partially initialized.
-    // For example, `let x = (0, vec![1])` will have the vector temporarily invalid, but with
-    // space allocated on the stack. So we ensure that doesn't fail.
-    let Ok(mplace) = self.ev.ecx.deref_operand(&ptr) else {
-      return Ok(MValue::Unallocated);
-    };
-
-    self.read_pointer(mplace, postprocess)
-  }
-   */
-
   fn read_array(
     &mut self,
     base: MPlaceTy<'tcx, miri::Provenance>,
@@ -299,7 +284,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
   ) -> InterpResult<'tcx, Option<u64>> {
     let (_, len) = op.field_by_name("len", &self.ev.ecx)?;
     let len = match self.read(&len) {
-      Ok(MValue::Unallocated) => return Ok(None),
+      Ok(MValue::Unallocated { .. }) => return Ok(None),
       Ok(MValue::Uint(len)) => len,
       _ => unreachable!(),
     };
@@ -426,7 +411,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
           Err(e) => match e.into_kind() {
             InterpError::UndefinedBehavior(
               UndefinedBehaviorInfo::InvalidUninitBytes(..),
-            ) => return Ok(MValue::Unallocated),
+            ) => return Ok(MValue::Unallocated { alloc_id: None }),
             e => return Err(InterpErrorInfo::from(e)),
           },
         };
@@ -467,7 +452,14 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       }
 
       _ if ty.is_any_ptr() => {
-        let Ok(mplace) = self.ev.ecx.deref_operand(op) else { return Ok(MValue::Unallocated) };
+        let val = self.ev.ecx.read_immediate(op)?;
+        let mplace = self.ev.ecx.ref_to_mplace(&val)?;
+        if self.ev.ecx.check_mplace(mplace).is_err() {
+          let (alloc_id, _, _) = self.ev.ecx.ptr_get_alloc_id(mplace.ptr)?;
+          return Ok(MValue::Unallocated {
+            alloc_id: Some(alloc_id.0.get()),
+          });
+        }
         self.read_pointer(mplace)?
       }
 

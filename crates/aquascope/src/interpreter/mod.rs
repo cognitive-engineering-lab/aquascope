@@ -3,7 +3,12 @@
 use anyhow::Result;
 use either::Either;
 use flowistry::mir::utils::SpanExt;
-use rustc_middle::ty::TyCtxt;
+use rustc_data_structures::vec_map::VecMap;
+use rustc_hir::def_id::LocalDefId;
+use rustc_middle::{
+  mir::BorrowCheckResult,
+  ty::{self, TyCtxt},
+};
 
 mod mapper;
 mod miri_utils;
@@ -11,16 +16,15 @@ mod mvalue;
 mod step;
 
 pub use mvalue::MValue;
-pub use step::MStep;
+use rustc_session::Session;
+use smallvec::SmallVec;
+pub use step::MTrace;
 
 use crate::{interpreter::mapper::Mapper, Range};
 
-pub(crate) fn interpret(tcx: TyCtxt) -> Result<Vec<MStep<Range>>> {
+pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
   let mut evaluator = step::VisEvaluator::new(tcx).unwrap();
-  let mir_steps = evaluator.eval().map_err(|e| {
-    e.print_backtrace();
-    anyhow::format_err!("{}", e)
-  })?;
+  let mir_steps = evaluator.eval()?;
 
   // eprintln!("{mir_steps:#?}");
 
@@ -48,7 +52,7 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<Vec<MStep<Range>>> {
       Either::Right(span) => span.as_local(outer_span)?,
     };
     let range =
-      flowistry::source_map::Range::from_span(span, tcx.sess.source_map())
+      flowistry::source_map::CharRange::from_span(span, tcx.sess.source_map())
         .unwrap();
     Some(Range::from(range))
   });
@@ -58,10 +62,38 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<Vec<MStep<Range>>> {
 
 #[derive(Default)]
 pub struct InterpretCallbacks {
-  pub result: Option<Result<Vec<MStep<Range>>>>,
+  pub result: Option<Result<MTrace<Range>>>,
+}
+
+// We disable `mir_borrowck` to allow programs with Rust-caught UB to execute
+// rather than being rejected out of hand.
+fn fake_mir_borrowck(
+  tcx: TyCtxt<'_>,
+  _id: LocalDefId,
+) -> &'_ BorrowCheckResult<'_> {
+  tcx.arena.alloc(BorrowCheckResult {
+    concrete_opaque_types: VecMap::new(),
+    closure_requirements: None,
+    used_mut_upvars: SmallVec::new(),
+    tainted_by_errors: None,
+  })
+}
+
+// See `fake_mir_borrowck`
+pub fn override_queries(
+  _session: &Session,
+  providers: &mut ty::query::Providers,
+  _extern_providers: &mut ty::query::ExternProviders,
+) {
+  providers.mir_borrowck = fake_mir_borrowck;
 }
 
 impl rustc_driver::Callbacks for InterpretCallbacks {
+  // See `fake_mir_borrowck`
+  fn config(&mut self, config: &mut rustc_interface::interface::Config) {
+    config.override_queries = Some(override_queries);
+  }
+
   fn after_parsing<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,

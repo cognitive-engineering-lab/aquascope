@@ -314,6 +314,14 @@ $glyph-width: 14px;
     bottom: 1px;
     font-weight: bold;
   }
+
+  &.fail {
+    background: red;
+    
+    > span {
+      color: white;
+    }
+  }
 }
 
 .interpreter {
@@ -364,6 +372,11 @@ $glyph-width: 14px;
       .step-marker {
         font-size: 18px;
         font-family: $monospace;
+      }
+
+      .undefined-behavior {
+        margin-left: 10px;
+        color: red;
       }
     }
 
@@ -445,6 +458,18 @@ $glyph-width: 14px;
       td {
         border: 1px solid #ccc;
         transition: width 1s, height 1s;
+      }
+    }
+
+    .unallocated {
+      &.error {
+        display: inline-block;
+        width: 1.2em; // should be same as line-height
+
+        color: red;
+        border: 1px dashed red;
+        border-radius: 50%;    
+        text-align: center;  
       }
     }
   }

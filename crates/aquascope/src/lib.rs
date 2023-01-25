@@ -65,19 +65,15 @@ use ts_rs::TS;
 pub struct Range {
   pub char_start: usize,
   pub char_end: usize,
-  pub byte_start: usize,
-  pub byte_end: usize,
-  pub filename: String,
+  pub filename: usize,
 }
 
-impl From<flowistry::source_map::Range> for Range {
-  fn from(i: flowistry::source_map::Range) -> Self {
+impl From<flowistry::source_map::CharRange> for Range {
+  fn from(i: flowistry::source_map::CharRange) -> Self {
     Range {
-      char_start: i.char_start,
-      char_end: i.char_end,
-      byte_start: i.byte_start,
-      byte_end: i.byte_end,
-      filename: i.filename,
+      char_start: i.start.0,
+      char_end: i.end.0,
+      filename: i.filename.as_usize(),
     }
   }
 }

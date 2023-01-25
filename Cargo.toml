@@ -10,4 +10,5 @@ opt-level = 3
 opt-level = 3
 
 [patch.crates-io]
-flowistry = { git = "https://github.com/willcrichton/flowistry", rev = "5eb8f457e953c1b009e0b197adf1769b7dded590" }
+flowistry = { git = "https://github.com/willcrichton/flowistry", rev = "28ed3957dcc527036d163dad91653a8a3d4a29b0" }
+rustc_plugin = { git = "https://github.com/willcrichton/flowistry", rev = "28ed3957dcc527036d163dad91653a8a3d4a29b0" }

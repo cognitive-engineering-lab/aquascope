@@ -2,197 +2,185 @@
 source: crates/aquascope/tests/interpreter.rs
 description: box.test
 ---
-- stack:
-    frames:
-      - name: main
-        body_span:
-          char_start: 0
-          char_end: 64
-          byte_start: 0
-          byte_end: 64
-          filename: dummy.rs
-        location:
-          char_start: 14
-          char_end: 38
-          byte_start: 14
-          byte_end: 38
-          filename: dummy.rs
-        locals:
-          - - x
-            - type: Struct
-              value:
-                name: Box
-                fields:
-                  - - "0"
-                    - type: Struct
-                      value:
-                        name: Unique
-                        fields:
-                          - - pointer
-                            - type: Struct
-                              value:
-                                name: NonNull
-                                fields:
-                                  - - pointer
-                                    - type: Pointer
-                                      value:
-                                        path:
-                                          segment:
-                                            type: Heap
-                                            value:
-                                              index: 0
-                                          parts: []
-                                        range: ~
-                                alloc_kind: ~
-                        alloc_kind: ~
-                alloc_kind:
-                  type: Box
-  heap:
-    locations:
-      - type: Int
-        value: 0
-- stack:
-    frames:
-      - name: main
-        body_span:
-          char_start: 0
-          char_end: 64
-          byte_start: 0
-          byte_end: 64
-          filename: dummy.rs
-        location:
-          char_start: 41
-          char_end: 49
-          byte_start: 41
-          byte_end: 49
-          filename: dummy.rs
-        locals:
-          - - x
-            - type: Struct
-              value:
-                name: Box
-                fields:
-                  - - "0"
-                    - type: Struct
-                      value:
-                        name: Unique
-                        fields:
-                          - - pointer
-                            - type: Struct
-                              value:
-                                name: NonNull
-                                fields:
-                                  - - pointer
-                                    - type: Pointer
-                                      value:
-                                        path:
-                                          segment:
-                                            type: Heap
-                                            value:
-                                              index: 0
-                                          parts: []
-                                        range: ~
-                                alloc_kind: ~
-                        alloc_kind: ~
-                alloc_kind:
-                  type: Box
-  heap:
-    locations:
-      - type: Int
-        value: 1
-- stack:
-    frames:
-      - name: main
-        body_span:
-          char_start: 0
-          char_end: 64
-          byte_start: 0
-          byte_end: 64
-          filename: dummy.rs
-        location:
-          char_start: 52
-          char_end: 62
-          byte_start: 52
-          byte_end: 62
-          filename: dummy.rs
-        locals:
-          - - x
-            - type: Struct
-              value:
-                name: Box
-                fields:
-                  - - "0"
-                    - type: Struct
-                      value:
-                        name: Unique
-                        fields:
-                          - - pointer
-                            - type: Struct
-                              value:
-                                name: NonNull
-                                fields:
-                                  - - pointer
-                                    - type: Pointer
-                                      value:
-                                        path:
-                                          segment:
-                                            type: Heap
-                                            value:
-                                              index: 0
-                                          parts: []
-                                        range: ~
-                                alloc_kind: ~
-                        alloc_kind: ~
-                alloc_kind:
-                  type: Box
-          - - y
-            - type: Struct
-              value:
-                name: Box
-                fields:
-                  - - "0"
-                    - type: Struct
-                      value:
-                        name: Unique
-                        fields:
-                          - - pointer
-                            - type: Struct
-                              value:
-                                name: NonNull
-                                fields:
-                                  - - pointer
-                                    - type: Pointer
-                                      value:
-                                        path:
-                                          segment:
-                                            type: Heap
-                                            value:
-                                              index: 0
-                                          parts: []
-                                        range: ~
-                                alloc_kind: ~
-                        alloc_kind: ~
-                alloc_kind:
-                  type: Box
-  heap:
-    locations:
-      - type: Int
-        value: 1
-- stack:
-    frames:
-      - name: main
-        body_span:
-          char_start: 0
-          char_end: 64
-          byte_start: 0
-          byte_end: 64
-          filename: dummy.rs
-        location:
-          char_start: 63
-          char_end: 64
-          byte_start: 63
-          byte_end: 64
-          filename: dummy.rs
-        locals: []
-  heap:
-    locations: []
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 64
+            filename: 0
+          location:
+            char_start: 14
+            char_end: 38
+            filename: 0
+          locals:
+            - - x
+              - type: Struct
+                value:
+                  name: Box
+                  fields:
+                    - - "0"
+                      - type: Struct
+                        value:
+                          name: Unique
+                          fields:
+                            - - pointer
+                              - type: Struct
+                                value:
+                                  name: NonNull
+                                  fields:
+                                    - - pointer
+                                      - type: Pointer
+                                        value:
+                                          path:
+                                            segment:
+                                              type: Heap
+                                              value:
+                                                index: 0
+                                            parts: []
+                                          range: ~
+                                  alloc_kind: ~
+                          alloc_kind: ~
+                  alloc_kind:
+                    type: Box
+    heap:
+      locations:
+        - type: Int
+          value: 0
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 64
+            filename: 0
+          location:
+            char_start: 41
+            char_end: 49
+            filename: 0
+          locals:
+            - - x
+              - type: Struct
+                value:
+                  name: Box
+                  fields:
+                    - - "0"
+                      - type: Struct
+                        value:
+                          name: Unique
+                          fields:
+                            - - pointer
+                              - type: Struct
+                                value:
+                                  name: NonNull
+                                  fields:
+                                    - - pointer
+                                      - type: Pointer
+                                        value:
+                                          path:
+                                            segment:
+                                              type: Heap
+                                              value:
+                                                index: 0
+                                            parts: []
+                                          range: ~
+                                  alloc_kind: ~
+                          alloc_kind: ~
+                  alloc_kind:
+                    type: Box
+    heap:
+      locations:
+        - type: Int
+          value: 1
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 64
+            filename: 0
+          location:
+            char_start: 52
+            char_end: 62
+            filename: 0
+          locals:
+            - - x
+              - type: Struct
+                value:
+                  name: Box
+                  fields:
+                    - - "0"
+                      - type: Struct
+                        value:
+                          name: Unique
+                          fields:
+                            - - pointer
+                              - type: Struct
+                                value:
+                                  name: NonNull
+                                  fields:
+                                    - - pointer
+                                      - type: Pointer
+                                        value:
+                                          path:
+                                            segment:
+                                              type: Heap
+                                              value:
+                                                index: 0
+                                            parts: []
+                                          range: ~
+                                  alloc_kind: ~
+                          alloc_kind: ~
+                  alloc_kind:
+                    type: Box
+            - - y
+              - type: Struct
+                value:
+                  name: Box
+                  fields:
+                    - - "0"
+                      - type: Struct
+                        value:
+                          name: Unique
+                          fields:
+                            - - pointer
+                              - type: Struct
+                                value:
+                                  name: NonNull
+                                  fields:
+                                    - - pointer
+                                      - type: Pointer
+                                        value:
+                                          path:
+                                            segment:
+                                              type: Heap
+                                              value:
+                                                index: 0
+                                            parts: []
+                                          range: ~
+                                  alloc_kind: ~
+                          alloc_kind: ~
+                  alloc_kind:
+                    type: Box
+    heap:
+      locations:
+        - type: Int
+          value: 1
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 64
+            filename: 0
+          location:
+            char_start: 63
+            char_end: 64
+            filename: 0
+          locals: []
+    heap:
+      locations: []
+result:
+  type: Success
+

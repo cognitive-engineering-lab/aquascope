@@ -1,0 +1,312 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: error.test
+---
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 86
+            filename: 0
+          location:
+            char_start: 14
+            char_end: 40
+            filename: 0
+          locals:
+            - - v
+              - type: Struct
+                value:
+                  name: Vec
+                  fields:
+                    - - buf
+                      - type: Struct
+                        value:
+                          name: RawVec
+                          fields:
+                            - - ptr
+                              - type: Struct
+                                value:
+                                  name: Unique
+                                  fields:
+                                    - - pointer
+                                      - type: Struct
+                                        value:
+                                          name: NonNull
+                                          fields:
+                                            - - pointer
+                                              - type: Pointer
+                                                value:
+                                                  path:
+                                                    segment:
+                                                      type: Heap
+                                                      value:
+                                                        index: 0
+                                                    parts:
+                                                      - type: Index
+                                                        value: 0
+                                                  range: ~
+                                          alloc_kind: ~
+                                  alloc_kind: ~
+                            - - cap
+                              - type: Uint
+                                value: 3
+                          alloc_kind: ~
+                    - - len
+                      - type: Uint
+                        value: 3
+                  alloc_kind:
+                    type: Vec
+                    value:
+                      len: 3
+    heap:
+      locations:
+        - type: Array
+          value:
+            type: All
+            value:
+              - type: Int
+                value: 1
+              - type: Int
+                value: 2
+              - type: Int
+                value: 3
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 86
+            filename: 0
+          location:
+            char_start: 43
+            char_end: 57
+            filename: 0
+          locals:
+            - - v
+              - type: Struct
+                value:
+                  name: Vec
+                  fields:
+                    - - buf
+                      - type: Struct
+                        value:
+                          name: RawVec
+                          fields:
+                            - - ptr
+                              - type: Struct
+                                value:
+                                  name: Unique
+                                  fields:
+                                    - - pointer
+                                      - type: Struct
+                                        value:
+                                          name: NonNull
+                                          fields:
+                                            - - pointer
+                                              - type: Pointer
+                                                value:
+                                                  path:
+                                                    segment:
+                                                      type: Heap
+                                                      value:
+                                                        index: 0
+                                                    parts:
+                                                      - type: Index
+                                                        value: 0
+                                                  range: ~
+                                          alloc_kind: ~
+                                  alloc_kind: ~
+                            - - cap
+                              - type: Uint
+                                value: 3
+                          alloc_kind: ~
+                    - - len
+                      - type: Uint
+                        value: 3
+                  alloc_kind:
+                    type: Vec
+                    value:
+                      len: 3
+            - - y
+              - type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Heap
+                      value:
+                        index: 0
+                    parts:
+                      - type: Index
+                        value: 0
+                  range: ~
+    heap:
+      locations:
+        - type: Array
+          value:
+            type: All
+            value:
+              - type: Int
+                value: 1
+              - type: Int
+                value: 2
+              - type: Int
+                value: 3
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 86
+            filename: 0
+          location:
+            char_start: 60
+            char_end: 70
+            filename: 0
+          locals:
+            - - v
+              - type: Struct
+                value:
+                  name: Vec
+                  fields:
+                    - - buf
+                      - type: Struct
+                        value:
+                          name: RawVec
+                          fields:
+                            - - ptr
+                              - type: Struct
+                                value:
+                                  name: Unique
+                                  fields:
+                                    - - pointer
+                                      - type: Struct
+                                        value:
+                                          name: NonNull
+                                          fields:
+                                            - - pointer
+                                              - type: Pointer
+                                                value:
+                                                  path:
+                                                    segment:
+                                                      type: Heap
+                                                      value:
+                                                        index: 0
+                                                    parts:
+                                                      - type: Index
+                                                        value: 0
+                                                  range: ~
+                                          alloc_kind: ~
+                                  alloc_kind: ~
+                            - - cap
+                              - type: Uint
+                                value: 6
+                          alloc_kind: ~
+                    - - len
+                      - type: Uint
+                        value: 4
+                  alloc_kind:
+                    type: Vec
+                    value:
+                      len: 4
+            - - y
+              - type: Unallocated
+                value:
+                  alloc_id: 862
+    heap:
+      locations:
+        - type: Array
+          value:
+            type: All
+            value:
+              - type: Int
+                value: 1
+              - type: Int
+                value: 2
+              - type: Int
+                value: 3
+              - type: Int
+                value: 0
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 86
+            filename: 0
+          location:
+            char_start: 73
+            char_end: 84
+            filename: 0
+          locals:
+            - - v
+              - type: Struct
+                value:
+                  name: Vec
+                  fields:
+                    - - buf
+                      - type: Struct
+                        value:
+                          name: RawVec
+                          fields:
+                            - - ptr
+                              - type: Struct
+                                value:
+                                  name: Unique
+                                  fields:
+                                    - - pointer
+                                      - type: Struct
+                                        value:
+                                          name: NonNull
+                                          fields:
+                                            - - pointer
+                                              - type: Pointer
+                                                value:
+                                                  path:
+                                                    segment:
+                                                      type: Heap
+                                                      value:
+                                                        index: 0
+                                                    parts:
+                                                      - type: Index
+                                                        value: 0
+                                                  range: ~
+                                          alloc_kind: ~
+                                  alloc_kind: ~
+                            - - cap
+                              - type: Uint
+                                value: 6
+                          alloc_kind: ~
+                    - - len
+                      - type: Uint
+                        value: 4
+                  alloc_kind:
+                    type: Vec
+                    value:
+                      len: 4
+            - - y
+              - type: Unallocated
+                value:
+                  alloc_id: 862
+    heap:
+      locations:
+        - type: Array
+          value:
+            type: All
+            value:
+              - type: Int
+                value: 1
+              - type: Int
+                value: 2
+              - type: Int
+                value: 3
+              - type: Int
+                value: 0
+result:
+  type: Error
+  value:
+    type: PointerUseAfterFree
+    value:
+      alloc_id: 862
+

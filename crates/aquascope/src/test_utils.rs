@@ -2,12 +2,13 @@ use std::{collections::HashMap, fs, io, panic, path::Path, process::Command};
 
 use anyhow::{bail, Context, Result};
 use flowistry::{
-  indexed::impls::LocationOrArg,
+  indexed::impls::{FilenameIndex, LocationOrArg},
   mir::{
     borrowck_facts::{self, NO_SIMPLIFY},
     utils::{BodyExt, OperandExt},
   },
-  source_map::{self, GraphemeIndices, Range, Spanner, ToSpan},
+  source_map::{self, Spanner, ToSpan},
+  test_utils::{DUMMY_CHAR_RANGE, DUMMY_FILE},
 };
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
@@ -16,12 +17,12 @@ use rustc_middle::{
   mir::{Rvalue, StatementKind},
   ty::TyCtxt,
 };
-use rustc_span::{source_map::FileLoader, BytePos};
+use rustc_span::source_map::FileLoader;
 
 use crate::{
   analysis::{self, permissions::Permissions, stepper::PermissionsDataDiff},
   errors,
-  interpreter::{self, MStep},
+  interpreter::{self, MTrace},
 };
 
 struct StringLoader(String);
@@ -60,7 +61,8 @@ impl From<&str> for Permissions {
 
 // Intermediate step that maps a start-end position,
 // to a place string and corresponding permissions.
-type PermMap = HashMap<(usize, usize), (String, Permissions)>;
+type PermMap =
+  HashMap<(source_map::BytePos, source_map::BytePos), (String, Permissions)>;
 
 fn split_test_source(
   source: impl AsRef<str>,
@@ -115,7 +117,13 @@ fn split_test_source(
 
       let perms = perms_str.into();
 
-      perm_map.insert((start_range, end_range), (var.to_string(), perms));
+      perm_map.insert(
+        (
+          source_map::BytePos(start_range),
+          source_map::BytePos(end_range),
+        ),
+        (var.to_string(), perms),
+      );
       source_idx += close.len();
     } else if check_delim!(close) {
       bail!(
@@ -136,15 +144,20 @@ fn split_test_source(
 fn parse_test_source(
   src: &str,
   delimeters: (&'static str, &'static str),
-) -> Result<(String, HashMap<Range, Permissions>)> {
+) -> Result<(String, HashMap<source_map::ByteRange, Permissions>)> {
   let (clean, interim_map) = split_test_source(src, delimeters)?;
-
-  let indices = GraphemeIndices::new(&clean);
 
   let map = interim_map
     .into_iter()
-    .map(|((s, e), (_var_str, perms))| {
-      (Range::from_byte_range(s, e, "dummy.rs", &indices), perms)
+    .map(|((start, end), (_var_str, perms))| {
+      (
+        source_map::ByteRange {
+          start,
+          end,
+          filename: *DUMMY_FILE,
+        },
+        perms,
+      )
     })
     .collect::<HashMap<_, _>>();
 
@@ -276,9 +289,9 @@ pub fn test_steps_in_file(
         ctxt,
         PermIncludeMode::Changes,
         |span| {
-          source_map::Range::from_span(span, source_map)
+          source_map::CharRange::from_span(span, source_map)
             .ok()
-            .unwrap_or_default()
+            .unwrap_or(*DUMMY_CHAR_RANGE)
             .into()
         },
       );
@@ -290,8 +303,13 @@ pub fn test_steps_in_file(
       let normalized = body_steps
         .into_iter()
         .map(|pss| {
-          let bp = BytePos(pss.location.byte_end as u32);
-          let line_num = source_map.lookup_line(bp).unwrap().line;
+          let char_range = source_map::CharRange {
+            start: source_map::CharPos(pss.location.char_start),
+            end: source_map::CharPos(pss.location.char_end),
+            filename: FilenameIndex::from_usize(pss.location.filename),
+          };
+          let span = char_range.to_span(ctxt.tcx).unwrap();
+          let line_num = source_map.lookup_line(span.hi()).unwrap().line;
           // FIXME: we shouldn't flatten the tables together, this was only a
           // quick fix for the tests.
           let inner_info = pss
@@ -314,7 +332,7 @@ pub fn test_steps_in_file(
 
 pub fn test_interpreter_in_file(
   path: &Path,
-  run_insta: impl Fn(String, Vec<MStep<crate::Range>>) + Sync,
+  run_insta: impl Fn(String, MTrace<crate::Range>) + Sync,
 ) {
   let main = || -> Result<()> {
     let input = load_test_from_file(path)?;
@@ -322,7 +340,7 @@ pub fn test_interpreter_in_file(
       "--crate-type bin --sysroot {}",
       aquascope_workspace_utils::miri_sysroot()?.display()
     );
-    compile(input, &args, |tcx| {
+    compile(input, &args, true, |tcx| {
       let name = path.file_name().unwrap().to_string_lossy().to_string();
       let result = interpreter::interpret(tcx).unwrap();
       run_insta(name, result);
@@ -384,6 +402,7 @@ pub fn compile_bodies(
   compile(
     input,
     &format!("--crate-type lib --sysroot {}", &*SYSROOT),
+    false,
     |tcx| {
       let hir = tcx.hir();
       hir
@@ -410,10 +429,12 @@ pub fn compile_bodies(
 pub fn compile(
   input: impl Into<String>,
   args: &str,
+  is_interpreter: bool,
   callback: impl FnOnce(TyCtxt<'_>) + Send,
 ) {
   let mut callbacks = TestCallbacks {
     callback: Some(callback),
+    is_interpreter,
   };
   let args = format!(
     "rustc dummy.rs --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings {args}",
@@ -431,6 +452,7 @@ pub fn compile(
 
 struct TestCallbacks<Cb> {
   callback: Option<Cb>,
+  is_interpreter: bool,
 }
 
 impl<Cb> rustc_driver::Callbacks for TestCallbacks<Cb>
@@ -470,7 +492,11 @@ where
     }));
 
     NO_SIMPLIFY.store(true, Ordering::SeqCst);
-    config.override_queries = Some(borrowck_facts::override_queries);
+    config.override_queries = Some(if self.is_interpreter {
+      crate::interpreter::override_queries
+    } else {
+      borrowck_facts::override_queries
+    });
   }
 
   fn after_parsing<'tcx>(
