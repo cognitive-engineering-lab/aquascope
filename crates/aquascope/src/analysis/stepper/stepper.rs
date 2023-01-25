@@ -716,11 +716,24 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     let body = &hir.body(ctxt.body_id);
     let body_hir_id = body.value.hir_id;
     let body_span = body.value.span;
-    let (from, to) = ir_mapper
+
+    let mol = ir_mapper
       .get_mir_locations(body_hir_id, GatherDepth::Nested)
-      .unwrap()
-      .get_entry_exit_locations()
       .unwrap();
+    // A body must have an entry location.
+    let from = mol.entry_location().unwrap();
+
+    assert_eq!(from, Location {
+      block: mir::START_BLOCK,
+      statement_index: 0,
+    });
+
+    // A body with an infinite loop will not generate MIR that
+    // contains an exit location.
+    let to = mol.exit_location().unwrap_or_else(|| {
+      log::error!("you found a body that doesn't have an exit location! did someone say infinite loop?");
+      todo!("bodies containing an infinite loop is a stepper incompleteness, a fix is coming :)");
+    });
 
     let body_segment = MirSegment::new(from, to);
     let mir_segments = Box::new(SegmentTree::new(body_segment, body_span));
@@ -821,7 +834,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
         self.mir_segments.as_mut().replace_single(segment, subtree)
       }
 
-      _ => unreachable!(),
+      _ => unreachable!("enclosing segments can only be a `Single` variant, this is a stepper bug!"),
     }
   }
 
@@ -1268,6 +1281,8 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
     use hir::{ExprKind as EK, LoopSource, StmtKind as SK};
 
     match expr.kind {
+      // Special case for While Loop desugaring, this shouldn't be necessary
+      // when generic loops are handled.
       EK::Loop(
         hir::Block {
           stmts: [],
@@ -1311,6 +1326,8 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
         intravisit::walk_expr(self, then);
       }
 
+      // Special case for For Loop desugaring, this shouldn't be necessary
+      // when generic loops are handled.
       EK::Loop(
         hir::Block {
           stmts:
@@ -1359,11 +1376,16 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
         intravisit::walk_arm(self, some);
       }
 
+      // TODO: have a split strategy for bare loops. They could be infinite, and
+      // thus have no exit block. This shouldn't be an issue but it currently is.
       EK::Loop(_block, _label, LoopSource::Loop, _span) => {
         todo!("bare loops aren't working yet, sorry!")
       }
 
       EK::If(cnd, then, else_opt) => {
+        // NOTE: first we need to walk and split the condition. In the
+        // case of a more complex condition expression, splitting this
+        // first will result in a split location closest to the `SwitchInt`.
         intravisit::walk_expr(self, cnd);
 
         let ids = [Some(then), else_opt]
@@ -1381,6 +1403,9 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
       }
 
       EK::Match(swtch, arms, _source) => {
+        // NOTE: first we need to walk and split the condition. In the
+        // case of a more complex condition expression, splitting this
+        // first will result in a split location closest to the `SwitchInt`.
         intravisit::walk_expr(self, swtch);
 
         let ids = arms

@@ -659,6 +659,12 @@ impl<'tcx> WithPredecessors for CleanedBody<'_, 'tcx> {
   }
 }
 
+/// Finds all paths between two nodes.
+///
+/// This DFS will find all unique paths between two nodes. This
+/// includes allowing loops to be traversed (at most once).
+/// This is quite a HACK to briefly satisfy the needs of the
+/// [stepper](crate::analysis::stepper::compute_permission_steps).
 struct DFSFinder<'graph, G>
 where
   G: ?Sized + DirectedGraph + WithNumNodes + WithSuccessors,
@@ -666,7 +672,6 @@ where
   graph: &'graph G,
   paths: Vec<Vec<G::Node>>,
   stack: Vec<G::Node>,
-  // visited: BitSet<G::Node>,
   visited: HashMap<G::Node, u8>,
 }
 
@@ -679,7 +684,6 @@ where
       graph,
       paths: vec![],
       stack: vec![],
-      // visited: BitSet::new_empty(graph.num_nodes()),
       visited: HashMap::default(),
     }
   }
