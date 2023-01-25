@@ -4,7 +4,7 @@
 
 ## Looking under the surface of rustc, _at a safe distance_.
 
-Aquascope is a tool that generates visualizations aiming to further program understanding. It's distributed as a editor embedable into [mdBook](https://rust-lang.github.io/mdBook/) via a preprocessor or you can try it out [in the browser](https://gavinleroy.com/aquascope).
+_Aquascope_{: .small} is a tool that generates interactive visualizations from Rust programs. These visualizations aim to help learners intuit correct semantics for the borrow checker and the difference between safe and unsafe programs. Aquascope is distributed as an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor or you can try it out [in the browser](https://gavinleroy.com/aquascope).
 
 <!-- Borrow check information is reformulated in terms of _permissions_, a new pedagogy of ownership to provide learners with a notional machine for this kind of static analysis. Example visualizations and this new pedagogy are demonstrated in the [Rust Book Experiment](https://rust-book.cs.brown.edu/). -->
 
@@ -44,7 +44,8 @@ Currently, Aquascope supports three types of visualizations:
 <table>
     <tr>
         <td>
-<code>
+<pre>
+<code style="display: block; padding: 20px;">
 ```aquascope,boundaries
 fn main() {
     let mut x = 1;
@@ -53,6 +54,7 @@ fn main() {
 }
 ```
 </code>
+</pre>
         </td>
         <td>
         TODO: insert image
