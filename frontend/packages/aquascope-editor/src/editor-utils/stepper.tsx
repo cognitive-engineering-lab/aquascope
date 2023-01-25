@@ -18,7 +18,8 @@ import ReactDOM from "react-dom/client";
 
 import {
   PermissionsDataDiff,
-  PermissionsStateStep,
+  PermissionsLineDisplay,
+  PermissionsStepTable,
   StepperAnnotations,
   ValueStep,
 } from "../types";
@@ -217,7 +218,7 @@ let PermDiffRow = ({
   );
 };
 
-let stepLocation = (step: PermissionsStateStep): number => {
+let stepLocation = (step: PermissionsLineDisplay): number => {
   return step.location.char_end;
 };
 
@@ -229,21 +230,16 @@ let StepTable = ({ rows }: { rows: [string, PermissionsDataDiff][] }) => (
   </table>
 );
 
-let StepTableWidget = ({
-  spaces,
+// An individual table goes inside of the overall container, and
+// contains its own dropdown based on focused / unfocused places.
+let StepTableIndividual = ({
   focused,
   hidden,
-  init,
 }: {
-  spaces: string;
   focused: [string, PermissionsDataDiff][];
   hidden: [string, PermissionsDataDiff][];
-  init: boolean;
 }): JSX.Element => {
-  let [display, setDisplay] = useState(init);
   let [displayAll, setDisplayAll] = useState(false);
-  let arrowOut = "»";
-  let arrowIn = "«";
 
   let hiddenDropdown =
     hidden.length > 0 ? (
@@ -254,6 +250,49 @@ let StepTableWidget = ({
         </div>
       </>
     ) : null;
+
+  return (
+    <div
+      className="step-table-container"
+      onClick={() => setDisplayAll(!displayAll)}
+    >
+      <StepTable rows={focused} />
+      {hiddenDropdown}
+    </div>
+  );
+};
+
+// On a single line there can be multiple tables next to each other.
+// All tables go in a container that can be collapsed to the left.
+let StepLine = ({
+  spaces,
+  focusedRegex,
+  tables,
+  init,
+}: {
+  spaces: string;
+  focusedRegex: RegExp;
+  tables: PermissionsStepTable[];
+  init: boolean;
+}): JSX.Element => {
+  let [display, setDisplay] = useState(init);
+  let arrowOut = "»";
+  let arrowIn = "«";
+
+  let together = tables.map((table, i) => {
+    let [focusedDiffs, hiddenDiffs] = _.partition(
+      table.state,
+      ([path, _]) => !!path.match(focusedRegex)
+    );
+
+    return (
+      <StepTableIndividual
+        key={i}
+        focused={focusedDiffs}
+        hidden={hiddenDiffs}
+      />
+    );
+  });
 
   return (
     <div className="perm-step-widget">
@@ -267,31 +306,25 @@ let StepTableWidget = ({
         })}
       >
         {spaces}
-        <div
-          className="step-table-container"
-          onClick={() => setDisplayAll(!displayAll)}
-        >
-          <StepTable rows={focused} />
-          {hiddenDropdown}
-        </div>
+        {together}
       </div>
     </div>
   );
 };
 
-class PermissionStepTableWidget extends WidgetType {
+class PermissionStepLineWidget extends WidgetType {
   line: Line;
   rowHTML?: string;
   constructor(
     readonly view: EditorView,
-    readonly step: PermissionsStateStep,
+    readonly step: PermissionsLineDisplay,
     readonly annotations?: StepperAnnotations
   ) {
     super();
     this.line = view.state.doc.lineAt(stepLocation(step));
   }
 
-  eq(other: PermissionStepTableWidget): boolean {
+  eq(other: PermissionStepLineWidget): boolean {
     // Only one table widget can (should) be on a line.
     return this.line.number === other.line.number;
   }
@@ -317,17 +350,14 @@ class PermissionStepTableWidget extends WidgetType {
     let r = new RegExp(
       this.annotations?.focused_paths[currLine.number] ?? "(.*)?"
     );
-    console.log(`regex for line ${currLine.number} :: ${r}`);
-    let [focusedDiffs, hiddenDiffs] = _.partition(
-      this.step.state,
-      ([path, _]) => !!path.match(r)
-    );
+
+    let tables = this.step.state;
 
     ReactDOM.createRoot(container).render(
-      <StepTableWidget
+      <StepLine
         spaces={spaces}
-        focused={focusedDiffs}
-        hidden={hiddenDiffs}
+        focusedRegex={r}
+        tables={tables}
         init={initDisplay}
       />
     );
@@ -360,13 +390,13 @@ export let stepField = StateField.define<DecorationSet>({
 
 export function renderSteps(
   view: EditorView,
-  stateSteps: PermissionsStateStep[],
+  stateSteps: PermissionsLineDisplay[],
   annotations?: StepperAnnotations
 ) {
   let decos = _.sortBy(
     stateSteps.map(step =>
       Decoration.widget({
-        widget: new PermissionStepTableWidget(view, step, annotations),
+        widget: new PermissionStepLineWidget(view, step, annotations),
       }).range(stepLocation(step))
     ),
     deco => deco.from

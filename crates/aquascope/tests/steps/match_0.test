@@ -1,0 +1,18 @@
+fn foo(mut b: i32) {
+  let a = &mut b;
+
+  match {
+    *a += 1;
+    let z = *a * 2;
+    let q = *a / 2;
+    (z + q - *a) * 3 > 100
+  } {
+      true => {
+        println!("{a}");
+      },
+
+      false => {
+        println!("{b}");
+      },
+  }
+}

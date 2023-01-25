@@ -2,28 +2,33 @@
 use std::fmt;
 
 use flowistry::mir::utils::BodyExt;
+use itertools::Itertools;
 use rustc_data_structures::{
   captures::Captures,
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
   graph::{dominators::Dominators, *},
 };
 use rustc_hir::{self as hir, HirId};
-use rustc_index::bit_set::{BitSet, SparseBitMatrix};
+use rustc_index::{
+  bit_set::{BitSet, SparseBitMatrix},
+  vec::Idx,
+};
 use rustc_middle::{
   mir::{
-    self, visit::Visitor as MirVisitor, BasicBlock, Body, Location, Place,
+    self, visit::Visitor as MirVisitor, BasicBlock, BasicBlockData,
+    BasicBlocks, Body, Location, Place,
   },
   ty::TyCtxt,
 };
 
 pub struct IRMapper<'a, 'tcx> {
-  // flowistry::Spanner
+  pub(crate) cleaned_graph: CleanedBody<'a, 'tcx>,
   tcx: TyCtxt<'tcx>,
   body: &'a Body<'tcx>,
   hir_to_mir: HashMap<HirId, HashSet<Location>>,
   gather_mode: GatherMode,
   dominators: Dominators<BasicBlock>,
-  post_dominators: PostDominators,
+  post_dominators: PostDominators<BasicBlock>,
 }
 
 // TODO: I want to decompose this into more specific regions.
@@ -128,6 +133,8 @@ where
   ) -> Self {
     let dominators = body.basic_blocks.dominators();
     let control_dependencies = PostDominators::build(body);
+    let cleaned_graph = CleanedBody::make(body);
+
     let mut ir_map = IRMapper {
       tcx,
       body,
@@ -135,6 +142,7 @@ where
       post_dominators: control_dependencies,
       hir_to_mir: HashMap::default(),
       gather_mode,
+      cleaned_graph,
     };
 
     ir_map.visit_body(body);
@@ -144,31 +152,32 @@ where
       let _hirs = hir.node_to_string(*id);
     }
 
-    #[cfg(debug_assertions)]
-    ir_map.check_invariants();
+    if cfg!(debug_assertions) {
+      ir_map.check_invariants();
+    }
 
     ir_map
   }
 
-  pub fn local_assigned_place(
-    &self,
-    local: &hir::Local,
-  ) -> Option<Place<'tcx>> {
+  pub fn local_assigned_place(&self, local: &hir::Local) -> Vec<Place<'tcx>> {
     use either::Either;
     use mir::{FakeReadCause as FRC, StatementKind as SK};
     let id = local.hir_id;
-    if let Some(mol) = self.get_mir_locations(id, GatherDepth::Outer) {
-      for loc in mol.values() {
-        match self.body.stmt_at(loc) {
-          Either::Left(mir::Statement {
-            kind: SK::FakeRead(box (FRC::ForLet(_), place)),
-            ..
-          }) => return Some(*place),
-          _ => continue,
-        }
-      }
-    }
-    None
+    self
+      .get_mir_locations(id, GatherDepth::Outer)
+      .map(|mol| {
+        mol
+          .values()
+          .filter_map(|loc| match self.body.stmt_at(loc) {
+            Either::Left(mir::Statement {
+              kind: SK::FakeRead(box (FRC::ForLet(_), place)),
+              ..
+            }) => Some(*place),
+            _ => None,
+          })
+          .collect::<Vec<_>>()
+      })
+      .unwrap_or_else(|| Vec::default())
   }
 
   // Determines whether or not a block was inserted solely as a
@@ -192,7 +201,7 @@ where
   /// This works under the assumption that there exists a global
   /// maximum in the (post-)dominator lattice.
   ///
-  /// See: https://en.wikipedia.org/wiki/Dominator_(graph_theory)
+  /// See: <https://en.wikipedia.org/wiki/Dominator_(graph_theory)>
   pub fn get_mir_locations(
     &self,
     hir_id: HirId,
@@ -200,9 +209,7 @@ where
   ) -> Option<MirOrderedLocations> {
     let empty_set = &HashSet::default();
     let outer = self.hir_to_mir.get(&hir_id).unwrap_or(empty_set);
-
     let mut locations = outer.clone();
-
     match depth {
       GatherDepth::Outer => (),
       // Gather all the mir locations for every HirId nested under this one.
@@ -248,7 +255,7 @@ where
 
     let exit_block = basic_blocks.iter().find(|&&&b1| {
       basic_blocks.iter().all(|&&b2| {
-        b1 == b2 || self.post_dominators.is_postdominated_by(b1, b2)
+        b1 == b2 || self.post_dominators.is_postdominated_by(b2, b1)
       })
     });
 
@@ -291,6 +298,45 @@ where
         });
 
     assert!(disjoint_locations);
+  }
+}
+
+// -------------------------------------------------------------------
+// Gather the HIR -> MIR relationships for statements and terminators.
+
+impl<'tcx> MirVisitor<'tcx> for IRMapper<'_, 'tcx> {
+  fn visit_basic_block_data(
+    &mut self,
+    block: mir::BasicBlock,
+    data: &mir::BasicBlockData<'tcx>,
+  ) {
+    match self.gather_mode {
+      GatherMode::All => self.super_basic_block_data(block, data),
+      GatherMode::IgnoreCleanup if !data.is_cleanup => {
+        self.super_basic_block_data(block, data)
+      }
+      GatherMode::IgnoreCleanup => {
+        log::debug!("Ignoring cleanup block {block:?}");
+      }
+    }
+  }
+
+  fn visit_statement(
+    &mut self,
+    _terminator: &mir::Statement<'tcx>,
+    location: Location,
+  ) {
+    let hir_id = self.body.location_to_hir_id(location);
+    self.hir_to_mir.entry(hir_id).or_default().insert(location);
+  }
+
+  fn visit_terminator(
+    &mut self,
+    _terminator: &mir::Terminator<'tcx>,
+    location: Location,
+  ) {
+    let hir_id = self.body.location_to_hir_id(location);
+    self.hir_to_mir.entry(hir_id).or_default().insert(location);
   }
 }
 
@@ -386,9 +432,9 @@ fn compute_post_dominators(
     .collect()
 }
 
-pub struct PostDominators(SparseBitMatrix<BasicBlock, BasicBlock>);
+pub struct PostDominators<Node: Idx>(SparseBitMatrix<Node, Node>);
 
-impl fmt::Debug for PostDominators {
+impl fmt::Debug for PostDominators<BasicBlock> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     for (i, (bb, bbs)) in self
       .0
@@ -412,7 +458,7 @@ impl fmt::Debug for PostDominators {
   }
 }
 
-impl PostDominators {
+impl PostDominators<BasicBlock> {
   pub fn build(body: &Body) -> Self {
     PostDominators(
       body
@@ -456,45 +502,283 @@ impl PostDominators {
   }
 
   pub fn is_postdominated_by(&self, b1: BasicBlock, pdom: BasicBlock) -> bool {
-    self.0.row(pdom).map_or(false, |row| row.contains(b1))
+    self.0.row(b1).map_or(false, |row| row.contains(pdom))
   }
 }
 
-// -------------------------------------------------------------------
-// Gather the HIR -> MIR relationships for statements and terminators.
+/// A /cleaned/ graph representation for working with the MIR.
+///
+/// A `CleanedBody` represents MIR locations that are reachable via
+/// regular control-flow. This removes cleanup blocks or those which
+/// fall in unwind paths. When mapping back to source-level constructs
+/// this is almost certainly what you want to use.
+pub(crate) struct CleanedBody<'a, 'tcx: 'a> {
+  body: &'a Body<'tcx>,
+  doms: Option<Dominators<BasicBlock>>,
+  pdoms: PostDominators<BasicBlock>,
+}
 
-impl<'tcx> MirVisitor<'tcx> for IRMapper<'_, 'tcx> {
-  fn visit_basic_block_data(
-    &mut self,
-    block: mir::BasicBlock,
-    data: &mir::BasicBlockData<'tcx>,
-  ) {
-    match self.gather_mode {
-      GatherMode::All => self.super_basic_block_data(block, data),
-      GatherMode::IgnoreCleanup if !data.is_cleanup => {
-        self.super_basic_block_data(block, data)
-      }
-      GatherMode::IgnoreCleanup => {
-        log::debug!("Ignoring cleanup block {block:?}");
+impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
+  fn make(body: &'a Body<'tcx>) -> Self {
+    let mut g = CleanedBody {
+      body,
+      doms: None,
+      pdoms: PostDominators::build(body),
+    };
+
+    let doms = dominators::dominators(&g);
+    g.doms = Some(doms);
+
+    g
+  }
+
+  pub fn body(&self) -> &'a Body<'tcx> {
+    &self.body
+  }
+
+  pub fn vertices(&self) -> Vec<BasicBlock> {
+    self
+      .body
+      .basic_blocks
+      .indices()
+      .filter(|bbi| CleanedBody::keep_block(&self.body.basic_blocks[*bbi]))
+      .collect::<Vec<_>>()
+  }
+
+  pub(crate) fn dominators(&self) -> &Dominators<BasicBlock> {
+    self.doms.as_ref().unwrap()
+  }
+
+  pub(crate) fn post_dominators(&self) -> &PostDominators<BasicBlock> {
+    &self.pdoms
+  }
+
+  // TODO: cache the results
+  pub(crate) fn paths_from_to(
+    &self,
+    from: BasicBlock,
+    to: BasicBlock,
+  ) -> Vec<Vec<BasicBlock>> {
+    DFSFinder::find_paths_from_to(self, from, to)
+  }
+
+  /// Compute the locations successor.
+  ///
+  /// If the specified location lies in the middle of a `BasicBlock`,
+  /// the successor location is simply the Location with the next statement index.
+  /// When analyzing terminators, if the jump location is not clear, `None` will
+  /// be returned. (NOTE: jump locations are computed based on the cleaned graph).
+  pub(crate) fn location_successor(
+    &self,
+    location: Location,
+  ) -> Option<Location> {
+    let b = location.block;
+    let si = location.statement_index;
+    let bbd = &self.body.basic_blocks[b];
+
+    if si < bbd.statements.len() {
+      Some(location.successor_within_block())
+    } else {
+      // The location is a terminator. If there exists
+      // only a singular block successor in the cleaned graph,
+      // then we can take the first statement in the block,
+      // otherwise we just give up.
+      let nexts = self.successors(location.block).collect::<Vec<_>>();
+      if nexts.len() == 1 {
+        Some(Location {
+          block: nexts[0],
+          statement_index: 0,
+        })
+      } else {
+        None
       }
     }
   }
 
-  fn visit_statement(
-    &mut self,
-    _terminator: &mir::Statement<'tcx>,
-    location: Location,
-  ) {
-    let hir_id = self.body.location_to_hir_id(location);
-    self.hir_to_mir.entry(hir_id).or_default().insert(location);
+  fn keep_block(bb: &BasicBlockData) -> bool {
+    !bb.is_cleanup && !bb.is_empty_unreachable()
+  }
+}
+
+// -----------
+// Graph impls
+
+impl DirectedGraph for CleanedBody<'_, '_> {
+  type Node = BasicBlock;
+}
+
+impl WithStartNode for CleanedBody<'_, '_> {
+  fn start_node(&self) -> Self::Node {
+    self.body.basic_blocks.start_node()
+  }
+}
+
+impl<'tcx> WithNumNodes for CleanedBody<'_, 'tcx> {
+  fn num_nodes(&self) -> usize {
+    self.body.basic_blocks.len()
+  }
+}
+
+impl<'tcx, 'graph> GraphSuccessors<'graph> for CleanedBody<'_, 'tcx> {
+  type Item = BasicBlock;
+  type Iter = Box<dyn Iterator<Item = BasicBlock> + 'graph>;
+}
+
+impl<'tcx> WithSuccessors for CleanedBody<'_, 'tcx> {
+  fn successors(
+    &self,
+    node: Self::Node,
+  ) -> <Self as GraphSuccessors<'_>>::Iter {
+    Box::new(
+      <BasicBlocks as WithSuccessors>::successors(
+        &self.body.basic_blocks,
+        node,
+      )
+      .filter(|bb| CleanedBody::keep_block(&self.body.basic_blocks[*bb])),
+    )
+  }
+}
+
+impl<'tcx, 'graph> GraphPredecessors<'graph> for CleanedBody<'_, 'tcx> {
+  type Item = BasicBlock;
+  type Iter = Box<dyn Iterator<Item = BasicBlock> + 'graph>;
+}
+
+impl<'tcx> WithPredecessors for CleanedBody<'_, 'tcx> {
+  fn predecessors(
+    &self,
+    node: Self::Node,
+  ) -> <Self as GraphSuccessors<'_>>::Iter {
+    Box::new(
+      <BasicBlocks as WithPredecessors>::predecessors(
+        &self.body.basic_blocks,
+        node,
+      )
+      .filter(|bb| CleanedBody::keep_block(&self.body.basic_blocks[*bb])),
+    )
+  }
+}
+
+/// Finds all paths between two nodes.
+///
+/// This DFS will find all unique paths between two nodes. This
+/// includes allowing loops to be traversed (at most once).
+/// This is quite a HACK to briefly satisfy the needs of the
+/// [stepper](crate::analysis::stepper::compute_permission_steps).
+struct DFSFinder<'graph, G>
+where
+  G: ?Sized + DirectedGraph + WithNumNodes + WithSuccessors,
+{
+  graph: &'graph G,
+  paths: Vec<Vec<G::Node>>,
+  stack: Vec<G::Node>,
+  visited: HashMap<G::Node, u8>,
+}
+
+impl<'graph, G> DFSFinder<'graph, G>
+where
+  G: ?Sized + DirectedGraph + WithNumNodes + WithSuccessors,
+{
+  pub fn new(graph: &'graph G) -> Self {
+    Self {
+      graph,
+      paths: vec![],
+      stack: vec![],
+      visited: HashMap::default(),
+    }
   }
 
-  fn visit_terminator(
-    &mut self,
-    _terminator: &mir::Terminator<'tcx>,
-    location: Location,
-  ) {
-    let hir_id = self.body.location_to_hir_id(location);
-    self.hir_to_mir.entry(hir_id).or_default().insert(location);
+  pub fn find_paths_from_to(
+    graph: &'graph G,
+    from: G::Node,
+    to: G::Node,
+  ) -> Vec<Vec<G::Node>> {
+    let mut dfs = Self::new(graph);
+    dfs.search(from, to);
+    dfs.paths.into_iter().unique().collect::<Vec<_>>()
+  }
+
+  fn insert(&mut self, n: G::Node) -> bool {
+    let v = self.visited.entry(n).or_default();
+    if *v >= 2 {
+      return false;
+    }
+    *v += 1;
+    true
+  }
+
+  fn remove(&mut self, n: G::Node) {
+    let v = self.visited.entry(n).or_default();
+    assert!(*v > 0);
+    *v -= 1;
+  }
+
+  fn search(&mut self, from: G::Node, to: G::Node) {
+    if !self.insert(from) {
+      return;
+    }
+
+    self.stack.push(from);
+
+    if from == to {
+      self.paths.push(self.stack.clone());
+      self.remove(to);
+      self.stack.pop().unwrap();
+      return;
+    }
+
+    for v in self.graph.successors(from) {
+      self.search(v, to);
+    }
+
+    self.stack.pop().unwrap();
+    self.remove(from);
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use rustc_data_structures::graph::vec_graph::VecGraph;
+
+  use super::*;
+
+  #[test]
+  fn if_shape() {
+    // Diamond shaped IF.
+    let graph = VecGraph::new(6, vec![
+      (0u32, 1u32),
+      (1u32, 2u32),
+      (1u32, 3u32),
+      (2u32, 4u32),
+      (3u32, 4u32),
+      (4u32, 5u32),
+    ]);
+
+    let paths_0_5 = vec![vec![0, 1, 2, 4, 5], vec![0, 1, 3, 4, 5]];
+
+    assert_eq!(DFSFinder::find_paths_from_to(&graph, 0, 5), paths_0_5);
+  }
+
+  #[test]
+  fn while_loop_shape() {
+    // While loop shape:
+    // 0 -> 1 -> 2 -> 3 -> 5
+    //           ^    |
+    //           |    v
+    //           |-- 4
+    let graph = VecGraph::new(6, vec![
+      (0u32, 1u32),
+      (1u32, 2u32),
+      (2u32, 3u32),
+      (3u32, 5u32),
+      (3u32, 4u32),
+      (4u32, 2u32),
+    ]);
+
+    let paths_0_5 = vec![vec![0, 1, 2, 3, 5], vec![0, 1, 2, 3, 4, 2, 3, 5]];
+    let mut paths = DFSFinder::find_paths_from_to(&graph, 0, 5);
+    paths.sort_by(|l, r| l.len().cmp(&r.len()));
+
+    assert_eq!(paths, paths_0_5);
   }
 }

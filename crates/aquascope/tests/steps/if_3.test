@@ -1,0 +1,9 @@
+fn ascii_capitalize(v: &mut Vec<char>) {
+    let c = &v[0];
+    if c.is_ascii_lowercase() {
+        let c_up = c.to_ascii_uppercase();
+        v[0] = c_up;
+    } else {
+        println!("Already capitalized: {:?}", v);
+    }
+}

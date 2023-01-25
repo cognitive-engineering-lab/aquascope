@@ -1,0 +1,539 @@
+---
+source: crates/aquascope/tests/stepper.rs
+description: ascii_capitalize@if_3.test
+---
+- - 0
+  - - - "*v"
+      - is_live:
+          type: High
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: High
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+          write:
+            type: High
+          drop:
+            type: None
+            value: false
+    - - v
+      - is_live:
+          type: High
+        type_droppable:
+          type: High
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+          write:
+            type: None
+            value: false
+          drop:
+            type: High
+- - 1
+  - - - "*c"
+      - is_live:
+          type: High
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+          write:
+            type: None
+            value: false
+          drop:
+            type: High
+    - - "*v"
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: High
+        loan_drop_refined:
+          type: High
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: Low
+          drop:
+            type: None
+            value: false
+    - - c
+      - is_live:
+          type: High
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+          write:
+            type: None
+            value: false
+          drop:
+            type: High
+    - - v
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: High
+        loan_drop_refined:
+          type: High
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low
+- - 3
+  - - - "*c"
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low
+    - - "*v"
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: Low
+        loan_drop_refined:
+          type: Low
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: High
+          drop:
+            type: None
+            value: false
+    - - c
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low
+    - - c_up
+      - is_live:
+          type: High
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: Low
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+          write:
+            type: None
+            value: false
+          drop:
+            type: High
+    - - v
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: Low
+        loan_drop_refined:
+          type: Low
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: None
+            value: false
+          drop:
+            type: High
+- - 4
+  - - - "*v"
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: Low
+          drop:
+            type: None
+            value: false
+    - - c_up
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low
+    - - v
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low
+- - 5
+  - - - "*c"
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low
+    - - "*v"
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: Low
+        loan_drop_refined:
+          type: Low
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: High
+          drop:
+            type: None
+            value: false
+    - - c
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low
+    - - v
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: Low
+        loan_drop_refined:
+          type: Low
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: None
+            value: false
+          drop:
+            type: High
+- - 6
+  - - - "*v"
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: Low
+          drop:
+            type: None
+            value: false
+    - - v
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low

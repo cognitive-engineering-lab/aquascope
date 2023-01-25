@@ -1,0 +1,109 @@
+---
+source: crates/aquascope/tests/stepper.rs
+description: find_nth@illegal_promotion_0.test
+---
+- - 0
+  - - - "*elems"
+      - is_live:
+          type: High
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+          write:
+            type: None
+            value: false
+          drop:
+            type: None
+            value: false
+    - - "*elems[]"
+      - is_live:
+          type: High
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+          write:
+            type: None
+            value: false
+          drop:
+            type: None
+            value: false
+    - - elems
+      - is_live:
+          type: High
+        type_droppable:
+          type: High
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+          write:
+            type: None
+            value: false
+          drop:
+            type: High
+    - - n
+      - is_live:
+          type: High
+        type_droppable:
+          type: High
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+          write:
+            type: None
+            value: false
+          drop:
+            type: High

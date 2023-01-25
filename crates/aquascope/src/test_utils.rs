@@ -257,6 +257,7 @@ pub fn test_steps_in_file(
     + Sync
     + Copy,
 ) {
+  use analysis::stepper::{stepper, PermIncludeMode};
   let inner = || -> Result<()> {
     let source = load_test_from_file(path)?;
     compile_bodies(source, move |tcx, body_id, body_with_facts| {
@@ -271,12 +272,16 @@ pub fn test_steps_in_file(
         .unwrap_or_else(|| String::from("<anon body>"));
 
       let source_map = tcx.sess.source_map();
-      let body_steps = analysis::compute_permission_steps(ctxt, |span| {
-        source_map::Range::from_span(span, source_map)
-          .ok()
-          .unwrap_or_default()
-          .into()
-      });
+      let body_steps = stepper::compute_permission_steps(
+        ctxt,
+        PermIncludeMode::Changes,
+        |span| {
+          source_map::Range::from_span(span, source_map)
+            .ok()
+            .unwrap_or_default()
+            .into()
+        },
+      );
 
       // NOTE: we normalize the permission steps to be
       // - usize: the line number of the corresponding statement.
@@ -287,7 +292,13 @@ pub fn test_steps_in_file(
         .map(|pss| {
           let bp = BytePos(pss.location.byte_end as u32);
           let line_num = source_map.lookup_line(bp).unwrap().line;
-          let inner_info = pss.state;
+          // FIXME: we shouldn't flatten the tables together, this was only a
+          // quick fix for the tests.
+          let inner_info = pss
+            .state
+            .into_iter()
+            .flat_map(|ps| ps.state)
+            .collect::<Vec<_>>();
           (line_num, inner_info)
         })
         .collect::<Vec<_>>();

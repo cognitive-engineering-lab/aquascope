@@ -10,7 +10,10 @@
   once_cell,
   exact_size_is_empty,
   iter_intersperse,
-  is_some_and
+  is_some_and,
+  hash_drain_filter,
+  drain_filter,
+  type_changing_struct_update
 )]
 
 #[macro_use]
