@@ -1,4 +1,4 @@
-# Aquascope <img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" height="300" />
+# <p style=""><span>Aquascope</span><img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" style="float: right" height="300" /> </p>
 
 [![tests](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml/badge.svg)](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml)
 
@@ -44,7 +44,7 @@ Currently, Aquascope supports three types of visualizations:
 <table>
     <tr>
         <td>
-        ````text
+<code>
 ```aquascope,boundaries
 fn main() {
     let mut x = 1;
@@ -52,7 +52,7 @@ fn main() {
     println!("{} = {}", x, *y);
 }
 ```
-        ````
+</code>
         </td>
         <td>
         TODO: insert image
@@ -65,7 +65,7 @@ fn main() {
 <table>
     <tr>
         <td>
-        ````text
+<code>
 ```aquascope,stepper
 fn main() {
     let mut x = 1;
@@ -73,7 +73,7 @@ fn main() {
     println!("{} = {}", x, *y);
 }
 ```
-        ````
+</code>
         </td>
         <td>
         TODO: insert image
@@ -86,8 +86,7 @@ fn main() {
 <table>
     <tr>
         <td>
-        <code>
-        ````text
+<code>
 ```aquascope,interpreter,concreteTypes=true
 fn main() {
     let s1 = String::from("Hello");
@@ -99,7 +98,7 @@ fn add_suffix(mut s2: String) -> String {
     s2
 }
 ```
-        ````
+</code>
         </td>
         <td>
         TODO: insert image
