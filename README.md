@@ -22,7 +22,7 @@ cargo install mdbook-aquascope
 
 ### From source
 
-You will need Cargo and [npm](https://www.npmjs.com/) installed, then you can install the preprocessor:
+You will first need Cargo and [npm](https://www.npmjs.com/) installed, then you can run:
 
 ```sh
 git clone https://github.com/cognitive-engineering-lab/aquascope.git
@@ -44,7 +44,7 @@ Currently, Aquascope supports three types of visualizations:
 <table>
     <tr>
         <td>
-        <code>
+        ````text
 ```aquascope,boundaries
 fn main() {
     let mut x = 1;
@@ -52,7 +52,7 @@ fn main() {
     println!("{} = {}", x, *y);
 }
 ```
-        </code>
+        ````
         </td>
         <td>
         TODO: insert image
@@ -65,7 +65,7 @@ fn main() {
 <table>
     <tr>
         <td>
-        <code>
+        ````text
 ```aquascope,stepper
 fn main() {
     let mut x = 1;
@@ -73,7 +73,7 @@ fn main() {
     println!("{} = {}", x, *y);
 }
 ```
-        </code>
+        ````
         </td>
         <td>
         TODO: insert image
@@ -87,19 +87,19 @@ fn main() {
     <tr>
         <td>
         <code>
+        ````text
 ```aquascope,interpreter,concreteTypes=true
 fn main() {
-    let n = Box::new(1);
-    let y = plus_one(&n);
-    println!("The value of y is: {y}");
+    let s1 = String::from("Hello");
+    let s3 = add_suffix(s1);
+    println!("{s3}");
 }
-
-fn plus_one(x: &i32) -> i32 {
-    *x + 1
+fn add_suffix(mut s2: String) -> String {
+    s2.push_str(" world");
+    s2
 }
-
 ```
-        </code>
+        ````
         </td>
         <td>
         TODO: insert image
@@ -113,6 +113,8 @@ fn plus_one(x: &i32) -> i32 {
 Aquascope provides a set of annotations for each visualization to allow for slight customization. TODO
 
 ## Limitations
+
+```
 
 ```
 
