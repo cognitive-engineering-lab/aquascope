@@ -415,9 +415,8 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
             e => return Err(InterpErrorInfo::from(e)),
           },
         };
-        let scalar = match &*imm {
-          Immediate::Scalar(scalar) => scalar,
-          _ => unreachable!(),
+        let Immediate::Scalar(scalar) = &*imm else {
+          unreachable!()
         };
         match ty.kind() {
           TyKind::Bool => MValue::Bool(scalar.to_bool()?),

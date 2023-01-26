@@ -211,9 +211,9 @@ pub fn test_refinements_in_file(path: &Path) {
           } else {
             places.first().unwrap()
           };
-          let loc = match mir_spanner.locations[0] {
-            LocationOrArg::Location(l) => l,
-            _ => unreachable!("not a location"),
+
+          let LocationOrArg::Location(loc) = mir_spanner.locations[0] else {
+            unreachable!("not a location")
           };
 
           // FIXME: this code is to catch any false assumptions I'm making
@@ -239,16 +239,15 @@ pub fn test_refinements_in_file(path: &Path) {
           let computed_perms =
             ctxt.permissions_data_at_point(path, point).permissions;
 
-          if *expected_perms != computed_perms {
-            panic!(
-              "\n\n\x1b[31mExpected {expected_perms:?} \
-               but got {computed_perms:?} permissions\n  \
-               \x1b[33m\
-               for {place:?} in {stmt:?}\n  \
-               on line {source_line}: {line_str}\n  \
-               \x1b[0m\n\n"
-            );
-          }
+          assert!(
+            (*expected_perms == computed_perms),
+            "\n\n\x1b[31mExpected {expected_perms:?} \
+                   but got {computed_perms:?} permissions\n  \
+                   \x1b[33m\
+                   for {place:?} in {stmt:?}\n  \
+                   on line {source_line}: {line_str}\n  \
+                   \x1b[0m\n\n"
+          );
 
           log::debug!("successful test!");
 
@@ -256,9 +255,10 @@ pub fn test_refinements_in_file(path: &Path) {
         });
       });
 
-      if !expected_permissions.is_empty() {
-        panic!("Not all ranges tested! {expected_permissions:#?}");
-      }
+      assert!(
+        expected_permissions.is_empty(),
+        "Not all ranges tested! {expected_permissions:#?}"
+      );
     });
 
     Ok(())
@@ -274,7 +274,7 @@ pub fn test_steps_in_file(
     + Sync
     + Copy,
 ) {
-  use analysis::stepper::{stepper, PermIncludeMode};
+  use analysis::stepper::{find_steps, PermIncludeMode};
   let inner = || -> Result<()> {
     let source = load_test_from_file(path)?;
     compile_normal(source, move |tcx| {
@@ -283,15 +283,13 @@ pub fn test_steps_in_file(
           &analysis::compute_permissions(tcx, body_id, body_with_facts);
         // Required to give the snapshot a more specific internal name.
         let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-        let tag = ctxt
-          .tcx
-          .hir()
-          .opt_name(owner)
-          .map(|n| String::from(n.as_str()))
-          .unwrap_or_else(|| String::from("<anon body>"));
+        let tag = ctxt.tcx.hir().opt_name(owner).map_or_else(
+          || String::from("<anon body>"),
+          |n| String::from(n.as_str()),
+        );
 
         let source_map = tcx.sess.source_map();
-        let body_steps = stepper::compute_permission_steps(
+        let body_steps = find_steps::compute_permission_steps(
           ctxt,
           PermIncludeMode::Changes,
           |span| {
@@ -392,9 +390,7 @@ pub fn run_in_dir(
       total
     );
 
-    if failed {
-      panic!("some tests failed");
-    }
+    assert!(!failed, "some tests failed");
 
     Ok(())
   };

@@ -11,3 +11,4 @@ repos:
     hooks:
     -   id: fmt
         args: ['--check', '--', '--skip-children', '--unstable-features']
+    -   id: clippy

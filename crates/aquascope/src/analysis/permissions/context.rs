@@ -9,7 +9,7 @@ use rustc_hir::{def_id::DefId, BodyId, Mutability};
 use rustc_index::vec::IndexVec;
 use rustc_infer::infer::TyCtxtInferExt;
 use rustc_middle::{
-  mir::{BorrowKind, Local, Location, Place, TerminatorKind},
+  mir::{BorrowKind, Local, Location, Place},
   ty::{ParamEnv, Ty, TyCtxt},
 };
 use rustc_mir_dataflow::move_paths::MoveData;
@@ -82,8 +82,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
   pub fn point_to_location(&self, p: Point) -> Location {
     match self.body_with_facts.location_table.to_location(p) {
-      RichLocation::Start(l) => l,
-      RichLocation::Mid(l) => l,
+      RichLocation::Start(l) | RichLocation::Mid(l) => l,
     }
   }
 
@@ -205,6 +204,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     }
   }
 
+  #[allow(clippy::if_not_else)]
   pub fn permissions_data_at_point(
     &self,
     path: Path,
@@ -271,10 +271,10 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     };
 
     PermissionsData {
-      is_live,
       type_droppable,
       type_writeable,
       type_copyable,
+      is_live,
       path_moved,
       loan_read_refined,
       loan_write_refined,
@@ -311,56 +311,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
         acc
       })
       .into()
-  }
-
-  // HACK: this method should be called with extreme caution, please prefer `permissions_domain_at_point`.
-  //
-  // This method currently exists to provide a quick fix for the following problem. At a given MIR Location,
-  // a statement could cause some permissions change. For example:
-  //
-  // ```
-  // let s = String::from("hi!");
-  // ```
-  //
-  // The HIR node for this Local will have a few MIR locations associated with it, simplified these are:
-  //
-  // ```
-  // StorageLive(s);
-  // FakeRead(ForLet(None), s);
-  // ```
-  //
-  // When finding the permission steps throughout a program, we need to talk about the before, and after
-  // effects of a node. For the above Local assignment, we want to reason about the before and after state,
-  // which includes any trailing affect the assignment might have.
-  //
-  // TODO: a much better way to handle this is to include a notion of Before / After for our permissions
-  // analysis. This would give us a more principled way to look at it rather than manipulating the
-  // location.
-  pub(crate) fn permissions_domain_after_point_effect(
-    &self,
-    point: Point,
-  ) -> Option<PermissionsDomain<'tcx>> {
-    let location = self.point_to_location(point);
-    let body = &self.body_with_facts.body;
-    let block_data = &body.basic_blocks[location.block];
-    if block_data.statements.len() == location.statement_index {
-      let terminator = block_data.terminator();
-      match terminator.kind {
-        TerminatorKind::Goto { target } => {
-          let loc = Location {
-            block: target,
-            statement_index: 0,
-          };
-          let point = self.location_to_point(loc);
-          Some(self.permissions_domain_at_point(point))
-        }
-        _ => None,
-      }
-    } else {
-      let next_location = location.successor_within_block();
-      let point = self.location_to_point(next_location);
-      Some(self.permissions_domain_at_point(point))
-    }
   }
 
   /// Compute the beginning and end of the live loan region

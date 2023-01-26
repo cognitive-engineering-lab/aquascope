@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 use std::{env, net::SocketAddr};
@@ -104,7 +105,7 @@ pub type Result<T, E = Error> = ::std::result::Result<T, E>;
 
 impl axum::response::IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        let body = format!("{}", self);
+        let body = format!("{self}");
         (axum::http::StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
     }
 }
