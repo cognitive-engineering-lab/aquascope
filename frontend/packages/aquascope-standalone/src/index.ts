@@ -3,6 +3,10 @@ import * as Ed from "aquascope-editor";
 
 import { basicSetup } from "./setup";
 
+declare global {
+  var SERVER_URL: string;
+}
+
 export let globals: {
   editor: Ed.Editor;
 };
