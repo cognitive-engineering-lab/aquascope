@@ -1,7 +1,6 @@
 //! Main data structure for mapping HIR to MIR and vice-versa.
-use std::fmt;
 
-use flowistry::mir::utils::BodyExt;
+use flowistry::mir::{control_dependencies::PostDominators, utils::BodyExt};
 use itertools::Itertools;
 use rustc_data_structures::{
   captures::Captures,
@@ -10,7 +9,7 @@ use rustc_data_structures::{
 };
 use rustc_hir::{self as hir, HirId};
 use rustc_index::{
-  bit_set::{BitSet, SparseBitMatrix},
+  bit_set::{HybridBitSet, SparseBitMatrix},
   vec::Idx,
 };
 use rustc_middle::{
@@ -20,6 +19,7 @@ use rustc_middle::{
   },
   ty::TyCtxt,
 };
+use smallvec::SmallVec;
 
 pub struct IRMapper<'a, 'tcx> {
   pub(crate) cleaned_graph: CleanedBody<'a, 'tcx>,
@@ -28,7 +28,43 @@ pub struct IRMapper<'a, 'tcx> {
   hir_to_mir: HashMap<HirId, HashSet<Location>>,
   gather_mode: GatherMode,
   dominators: Dominators<BasicBlock>,
-  post_dominators: PostDominators<BasicBlock>,
+  post_dominators: AllPostDominators<BasicBlock>,
+}
+
+/// Computes the intersection of the post-dominators across all exits
+/// to a graph.
+struct AllPostDominators<Node: Idx>(SparseBitMatrix<Node, Node>);
+impl<Node: Idx> AllPostDominators<Node> {
+  fn build<G: ControlFlowGraph<Node = Node>>(
+    graph: &G,
+    exits: impl IntoIterator<Item = Node>,
+  ) -> Self {
+    let mut pdom = SparseBitMatrix::new(graph.num_nodes());
+    let all_nodes = (0 .. graph.num_nodes()).map(|i| Node::new(i));
+    for node in all_nodes.clone() {
+      pdom.insert_all_into_row(node)
+    }
+    for exit in exits {
+      let exit_pdom = PostDominators::build(graph, exit);
+      for node in all_nodes.clone() {
+        let mut is_pdom = HybridBitSet::new_empty(graph.num_nodes());
+        if let Some(iter) = exit_pdom.post_dominators(node) {
+          for other in iter {
+            is_pdom.insert(other);
+          }
+        }
+        pdom.intersect_row(node, &is_pdom);
+      }
+    }
+    AllPostDominators(pdom)
+  }
+
+  fn is_postdominated_by(&self, node: Node, dom: Node) -> bool {
+    match self.0.row(node) {
+      Some(set) => set.contains(dom),
+      None => false,
+    }
+  }
 }
 
 // TODO: I want to decompose this into more specific regions.
@@ -131,15 +167,18 @@ where
     body: &'a Body<'tcx>,
     gather_mode: GatherMode,
   ) -> Self {
-    let dominators = body.basic_blocks.dominators();
-    let control_dependencies = PostDominators::build(body);
-    let cleaned_graph = CleanedBody::make(body);
+    let cleaned_graph = CleanedBody(body);
+    let dominators = dominators::dominators(&cleaned_graph);
+    let post_dominators = AllPostDominators::build(
+      &cleaned_graph,
+      body.all_returns().map(|loc| loc.block),
+    );
 
     let mut ir_map = IRMapper {
       tcx,
       body,
       dominators,
-      post_dominators: control_dependencies,
+      post_dominators,
       hir_to_mir: HashMap::default(),
       gather_mode,
       cleaned_graph,
@@ -340,217 +379,17 @@ impl<'tcx> MirVisitor<'tcx> for IRMapper<'_, 'tcx> {
   }
 }
 
-// -------------------------------------------
-// Graph for post-dominator set.
-// HACK: a majority of the functionality was copied from Flowistry's
-// ControlDependencies. You should be able to reuse bits.
-//
-// See:
-// https://github.com/willcrichton/flowistry/blob/5eb8f457e953c1b009e0b197adf1769b7dded590/crates/flowistry/src/mir/control_dependencies.rs#L98
-
-struct BodyReversed<'a, 'tcx> {
-  body: &'a Body<'tcx>,
-  ret: BasicBlock,
-  unreachable: BitSet<BasicBlock>,
-}
-
-impl DirectedGraph for BodyReversed<'_, '_> {
-  type Node = BasicBlock;
-}
-
-impl WithStartNode for BodyReversed<'_, '_> {
-  fn start_node(&self) -> Self::Node {
-    self.ret
-  }
-}
-
-impl WithNumNodes for BodyReversed<'_, '_> {
-  fn num_nodes(&self) -> usize {
-    self.body.basic_blocks.len()
-  }
-}
-
-impl<'graph> GraphSuccessors<'graph> for BodyReversed<'_, '_> {
-  type Item = BasicBlock;
-  type Iter = Box<dyn Iterator<Item = BasicBlock> + 'graph>;
-}
-
-impl WithSuccessors for BodyReversed<'_, '_> {
-  fn successors(
-    &self,
-    node: Self::Node,
-  ) -> <Self as GraphSuccessors<'_>>::Iter {
-    Box::new(
-      self.body.basic_blocks.predecessors()[node]
-        .iter()
-        .filter(|bb| !self.unreachable.contains(**bb))
-        .copied(),
-    )
-  }
-}
-
-impl<'graph> GraphPredecessors<'graph> for BodyReversed<'_, '_> {
-  type Item = BasicBlock;
-  type Iter = Box<dyn Iterator<Item = BasicBlock> + 'graph>;
-}
-
-impl WithPredecessors for BodyReversed<'_, '_> {
-  fn predecessors(
-    &self,
-    node: Self::Node,
-  ) -> <Self as GraphPredecessors<'_>>::Iter {
-    Box::new(
-      self.body.basic_blocks[node]
-        .terminator()
-        .successors()
-        .filter(|bb| !self.unreachable.contains(*bb)),
-    )
-  }
-}
-
-fn compute_post_dominators(
-  body: &Body,
-  ret: BasicBlock,
-) -> HashMap<BasicBlock, HashSet<BasicBlock>> {
-  let nblocks = body.basic_blocks.len();
-  let mut graph = BodyReversed {
-    body,
-    ret,
-    unreachable: BitSet::new_empty(nblocks),
-  };
-
-  let reachable = iterate::post_order_from(&graph, ret);
-  graph.unreachable.insert_all();
-  for n in &reachable {
-    graph.unreachable.remove(*n);
-  }
-
-  let dominators = dominators::dominators(graph);
-  reachable
-    .into_iter()
-    .map(|n| (n, dominators.dominators(n).collect()))
-    .collect()
-}
-
-pub struct PostDominators<Node: Idx>(SparseBitMatrix<Node, Node>);
-
-impl fmt::Debug for PostDominators<BasicBlock> {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    for (i, (bb, bbs)) in self
-      .0
-      .rows()
-      .enumerate()
-      .filter_map(|(i, bb)| self.0.row(bb).map(move |bbs| (i, (bb, bbs))))
-    {
-      if i > 0 {
-        write!(f, ", ")?;
-      }
-      write!(f, "{bb:?}: {{")?;
-      for (j, bb2) in bbs.iter().enumerate() {
-        if j > 0 {
-          write!(f, ", ")?;
-        }
-        write!(f, "{bb2:?}")?;
-      }
-      write!(f, "}}")?;
-    }
-    Ok(())
-  }
-}
-
-impl PostDominators<BasicBlock> {
-  pub fn build(body: &Body) -> Self {
-    PostDominators(
-      body
-        .all_returns()
-        .map(|loc| {
-          let block = loc.block;
-          assert!(!body.basic_blocks[block].is_cleanup);
-          PostDominators::build_for_return(body, loc.block)
-        })
-        .fold(
-          SparseBitMatrix::new(body.basic_blocks.len()),
-          |mut deps1, deps2| {
-            for block in deps2.rows() {
-              if let Some(set) = deps2.row(block) {
-                deps1.union_row(block, set);
-              }
-            }
-            deps1
-          },
-        ),
-    )
-  }
-
-  fn build_for_return(
-    body: &Body,
-    ret: BasicBlock,
-  ) -> SparseBitMatrix<BasicBlock, BasicBlock> {
-    let doms = compute_post_dominators(body, ret);
-    log::debug!("post-doms={doms:#?}");
-
-    let n = body.basic_blocks.len();
-    let mut domsp = SparseBitMatrix::<BasicBlock, BasicBlock>::new(n);
-
-    for (b1, doms) in doms.iter() {
-      for b2 in doms.iter() {
-        domsp.insert(*b1, *b2);
-      }
-    }
-
-    domsp
-  }
-
-  pub fn is_postdominated_by(&self, b1: BasicBlock, pdom: BasicBlock) -> bool {
-    self.0.row(b1).map_or(false, |row| row.contains(pdom))
-  }
-}
-
 /// A /cleaned/ graph representation for working with the MIR.
 ///
 /// A `CleanedBody` represents MIR locations that are reachable via
 /// regular control-flow. This removes cleanup blocks or those which
 /// fall in unwind paths. When mapping back to source-level constructs
 /// this is almost certainly what you want to use.
-pub(crate) struct CleanedBody<'a, 'tcx: 'a> {
-  body: &'a Body<'tcx>,
-  doms: Option<Dominators<BasicBlock>>,
-  pdoms: PostDominators<BasicBlock>,
-}
+pub(crate) struct CleanedBody<'a, 'tcx: 'a>(&'a Body<'tcx>);
 
 impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
-  fn make(body: &'a Body<'tcx>) -> Self {
-    let mut g = CleanedBody {
-      body,
-      doms: None,
-      pdoms: PostDominators::build(body),
-    };
-
-    let doms = dominators::dominators(&g);
-    g.doms = Some(doms);
-
-    g
-  }
-
   pub fn body(&self) -> &'a Body<'tcx> {
-    &self.body
-  }
-
-  pub fn vertices(&self) -> Vec<BasicBlock> {
-    self
-      .body
-      .basic_blocks
-      .indices()
-      .filter(|bbi| CleanedBody::keep_block(&self.body.basic_blocks[*bbi]))
-      .collect::<Vec<_>>()
-  }
-
-  pub(crate) fn dominators(&self) -> &Dominators<BasicBlock> {
-    self.doms.as_ref().unwrap()
-  }
-
-  pub(crate) fn post_dominators(&self) -> &PostDominators<BasicBlock> {
-    &self.pdoms
+    &self.0
   }
 
   // TODO: cache the results
@@ -574,7 +413,7 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
   ) -> Option<Location> {
     let b = location.block;
     let si = location.statement_index;
-    let bbd = &self.body.basic_blocks[b];
+    let bbd = &self.0.basic_blocks[b];
 
     if si < bbd.statements.len() {
       Some(location.successor_within_block())
@@ -609,19 +448,19 @@ impl DirectedGraph for CleanedBody<'_, '_> {
 
 impl WithStartNode for CleanedBody<'_, '_> {
   fn start_node(&self) -> Self::Node {
-    self.body.basic_blocks.start_node()
+    self.0.basic_blocks.start_node()
   }
 }
 
 impl<'tcx> WithNumNodes for CleanedBody<'_, 'tcx> {
   fn num_nodes(&self) -> usize {
-    self.body.basic_blocks.len()
+    self.0.basic_blocks.len()
   }
 }
 
-impl<'tcx, 'graph> GraphSuccessors<'graph> for CleanedBody<'_, 'tcx> {
+impl<'tcx> GraphSuccessors<'_> for CleanedBody<'_, 'tcx> {
   type Item = BasicBlock;
-  type Iter = Box<dyn Iterator<Item = BasicBlock> + 'graph>;
+  type Iter = smallvec::IntoIter<[BasicBlock; 4]>;
 }
 
 impl<'tcx> WithSuccessors for CleanedBody<'_, 'tcx> {
@@ -629,19 +468,16 @@ impl<'tcx> WithSuccessors for CleanedBody<'_, 'tcx> {
     &self,
     node: Self::Node,
   ) -> <Self as GraphSuccessors<'_>>::Iter {
-    Box::new(
-      <BasicBlocks as WithSuccessors>::successors(
-        &self.body.basic_blocks,
-        node,
-      )
-      .filter(|bb| CleanedBody::keep_block(&self.body.basic_blocks[*bb])),
-    )
+    <BasicBlocks as WithSuccessors>::successors(&self.0.basic_blocks, node)
+      .filter(|bb| CleanedBody::keep_block(&self.0.basic_blocks[*bb]))
+      .collect::<SmallVec<[BasicBlock; 4]>>()
+      .into_iter()
   }
 }
 
-impl<'tcx, 'graph> GraphPredecessors<'graph> for CleanedBody<'_, 'tcx> {
+impl<'tcx> GraphPredecessors<'_> for CleanedBody<'_, 'tcx> {
   type Item = BasicBlock;
-  type Iter = Box<dyn Iterator<Item = BasicBlock> + 'graph>;
+  type Iter = smallvec::IntoIter<[BasicBlock; 4]>;
 }
 
 impl<'tcx> WithPredecessors for CleanedBody<'_, 'tcx> {
@@ -649,13 +485,10 @@ impl<'tcx> WithPredecessors for CleanedBody<'_, 'tcx> {
     &self,
     node: Self::Node,
   ) -> <Self as GraphSuccessors<'_>>::Iter {
-    Box::new(
-      <BasicBlocks as WithPredecessors>::predecessors(
-        &self.body.basic_blocks,
-        node,
-      )
-      .filter(|bb| CleanedBody::keep_block(&self.body.basic_blocks[*bb])),
-    )
+    <BasicBlocks as WithPredecessors>::predecessors(&self.0.basic_blocks, node)
+      .filter(|bb| CleanedBody::keep_block(&self.0.basic_blocks[*bb]))
+      .collect::<SmallVec<[BasicBlock; 4]>>()
+      .into_iter()
   }
 }
 
