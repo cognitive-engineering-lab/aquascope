@@ -1,8 +1,13 @@
 [package]
 name = "aquascope_front"
 version = "0.1.0"
+license = "MIT"
 edition = "2021"
-authors = ["Gavin Gray <gagray@ethz.ch>"]
+authors = [
+  "Will Crichton <wcrichto@cs.stanford.edu>",
+  "Gavin Gray <gavinleroy6@gmail.com>"
+]
+repository = "https://github.com/cognitive-engineering-lab/aquascope"
 
 [package.metadata.rust-analyzer]
 rustc_private = true
