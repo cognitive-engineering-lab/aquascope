@@ -213,7 +213,7 @@ steps:
             - - y
               - type: Unallocated
                 value:
-                  alloc_id: 862
+                  alloc_id: 0
     heap:
       locations:
         - type: Array
@@ -288,7 +288,7 @@ steps:
             - - y
               - type: Unallocated
                 value:
-                  alloc_id: 862
+                  alloc_id: 0
     heap:
       locations:
         - type: Array
@@ -308,5 +308,5 @@ result:
   value:
     type: PointerUseAfterFree
     value:
-      alloc_id: 862
+      alloc_id: 0
 

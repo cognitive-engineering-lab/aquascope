@@ -124,7 +124,7 @@ pub enum MValue {
   },
 
   Unallocated {
-    alloc_id: Option<u64>,
+    alloc_id: Option<usize>,
   },
 }
 
@@ -221,7 +221,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
               Some(t) => t.clone(),
               None => {
                 return Ok(MValue::Unallocated {
-                  alloc_id: Some(alloc_id.0.get()),
+                  alloc_id: Some(self.ev.remap_alloc_id(alloc_id)),
                 })
               }
             };
@@ -457,7 +457,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         if self.ev.ecx.check_mplace(mplace).is_err() {
           let (alloc_id, _, _) = self.ev.ecx.ptr_get_alloc_id(mplace.ptr)?;
           return Ok(MValue::Unallocated {
-            alloc_id: Some(alloc_id.0.get()),
+            alloc_id: Some(self.ev.remap_alloc_id(alloc_id)),
           });
         }
         self.read_pointer(mplace)?

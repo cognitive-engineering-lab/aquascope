@@ -54,7 +54,7 @@ pub struct MStep<L> {
 #[serde(tag = "type", content = "value")]
 #[ts(export)]
 pub enum MUndefinedBehavior {
-  PointerUseAfterFree { alloc_id: u64 },
+  PointerUseAfterFree { alloc_id: usize },
   Other(String),
 }
 
@@ -81,6 +81,7 @@ pub(crate) struct MemoryMap<'tcx> {
   pub(crate) place_to_loc:
     HashMap<AllocId, (MMemorySegment, TyAndLayout<'tcx>)>,
   pub(crate) stack_slots: HashMap<AllocId, (usize, String, TyAndLayout<'tcx>)>,
+  pub(crate) alloc_id_remapping: HashMap<AllocId, usize>,
 }
 
 pub struct VisEvaluator<'mir, 'tcx> {
@@ -124,6 +125,12 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       ecx,
       memory_map: RefCell::default(),
     })
+  }
+
+  pub(super) fn remap_alloc_id(&self, alloc_id: AllocId) -> usize {
+    let mut memory_map = self.memory_map.borrow_mut();
+    let n = memory_map.alloc_id_remapping.len();
+    *memory_map.alloc_id_remapping.entry(alloc_id).or_insert(n)
   }
 
   fn build_locals(
@@ -337,7 +344,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       InterpError::UndefinedBehavior(ub) => match ub {
         PointerUseAfterFree(alloc_id) => {
           MUndefinedBehavior::PointerUseAfterFree {
-            alloc_id: alloc_id.0.get(),
+            alloc_id: self.remap_alloc_id(alloc_id),
           }
         }
         ub => MUndefinedBehavior::Other(ub.to_string()),
