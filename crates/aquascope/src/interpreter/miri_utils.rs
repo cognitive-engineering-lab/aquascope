@@ -93,7 +93,7 @@ impl<'tcx> AddressLocator<'_, '_, 'tcx> {
         let array_offset = (self.target - offset) / stride * stride;
         let elem = layout.field(self.ecx, 0);
         let index = (array_offset / stride) as usize;
-        dbg!((index, array_offset));
+        // dbg!((index, array_offset));
         self
           .segments
           .push(PlaceElem::Index(Local::from_usize(index)));

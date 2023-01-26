@@ -10,7 +10,7 @@ license = "MIT"
 rustc_private = true
 
 [features]
-testing = ["lazy_static", "insta"]
+testing = ["lazy_static", "insta", "flowistry/test"]
 
 [dependencies]
 anyhow = "1.0.0"

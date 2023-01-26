@@ -2,195 +2,24 @@
 source: crates/aquascope/tests/interpreter.rs
 description: tuple.test
 ---
-- stack:
-    frames:
-      - name: main
-        body_span:
-          char_start: 0
-          char_end: 67
-          byte_start: 0
-          byte_end: 67
-          filename: dummy.rs
-        location:
-          char_start: 14
-          char_end: 53
-          byte_start: 14
-          byte_end: 53
-          filename: dummy.rs
-        locals:
-          - - x
-            - type: Tuple
-              value:
-                - type: Int
-                  value: 0
-                - type: Struct
-                  value:
-                    name: String
-                    fields:
-                      - - vec
-                        - type: Struct
-                          value:
-                            name: Vec
-                            fields:
-                              - - buf
-                                - type: Struct
-                                  value:
-                                    name: RawVec
-                                    fields:
-                                      - - ptr
-                                        - type: Struct
-                                          value:
-                                            name: Unique
-                                            fields:
-                                              - - pointer
-                                                - type: Struct
-                                                  value:
-                                                    name: NonNull
-                                                    fields:
-                                                      - - pointer
-                                                        - type: Pointer
-                                                          value:
-                                                            path:
-                                                              segment:
-                                                                type: Heap
-                                                                value:
-                                                                  index: 0
-                                                              parts:
-                                                                - type: Index
-                                                                  value: 0
-                                                            range: ~
-                                                    alloc_kind: ~
-                                            alloc_kind: ~
-                                      - - cap
-                                        - type: Uint
-                                          value: 5
-                                    alloc_kind: ~
-                              - - len
-                                - type: Uint
-                                  value: 5
-                            alloc_kind: ~
-                    alloc_kind:
-                      type: String
-                      value:
-                        len: 5
-  heap:
-    locations:
-      - type: Array
-        value:
-          type: All
-          value:
-            - type: Char
-              value: 72
-            - type: Char
-              value: 101
-            - type: Char
-              value: 108
-            - type: Char
-              value: 108
-            - type: Char
-              value: 111
-- stack:
-    frames:
-      - name: main
-        body_span:
-          char_start: 0
-          char_end: 67
-          byte_start: 0
-          byte_end: 67
-          filename: dummy.rs
-        location:
-          char_start: 56
-          char_end: 65
-          byte_start: 56
-          byte_end: 65
-          filename: dummy.rs
-        locals:
-          - - x
-            - type: Tuple
-              value:
-                - type: Int
-                  value: 1
-                - type: Struct
-                  value:
-                    name: String
-                    fields:
-                      - - vec
-                        - type: Struct
-                          value:
-                            name: Vec
-                            fields:
-                              - - buf
-                                - type: Struct
-                                  value:
-                                    name: RawVec
-                                    fields:
-                                      - - ptr
-                                        - type: Struct
-                                          value:
-                                            name: Unique
-                                            fields:
-                                              - - pointer
-                                                - type: Struct
-                                                  value:
-                                                    name: NonNull
-                                                    fields:
-                                                      - - pointer
-                                                        - type: Pointer
-                                                          value:
-                                                            path:
-                                                              segment:
-                                                                type: Heap
-                                                                value:
-                                                                  index: 0
-                                                              parts:
-                                                                - type: Index
-                                                                  value: 0
-                                                            range: ~
-                                                    alloc_kind: ~
-                                            alloc_kind: ~
-                                      - - cap
-                                        - type: Uint
-                                          value: 5
-                                    alloc_kind: ~
-                              - - len
-                                - type: Uint
-                                  value: 5
-                            alloc_kind: ~
-                    alloc_kind:
-                      type: String
-                      value:
-                        len: 5
-  heap:
-    locations:
-      - type: Array
-        value:
-          type: All
-          value:
-            - type: Char
-              value: 72
-            - type: Char
-              value: 101
-            - type: Char
-              value: 108
-            - type: Char
-              value: 108
-            - type: Char
-              value: 111
-- stack:
-    frames:
-      - name: main
-        body_span:
-          char_start: 0
-          char_end: 67
-          byte_start: 0
-          byte_end: 67
-          filename: dummy.rs
-        location:
-          char_start: 66
-          char_end: 67
-          byte_start: 66
-          byte_end: 67
-          filename: dummy.rs
-        locals: []
-  heap:
-    locations: []
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 67
+            filename: 0
+          location:
+            char_start: 14
+            char_end: 53
+            filename: 0
+          locals: []
+    heap:
+      locations: []
+result:
+  type: Error
+  value:
+    type: Other
+    value: "using uninitialized data, but this operation requires initialized memory"
+

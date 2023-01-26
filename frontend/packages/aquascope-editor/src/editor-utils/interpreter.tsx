@@ -5,6 +5,7 @@ import {
   ViewPlugin,
   WidgetType,
 } from "@codemirror/view";
+import classNames from "classnames";
 import LeaderLine from "leader-line-new";
 import _ from "lodash";
 import React, {
@@ -23,6 +24,8 @@ import {
   MHeap,
   MStack,
   MStep,
+  MTrace,
+  MUndefinedBehavior,
   MValue,
   Range,
 } from "../types";
@@ -38,6 +41,9 @@ interface InterpreterConfig {
 let ConfigContext = React.createContext<InterpreterConfig>({});
 let CodeContext = React.createContext("");
 let PathContext = React.createContext<string[]>([]);
+let ErrorContext = React.createContext<MUndefinedBehavior | undefined>(
+  undefined
+);
 
 let codeRange = (code: string, range: Range) => {
   return code.slice(range.char_start, range.char_end);
@@ -235,6 +241,7 @@ let PointerView = ({ value: { path, range } }: { value: MPointer }) => {
 
 let ValueView = ({ value }: { value: MValue }) => {
   let pathCtx = useContext(PathContext);
+  let error = useContext(ErrorContext);
   return (
     <>
       {value.type == "Bool" ||
@@ -291,7 +298,17 @@ let ValueView = ({ value }: { value: MValue }) => {
       ) : value.type == "Array" ? (
         <AbbreviatedView value={value.value} />
       ) : value.type == "Unallocated" ? (
-        <>X</>
+        (() => {
+          let isError =
+            error &&
+            error.type == "PointerUseAfterFree" &&
+            error.value.alloc_id == value.value.alloc_id;
+          return (
+            <span className={classNames("unallocated", { error: isError })}>
+              X
+            </span>
+          );
+        })()
       ) : (
         <>TODO</>
       )}
@@ -385,17 +402,10 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
 
 (LeaderLine as any).positionByWindowResize = false;
 
-let StepView = ({
-  container,
-  step,
-  index,
-}: {
-  container: React.RefObject<HTMLDivElement>;
-  step: MStep<Range>;
-  index: number;
-}) => {
+let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
   let ref = useRef<HTMLDivElement>(null);
-  let configCtx = useContext(ConfigContext);
+  let config = useContext(ConfigContext);
+  let error = useContext(ErrorContext);
   useEffect(() => {
     let stepContainer = ref.current!;
     let query = (sel: string): HTMLElement => {
@@ -465,12 +475,22 @@ let StepView = ({
       clearTimeout(timeout);
       lines.forEach(line => line.remove());
     };
-  }, [configCtx.concreteTypes]);
+  }, [config.concreteTypes]);
 
   return (
     <div className="step">
       <div className="step-header">
-        <span className="step-marker">L{index + 1}</span>
+        <StepMarkerView index={index} fail={error !== undefined} />
+        {error !== undefined ? (
+          <span className="undefined-behavior">
+            undefined behavior:{" "}
+            {error.type == "PointerUseAfterFree" ? (
+              <>pointer used after its pointee is freed</>
+            ) : (
+              error.value
+            )}
+          </span>
+        ) : null}
       </div>
       <div className="memory-container" ref={ref}>
         <StackView stack={step.stack} />
@@ -481,10 +501,10 @@ let StepView = ({
 };
 
 let InterpreterView = ({
-  steps,
+  trace,
   config,
 }: {
-  steps: MStep<Range>[];
+  trace: MTrace<Range>;
   config?: InterpreterConfig;
 }) => {
   let ref = useRef<HTMLDivElement>(null);
@@ -496,6 +516,8 @@ let InterpreterView = ({
   let flexDirection: CSSProperties["flexDirection"] = config?.horizontal
     ? "row"
     : "column";
+
+  console.log(trace.result);
 
   return (
     <ConfigContext.Provider value={{ ...config, concreteTypes: concreteTypes }}>
@@ -515,9 +537,17 @@ let InterpreterView = ({
             className={`fa fa-${concreteTypes ? "binoculars" : "binoculars"}`}
           />
         </button>
-        {steps.map((step, i) => (
-          <StepView key={i} index={i} step={step} container={ref} />
-        ))}
+        {trace.steps.map((step, i) => {
+          let error =
+            i == trace.steps.length - 1 && trace.result.type == "Error"
+              ? trace.result.value
+              : undefined;
+          return (
+            <ErrorContext.Provider key={i} value={error}>
+              <StepView index={i} step={step} />
+            </ErrorContext.Provider>
+          );
+        })}
       </div>
     </ConfigContext.Provider>
   );
@@ -529,7 +559,7 @@ let filterSteps = (
 ): [number[], MStep<Range>[]] => {
   let stepsRev = [...steps].reverse();
   let indexedMarks: [number, number, MStep<Range>][] = marks.map(idx => {
-    let stepRevIdx = stepsRev.findIndex((step, i) => {
+    let stepRevIdx = stepsRev.findIndex(step => {
       let frame = _.last(step.stack.frames)!;
       let markInFrame =
         frame.body_span.char_start <= idx && idx <= frame.body_span.char_end;
@@ -549,23 +579,23 @@ let filterSteps = (
   ];
 };
 
-let StepMarkerView = ({ index }: { index: number }) => {
+let StepMarkerView = ({ index, fail }: { index: number; fail: boolean }) => {
   return (
-    <span className="step-marker">
+    <span className={classNames("step-marker", { fail })}>
       <span>L{index + 1}</span>
     </span>
   );
 };
 
 class StepMarkerWidget extends WidgetType {
-  constructor(readonly index: number) {
+  constructor(readonly index: number, readonly fail: boolean) {
     super();
   }
 
   toDOM() {
     let container = document.createElement("span");
     ReactDOM.createRoot(container).render(
-      <StepMarkerView index={this.index} />
+      <StepMarkerView index={this.index} fail={this.fail} />
     );
     return container;
   }
@@ -574,7 +604,7 @@ class StepMarkerWidget extends WidgetType {
 export function renderInterpreter(
   view: EditorView,
   container: HTMLDivElement,
-  steps: MStep<Range>[],
+  trace: MTrace<Range>,
   contents: string,
   config?: InterpreterConfig,
   annotations?: InterpAnnotations
@@ -585,30 +615,39 @@ export function renderInterpreter(
 
   let root = ReactDOM.createRoot(container);
   let marks = annotations?.state_locations || [];
+  let widgetRanges;
   if (marks.length > 0) {
-    let [sortedMarks, filteredSteps] = filterSteps(steps, marks);
-    steps = filteredSteps;
-
-    let decos = _.sortBy(
-      sortedMarks.map((mark, i) =>
-        Decoration.widget({
-          widget: new StepMarkerWidget(i),
-        }).range(mark)
-      ),
-      deco => deco.from
+    let [sortedMarks, filteredSteps] = filterSteps(trace.steps, marks);
+    widgetRanges = sortedMarks;
+    trace.steps = filteredSteps;
+  } else {
+    widgetRanges = trace.steps.map(
+      step => _.last(step.stack.frames)!.location.char_end
     );
-
-    let plugin = ViewPlugin.fromClass(class {}, {
-      decorations: () => Decoration.set(decos),
-    });
-    view.dispatch({
-      effects: [StateEffect.appendConfig.of(plugin)],
-    });
   }
+
+  let decos = _.sortBy(
+    widgetRanges.map((mark, i) =>
+      Decoration.widget({
+        widget: new StepMarkerWidget(
+          i,
+          i == trace.steps.length - 1 && trace.result.type == "Error"
+        ),
+      }).range(mark)
+    ),
+    deco => deco.from
+  );
+
+  let plugin = ViewPlugin.fromClass(class {}, {
+    decorations: () => Decoration.set(decos),
+  });
+  view.dispatch({
+    effects: [StateEffect.appendConfig.of(plugin)],
+  });
 
   root.render(
     <CodeContext.Provider value={contents}>
-      <InterpreterView steps={steps} config={config} />
+      <InterpreterView trace={trace} config={config} />
     </CodeContext.Provider>
   );
 }

@@ -15,9 +15,12 @@ use std::{
 
 pub use boundaries::compute_permission_boundaries;
 pub use find_bindings::find_bindings;
-use flowistry::mir::{
-  borrowck_facts::get_body_with_borrowck_facts,
-  utils::{BodyExt, SpanExt},
+use flowistry::{
+  mir::{
+    borrowck_facts::get_body_with_borrowck_facts,
+    utils::{BodyExt, SpanExt},
+  },
+  source_map::CharRange,
 };
 use ir_mapper::{GatherMode, IRMapper};
 use permissions::{Loan, PermissionsCtxt, Point, RefinementRegion, Refiner};
@@ -280,13 +283,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
 
   pub fn span_to_range(&self, span: Span) -> Range {
     let source_map = self.permissions.tcx.sess.source_map();
-    flowistry::source_map::Range::from_span(span, source_map)
-      .ok()
-      .unwrap_or_else(|| {
-        log::error!("The span {span:?} could not be turned into a valid Range");
-        flowistry::source_map::Range::default()
-      })
-      .into()
+    CharRange::from_span(span, source_map).unwrap().into()
   }
 
   fn construct_loan_info(&self) -> (LoanPoints, LoanRegions) {

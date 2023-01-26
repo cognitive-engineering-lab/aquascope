@@ -2,12 +2,13 @@ use std::{collections::HashMap, fs, io, panic, path::Path, process::Command};
 
 use anyhow::{bail, Context, Result};
 use flowistry::{
-  indexed::impls::LocationOrArg,
+  indexed::impls::{FilenameIndex, LocationOrArg},
   mir::{
     borrowck_facts::{self, NO_SIMPLIFY},
     utils::{BodyExt, OperandExt},
   },
-  source_map::{self, GraphemeIndices, Range, Spanner, ToSpan},
+  source_map::{self, Spanner, ToSpan},
+  test_utils::{DUMMY_CHAR_RANGE, DUMMY_FILE, DUMMY_FILE_NAME},
 };
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
@@ -16,12 +17,12 @@ use rustc_middle::{
   mir::{Rvalue, StatementKind},
   ty::TyCtxt,
 };
-use rustc_span::{source_map::FileLoader, BytePos};
+use rustc_span::source_map::FileLoader;
 
 use crate::{
   analysis::{self, permissions::Permissions, stepper::PermissionsDataDiff},
   errors,
-  interpreter::{self, MStep},
+  interpreter::{self, MTrace},
 };
 
 struct StringLoader(String);
@@ -60,7 +61,8 @@ impl From<&str> for Permissions {
 
 // Intermediate step that maps a start-end position,
 // to a place string and corresponding permissions.
-type PermMap = HashMap<(usize, usize), (String, Permissions)>;
+type PermMap =
+  HashMap<(source_map::BytePos, source_map::BytePos), (String, Permissions)>;
 
 fn split_test_source(
   source: impl AsRef<str>,
@@ -115,7 +117,13 @@ fn split_test_source(
 
       let perms = perms_str.into();
 
-      perm_map.insert((start_range, end_range), (var.to_string(), perms));
+      perm_map.insert(
+        (
+          source_map::BytePos(start_range),
+          source_map::BytePos(end_range),
+        ),
+        (var.to_string(), perms),
+      );
       source_idx += close.len();
     } else if check_delim!(close) {
       bail!(
@@ -136,15 +144,20 @@ fn split_test_source(
 fn parse_test_source(
   src: &str,
   delimeters: (&'static str, &'static str),
-) -> Result<(String, HashMap<Range, Permissions>)> {
+) -> Result<(String, HashMap<source_map::ByteRange, Permissions>)> {
   let (clean, interim_map) = split_test_source(src, delimeters)?;
-
-  let indices = GraphemeIndices::new(&clean);
 
   let map = interim_map
     .into_iter()
-    .map(|((s, e), (_var_str, perms))| {
-      (Range::from_byte_range(s, e, "dummy.rs", &indices), perms)
+    .map(|((start, end), (_var_str, perms))| {
+      (
+        DUMMY_FILE.with(|filename| source_map::ByteRange {
+          start,
+          end,
+          filename: *filename,
+        }),
+        perms,
+      )
     })
     .collect::<HashMap<_, _>>();
 
@@ -165,84 +178,88 @@ pub fn load_test_from_file(path: &Path) -> Result<String> {
 pub fn test_refinements_in_file(path: &Path) {
   let inner = || -> Result<()> {
     let input = load_test_from_file(path)?;
+    let (clean_input, _) = parse_test_source(&input, ("`[", "]`"))?;
 
-    let (clean_input, expected_permissions) =
-      parse_test_source(&input, ("`[", "]`"))?;
+    compile_normal(clean_input, |tcx| {
+      let (_, mut expected_permissions) =
+        parse_test_source(&input, ("`[", "]`")).unwrap();
 
-    let mut expected_permissions = expected_permissions;
+      for_each_body(tcx, |body_id, body_with_facts| {
+        let ctxt = analysis::compute_permissions(tcx, body_id, body_with_facts);
+        let spanner = Spanner::new(tcx, body_id, &body_with_facts.body);
+        let source_map = tcx.sess.source_map();
 
-    compile_bodies(clean_input, |tcx, body_id, body_with_facts| {
-      let ctxt = analysis::compute_permissions(tcx, body_id, body_with_facts);
-      let spanner = Spanner::new(tcx, body_id, &body_with_facts.body);
-      let source_map = tcx.sess.source_map();
+        expected_permissions.retain(|range, expected_perms| {
+          let span = range.to_span(tcx).unwrap();
+          let places = spanner.span_to_places(span);
+          let source_file = source_map.lookup_source_file(span.lo());
+          let source_line = source_map.lookup_line(span.lo()).unwrap().line;
+          let line_str = source_file.get_line(source_line).unwrap();
+          let source_line = source_line + 1;
 
-      expected_permissions.retain(|range, expected_perms| {
-        let span = range.to_span(tcx).unwrap();
-        let places = spanner.span_to_places(span);
-        let source_file = source_map.lookup_source_file(span.lo());
-        let source_line = source_map.lookup_line(span.lo()).unwrap().line;
-        let line_str = source_file.get_line(source_line).unwrap();
-        let source_line = source_line + 1;
+          log::debug!(
+            "Spanned places {span:?} {expected_perms:?}: {:?}",
+            places
+          );
 
-        log::debug!("Spanned places {span:?} {expected_perms:?}: {:?}", places);
+          // HACK: revisit this because it is most certainly based in
+          // a fragile assumption.
+          let mir_spanner = if places.is_empty() {
+            // If no places were found for this span then ignore it
+            // for now and see if it matches in a different body.
+            return true;
+          } else {
+            places.first().unwrap()
+          };
+          let loc = match mir_spanner.locations[0] {
+            LocationOrArg::Location(l) => l,
+            _ => unreachable!("not a location"),
+          };
 
-        // HACK: revisit this because it is most certainly based in
-        // a fragile assumption.
-        let mir_spanner = if places.is_empty() {
-          // If no places were found for this span then ignore it
-          // for now and see if it matches in a different body.
-          return true;
-        } else {
-          places.first().unwrap()
-        };
-        let loc = match mir_spanner.locations[0] {
-          LocationOrArg::Location(l) => l,
-          _ => unreachable!("not a location"),
-        };
+          // FIXME: this code is to catch any false assumptions I'm making
+          // about the structure of the generated MIR and the Flowistry Spanner.
+          let stmt = ctxt.body_with_facts.body.stmt_at(loc).left().unwrap();
+          let place = match &stmt.kind {
+            StatementKind::Assign(box (lhs, rvalue)) => {
+              let exp = ctxt.place_to_path(&mir_spanner.place);
+              let act = ctxt.place_to_path(lhs);
+              assert_eq!(exp, act);
 
-        // FIXME: this code is to catch any false assumptions I'm making
-        // about the structure of the generated MIR and the Flowistry Spanner.
-        let stmt = ctxt.body_with_facts.body.stmt_at(loc).left().unwrap();
-        let place = match &stmt.kind {
-          StatementKind::Assign(box (lhs, rvalue)) => {
-            let exp = ctxt.place_to_path(&mir_spanner.place);
-            let act = ctxt.place_to_path(lhs);
-            assert_eq!(exp, act);
-
-            match rvalue {
-              Rvalue::Ref(_, _, place) => *place,
-              Rvalue::Use(op) => op.to_place().unwrap(),
-              _ => unimplemented!(),
+              match rvalue {
+                Rvalue::Ref(_, _, place) => *place,
+                Rvalue::Use(op) => op.to_place().unwrap(),
+                _ => unimplemented!(),
+              }
             }
-          }
-          _ => unreachable!("not a move"),
-        };
+            _ => unreachable!("not a move"),
+          };
 
-        let path = ctxt.place_to_path(&place);
-        let point = ctxt.location_to_point(loc);
-        let computed_perms =
-          ctxt.permissions_data_at_point(path, point).permissions;
+          let path = ctxt.place_to_path(&place);
+          let point = ctxt.location_to_point(loc);
+          let computed_perms =
+            ctxt.permissions_data_at_point(path, point).permissions;
 
-        if *expected_perms != computed_perms {
-          panic!(
-            "\n\n\x1b[31mExpected {expected_perms:?} \
+          if *expected_perms != computed_perms {
+            panic!(
+              "\n\n\x1b[31mExpected {expected_perms:?} \
                but got {computed_perms:?} permissions\n  \
                \x1b[33m\
                for {place:?} in {stmt:?}\n  \
                on line {source_line}: {line_str}\n  \
                \x1b[0m\n\n"
-          );
-        }
+            );
+          }
 
-        log::debug!("successful test!");
+          log::debug!("successful test!");
 
-        false
+          false
+        });
       });
-    });
 
-    if !expected_permissions.is_empty() {
-      panic!("Not all ranges tested! {expected_permissions:#?}");
-    }
+      if !expected_permissions.is_empty() {
+        panic!("Not all ranges tested! {expected_permissions:#?}");
+      }
+    });
 
     Ok(())
   };
@@ -260,50 +277,60 @@ pub fn test_steps_in_file(
   use analysis::stepper::{stepper, PermIncludeMode};
   let inner = || -> Result<()> {
     let source = load_test_from_file(path)?;
-    compile_bodies(source, move |tcx, body_id, body_with_facts| {
-      let ctxt = &analysis::compute_permissions(tcx, body_id, body_with_facts);
-      // Required to give the snapshot a more specific internal name.
-      let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-      let tag = ctxt
-        .tcx
-        .hir()
-        .opt_name(owner)
-        .map(|n| String::from(n.as_str()))
-        .unwrap_or_else(|| String::from("<anon body>"));
+    compile_normal(source, move |tcx| {
+      for_each_body(tcx, |body_id, body_with_facts| {
+        let ctxt =
+          &analysis::compute_permissions(tcx, body_id, body_with_facts);
+        // Required to give the snapshot a more specific internal name.
+        let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
+        let tag = ctxt
+          .tcx
+          .hir()
+          .opt_name(owner)
+          .map(|n| String::from(n.as_str()))
+          .unwrap_or_else(|| String::from("<anon body>"));
 
-      let source_map = tcx.sess.source_map();
-      let body_steps = stepper::compute_permission_steps(
-        ctxt,
-        PermIncludeMode::Changes,
-        |span| {
-          source_map::Range::from_span(span, source_map)
-            .ok()
-            .unwrap_or_default()
-            .into()
-        },
-      );
+        let source_map = tcx.sess.source_map();
+        let body_steps = stepper::compute_permission_steps(
+          ctxt,
+          PermIncludeMode::Changes,
+          |span| {
+            DUMMY_CHAR_RANGE.with(|dummy_char_range| {
+              source_map::CharRange::from_span(span, source_map)
+                .ok()
+                .unwrap_or(*dummy_char_range)
+                .into()
+            })
+          },
+        );
 
-      // NOTE: we normalize the permission steps to be
-      // - usize: the line number of the corresponding statement.
-      // - String: the the path (place) of the permissions.
-      // - PermsDiff: obviously the actual permission diffs.
-      let normalized = body_steps
-        .into_iter()
-        .map(|pss| {
-          let bp = BytePos(pss.location.byte_end as u32);
-          let line_num = source_map.lookup_line(bp).unwrap().line;
-          // FIXME: we shouldn't flatten the tables together, this was only a
-          // quick fix for the tests.
-          let inner_info = pss
-            .state
-            .into_iter()
-            .flat_map(|ps| ps.state)
-            .collect::<Vec<_>>();
-          (line_num, inner_info)
-        })
-        .collect::<Vec<_>>();
+        // NOTE: we normalize the permission steps to be
+        // - usize: the line number of the corresponding statement.
+        // - String: the the path (place) of the permissions.
+        // - PermsDiff: obviously the actual permission diffs.
+        let normalized = body_steps
+          .into_iter()
+          .map(|pss| {
+            let char_range = source_map::CharRange {
+              start: source_map::CharPos(pss.location.char_start),
+              end: source_map::CharPos(pss.location.char_end),
+              filename: FilenameIndex::from_usize(pss.location.filename),
+            };
+            let span = char_range.to_span(ctxt.tcx).unwrap();
+            let line_num = source_map.lookup_line(span.hi()).unwrap().line;
+            // FIXME: we shouldn't flatten the tables together, this was only a
+            // quick fix for the tests.
+            let inner_info = pss
+              .state
+              .into_iter()
+              .flat_map(|ps| ps.state)
+              .collect::<Vec<_>>();
+            (line_num, inner_info)
+          })
+          .collect::<Vec<_>>();
 
-      assert_snap(tag, normalized);
+        assert_snap(tag, normalized);
+      });
     });
 
     Ok(())
@@ -314,7 +341,7 @@ pub fn test_steps_in_file(
 
 pub fn test_interpreter_in_file(
   path: &Path,
-  run_insta: impl Fn(String, Vec<MStep<crate::Range>>) + Sync,
+  run_insta: impl Fn(String, MTrace<crate::Range>) + Sync,
 ) {
   let main = || -> Result<()> {
     let input = load_test_from_file(path)?;
@@ -322,7 +349,7 @@ pub fn test_interpreter_in_file(
       "--crate-type bin --sysroot {}",
       aquascope_workspace_utils::miri_sysroot()?.display()
     );
-    compile(input, &args, |tcx| {
+    compile(input, &args, true, |tcx| {
       let name = path.file_name().unwrap().to_string_lossy().to_string();
       let result = interpreter::interpret(tcx).unwrap();
       run_insta(name, result);
@@ -375,34 +402,38 @@ pub fn run_in_dir(
   main().unwrap();
 }
 
-pub fn compile_bodies(
+pub fn for_each_body<'tcx>(
+  tcx: TyCtxt<'tcx>,
+  mut f: impl FnMut(BodyId, &BodyWithBorrowckFacts<'tcx>),
+) {
+  let hir = tcx.hir();
+  hir
+    .items()
+    .filter_map(|id| match hir.item(id).kind {
+      ItemKind::Fn(_, _, body) => Some(body),
+      _ => None,
+    })
+    .for_each(|body_id| {
+      let def_id = tcx.hir().body_owner_def_id(body_id);
+      errors::track_body_diagnostics(def_id);
+      let body_with_facts =
+        borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
+
+      log::debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
+
+      f(body_id, body_with_facts);
+    })
+}
+
+pub fn compile_normal(
   input: impl Into<String>,
-  mut callback: impl for<'tcx> FnMut(TyCtxt<'tcx>, BodyId, &BodyWithBorrowckFacts<'tcx>)
-    + Send
-    + std::marker::Sync,
+  callbacks: impl FnOnce(TyCtxt<'_>) + Send,
 ) {
   compile(
     input,
     &format!("--crate-type lib --sysroot {}", &*SYSROOT),
-    |tcx| {
-      let hir = tcx.hir();
-      hir
-        .items()
-        .filter_map(|id| match hir.item(id).kind {
-          ItemKind::Fn(_, _, body) => Some(body),
-          _ => None,
-        })
-        .for_each(|body_id| {
-          let def_id = tcx.hir().body_owner_def_id(body_id);
-          errors::track_body_diagnostics(def_id);
-          let body_with_facts =
-            borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
-
-          log::debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
-
-          callback(tcx, body_id, body_with_facts);
-        })
-    },
+    false,
+    callbacks,
   )
 }
 
@@ -410,13 +441,15 @@ pub fn compile_bodies(
 pub fn compile(
   input: impl Into<String>,
   args: &str,
+  is_interpreter: bool,
   callback: impl FnOnce(TyCtxt<'_>) + Send,
 ) {
   let mut callbacks = TestCallbacks {
     callback: Some(callback),
+    is_interpreter,
   };
   let args = format!(
-    "rustc dummy.rs --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings {args}",
+    "rustc {DUMMY_FILE_NAME} --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings {args}",
   );
   let args = args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
 
@@ -431,6 +464,7 @@ pub fn compile(
 
 struct TestCallbacks<Cb> {
   callback: Option<Cb>,
+  is_interpreter: bool,
 }
 
 impl<Cb> rustc_driver::Callbacks for TestCallbacks<Cb>
@@ -470,7 +504,11 @@ where
     }));
 
     NO_SIMPLIFY.store(true, Ordering::SeqCst);
-    config.override_queries = Some(borrowck_facts::override_queries);
+    config.override_queries = Some(if self.is_interpreter {
+      crate::interpreter::override_queries
+    } else {
+      borrowck_facts::override_queries
+    });
   }
 
   fn after_parsing<'tcx>(

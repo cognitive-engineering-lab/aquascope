@@ -13,7 +13,7 @@ use rustc_hir::{intravisit::Visitor, Body, Expr, ExprKind, HirId, Stmt};
 use rustc_middle::{mir::Location, ty::InstanceDef};
 use rustc_span::{BytePos, Span};
 
-use super::step::{MFrame, MStack, MStep, MirLoc};
+use super::step::{MFrame, MStack, MStep, MTrace, MirLoc};
 use crate::analysis::ir_mapper::{GatherDepth, GatherMode, IRMapper};
 
 #[derive(Default)]
@@ -144,10 +144,11 @@ impl<'a, 'mir, 'tcx> Mapper<'a, 'mir, 'tcx> {
 ///                      S3@H2              S5@H2
 /// ```
 pub fn group_steps<Loc1, Loc2: PartialEq + Clone>(
-  steps: Vec<MStep<Loc1>>,
+  trace: MTrace<Loc1>,
   abstract_loc: impl Fn(Loc1) -> Option<Loc2>,
-) -> Vec<MStep<Loc2>> {
-  steps
+) -> MTrace<Loc2> {
+  let steps = trace
+    .steps
     .into_iter()
     .filter_map(|step| {
       let frames = step
@@ -172,13 +173,17 @@ pub fn group_steps<Loc1, Loc2: PartialEq + Clone>(
     .group_by(|step| step.stack.frames.last().unwrap().location.clone())
     .into_iter()
     .map(|(_, group)| group.last().unwrap())
-    .collect()
+    .collect();
+  MTrace {
+    steps,
+    result: trace.result,
+  }
 }
 
 #[cfg(test)]
 mod test {
   use crate::{
-    interpreter::step::{MFrame, MHeap, MStack, MStep},
+    interpreter::step::{MFrame, MHeap, MResult, MStack, MStep, MTrace},
     Range,
   };
 
@@ -201,8 +206,13 @@ mod test {
   #[test]
   fn test_group_steps() {
     let steps = vec![mk_step("S0", 0), mk_step("S1", 1), mk_step("S2", 2)];
-    let grouped = super::group_steps(steps, |n| Some(n / 2 * 2));
+    let trace = MTrace {
+      steps,
+      result: MResult::Success,
+    };
+    let grouped = super::group_steps(trace, |n| Some(n / 2 * 2));
     let named_locs = grouped
+      .steps
       .into_iter()
       .map(|mut step| {
         let frame = step.stack.frames.remove(0);

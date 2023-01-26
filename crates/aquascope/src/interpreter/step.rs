@@ -2,12 +2,12 @@
 
 use std::{cell::RefCell, cmp::Ordering, collections::HashMap};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use either::Either;
 use flowistry::mir::utils::PlaceExt;
 use miri::{
-  AllocId, Immediate, InterpCx, InterpResult, LocalValue, Machine, MiriConfig,
-  MiriMachine, Operand,
+  AllocId, Immediate, InterpCx, InterpError, InterpErrorInfo, InterpResult,
+  LocalValue, Machine, MiriConfig, MiriMachine, Operand, UndefinedBehaviorInfo,
 };
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
@@ -50,6 +50,29 @@ pub struct MStep<L> {
   pub heap: MHeap,
 }
 
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[serde(tag = "type", content = "value")]
+#[ts(export)]
+pub enum MUndefinedBehavior {
+  PointerUseAfterFree { alloc_id: usize },
+  Other(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[serde(tag = "type", content = "value")]
+#[ts(export)]
+pub enum MResult {
+  Success,
+  Error(MUndefinedBehavior),
+}
+
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[ts(export)]
+pub struct MTrace<L> {
+  pub steps: Vec<MStep<L>>,
+  pub result: MResult,
+}
+
 pub(crate) type MirLoc<'tcx> = (InstanceDef<'tcx>, Either<Location, Span>);
 
 #[derive(Default)]
@@ -58,6 +81,7 @@ pub(crate) struct MemoryMap<'tcx> {
   pub(crate) place_to_loc:
     HashMap<AllocId, (MMemorySegment, TyAndLayout<'tcx>)>,
   pub(crate) stack_slots: HashMap<AllocId, (usize, String, TyAndLayout<'tcx>)>,
+  pub(crate) alloc_id_remapping: HashMap<AllocId, usize>,
 }
 
 pub struct VisEvaluator<'mir, 'tcx> {
@@ -101,6 +125,12 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       ecx,
       memory_map: RefCell::default(),
     })
+  }
+
+  pub(super) fn remap_alloc_id(&self, alloc_id: AllocId) -> usize {
+    let mut memory_map = self.memory_map.borrow_mut();
+    let n = memory_map.alloc_id_remapping.len();
+    *memory_map.alloc_id_remapping.entry(alloc_id).or_insert(n)
   }
 
   fn build_locals(
@@ -183,7 +213,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       .collect::<String>();
 
     let body_span = Range::from(
-      flowistry::source_map::Range::from_span(
+      flowistry::source_map::CharRange::from_span(
         body_span(tcx, frame.instance.def_id(), BodySpanType::Whole),
         tcx.sess.source_map(),
       )
@@ -304,19 +334,44 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     }
   }
 
-  /// Evaluate the program to completion, returning a vector of MIR steps for local functions
-  pub fn eval(&mut self) -> InterpResult<'tcx, Vec<MStep<MirLoc<'tcx>>>> {
-    let mut steps = Vec::new();
-    loop {
-      let (step, more_work) = self.step()?;
-      if let Some(step) = step {
-        steps.push(step);
-      }
-      if !more_work {
-        break;
-      }
-    }
+  fn beautify_error(
+    &mut self,
+    e: InterpErrorInfo,
+  ) -> Result<MUndefinedBehavior> {
+    use UndefinedBehaviorInfo::*;
 
-    Ok(steps)
+    Ok(match e.into_kind() {
+      InterpError::UndefinedBehavior(ub) => match ub {
+        PointerUseAfterFree(alloc_id) => {
+          MUndefinedBehavior::PointerUseAfterFree {
+            alloc_id: self.remap_alloc_id(alloc_id),
+          }
+        }
+        ub => MUndefinedBehavior::Other(ub.to_string()),
+      },
+      err => bail!("{err}"),
+    })
+  }
+
+  /// Evaluate the program to completion, returning a vector of MIR steps for local functions
+  pub fn eval(&mut self) -> Result<MTrace<MirLoc<'tcx>>> {
+    let mut steps = Vec::new();
+    let result = loop {
+      match self.step() {
+        Ok((step, more_work)) => {
+          if let Some(step) = step {
+            steps.push(step);
+          }
+          if !more_work {
+            break MResult::Success;
+          }
+        }
+        Err(e) => {
+          break MResult::Error(self.beautify_error(e)?);
+        }
+      }
+    };
+
+    Ok(MTrace { steps, result })
   }
 }
