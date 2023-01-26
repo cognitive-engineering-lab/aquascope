@@ -1,7 +1,18 @@
 [package]
 name = "mdbook-aquascope"
+authors = [
+  "Will Crichton <wcrichto@cs.stanford.edu>",
+  "Gavin Gray <gavinleroy6@gmail.com>"
+]
+description = "Interactive Aquascope editor for your mdBook"
+license = "MIT"
 version = "0.1.0"
 edition = "2021"
+include = [
+  "/frontend/packages/aquascope-embed/dist/lib.js",
+  "/frontend/packages/aquascope-embed/dist/lib.css"
+]
+repository = "https://github.com/cognitive-engineering-lab/aquascope"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
