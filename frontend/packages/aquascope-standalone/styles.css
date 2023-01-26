@@ -4,15 +4,41 @@
 
 html,
 body {
+  padding: 3em;
   height: 100%;
   font-family: "Verdana", sans-serif;
   font-size: 18px;
-  background-color: lightgray;
+  background-color: white;
+}
+
+span.scp {
+  font-variant: small-caps;
+  font-weight: bolder;
+}
+
+div.center {
+  width: 100%;
+  text-align: center;
+}
+
+div.blurb {
+  width: 50%;
+  display: inline-block;
+  margin: auto;
+  padding: 5px;
+
+  border-style: solid;
+  border-width: 5px;
+  border-radius: 5px;
+  border-color: #e8e8e8;
+  background-color: #f5f5f5;
+
+  margin-bottom: 4em;
 }
 
 nav {
   width: 100%;
-  background-color: firebrick;
+  background-color: #f5f5f5;
   padding-left: 30px;
   padding-right: 10px;
 }
@@ -25,7 +51,7 @@ nav {
 }
 
 .nav-item:hover {
-  color: whitesmoke;
+  color: #f5f5f5;
 }
 
 .static-editor {
@@ -36,6 +62,25 @@ nav {
 
   /* position: relative; */
   /* padding-left: 25px; */
+}
+
+.top-right {
+  z-index: 10;
+  position: absolute;
+  top: 8px;
+  right: 1em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+}
+
+.cm-button {
+  padding: 5px 10px;
+  background: #f5f5f5;
+  display: inline-block;
+  border: 1px #f5f5f5;
+  border-color: #e8e8e8;
+  border-radius: 2px;
 }
 
 /* XXX: tabs **************************************** */
@@ -55,16 +100,20 @@ nav {
   margin: 0;
   margin-bottom: -1px;
 }
+
 .tab {
+  font-family: monospace;
   padding: 5px 10px;
-  background: #ddd;
-  border: 1px solid #bbb;
+  background: white;
   width: fit-content;
   display: inline-block;
+  border: 1px white;
+  border-radius: 2px;
 }
+
 .tab.active {
-  background: #fff;
-  border-bottom-color: white !important;
+  background: #f5f5f5;
+  border-bottom-color: #f5f5f5 !important;
 }
 
 .tab-pane {
@@ -77,7 +126,7 @@ nav {
   /* padding-left: 25px; */
 
   display: none;
-  border: 1px solid #bbb;
+  border: 1px solid #e8e8e8;
 }
 .tab-pane.active {
   display: block;
@@ -92,7 +141,16 @@ nav {
   border-style: solid;
   border-width: 5px;
   border-radius: 5px;
-  border-color: #bbb;
+  border-color: #e8e8e8;
 
   background-color: white;
+}
+
+a {
+  text-decoration: none;
+  transition: 0.25s all ease;
+}
+
+a:hover {
+  opacity: 50%;
 }
