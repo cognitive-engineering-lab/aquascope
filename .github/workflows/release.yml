@@ -6,7 +6,32 @@ on:
       - "v*"
 
 jobs:
+  test:
+    runs-on: ubuntu-20.04
+    env:
+      AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: davidB/rust-cargo-make@v1
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-insta
+          version: latest
+          use-tool-cache: true
+      - name: Generate TS bindings
+        run: cargo make init-bindings
+      - name: Prepare frontend
+        run: npm install -g graco && cd frontend && graco prepare
+      - name: Standalone connect
+        run: |
+          cargo make watch &
+          sleep 120
+          cd frontend
+          graco build -w &
+          graco test
+
   publish-standalone-and-docs:
+    needs: test
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v1
@@ -18,3 +43,14 @@ jobs:
           folder: ./frontend/packages/aquascope-standalone/dist
           clean: true
           clean-exclude: dev
+
+  publish-crate:
+    needs: publish-standalone-and-docs
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v1
+      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }} && cargo install cargo-workspaces
+      - uses: actions-rs/cargo@v1
+        with:
+          command: ws
+          args: publish --from-git --yes
