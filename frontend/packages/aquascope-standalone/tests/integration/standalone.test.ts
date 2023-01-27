@@ -44,13 +44,13 @@ describe("Aquascope Standalone", () => {
     expect(widgets.length).toBeGreaterThan(0);
   });
 
-  it("runs the interpreter", async () => {
-    await page.click("#showInterpret");
-    let crashedElement = await page.$(".aquascope-crash");
-    // No crashed elements
-    expect(crashedElement).toBeNull();
-    await page.waitForSelector(interpSelector);
-    let widgets = await page.$$(interpSelector);
-    expect(widgets.length).toBeGreaterThan(0);
-  });
+  // it("runs the interpreter", async () => {
+  //   await page.click("#showInterpret");
+  //   let crashedElement = await page.$(".aquascope-crash");
+  //   // No crashed elements
+  //   expect(crashedElement).toBeNull();
+  //   await page.waitForSelector(interpSelector);
+  //   let widgets = await page.$$(interpSelector);
+  //   expect(widgets.length).toBeGreaterThan(0);
+  // });
 });

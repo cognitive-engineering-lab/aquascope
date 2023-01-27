@@ -24,6 +24,7 @@ jobs:
       - run: npm install -g graco && cd frontend && graco prepare
       - run: cargo miri setup
       - run: cargo install --path crates/aquascope_front --debug
+      - run: cd crates/mdbook-aquascope/test-book/build
       - name: Backend tests
         uses: actions-rs/cargo@v1
         with:
