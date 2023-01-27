@@ -31,7 +31,7 @@ jobs:
           args: test --features=no-docker
       - name: Frontend tests
         run: |
-          cargo make watch &
+          cd crates/aquascope_serve && cargo run --features=no-docker &
           sleep 120
           cd frontend
           graco build -w &
