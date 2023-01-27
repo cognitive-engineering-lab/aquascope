@@ -23,6 +23,7 @@ jobs:
       - run: cargo make init-bindings
       - run: npm install -g graco && cd frontend && graco prepare
       - run: cargo miri setup
+      - run: cargo install --path crates/aquascope_front --debug
       - uses: actions-rs/cargo@v1
         with:
           command: insta
