@@ -18,7 +18,7 @@ runs:
       shell: bash
 
     - name: Install aquascope
-      run: cargo install --path crates/aquascope_frontend --debug
+      run: cargo install --path crates/aquascope_front --debug
       shell: bash
 
     - name: Install mdbook-aquascope
