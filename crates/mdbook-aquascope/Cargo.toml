@@ -5,6 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+dev = ["mdbook-preprocessor-utils/testing"]
+
 [dependencies]
 mdbook-preprocessor-utils = "0.1"
 nom = "7"
@@ -18,7 +21,8 @@ ts-rs = "6.2"
 rayon = "1"
 aquascope_workspace_utils = { path = "../aquascope_workspace_utils" }
 regex = "1"
-
+flate2 = "1"
 
 [dev-dependencies]
+mdbook-aquascope = { path = ".", features = ["dev"] }
 maplit = "*"
