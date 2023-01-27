@@ -3,6 +3,8 @@ import { indentUnit } from "@codemirror/language";
 import { Compartment, EditorState, Extension } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
 import _ from "lodash";
+import React, { useEffect, useState } from "react";
+import ReactDOM from "react-dom/client";
 
 import { boundaryField, renderBoundaries } from "./editor-utils/boundaries";
 import { renderInterpreter } from "./editor-utils/interpreter";
@@ -47,10 +49,44 @@ fn main() {
 let readOnly = new Compartment();
 let mainKeybinding = new Compartment();
 
+interface Button {
+  icon: string;
+  index: number;
+}
+
+type ButtonName = "copy" | "eye";
+const BUTTON_ORDER: ButtonName[] = ["copy", "eye"];
+
+let CopyButton = ({ view }: { view: EditorView }) => (
+  <i
+    className="fa fa-copy"
+    onClick={() => {
+      let contents = view.state.doc.toJSON().join("\n");
+      navigator.clipboard.writeText(contents);
+    }}
+  />
+);
+
+let HideButton = ({ container }: { container: HTMLDivElement }) => {
+  let [hidden, setHidden] = useState(true);
+  useEffect(() => {
+    if (!hidden) container.classList.add("show-hidden");
+    else container.classList.remove("show-hidden");
+  }, [hidden]);
+  return (
+    <i
+      className={`fa ${hidden ? "fa-eye" : "fa-eye-slash"}`}
+      onClick={() => setHidden(!hidden)}
+    />
+  );
+};
+
 export class Editor {
   private view: EditorView;
   private interpreterContainer: HTMLDivElement;
   private editorContainer: HTMLDivElement;
+  private buttonContainer: ReactDOM.Root;
+  private buttons: Set<ButtonName>;
 
   public constructor(
     dom: HTMLDivElement,
@@ -71,6 +107,8 @@ export class Editor {
       }
     );
 
+    this.buttons = new Set(["copy"]);
+
     let initialState = EditorState.create({
       doc: code,
       extensions: [
@@ -87,19 +125,38 @@ export class Editor {
       ],
     });
 
-    let editorContainer = document.createElement("div");
-    let initialView = new EditorView({
+    this.editorContainer = document.createElement("div");
+    this.view = new EditorView({
       state: initialState,
-      parent: editorContainer,
+      parent: this.editorContainer,
     });
+
+    let buttonContainer = document.createElement("div");
+    this.buttonContainer = ReactDOM.createRoot(buttonContainer);
+    this.renderButtons();
+
+    this.editorContainer.appendChild(buttonContainer);
 
     this.interpreterContainer = document.createElement("div");
 
-    dom.appendChild(editorContainer);
+    dom.appendChild(this.editorContainer);
     dom.appendChild(this.interpreterContainer);
+  }
 
-    this.editorContainer = dom;
-    this.view = initialView;
+  renderButtons() {
+    this.buttonContainer.render(
+      <div className="top-right">
+        {Array.from(this.buttons).map((button, i) => (
+          <button className="cm-button" key={i}>
+            {button == "copy" ? (
+              <CopyButton view={this.view} />
+            ) : button == "eye" ? (
+              <HideButton container={this.editorContainer} />
+            ) : null}
+          </button>
+        ))}
+      </div>
+    );
   }
 
   public getCurrentCode(): string {
@@ -136,8 +193,8 @@ export class Editor {
       effects: [f.effectType.of(newEffects)],
     });
   }
-  // Actions to communicate with the aquascope server
 
+  // Actions to communicate with the aquascope server
   async callBackendWithCode(endpoint: string): Promise<ServerResponse> {
     let inEditor = this.getCurrentCode();
     let endpointUrl = new URL(endpoint, this.serverUrl);
@@ -190,6 +247,8 @@ export class Editor {
       this.view.dispatch({
         effects: annotations.hidden_lines.map(line => hideLine.of({ line })),
       });
+      this.buttons.add("eye");
+      this.renderButtons();
     }
 
     if (operation == "interpreter") {

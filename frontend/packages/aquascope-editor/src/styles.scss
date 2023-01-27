@@ -1,24 +1,51 @@
 $monospace: "Source Code Pro", monospace;
-$transparent-color: #fff;
-$boundaries-color: #4ebeef;
+$transparent: rgba(0,0,0,0);
 
-// Colors for permission stacks
-$read-color: #4ebeef;
-$write-color: #5dca36;
-$drop-color: #ff4244;
+:root {
+  --aq-bg: white;
+  --aq-fg: black;
+
+  // Colors for permission stacks
+  --aq-read-color: #4ebeef;
+  --aq-write-color: #5dca36;
+  --aq-drop-color: #ff4244;  
+
+  --aq-error: red;
+  --aq-error-text: white;
+
+  --aq-button-border: gray;
+  --aq-button-text: gray;
+  --aq-button-background: lightgray;  
+  --aq-button-border-hover: black;
+  --aq-button-text-hover: black;
+  --aq-button-background-hover: white;
+
+  --aq-step-widget-text: #ccc;
+  --aq-step-table-text: black;
+  --aq-step-table-border: gainsboro;
+  --aq-step-table-background: whitesmoke;
+}
+
 $glyph-width: 14px;
 
 @mixin button {
+  background-color: var(--aq-button-background);
+  color: var(--aq-button-text);
   opacity: 0;
   font-size: 14px;
-  border-style: solid;
-  border-width: 1px;
+  border: 1px solid var(--aq-button-border);
   border-radius: 4px;
   padding: 3px 5px;
   margin: 0px 5px;
   transition: 100ms;
   transition-property: color, border-color, background-color, opacity;
   cursor: pointer;
+
+  &:hover {
+    background-color: var(--aq-button-background-hover);
+    color: var(--aq-button-text-hover);
+    border-color: var(--aq-button-border-hover);
+  }
 }
 
 .aquascope {
@@ -81,46 +108,51 @@ $glyph-width: 14px;
   }
 
   .cm-line.hidden-line {
-    display: none;
+    display: none;    
+  }
+
+  .show-hidden .cm-line.hidden-line {
+    display: block;
+    opacity: 0.6;      
   }
 
   /* Loan Highlighting */
 
   .aquascope-loan {
-    text-decoration: underline 3px rgba($transparent-color, 0);
+    text-decoration: underline 3px $transparent;
     transition: 1s all;
 
     &.show-hidden {
       &.read {
-        text-decoration: underline 3px $read-color !important;
+        text-decoration: underline 3px var(--aq-read-color) !important;
       }
 
       &.write {
-        text-decoration: underline 3px $write-color !important;
+        text-decoration: underline 3px var(--aq-write-color) !important;
       }
 
       &.drop {
-        text-decoration: underline 3px $drop-color !important;
+        text-decoration: underline 3px var(--aq-drop-color) !important;
       }
     }
   }
 
   .aquascope-live-region {
-    background-color: rgba($transparent-color, 0);
+    background-color: $transparent;
     border-radius: 5px;
     transition: 1s all;
 
     &.show-hidden {
       &.read {
-        background-color: rgba($read-color, 0.4) !important;
+        background-color: rgba(var(--aq-read-color), 0.4) !important;
       }
 
       &.write {
-        background-color: rgba($write-color, 0.4) !important;
+        background-color: rgba(var(--aq-write-color), 0.4) !important;
       }
 
       &.drop {
-        background-color: rgba($drop-color, 0.4) !important;
+        background-color: rgba(var(--aq-drop-color), 0.4) !important;
       }
     }
   }
@@ -143,23 +175,23 @@ $glyph-width: 14px;
       font-size: $glyph-width;
 
       &.read {
-        stroke: $read-color;
-        fill: $read-color;
+        stroke: var(--aq-read-color);
+        fill: var(--aq-read-color);
       }
 
       &.write {
-        stroke: $write-color;
-        fill: $write-color;
+        stroke: var(--aq-write-color);
+        fill: var(--aq-write-color);
       }
 
       &.drop {
-        stroke: $drop-color;
-        fill: $drop-color;
+        stroke: var(--aq-drop-color);
+        fill: var(--aq-drop-color);
       }
 
       &.missing {
         stroke-width: 1;
-        fill: rgba($transparent-color, 0) !important;
+        fill: $transparent!important;
       }
     }
   }
@@ -187,18 +219,18 @@ $glyph-width: 14px;
       }
 
       &.perm-diff-none {
-        stroke: black;
-        fill: black;
+        stroke: var(--aq-fg);
+        fill: var(--aq-fg);
       }
 
       &perm-diff-none-high {
-        stroke: black;
-        fill: black;
+        stroke: var(--aq-fg);
+        fill: var(--aq-fg);
       }
 
       &.perm-diff-none-low {
-        stroke: black;
-        fill: black;
+        stroke: var(--aq-fg);
+        fill: var(--aq-fg);
       }
     }
   }
@@ -216,13 +248,13 @@ $glyph-width: 14px;
     cursor: pointer;
 
     &:hover {
-      color: black;
+      color: var(--aq-fg);
     }
   }
 
   .perm-step-widget {
     display: inline-block;
-    color: #ccc;
+    color: var(--aq-step-widget-text);
     position: relative;
     top: 0.5em;
   }
@@ -239,6 +271,7 @@ $glyph-width: 14px;
     text-align: center;
     width: 100%;
     cursor: pointer;
+    color: var(--aq-step-widget-text);
   }
 
   .step-table-container {
@@ -246,15 +279,19 @@ $glyph-width: 14px;
     flex-direction: column;
     align-items: flex-start;
     display: inline-flex;
+    margin-bottom: 5px;
 
-    background-color: whitesmoke;
-    border-color: gainsboro;
-    border: 2px solid;
+    background-color: var(--aq-step-table-background);    
+    border: 2px solid var(--aq-step-table-border);
     border-radius: 4px;
   }
 
-  .perm-step-table {
-    color: black;
+  .perm-step-table, .step-table-container {
+    color: var(--aq-step-table-text);
+
+    td {
+      padding: 1px 4px;
+    }
   }
 
   table.perm-step-table {
@@ -264,7 +301,7 @@ $glyph-width: 14px;
 
   .perm-step-table tr td {
     border: 1px dotted;
-    border-color: gainsboro;
+    border-color: var(--aq-step-table-border);
   }
 
   span.perm-diff-add {
@@ -299,8 +336,8 @@ $glyph-width: 14px;
   display: inline-block;
   border-radius: 4px;
   padding: 0 2px;
-  background: white;
-  border: 1px solid black;
+  background: var(--aq-bg);
+  border: 1px solid var(--aq-fg);
 
   .cm-editor & {
     margin: 2px 6px 0;
@@ -308,7 +345,7 @@ $glyph-width: 14px;
 
   > span {
     font-size: 0.8em;
-    color: black;
+    color: var(--aq-fg);
     vertical-align: middle;
     position: relative;
     bottom: 1px;
@@ -316,16 +353,16 @@ $glyph-width: 14px;
   }
 
   &.fail {
-    background: red;
+    background: var(--aq-error);
     
     > span {
-      color: white;
+      color: var(--aq-error-text);
     }
   }
 }
 
 .interpreter {
-  background: white;
+  background: var(--aq-bg);
   padding: 1rem;
   display: flex;
   gap: 30px;
@@ -339,13 +376,15 @@ $glyph-width: 14px;
     right: 1rem;
 
     @include button;
+
+    &.active {
+      border-color: var(--aq-fg);
+      background-color: var(--aq-bg);      
+      color: var(--aq-fg);
+    }
   }
 
   .step {
-    // border: 1px solid #ccc;
-    // padding: 0.5em;
-    // border-radius: 8px;
-
     .header {
       position: relative;
 
@@ -361,7 +400,7 @@ $glyph-width: 14px;
         width: 100%;
         height: 100%;
         z-index: 11;
-        background: white;
+        background: var(--aq-bg);
         opacity: 0.8;
       }
     }
@@ -376,7 +415,7 @@ $glyph-width: 14px;
 
       .undefined-behavior {
         margin-left: 10px;
-        color: red;
+        color: var(--aq-error);
       }
     }
 
@@ -392,7 +431,7 @@ $glyph-width: 14px;
       padding-left: 10px;
 
       .memory {
-        border: 1px dashed #ccc;
+        border: 1px dashed var(--aq-step-table-border);
         padding: 0.7rem;
         height: max-content;
 
@@ -425,7 +464,7 @@ $glyph-width: 14px;
 
     table.locals,
     .heap > table {
-      border: 2px solid #ccc;
+      border: 2px solid var(--aq-step-table-border);
 
       > tbody > tr > td {
         border-width: 2px;
@@ -434,7 +473,7 @@ $glyph-width: 14px;
     }
 
     table {
-      border: 1px solid #ccc;
+      border: 1px solid var(--aq-step-table-border);
       border-collapse: collapse;
       font-family: $monospace;
 
@@ -456,7 +495,7 @@ $glyph-width: 14px;
       }
 
       td {
-        border: 1px solid #ccc;
+        border: 1px solid var(--aq-step-table-border);
         transition: width 1s, height 1s;
       }
     }
@@ -466,8 +505,8 @@ $glyph-width: 14px;
         display: inline-block;
         width: 1.2em; // should be same as line-height
 
-        color: red;
-        border: 1px dashed red;
+        color: var(--aq-error);
+        border: 1px dashed var(--aq-error);
         border-radius: 50%;    
         text-align: center;  
       }

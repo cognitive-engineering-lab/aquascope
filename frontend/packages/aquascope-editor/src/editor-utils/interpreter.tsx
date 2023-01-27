@@ -529,13 +529,11 @@ let InterpreterView = ({
         onMouseLeave={() => setButtonVisible(false)}
       >
         <button
-          className="concrete-types"
+          className={classNames("concrete-types", { active: concreteTypes })}
           onClick={() => setConcreteTypes(!concreteTypes)}
           style={{ opacity: buttonVisible ? "1" : "0" }}
         >
-          <i
-            className={`fa fa-${concreteTypes ? "binoculars" : "binoculars"}`}
-          />
+          <i className="fa fa-binoculars" />
         </button>
         {trace.steps.map((step, i) => {
           let error =
