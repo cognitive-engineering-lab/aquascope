@@ -18,10 +18,8 @@ jobs:
           crate: cargo-insta
           version: latest
           use-tool-cache: true
-      - name: Generate TS bindings
-        run: cargo make init-bindings
-      - name: Prepare frontend
-        run: npm install -g graco && cd frontend && graco prepare
+      - run: cargo make init-bindings
+      - run: npm install -g graco && cd frontend && graco prepare
       - name: Standalone connect
         run: |
           cargo make watch &
