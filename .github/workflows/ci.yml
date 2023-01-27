@@ -30,7 +30,7 @@ jobs:
       - run: cargo miri setup
       - run: cargo install --path crates/aquascope_front --debug
       - run: cargo install --path crates/mdbook-aquascope --debug
-      - run: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(rustc --print target-libdir)
+      - run: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$($(rustup which --toolchain nightly-2022-12-07 rustc) --print target-libdir)
       - name: Setup mdBook
         uses: peaceiris/actions-mdbook@v1
         with:
