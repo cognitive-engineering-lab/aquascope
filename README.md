@@ -1,8 +1,8 @@
-# <p style=""><span>Aquascope</span><img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" style="float: right; border: 1px solid #555;" height="300" /> </p>
+# <span>Aquascope: looking under the surface of rustc, _at a safe distance_</span><img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" style="float: right; border: 1px solid #555;" height="300" /></p>
 
 [![tests](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml/badge.svg)](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml)
-
-## Looking under the surface of rustc, _at a safe distance_.
+[![crates.io](https://img.shields.io/crates/v/mdbook-aquascope.svg)](https://crates.io/crates/mdbook-aquascope)
+[![docs](https://img.shields.io/badge/docs-unpublished-red)](https://cognitive-engineering-lab/aquascope/docs)
 
 _Aquascope_ is a tool that generates interactive visualizations from Rust programs. These visualizations aim to help learners intuit correct semantics for the borrow checker and the difference between safe and unsafe programs. Aquascope is distributed as an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor or you can try it out [in the browser](https://gavinleroy.com/aquascope).
 
@@ -43,7 +43,7 @@ Currently, Aquascope supports three types of visualizations:
     <tr>
         <td>
 <pre>
-<code style="display: block; padding: 20px;">
+<code style="display: block; padding: 15px;">
 ```aquascope,boundaries
 fn main() {
     let mut x = 1;
@@ -55,7 +55,7 @@ fn main() {
 </pre>
         </td>
         <td>
-        TODO: insert image
+        <img src="https://user-images.githubusercontent.com/20209337/215225832-fb5842bb-ad7e-42d1-be36-ecb418d24e8e.png" />
         </td>
     </tr>
 </table>
@@ -66,7 +66,7 @@ fn main() {
     <tr>
         <td>
 <pre>
-<code style="display: block; padding: 20px;">
+<code style="display: block; padding: 15px;">
 ```aquascope,stepper
 fn main() {
     let mut x = 1;
@@ -89,7 +89,7 @@ fn main() {
     <tr>
         <td>
 <pre>
-<code style="display: block; padding: 20px;">
+<code style="display: block; padding: 15px;">
 ```aquascope,interpreter,concreteTypes=true
 fn main() {
     let s1 = String::from("Hello");
@@ -124,7 +124,7 @@ These annotations are line specific. Note, that if no lines are specified to be 
     <tr>
         <td>
 <pre>
-<code style="display: block; padding: 20px;">
+<code style="display: block; padding: 15px;">
 ```aquascope,stepper
 fn main() {
     let mut x = 1;
