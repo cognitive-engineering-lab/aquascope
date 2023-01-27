@@ -20,6 +20,8 @@ jobs:
           use-tool-cache: true
       - run: cargo make init-bindings
       - run: npm install -g graco && cd frontend && graco prepare
+      - run: cargo install --path crates/aquascope_frontend --debug
+      - run: cargo install --path crates/mdbook-aquascope --debug
       - name: Standalone connect
         run: |
           cd frontend
