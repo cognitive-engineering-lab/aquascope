@@ -20,11 +20,16 @@ jobs:
           crate: cargo-insta
           version: latest
           use-tool-cache: true
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: mdbook
+          version: latest
+          use-tool-cache: true
       - run: cargo make init-bindings
       - run: npm install -g graco && cd frontend && graco prepare
       - run: cargo miri setup
       - run: cargo install --path crates/aquascope_front --debug
-      - run: cd crates/mdbook-aquascope/test-book/build
+      - run: cd crates/mdbook-aquascope/test-book && mdbook build
       - name: Backend tests
         uses: actions-rs/cargo@v1
         with:
