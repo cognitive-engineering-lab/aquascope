@@ -6,9 +6,11 @@ use anyhow::{anyhow, bail, Context, Result};
 use either::Either;
 use flowistry::mir::utils::PlaceExt;
 use miri::{
-  AllocId, Immediate, InterpCx, InterpError, InterpErrorInfo, InterpResult,
-  LocalValue, Machine, MiriConfig, MiriMachine, Operand, UndefinedBehaviorInfo,
+  AllocId, AllocMap, AllocRange, Immediate, InterpCx, InterpError,
+  InterpErrorInfo, InterpResult, LocalValue, Machine, MiriConfig, MiriMachine,
+  Operand, UndefinedBehaviorInfo,
 };
+use rustc_abi::Size;
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{Body, ClearCrossCrate, LocalInfo, Location, Place, RETURN_PLACE},
@@ -177,6 +179,22 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         Operand::Indirect(mplace) => {
           let mut memory_map = self.memory_map.borrow_mut();
           let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
+
+          // Have to handle the case that a local is uninitialized and indirect
+          // by checking the init_mask in the local's allocation
+          let (_, allocation) =
+            self.ecx.memory.alloc_map().get(alloc_id).unwrap();
+          let initialized = allocation
+            .init_mask()
+            .is_range_initialized(AllocRange {
+              start: Size::ZERO,
+              size: allocation.size(),
+            })
+            .is_ok();
+          if !initialized {
+            continue;
+          }
+
           memory_map
             .stack_slots
             .insert(alloc_id, (index, name.clone(), layout.unwrap()));

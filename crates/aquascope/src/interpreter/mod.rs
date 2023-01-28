@@ -26,23 +26,34 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
   let mut evaluator = step::VisEvaluator::new(tcx).unwrap();
   let mir_steps = evaluator.eval()?;
 
-  // eprintln!("{mir_steps:#?}");
+  if log::log_enabled!(log::Level::Trace) {
+    for step in &mir_steps.steps {
+      let (inst, mir_body_loc) = step.stack.frames.last().unwrap().location;
+      eprintln!("{}", match mir_body_loc {
+        Either::Left(loc) => {
+          let body = evaluator.ecx.load_mir(inst, None).unwrap();
+          format!("{:?}", body.stmt_at(loc))
+        }
+        Either::Right(span) =>
+          tcx.sess.source_map().span_to_snippet(span).unwrap(),
+      })
+    }
+  }
 
   let mapper = Mapper::new(&evaluator.ecx);
   let hir_steps =
     mapper::group_steps(mir_steps, |loc| mapper.abstract_loc(loc));
 
-  // for step in &hir_steps {
-  //   let (_, hir_body_loc) = step.stack.frames.last().unwrap().location;
-  //   eprintln!(
-  //     "{:?}",
-  //     match hir_body_loc {
-  //       Either::Left(node_id) => tcx.hir().node_to_string(node_id),
-  //       Either::Right(span) => tcx.sess.source_map().span_to_snippet(span).unwrap(),
-  //     }
-  //   );
-  // }
-  // eprintln!("{hir_steps:#?}");
+  if log::log_enabled!(log::Level::Trace) {
+    for step in &hir_steps.steps {
+      let (_, hir_body_loc) = step.stack.frames.last().unwrap().location;
+      eprintln!("{:?}", match hir_body_loc {
+        Either::Left(node_id) => tcx.hir().node_to_string(node_id),
+        Either::Right(span) =>
+          tcx.sess.source_map().span_to_snippet(span).unwrap(),
+      });
+    }
+  }
 
   let src_steps = mapper::group_steps(hir_steps, |(owner_id, hir_body_loc)| {
     let hir = tcx.hir();
