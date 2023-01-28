@@ -161,6 +161,8 @@ $glyph-width: 14px;
 
   .permission-stack {
     display: inline-block;
+    position: relative;
+    top: 3px;
   }
 
   svg.permission {
@@ -187,6 +189,10 @@ $glyph-width: 14px;
       &.drop {
         stroke: var(--aq-drop-color);
         fill: var(--aq-drop-color);
+      }
+
+      &:not(.missing) {
+        stroke-width: 0;
       }
 
       &.missing {

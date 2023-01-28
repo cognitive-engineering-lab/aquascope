@@ -81,12 +81,17 @@ let HideButton = ({ container }: { container: HTMLDivElement }) => {
   );
 };
 
+interface CommonConfig {
+  shouldFail?: boolean;
+}
+
 export class Editor {
   private view: EditorView;
   private interpreterContainer: HTMLDivElement;
   private editorContainer: HTMLDivElement;
-  private buttonContainer: ReactDOM.Root;
+  private metaContainer: ReactDOM.Root;
   private buttons: Set<ButtonName>;
+  private shouldFail: boolean = false;
 
   public constructor(
     dom: HTMLDivElement,
@@ -97,7 +102,8 @@ export class Editor {
     },
     code: string = defaultCodeExample,
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
-    readonly noInteract: boolean = false
+    readonly noInteract: boolean = false,
+    readonly shouldFailHtml: string = "This code does not compile!"
   ) {
     let resetMarkedRangesOnEdit = EditorView.updateListener.of(
       (upd: ViewUpdate) => {
@@ -132,8 +138,8 @@ export class Editor {
     });
 
     let buttonContainer = document.createElement("div");
-    this.buttonContainer = ReactDOM.createRoot(buttonContainer);
-    this.renderButtons();
+    this.metaContainer = ReactDOM.createRoot(buttonContainer);
+    this.renderMeta();
 
     this.editorContainer.appendChild(buttonContainer);
 
@@ -143,18 +149,23 @@ export class Editor {
     dom.appendChild(this.interpreterContainer);
   }
 
-  renderButtons() {
-    this.buttonContainer.render(
-      <div className="top-right">
-        {Array.from(this.buttons).map((button, i) => (
-          <button className="cm-button" key={i}>
-            {button == "copy" ? (
-              <CopyButton view={this.view} />
-            ) : button == "eye" ? (
-              <HideButton container={this.editorContainer} />
-            ) : null}
-          </button>
-        ))}
+  renderMeta() {
+    this.metaContainer.render(
+      <div className="meta-container">
+        <div className="top-right">
+          {Array.from(this.buttons).map((button, i) => (
+            <button className="cm-button" key={i}>
+              {button == "copy" ? (
+                <CopyButton view={this.view} />
+              ) : button == "eye" ? (
+                <HideButton container={this.editorContainer} />
+              ) : null}
+            </button>
+          ))}
+        </div>
+        {this.shouldFail ? (
+          <div dangerouslySetInnerHTML={{ __html: this.shouldFailHtml }} />
+        ) : null}
       </div>
     );
   }
@@ -195,7 +206,10 @@ export class Editor {
   }
 
   // Actions to communicate with the aquascope server
-  async callBackendWithCode(endpoint: string): Promise<ServerResponse> {
+  async callBackendWithCode(
+    endpoint: string,
+    config?: any
+  ): Promise<ServerResponse> {
     let inEditor = this.getCurrentCode();
     let endpointUrl = new URL(endpoint, this.serverUrl);
     let serverResponseRaw = await fetch(endpointUrl, {
@@ -205,6 +219,7 @@ export class Editor {
       },
       body: JSON.stringify({
         code: inEditor,
+        config,
       }),
     });
     let serverResponse: ServerResponse = await serverResponseRaw.json();
@@ -219,14 +234,14 @@ export class Editor {
       annotations,
     }: {
       response?: Result<any>;
-      config?: any;
+      config?: CommonConfig & object;
       annotations?: AquascopeAnnotations;
     } = {}
   ) {
     console.debug(`Rendering operation: ${operation}`);
 
     if (!response) {
-      let serverResponse = await this.callBackendWithCode(operation);
+      let serverResponse = await this.callBackendWithCode(operation, config);
       if (serverResponse.success) {
         response = JSON.parse(serverResponse.stdout);
         this.reportStdErr({
@@ -248,8 +263,13 @@ export class Editor {
         effects: annotations.hidden_lines.map(line => hideLine.of({ line })),
       });
       this.buttons.add("eye");
-      this.renderButtons();
     }
+
+    if (config?.shouldFail) {
+      this.shouldFail = true;
+    }
+
+    this.renderMeta();
 
     if (operation == "interpreter") {
       renderInterpreter(
@@ -257,7 +277,7 @@ export class Editor {
         this.interpreterContainer,
         result,
         this.view.state.doc.toJSON().join("\n"),
-        config,
+        config as any,
         annotations?.interp
       );
     } else if (operation == "stepper") {

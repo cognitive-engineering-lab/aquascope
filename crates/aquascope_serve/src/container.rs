@@ -9,6 +9,7 @@ use bollard::{
 };
 use futures::StreamExt;
 use serde::Serialize;
+use serde_json::Value;
 use snafu::prelude::*;
 #[cfg(feature = "no-docker")]
 use std::fs;
@@ -376,7 +377,7 @@ impl Container {
     pub async fn interpreter(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
         self.write_source_code(&req.code).await?;
 
-        let mut cmd = self.interpreter_command();
+        let mut cmd = self.interpreter_command(req);
 
         let (stdout, stderr) = self.exec_output(&mut cmd).await?;
 
@@ -422,12 +423,18 @@ impl Container {
         cmd
     }
 
-    fn interpreter_command(&self) -> Command {
+    fn interpreter_command(&self, req: &SingleFileRequest) -> Command {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
         cmd.args(["--quiet", "aquascope", "interpreter"])
             .current_dir(cwd);
+
+        if let Some(config) = req.config.as_object() {
+            if config.contains_key("shouldFail") {
+                cmd.arg("--should-fail");
+            }
+        }
 
         if cfg!(feature = "no-docker") {
             let _ = cmd.env("RUST_LOG", "debug").env("RUST_BACKTRACE", "1");
@@ -484,6 +491,7 @@ impl From<bollard::errors::Error> for Error {
 #[derive(Debug, Clone)]
 pub struct SingleFileRequest {
     pub code: String,
+    pub config: Value,
 }
 
 #[derive(Debug, Clone)]

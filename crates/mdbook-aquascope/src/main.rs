@@ -11,18 +11,10 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use mdbook_aquascope::cache::Cache;
+use mdbook_aquascope::{block::AquascopeBlock, cache::Cache};
 use mdbook_preprocessor_utils::{
   mdbook::preprocess::PreprocessorContext, Asset, SimplePreprocessor,
 };
-use nom::{
-  bytes::complete::{tag, take_until},
-  character::complete::{anychar, char, none_of},
-  multi::many0,
-  sequence::{preceded, separated_pair, tuple},
-  IResult,
-};
-use nom_locate::LocatedSpan;
 use rayon::prelude::*;
 use tempfile::tempdir;
 
@@ -133,39 +125,6 @@ impl AquascopePreprocessor {
   }
 }
 
-struct AquascopeBlock {
-  operation: String,
-  config: Vec<(String, String)>,
-  code: String,
-}
-
-fn parse_aquascope_block(
-  i: LocatedSpan<&str>,
-) -> IResult<LocatedSpan<&str>, AquascopeBlock> {
-  fn parse_sym(i: LocatedSpan<&str>) -> IResult<LocatedSpan<&str>, String> {
-    let (i, v) = many0(none_of(",=\n"))(i)?;
-    Ok((i, v.into_iter().collect::<String>()))
-  }
-
-  let mut parser = tuple((
-    tag("```aquascope"),
-    preceded(char(','), parse_sym),
-    many0(preceded(
-      char(','),
-      separated_pair(parse_sym, char('='), parse_sym),
-    )),
-    take_until("```"),
-    tag("```"),
-  ));
-  let (i, (_, operation, config, code, _)) = parser(i)?;
-  let code = code.fragment().trim().to_string();
-  Ok((i, AquascopeBlock {
-    operation,
-    config,
-    code,
-  }))
-}
-
 impl SimplePreprocessor for AquascopePreprocessor {
   fn name() -> &'static str {
     "aquascope"
@@ -210,23 +169,7 @@ impl SimplePreprocessor for AquascopePreprocessor {
     _chapter_dir: &Path,
     content: &str,
   ) -> Result<Vec<(std::ops::Range<usize>, String)>> {
-    let mut content = LocatedSpan::new(content);
-    let mut to_process = Vec::new();
-    loop {
-      if let Ok((next, block)) = parse_aquascope_block(content) {
-        let range = content.location_offset() .. next.location_offset();
-        to_process.push((range, block));
-        content = next;
-      } else {
-        match anychar::<_, nom::error::Error<LocatedSpan<&str>>>(content) {
-          Ok((next, _)) => {
-            content = next;
-          }
-          Err(_) => break,
-        }
-      }
-    }
-
+    let to_process = AquascopeBlock::parse_all(content);
     let replacements = to_process
       .into_par_iter()
       .map(|(range, block)| {

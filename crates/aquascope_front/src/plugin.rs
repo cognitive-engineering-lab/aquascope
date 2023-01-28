@@ -48,6 +48,9 @@ enum AquascopeCommand {
   },
 
   Interpreter {
+    #[clap(long)]
+    should_fail: bool,
+
     #[clap(last = true)]
     flags: Vec<String>,
   },
@@ -104,7 +107,7 @@ impl RustcPlugin for AquascopePlugin {
     let flags = match &args.command {
       Boundaries { flags } => flags,
       Stepper { flags, .. } => flags,
-      Interpreter { flags } => flags,
+      Interpreter { flags, .. } => flags,
       _ => unreachable!(),
     };
 
@@ -135,9 +138,9 @@ impl RustcPlugin for AquascopePlugin {
         fluid_set!(INCLUDE_MODE, mode);
         postprocess(run(crate::permissions::permission_diffs, &compiler_args))
       }
-      Interpreter { .. } => {
+      Interpreter { should_fail, .. } => {
         let mut callbacks =
-          aquascope::interpreter::InterpretCallbacks::default();
+          aquascope::interpreter::InterpretCallbacks::new(should_fail);
         let _ = run_with_callbacks(&compiler_args, &mut callbacks);
         postprocess(
           callbacks

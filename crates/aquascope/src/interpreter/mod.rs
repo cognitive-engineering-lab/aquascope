@@ -60,11 +60,19 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
   Ok(src_steps)
 }
 
-#[derive(Default)]
 pub struct InterpretCallbacks {
+  should_fail: bool,
   pub result: Option<Result<MTrace<Range>>>,
 }
 
+impl InterpretCallbacks {
+  pub fn new(should_fail: bool) -> Self {
+    InterpretCallbacks {
+      should_fail,
+      result: None,
+    }
+  }
+}
 // We disable `mir_borrowck` to allow programs with Rust-caught UB to execute
 // rather than being rejected out of hand.
 fn fake_mir_borrowck(
@@ -91,7 +99,9 @@ pub fn override_queries(
 impl rustc_driver::Callbacks for InterpretCallbacks {
   // See `fake_mir_borrowck`
   fn config(&mut self, config: &mut rustc_interface::interface::Config) {
-    config.override_queries = Some(override_queries);
+    if self.should_fail {
+      config.override_queries = Some(override_queries);
+    }
   }
 
   fn after_parsing<'tcx>(
