@@ -18,6 +18,7 @@ runs:
         mkdir bin
         curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.25/mdbook-v0.4.25-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=bin
         echo "$(pwd)/bin" >> ${GITHUB_PATH}
+        shell: bash
 
     - name: Prepare frontend
       run: npm install -g graco && cd frontend && graco prepare
