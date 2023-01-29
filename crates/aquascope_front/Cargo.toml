@@ -4,8 +4,8 @@ version = "0.1.0"
 license = "MIT"
 edition = "2021"
 authors = [
-  "Will Crichton <wcrichto@cs.stanford.edu>",
-  "Gavin Gray <gavinleroy6@gmail.com>"
+  "Gavin Gray <gavinleroy6@gmail.com>",
+  "Will Crichton <wcrichto@cs.stanford.edu>"
 ]
 repository = "https://github.com/cognitive-engineering-lab/aquascope"
 
