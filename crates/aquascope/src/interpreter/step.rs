@@ -248,7 +248,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   }
 
   fn build_heap(&self) -> MHeap {
-    self.memory_map.replace(Default::default()).heap
+    self.memory_map.replace(MemoryMap::default()).heap
   }
 
   fn build_step(
@@ -338,7 +338,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     &mut self,
     e: InterpErrorInfo,
   ) -> Result<MUndefinedBehavior> {
-    use UndefinedBehaviorInfo::*;
+    use UndefinedBehaviorInfo::PointerUseAfterFree;
 
     Ok(match e.into_kind() {
       InterpError::UndefinedBehavior(ub) => match ub {

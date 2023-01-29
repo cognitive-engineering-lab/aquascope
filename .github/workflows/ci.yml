@@ -8,23 +8,27 @@ on:
   pull_request:
     branches:
       - "**"
-jobs:
 
+jobs:
   test:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
-      - uses: davidB/rust-cargo-make@v1
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-insta
-          version: latest
-          use-tool-cache: true
-      - run: cargo make init-bindings
-      - run: npm install -g graco && cd frontend && graco prepare
-      - run: cargo miri setup
-      - run: cargo install --path crates/aquascope_front --debug
-      - uses: actions-rs/cargo@v1
+      - name: Setup
+        uses: ./.github/workflows/setup
+      - name: Backend tests
+        uses: actions-rs/cargo@v1
         with:
           command: insta
           args: test --features=no-docker
+      - name: Build Aquascope server
+        run: cargo build -p aquascope_serve --features=no-docker
+      - name: Build standalone
+        run: cd frontend && graco build
+      - name: Frontend tests
+        run: |
+          cargo run -p aquascope_serve --features=no-docker &
+          cd frontend/packages/aquascope-standalone/dist
+          python3 -m http.server 8000 &
+          cd ../../../
+          graco test

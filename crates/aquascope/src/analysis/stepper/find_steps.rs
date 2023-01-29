@@ -183,10 +183,7 @@
 
 use anyhow::{bail, Result};
 use flowistry::mir::utils::{PlaceExt as FlowistryPlaceExt, SpanExt};
-use rustc_data_structures::{
-  self,
-  fx::{FxHashMap as HashMap, FxHashSet as HashSet},
-};
+use rustc_data_structures::{self, fx::FxHashMap as HashMap};
 use rustc_hir::{
   self as hir,
   intravisit::{self, Visitor as HirVisitor},
@@ -194,14 +191,17 @@ use rustc_hir::{
 };
 use rustc_middle::{
   hir::nested_filter,
-  mir::{self, BasicBlock, BasicBlocks, Local, Location, Place},
+  mir::{self, Local, Location, Place},
 };
 use rustc_span::Span;
 
-use super::*;
+use super::{
+  segment_tree::{MirSegment, SegmentSearchResult, SegmentTree, SplitType},
+  *,
+};
 use crate::{
   analysis::{
-    ir_mapper::{CleanedBody, GatherDepth, GatherMode, IRMapper},
+    ir_mapper::{GatherDepth, GatherMode, IRMapper},
     permissions::{
       Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
     },
@@ -305,11 +305,9 @@ fn prettify_permission_steps<'tcx>(
     .map(|(span, mut entries)| {
       let range = span_to_range(span);
 
-      entries
-        .iter_mut()
-        .for_each(|(_, v)| {
-          v.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection))
-        });
+      for (_, v) in entries.iter_mut() {
+        v.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection))
+      }
 
       let state = entries
         .into_iter()
@@ -341,360 +339,6 @@ fn prettify_permission_steps<'tcx>(
 
 // ------------------------------------------------
 
-/// Represents a segment of the MIR control-flow graph.
-///
-/// A `MirSegment` corresponds directly to locations where a permissions step
-/// will be made. However, a segment is also control-flow specific.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct MirSegment {
-  from: Location,
-  to: Location,
-}
-
-/// The types of splits that can be performed on a [`SegmentTre::Single`].
-#[derive(Clone)]
-enum SplitType {
-  /// A split of a segment that is not due to control flow.
-  /// Example, after each `Stmt` a step is created, this is simply
-  /// a step in a linear sequence.
-  Linear {
-    first: Box<SegmentTree>,
-    second: Box<SegmentTree>,
-  },
-
-  /// Split of a complex control flow.
-  /// For example, the `split_segments` of an `ExprKind::If` would be the segments
-  /// from the if condition, to the start of the then / else blocks.
-  /// The `join_segments` are all the those that end at the same join point.
-  ///
-  /// NOTE: any segment stored in the `splits` of a SplitType::ControlFlow
-  /// can not be split again, these are *atomic*.
-  ControlFlow {
-    splits: Vec<SegmentTree>,
-    joins: Vec<SegmentTree>,
-  },
-}
-
-/// A `SegmentTree` represents the control flow graph of a MIR `Body`.
-/// It's used to keep track of the entire graph as it is sliced during
-/// the permission steps analysis.
-#[derive(Clone)]
-enum SegmentTree {
-  /// An inner tree node with children.
-  Split {
-    segments: SplitType,
-    reach: MirSegment,
-    span: Span,
-    attached: Vec<Local>,
-  },
-
-  /// A leaf segment that is expected to be split again later.
-  Single {
-    segment: MirSegment,
-    span: Span,
-    attached: Vec<Local>,
-  },
-}
-
-/// Search result when trying to find the smallest enclosing segment for a location.
-///
-/// NOTE: this is used under the assumption that the location cannot be the
-/// ending location of a step (this would result in a zero distance step).
-#[derive(Clone, Debug)]
-enum SegmentSearchResult<'a> {
-  Enclosing(&'a SegmentTree),
-  StepExisits(MirSegment, Span),
-  NotFound,
-}
-
-// ------------------------------------------------
-// Debugging pretty printers
-
-impl std::fmt::Debug for MirSegment {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "MirSegment({:?} -> {:?})", self.from, self.to)
-  }
-}
-
-impl std::fmt::Debug for SegmentTree {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    fn print_loop(
-      f: &mut std::fmt::Formatter,
-      tree: &SegmentTree,
-      spaces: usize,
-    ) -> std::fmt::Result {
-      let indent_size = 4;
-      match tree {
-        SegmentTree::Single {
-          segment,
-          attached,
-          span,
-          ..
-        } => {
-          write!(
-            f,
-            "{}SegmentTree::Single: {segment:?} {span:?}\n",
-            " ".repeat(spaces)
-          )?;
-          write!(
-            f,
-            "{}-locals attached to end {:?}\n",
-            " ".repeat(spaces),
-            attached,
-          )
-        }
-        SegmentTree::Split {
-          segments: SplitType::Linear { first, second },
-          reach,
-          attached,
-          ..
-        } => {
-          write!(
-            f,
-            "{}SegmentTree::Split [LINEAR]: {reach:?}\n",
-            " ".repeat(spaces)
-          )?;
-          write!(
-            f,
-            "{}-locals attached to end {:?}\n",
-            " ".repeat(spaces),
-            attached,
-          )?;
-          print_loop(f, first, spaces + indent_size)?;
-          write!(f, "\n")?;
-          print_loop(f, second, spaces + indent_size)?;
-          write!(f, "\n")?;
-
-          Ok(())
-        }
-
-        SegmentTree::Split {
-          segments: SplitType::ControlFlow { splits, joins },
-          reach,
-          attached,
-          ..
-        } => {
-          write!(
-            f,
-            "{}SegmentTree::Split [CF]: {reach:?}\n",
-            " ".repeat(spaces)
-          )?;
-          write!(
-            f,
-            "{}-locals attached to end {:?}\n",
-            " ".repeat(spaces),
-            attached,
-          )?;
-          write!(f, "{}Splits:\n", " ".repeat(spaces))?;
-          for tree in splits.iter() {
-            print_loop(f, tree, spaces + indent_size)?;
-            write!(f, "\n")?;
-          }
-          write!(f, "\n")?;
-
-          write!(f, "{}Joins:\n", " ".repeat(spaces))?;
-          for tree in joins.iter() {
-            print_loop(f, tree, spaces + indent_size)?;
-            write!(f, "\n")?;
-          }
-
-          Ok(())
-        }
-      }
-    }
-
-    print_loop(f, self, 0)
-  }
-}
-
-// ------------------------------------------------
-// Impls
-
-impl MirSegment {
-  fn new(l1: Location, l2: Location) -> Self {
-    MirSegment { from: l1, to: l2 }
-  }
-
-  /// Expand the path through the segment to a full set of [`Location`]s.
-  fn squash_block_path(
-    &self,
-    basic_blocks: &BasicBlocks,
-    path: impl Iterator<Item = BasicBlock>,
-  ) -> Vec<Location> {
-    path
-      .flat_map(|bb| {
-        let bbd = &basic_blocks[bb];
-        let from = if bb == self.from.block {
-          self.from.statement_index
-        } else {
-          0
-        };
-
-        let to = if bb == self.to.block {
-          self.to.statement_index
-        } else {
-          bbd.statements.len()
-        };
-
-        (from ..= to).map(move |idx| Location {
-          block: bb,
-          statement_index: idx,
-        })
-      })
-      .collect::<Vec<_>>()
-  }
-
-  fn paths_along_segment(&self, graph: &CleanedBody) -> Vec<Vec<BasicBlock>> {
-    graph.paths_from_to(self.from.block, self.to.block)
-  }
-
-  fn spanned_locations(&self, graph: &CleanedBody) -> HashSet<Location> {
-    let block_paths = self.paths_along_segment(&graph);
-    let body = graph.body();
-    block_paths
-      .into_iter()
-      .flat_map(|path| {
-        self.squash_block_path(&body.basic_blocks, path.into_iter())
-      })
-      .collect::<HashSet<_>>()
-  }
-
-  fn into_diff<'tcx>(
-    &self,
-    ctxt: &PermissionsCtxt<'_, 'tcx>,
-  ) -> HashMap<Place<'tcx>, PermissionsDataDiff> {
-    let p0 = ctxt.location_to_point(self.from);
-    let p1 = ctxt.location_to_point(self.to);
-    let before = &ctxt.permissions_domain_at_point(p0);
-    let after = &ctxt.permissions_domain_at_point(p1);
-    before.diff(after)
-  }
-}
-
-impl SegmentTree {
-  fn new(body: MirSegment, span: Span) -> Self {
-    Self::Single {
-      segment: body,
-      span,
-      attached: vec![],
-    }
-  }
-
-  /// Find a [`SegmentTree::Single`] node which matches *exactly* the given segment.
-  fn find_single(&mut self, segment: MirSegment) -> Option<&mut SegmentTree> {
-    let node = &mut *self;
-
-    match node {
-      SegmentTree::Single { segment: seg, .. } if *seg == segment => Some(node),
-      SegmentTree::Single { .. } => None,
-      SegmentTree::Split {
-        segments: SplitType::ControlFlow { joins, .. },
-        ..
-      } => {
-        // NOTE: the split set is regarded as atomic so
-        // it isn't included in the search.
-        for s in joins.iter_mut() {
-          let r = s.find_single(segment);
-          if r.is_some() {
-            return r;
-          }
-        }
-
-        None
-      }
-
-      SegmentTree::Split {
-        segments: SplitType::Linear { first, second },
-        ..
-      } => first
-        .as_mut()
-        .find_single(segment)
-        .or_else(|| second.as_mut().find_single(segment)),
-    }
-  }
-
-  /// Replace a [`SegmentTree::Single`] node which matches *exactly* the given segment.
-  /// The subtree must fragment the [`MirSegment`] correctly, otherwise the tree
-  /// will enter an invalid state.
-  fn replace_single(
-    &mut self,
-    to_replace: MirSegment,
-    subtree: SegmentTree,
-  ) -> Result<()> {
-    // TODO better error handling here.
-    let node = self.find_single(to_replace);
-
-    if node.is_none() {
-      bail!("the provided mir segment to replace doesn't exist {to_replace:?}");
-    }
-
-    let node = node.unwrap();
-
-    if let SegmentTree::Single { segment, .. } = node {
-      assert_eq!(to_replace, *segment);
-    } else {
-      bail!("SegmentTree::find_single can only return a Single variant. This is an implementation bug");
-    }
-
-    *node = subtree;
-
-    Ok(())
-  }
-
-  fn subtree_contains(&self, location: Location, graph: &CleanedBody) -> bool {
-    let segment = match self {
-      SegmentTree::Split { reach, .. } => reach,
-      SegmentTree::Single { segment, .. } => segment,
-    };
-    let locs = segment.spanned_locations(graph);
-    locs.contains(&location)
-  }
-
-  /// Find the /leaf/ [`MirSegment`] and it's corresponding `Span` that enclose
-  /// `location`. The `location` is expected to be used as the end of step.
-  fn find_segment_for_end<'a>(
-    &'a self,
-    location: Location,
-    graph: &CleanedBody,
-  ) -> SegmentSearchResult<'a> {
-    match self {
-      SegmentTree::Single { segment, .. } if segment.to != location => {
-        SegmentSearchResult::Enclosing(self)
-      }
-
-      SegmentTree::Single { segment, span, .. } => {
-        SegmentSearchResult::StepExisits(*segment, *span)
-      }
-
-      SegmentTree::Split {
-        segments: SplitType::Linear { first, second },
-        ..
-      } => {
-        if first.subtree_contains(location, graph) {
-          first.find_segment_for_end(location, graph)
-        } else if second.subtree_contains(location, graph) {
-          second.find_segment_for_end(location, graph)
-        } else {
-          SegmentSearchResult::NotFound
-        }
-      }
-
-      SegmentTree::Split {
-        segments: SplitType::ControlFlow { joins, .. },
-        ..
-      } =>
-      // NOTE: the split locations are atomic and cannot be split.
-      {
-        joins
-          .iter()
-          .find(|s| s.subtree_contains(location, graph))
-          .map(|next| next.find_segment_for_end(location, graph))
-          .unwrap_or(SegmentSearchResult::NotFound)
-      }
-    }
-  }
-}
-
 /// Visitor for creating permission steps in the HIR.
 ///
 /// Visits the HIR in a Nested order, splitting the MIR and accumulating permission steps.
@@ -722,11 +366,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       .unwrap();
     // A body must have an entry location.
     let from = mol.entry_location().unwrap();
-
-    assert_eq!(from, Location {
-      block: mir::START_BLOCK,
-      statement_index: 0,
-    });
 
     // A body with an infinite loop will not generate MIR that
     // contains an exit location.
@@ -827,7 +466,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
           },
           reach: *segment,
           span: *old_span,
-          attached: attached.to_vec(),
+          attached: attached.clone(),
         };
 
         let segment = *segment;
@@ -944,7 +583,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       segments: SplitType::ControlFlow { splits, joins },
       reach: *segment,
       span: *old_span,
-      attached: attached.to_vec(),
+      attached: attached.clone(),
     };
 
     self.mir_segments.replace_single(*segment, subtree)
@@ -953,10 +592,9 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   fn span_of(&self, id: HirId) -> Span {
     let hir = self.ctxt.tcx.hir();
     let span = hir.span(id);
-    let sanitized = span
+    span
       .as_local(self.ctxt.body_with_facts.body.span)
-      .unwrap_or(span);
-    sanitized
+      .unwrap_or(span)
   }
 
   fn body_value_id(&self) -> HirId {
@@ -1084,7 +722,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
             }
 
             SplitType::ControlFlow { splits, joins } => {
-              for subtree in splits.into_iter() {
+              for subtree in splits.iter() {
                 diff_subtree(ctxt, subtree, result, attached_at);
               }
 
@@ -1100,7 +738,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
                 .collect::<HashMap<_, _>>();
 
               // 2. Differences not found in *any* of the join segments are ignored
-              for subtree in joins.into_iter() {
+              for subtree in joins.iter() {
                 let mut temp = HashMap::default();
                 diff_subtree(ctxt, subtree, &mut temp, attached_at);
                 // HACK: remove any differences that were attached to this span.
@@ -1151,7 +789,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       ),
     );
 
-    diff_subtree(&self.ctxt, &self.mir_segments, &mut diffs, &mut attached_at);
+    diff_subtree(self.ctxt, &self.mir_segments, &mut diffs, &mut attached_at);
 
     diffs
   }
@@ -1411,7 +1049,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
         let ids = arms
           .iter()
           .map(|arm| {
-            if let Some(_) = &arm.guard {
+            if arm.guard.is_some() {
               todo!("Arm guards are not supported, sorry!");
             }
 

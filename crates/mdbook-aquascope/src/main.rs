@@ -1,4 +1,5 @@
 #![feature(iter_intersperse)]
+#![allow(clippy::comparison_to_empty)]
 
 use std::{
   collections::HashMap,
@@ -25,9 +26,7 @@ use nom_locate::LocatedSpan;
 use rayon::prelude::*;
 use tempfile::tempdir;
 
-mdbook_preprocessor_utils::asset_generator!(
-  "../../../frontend/packages/aquascope-embed/dist/"
-);
+mdbook_preprocessor_utils::asset_generator!("../dist/");
 
 const FRONTEND_ASSETS: [Asset; 2] =
   [make_asset!("lib.js"), make_asset!("lib.css")];

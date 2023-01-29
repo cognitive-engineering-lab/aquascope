@@ -33,6 +33,8 @@ pub struct AquascopeAnnotations {
   interp: InterpAnnotations,
   stepper: StepperAnnotations,
 }
+
+#[allow(clippy::comparison_to_empty)]
 pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
   let marker_interp = ("`[", "]`", "interp");
   let marker_stepper = ("`(", ")`", "stepper");

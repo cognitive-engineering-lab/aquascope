@@ -268,7 +268,7 @@ impl Container {
 
         if !stderr.trim().is_empty() {
             log::error!("{}", stderr);
-            panic!("`cargo new` failed {}", stderr);
+            panic!("`cargo new` failed {stderr}");
         }
 
         log::debug!("Cargo output {}", output_s);

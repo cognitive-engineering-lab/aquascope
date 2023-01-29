@@ -1,9 +1,15 @@
 [package]
-authors = ["Gavin Gray <gagray@ethz.ch>"]
 name = "aquascope_serve"
+authors = [
+  "Will Crichton <wcrichto@cs.stanford.edu>",
+  "Gavin Gray <gavinleroy6@gmail.com>"
+]
 version = "0.1.0"
+license = "MIT"
 edition = "2021"
 default-run = "aquascope_serve"
+repository = "https://github.com/cognitive-engineering-lab/aquascope"
+publish = false
 
 [dependencies]
 async-trait = "0.1.52"

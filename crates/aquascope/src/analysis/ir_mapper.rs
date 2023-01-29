@@ -202,9 +202,9 @@ where
     use either::Either;
     use mir::{FakeReadCause as FRC, StatementKind as SK};
     let id = local.hir_id;
-    self
-      .get_mir_locations(id, GatherDepth::Outer)
-      .map(|mol| {
+    self.get_mir_locations(id, GatherDepth::Outer).map_or_else(
+      Vec::default,
+      |mol| {
         mol
           .values()
           .filter_map(|loc| match self.body.stmt_at(loc) {
@@ -215,8 +215,8 @@ where
             _ => None,
           })
           .collect::<Vec<_>>()
-      })
-      .unwrap_or_else(|| Vec::default())
+      },
+    )
   }
 
   // Determines whether or not a block was inserted solely as a
@@ -225,7 +225,6 @@ where
   fn is_false_location(&self, loc: Location) -> bool {
     use mir::TerminatorKind as TK;
     let bb = loc.block;
-    let idx = loc.statement_index;
     let data = &self.body.basic_blocks[bb];
     let term = data.terminator();
     data.statements.is_empty()
@@ -256,9 +255,9 @@ where
         let hir = self.tcx.hir();
         self.hir_to_mir.iter().for_each(|(child_id, locs)| {
           if hir.parent_id_iter(*child_id).any(|id| id == hir_id) {
-            locs.iter().for_each(|l| {
+            for l in locs.iter() {
               locations.insert(*l);
-            });
+            }
           }
         });
       }
@@ -387,9 +386,10 @@ impl<'tcx> MirVisitor<'tcx> for IRMapper<'_, 'tcx> {
 /// this is almost certainly what you want to use.
 pub(crate) struct CleanedBody<'a, 'tcx: 'a>(&'a Body<'tcx>);
 
+#[allow(dead_code)]
 impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
   pub fn body(&self) -> &'a Body<'tcx> {
-    &self.0
+    self.0
   }
 
   // TODO: cache the results

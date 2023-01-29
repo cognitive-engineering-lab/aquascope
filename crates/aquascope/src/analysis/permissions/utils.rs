@@ -1,3 +1,5 @@
+//! Various *debugging* utilities for permissions.
+
 use std::{collections::hash_map::Entry, io::Write, path::Path};
 
 use anyhow::{bail, Result};
@@ -272,7 +274,7 @@ impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
     let point = self.ctxt.location_to_point(location);
     let dmn = self.ctxt.permissions_domain_at_point(point);
     for (place, perms) in state.iter_mut() {
-      let new_perms = dmn.get(&place).unwrap();
+      let new_perms = dmn.get(place).unwrap();
       *perms = *new_perms;
     }
   }

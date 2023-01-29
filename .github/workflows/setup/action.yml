@@ -1,0 +1,39 @@
+name: setup
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v2
+    - uses: davidB/rust-cargo-make@v1
+    - uses: actions-rs/install@v0.1
+      with:
+        crate: cargo-insta
+        version: latest
+        use-tool-cache: true
+    - name: Gen bindings
+      run: cargo make init-bindings
+      shell: bash
+
+    - name: Install mdbook
+      run: |
+        mkdir bin
+        curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.25/mdbook-v0.4.25-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=bin
+        echo "$(pwd)/bin" >> ${GITHUB_PATH}
+      shell: bash
+
+    - name: Prepare frontend
+      run: npm install -g graco && cd frontend && graco prepare
+      shell: bash
+
+    - name: Install aquascope
+      run: cargo install --path crates/aquascope_front --debug
+      shell: bash
+
+    - name: Install mdbook-aquascope
+      run: cargo install --path crates/mdbook-aquascope --debug
+      shell: bash
+
+    - name: Build test book
+      run: |
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$($(rustup which --toolchain nightly-2022-12-07 rustc) --print target-libdir)
+        cd crates/mdbook-aquascope/test-book && mdbook build
+      shell: bash

@@ -1,4 +1,5 @@
-pub(crate) mod stepper;
+pub(crate) mod find_steps;
+mod segment_tree;
 
 use std::collections::hash_map::Entry;
 
@@ -144,14 +145,14 @@ pub struct PermissionsDataDiff {
 
 impl std::fmt::Debug for PermissionsDataDiff {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "\nPermissions Data Step\n")?;
-    write!(f, "  Permissions:          {:?}\n", self.permissions)?;
-    write!(f, "    is_live:            {:?}\n", self.is_live)?;
-    write!(f, "    type_droppable:     {:?}\n", self.type_droppable)?;
-    write!(f, "    type_writeable:     {:?}\n", self.type_writeable)?;
-    write!(f, "    path_moved:         {:?}\n", self.path_moved)?;
-    write!(f, "    loan_write_refined: {:?}\n", self.loan_write_refined)?;
-    write!(f, "    loan_drop_refined:  {:?}\n", self.loan_drop_refined)?;
+    writeln!(f, "\nPermissions Data Step")?;
+    writeln!(f, "  Permissions:          {:?}", self.permissions)?;
+    writeln!(f, "    is_live:            {:?}", self.is_live)?;
+    writeln!(f, "    type_droppable:     {:?}", self.type_droppable)?;
+    writeln!(f, "    type_writeable:     {:?}", self.type_writeable)?;
+    writeln!(f, "    path_moved:         {:?}", self.path_moved)?;
+    writeln!(f, "    loan_write_refined: {:?}", self.loan_write_refined)?;
+    writeln!(f, "    loan_drop_refined:  {:?}", self.loan_drop_refined)?;
     Ok(())
   }
 }
@@ -319,7 +320,7 @@ where
   'tcx: 'a,
 {
   let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
-  let pctxt = &ctxt.permissions;
+  let permissions_ctxt = &ctxt.permissions;
   let span_to_range = |span| ctxt.span_to_range(span);
-  stepper::compute_permission_steps(pctxt, mode, span_to_range)
+  find_steps::compute_permission_steps(permissions_ctxt, mode, span_to_range)
 }

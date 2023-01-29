@@ -1,0 +1,52 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  test:
+    runs-on: ubuntu-20.04
+    env:
+      AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Standalone connect
+        run: |
+          cd frontend
+          graco build
+          cd packages/aquascope-standalone/dist
+          python3 -m http.server 8000 &
+          cd ../../../
+          graco test
+
+  publish-standalone-and-docs:
+    needs: test
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v1
+      - run: npm install -g graco && cd frontend && graco prepare
+      - run: cargo doc --lib && mv ./target/doc ./frontend/packages/aquascope-standalone/dist/doc
+      - uses: JamesIves/github-pages-deploy-action@v4.3.0
+        with:
+          branch: gh-pages
+          folder: ./frontend/packages/aquascope-standalone/dist
+          clean: true
+          clean-exclude: dev
+
+  publish-crate:
+    needs: publish-standalone-and-docs
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-workspaces
+          version: latest
+          use-tool-cache: true
+      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+      - uses: actions-rs/cargo@v1
+        with:
+          command: ws
+          args: publish --from-git --yes
