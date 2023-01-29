@@ -2,7 +2,7 @@ use std::{path::PathBuf, process::Command};
 
 use anyhow::{bail, Context, Result};
 
-const TOOLCHAIN_TOML: &str = include_str!("../../../rust-toolchain.toml");
+const TOOLCHAIN_TOML: &str = include_str!("../rust-toolchain.toml");
 
 pub fn toolchain() -> Result<String> {
   let config: toml::Value = toml::from_str(TOOLCHAIN_TOML)?;

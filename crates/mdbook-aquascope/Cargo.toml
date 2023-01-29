@@ -9,8 +9,9 @@ license = "MIT"
 version = "0.1.0"
 edition = "2021"
 include = [
-  "../../frontend/packages/aquascope-embed/dist/lib.js",
-  "../../frontend/packages/aquascope-embed/dist/lib.css"
+  "src/**/*",
+  "Cargo.toml",
+  "dist/**/*"
 ]
 repository = "https://github.com/cognitive-engineering-lab/aquascope"
 
