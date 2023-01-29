@@ -171,6 +171,7 @@ export class Editor {
     if (!response) {
       let serverResponse = await this.callBackendWithCode(operation);
       if (serverResponse.success) {
+        console.log(`The server stdout ${serverResponse.stdout}`);
         response = JSON.parse(serverResponse.stdout);
         this.reportStdErr({
           type: "BuildError",
@@ -184,8 +185,6 @@ export class Editor {
       }
     }
 
-    let result = (response as any).Ok;
-
     if (annotations?.hidden_lines) {
       this.view.dispatch({
         effects: annotations.hidden_lines.map(line => hideLine.of({ line })),
@@ -193,6 +192,7 @@ export class Editor {
     }
 
     if (operation == "interpreter") {
+      let result = (response as any).Ok;
       renderInterpreter(
         this.view,
         this.interpreterContainer,
@@ -201,12 +201,16 @@ export class Editor {
         config,
         annotations?.interp
       );
-    } else if (operation == "stepper") {
-      renderSteps(this.view, result.values, annotations?.stepper);
-    } else if (operation == "boundaries") {
-      let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
-      this.addAnalysisFacts(loanFacts);
-      renderBoundaries(this.view, facts, result.values);
+    } else if (operation == "permissions") {
+      // TODO: unify the rendering.
+      // having each body separate overrides the previous.
+      response.forEach(res => {
+        let result = (res as any).Ok;
+        let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
+        this.addAnalysisFacts(loanFacts);
+        renderBoundaries(this.view, facts, result.boundaries);
+        renderSteps(this.view, result.steps, annotations?.stepper);
+      });
     }
   }
 }

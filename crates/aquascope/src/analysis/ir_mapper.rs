@@ -610,7 +610,7 @@ mod test {
 
     let paths_0_5 = vec![vec![0, 1, 2, 3, 5], vec![0, 1, 2, 3, 4, 2, 3, 5]];
     let mut paths = DFSFinder::find_paths_from_to(&graph, 0, 5);
-    paths.sort_by(|l, r| l.len().cmp(&r.len()));
+    paths.sort_by_key(|l| l.len());
 
     assert_eq!(paths, paths_0_5);
   }

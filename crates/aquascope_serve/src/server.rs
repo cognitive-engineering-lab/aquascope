@@ -1,7 +1,7 @@
 use crate::{
     container::{self, Container},
-    Config, ContainerCreationSnafu, Error, ErrorJson, InterpreterSnafu, PermissionStepsSnafu,
-    ReceiverTypesSnafu, Result, ServerResponse, SingleFileRequest,
+    Config, ContainerCreationSnafu, Error, ErrorJson, InterpreterSnafu, PermissionsSnafu, Result,
+    ServerResponse, SingleFileRequest,
 };
 use async_trait::async_trait;
 use axum::{
@@ -27,8 +27,7 @@ pub(crate) async fn serve(cfg: Config) {
                 "HELLO!"
             }),
         )
-        .route("/boundaries", post(boundaries))
-        .route("/stepper", post(stepper))
+        .route("/permissions", post(permissions))
         .route("/interpreter", post(interpreter));
 
     app = app.layer({
@@ -51,41 +50,14 @@ pub(crate) async fn serve(cfg: Config) {
         .unwrap();
 }
 
-// TODO get rid of the `AquascopeResult` from the return type
-// this can be coerced into our Server types here (build error, etc).
-async fn boundaries(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
-    log::trace!("Received request for receiver types");
-
-    let json = with_container(
-        req,
-        |knt, req| {
-            async move {
-                let v = knt.boundaries(req).await;
-                if let Err(e) = knt.cleanup().await {
-                    log::warn!("Error cleaning up container: {:?}", e);
-                }
-                v
-            }
-            .boxed()
-        },
-        ReceiverTypesSnafu,
-    )
-    .await
-    .map(Json);
-
-    log::debug!("returning JSON {:?}", json);
-
-    json
-}
-
-async fn stepper(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
+async fn permissions(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
     log::trace!("Received requeset for permission differences");
 
     let json = with_container(
         req,
         |knt, req| {
             async move {
-                let v = knt.stepper(req).await;
+                let v = knt.permissions(req).await;
                 if let Err(e) = knt.cleanup().await {
                     log::warn!("Error cleaning up container: {:?}", e);
                 }
@@ -93,7 +65,7 @@ async fn stepper(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerRespon
             }
             .boxed()
         },
-        PermissionStepsSnafu,
+        PermissionsSnafu,
     )
     .await
     .map(Json);

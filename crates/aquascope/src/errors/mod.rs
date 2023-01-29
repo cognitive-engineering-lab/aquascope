@@ -55,6 +55,10 @@ pub fn track_body_diagnostics(def_id: LocalDefId) {
   });
 }
 
+pub fn errors_exist() -> bool {
+  BODY_DIAGNOSTICS.with(|diagnostics| !diagnostics.borrow().is_empty())
+}
+
 pub fn get_span_of_first_error(def_id: LocalDefId) -> Option<Span> {
   // A security check that the body expected by the caller is
   // in sync with that of the error diagnostics.

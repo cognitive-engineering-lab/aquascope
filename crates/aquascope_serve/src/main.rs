@@ -91,10 +91,8 @@ impl From<container::ServerResponse> for ServerResponse {
 pub enum Error {
     #[snafu(display("Creating the container failed {source}"))]
     ContainerCreation { source: container::Error },
-    #[snafu(display("Visualizing receiver types failed {source}"))]
-    ReceiverTypes { source: container::Error },
-    #[snafu(display("Generating permission flow steps fail {source}"))]
-    PermissionSteps { source: container::Error },
+    #[snafu(display("Running permissions analysis failed  {source}"))]
+    Permissions { source: container::Error },
     #[snafu(display("Running interpreter failed {source}"))]
     Interpreter { source: container::Error },
     #[snafu(display("An Unknown error occurred: {msg}"))]

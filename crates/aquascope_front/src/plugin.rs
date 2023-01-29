@@ -6,8 +6,9 @@ use std::{
 
 use aquascope::{
   analysis::{
+    self,
     stepper::{PermIncludeMode, INCLUDE_MODE},
-    BodyAnalysisJoin,
+    AquascopeError, AquascopeResult,
   },
   errors::{initialize_error_tracking, track_body_diagnostics},
 };
@@ -34,12 +35,7 @@ pub struct AquascopePluginArgs {
 
 #[derive(Debug, Subcommand, Serialize, Deserialize)]
 enum AquascopeCommand {
-  Boundaries {
-    #[clap(last = true)]
-    flags: Vec<String>,
-  },
-
-  Stepper {
+  Permissions {
     #[clap(long)]
     steps_include_mode: Option<PermIncludeMode>,
 
@@ -102,8 +98,7 @@ impl RustcPlugin for AquascopePlugin {
     };
 
     let flags = match &args.command {
-      Boundaries { flags } => flags,
-      Stepper { flags, .. } => flags,
+      Permissions { flags, .. } => flags,
       Interpreter { flags } => flags,
       _ => unreachable!(),
     };
@@ -122,18 +117,12 @@ impl RustcPlugin for AquascopePlugin {
   ) -> RustcResult<()> {
     use AquascopeCommand::*;
     match plugin_args.command {
-      // TODO rename the command because it will eventually show *all* permissions
-      // and not just those for method calls.
-      Boundaries { .. } => postprocess(run(
-        crate::permissions::permission_boundaries,
-        &compiler_args,
-      )),
-      Stepper {
+      Permissions {
         steps_include_mode, ..
       } => {
         let mode = steps_include_mode.unwrap_or(PermIncludeMode::Changes);
         fluid_set!(INCLUDE_MODE, mode);
-        postprocess(run(crate::permissions::permission_diffs, &compiler_args))
+        postprocess(run(permissions_analyze_body, &compiler_args))
       }
       Interpreter { .. } => {
         let mut callbacks =
@@ -151,28 +140,15 @@ impl RustcPlugin for AquascopePlugin {
   }
 }
 
-// TODO you could simplify the interface of the Server by converting
-// AquascopeResults into a shared form of Result. Then for native commands
-// like below you'd go to a RustcResult whereas the server would turn this
-// into an axum Result.
-// FIXME: this logic was taken from Flowistry, where a build needs to be
-// successful in order to return proper results. Aquascope doesn't care
-// about that, so a type error (should never) produce an AquascopeError.
-// We do however want to report parse errors.
-fn postprocess<T: Serialize>(result: AquascopeResult<T>) -> RustcResult<()> {
-  let result: Result<T, String> = match result {
-    Ok(output) => Ok(output),
-    Err(e) => match e {
-      // AquascopeError::BuildError => {
-      //     Err(rustc_errors::ErrorGuaranteed::unchecked_claim_error_was_emitted())
-      // }
-      AquascopeError::AnalysisError(msg) => Err(msg),
-      _ => todo!(),
-    },
-  };
+fn permissions_analyze_body(
+  tcx: TyCtxt,
+  id: BodyId,
+) -> AquascopeResult<analysis::AnalysisOutput> {
+  analysis::AquascopeAnalysis::run(tcx, id)
+}
 
+fn postprocess<T: Serialize>(result: T) -> RustcResult<()> {
   println!("{}", serde_json::to_string(&result).unwrap());
-
   Ok(())
 }
 
@@ -199,7 +175,7 @@ pub fn run_with_callbacks(
 fn run<A: AquascopeAnalysis>(
   analysis: A,
   args: &[String],
-) -> AquascopeResult<A::Output> {
+) -> Vec<AquascopeResult<A::Output>> {
   let mut callbacks = AquascopeCallbacks {
     analysis: Some(analysis),
     output: Vec::default(),
@@ -212,58 +188,38 @@ fn run<A: AquascopeAnalysis>(
     log::warn!("I'm choosing to ignore this build error {:?}", e);
   }
 
-  callbacks
-    .output
-    .into_iter()
-    .reduce(BodyAnalysisJoin::analysis_join)
-    .unwrap()
-    .map_err(|e| AquascopeError::AnalysisError(e.to_string()))
+  callbacks.output
 }
-
-#[derive(
-  Debug,
-  Serialize,
-  Deserialize, // , TS
-)]
-#[serde(tag = "variant")]
-// #[ts(export)]
-pub enum AquascopeError {
-  // An error occured before the intended analysis could run.
-  BuildError,
-  AnalysisError(String),
-}
-
-pub type AquascopeResult<T> = Result<T, AquascopeError>;
 
 pub trait AquascopeAnalysis: Sized + Send + Sync {
-  type Output: BodyAnalysisJoin + Serialize + Send + Sync;
+  type Output: Serialize + Send + Sync;
   fn analyze(
     &mut self,
     tcx: TyCtxt,
     id: BodyId,
-  ) -> anyhow::Result<Self::Output>;
+  ) -> AquascopeResult<Self::Output>;
 }
 
 impl<F, O> AquascopeAnalysis for F
 where
-  F: for<'tcx> Fn<(TyCtxt<'tcx>, BodyId), Output = anyhow::Result<O>>
+  F: for<'tcx> Fn<(TyCtxt<'tcx>, BodyId), Output = AquascopeResult<O>>
     + Send
     + Sync,
-  O: BodyAnalysisJoin + Serialize + Send + Sync,
+  O: Serialize + Send + Sync,
 {
   type Output = O;
   fn analyze(
     &mut self,
     tcx: TyCtxt,
     id: BodyId,
-  ) -> anyhow::Result<Self::Output> {
+  ) -> AquascopeResult<Self::Output> {
     (self)(tcx, id)
   }
 }
 
 struct AquascopeCallbacks<A: AquascopeAnalysis> {
   analysis: Option<A>,
-  output: Vec<anyhow::Result<A::Output>>,
+  output: Vec<AquascopeResult<A::Output>>,
   rustc_start: Instant,
 }
 

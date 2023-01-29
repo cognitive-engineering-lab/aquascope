@@ -215,13 +215,13 @@ pub fn compute_permission_steps<'a, 'tcx>(
   ctxt: &PermissionsCtxt<'a, 'tcx>,
   mode: PermIncludeMode,
   span_to_range: impl Fn(Span) -> Range,
-) -> Vec<PermissionsLineDisplay>
+) -> Result<Vec<PermissionsLineDisplay>>
 where
   'tcx: 'a,
 {
   let body = &ctxt.body_with_facts.body;
   let _basic_blocks = body.basic_blocks.indices();
-  let mut hir_visitor = HirStepPoints::make(ctxt);
+  let mut hir_visitor = HirStepPoints::make(ctxt)?;
   hir_visitor.visit_nested_body(ctxt.body_id);
 
   log::debug!(
@@ -229,12 +229,20 @@ where
     hir_visitor.mir_segments
   );
 
-  prettify_permission_steps(
+  if !hir_visitor.fatal_error.is_empty() {
+    bail!(hir_visitor.fatal_error);
+  }
+
+  if let Some((_, msg)) = hir_visitor.unsupported_encounter {
+    bail!(msg);
+  }
+
+  Ok(prettify_permission_steps(
     ctxt,
     hir_visitor.finalize_diffs(),
     mode,
     span_to_range,
-  )
+  ))
 }
 
 // Prettify, means:
@@ -339,6 +347,14 @@ fn prettify_permission_steps<'tcx>(
 
 // ------------------------------------------------
 
+macro_rules! fatal {
+  ($this:expr, $( $rest:tt ),*) => {
+    let f = format!( $($rest)*);
+    $this.report_fatal(&f);
+    bail!(f);
+  }
+}
+
 /// Visitor for creating permission steps in the HIR.
 ///
 /// Visits the HIR in a Nested order, splitting the MIR and accumulating permission steps.
@@ -349,10 +365,12 @@ where
   ctxt: &'a PermissionsCtxt<'a, 'tcx>,
   ir_mapper: IRMapper<'a, 'tcx>,
   mir_segments: Box<SegmentTree>,
+  unsupported_encounter: Option<(Span, String)>,
+  fatal_error: String,
 }
 
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
-  fn make(ctxt: &'a PermissionsCtxt<'a, 'tcx>) -> Self {
+  fn make(ctxt: &'a PermissionsCtxt<'a, 'tcx>) -> Result<Self> {
     let tcx = ctxt.tcx;
     let hir = tcx.hir();
     let body = &ctxt.body_with_facts.body;
@@ -364,24 +382,39 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     let mol = ir_mapper
       .get_mir_locations(body_hir_id, GatherDepth::Nested)
       .unwrap();
+
     // A body must have an entry location.
     let from = mol.entry_location().unwrap();
 
     // A body with an infinite loop will not generate MIR that
     // contains an exit location.
-    let to = mol.exit_location().unwrap_or_else(|| {
-      log::error!("you found a body that doesn't have an exit location! did someone say infinite loop?");
-      todo!("bodies containing an infinite loop is a stepper incompleteness, a fix is coming :)");
-    });
+    let Some(to) = mol.exit_location() else {
+      bail!("bodies containing an infinite loop is a stepper incompleteness, a fix is coming :)");
+    };
 
     let body_segment = MirSegment::new(from, to);
     let mir_segments = Box::new(SegmentTree::new(body_segment, body_span));
 
-    HirStepPoints {
+    Ok(HirStepPoints {
       ctxt,
       ir_mapper,
       mir_segments,
+      unsupported_encounter: None,
+      fatal_error: String::default(),
+    })
+  }
+
+  fn report_unsupported(&mut self, id: HirId, msg: &str) {
+    if self.unsupported_encounter.is_none() {
+      let span = self.span_of(id);
+      self.unsupported_encounter = Some((span, String::from(msg)));
     }
+  }
+
+  fn report_fatal(&mut self, msg: &str) {
+    self.fatal_error.push_str(&"-".repeat(5));
+    self.fatal_error.push('\n');
+    self.fatal_error.push_str(msg);
   }
 
   /// Determine whether the traversal should visited nested HIR nodes.
@@ -428,16 +461,23 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       .find_segment_for_end(location, &self.ir_mapper.cleaned_graph);
 
     match enclosing_segment {
-      SegmentSearchResult::NotFound => unreachable!("{location:?} should always be enclosed in the graph. This is an implementation bug."),
+      SegmentSearchResult::NotFound => {
+        fatal!(self, "{location:?} should always be enclosed in the graph");
+      }
       SegmentSearchResult::StepExisits(segment, ..) => {
-        log::warn!("linear step had slice conflict at {location:?} with {segment:?}");
+        log::warn!(
+          "linear step had slice conflict at {location:?} with {segment:?}"
+        );
         Ok(())
       }
 
       SegmentSearchResult::Enclosing(SegmentTree::Single {
-        segment, span: old_span, attached,
+        segment,
+        span: old_span,
+        attached,
       }) => {
-        let mut paths = segment.paths_along_segment(&self.ir_mapper.cleaned_graph);
+        let mut paths =
+          segment.paths_along_segment(&self.ir_mapper.cleaned_graph);
 
         let first_step = SegmentTree::Single {
           segment: MirSegment::new(segment.from, location),
@@ -456,7 +496,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
           .collect::<Vec<_>>();
 
         if !paths.is_empty() {
-          bail!("Inserting a linear segment should not result in fragmentation.\nSplitting segment: {segment:?} at {location:?}. Remaining paths: {paths:#?}");
+          fatal!(self, "Inserting a linear segment should not result in fragmentation.\nSplitting segment: {segment:?} at {location:?}. Remaining paths: {paths:#?}");
         }
 
         let subtree = SegmentTree::Split {
@@ -473,7 +513,9 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
         self.mir_segments.as_mut().replace_single(segment, subtree)
       }
 
-      _ => unreachable!("enclosing segments can only be a `Single` variant, this is a stepper bug!"),
+      _ => {
+        fatal!(self, "Enclosing segments can only be a `Single` variant, this is a stepper bug!");
+      }
     }
   }
 
@@ -544,13 +586,13 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       .collect::<Vec<_>>();
 
     if enclosings.len() < steps.len() {
-      bail!("not every locations step had an enclosing segment.");
+      fatal!(self, "not every locations step had an enclosing segment.");
     }
 
     let (segment, old_span, attached) = enclosings.first().unwrap();
 
     if !enclosings.iter().all(|(s, _, _)| s == segment) {
-      bail!("not all provided locations map to the same enclosing segment: {enclosings:#?}");
+      fatal!(self, "not all provided locations map to the same enclosing segment: {enclosings:#?}");
     }
 
     let mut paths = segment.paths_along_segment(&self.ir_mapper.cleaned_graph);
@@ -804,10 +846,11 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 
 macro_rules! split_with_control_flow {
   ($this:tt, $ids:expr) => {
-    split_with_control_flow!($this, $ids, "splitting control flow")
+    split_with_control_flow!($this, $ids, "CF-SPLIT <anon>")
   };
 
   ($this:tt, $ids:expr, $msg:expr) => {
+    let f = format!("{}\nsplitting the control flow with:\n{:#?}", $msg, $ids);
     $ids
       .into_iter()
       .map(|id| {
@@ -831,8 +874,7 @@ macro_rules! split_with_control_flow {
       })
       .and_then(|steps| $this.insert_cf_step_at(steps).ok())
       .unwrap_or_else(|| {
-        unreachable!("splitting control flow failed");
-        // log::error!();
+        $this.report_fatal(&f);
       });
   };
 }
@@ -917,6 +959,10 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
   fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
     use hir::{ExprKind as EK, LoopSource, StmtKind as SK};
+
+    let hir = self.nested_visit_map();
+    let error_msg =
+      format!("Analyzing expr : {}", hir.node_to_string(expr.hir_id));
 
     match expr.kind {
       // Special case for While Loop desugaring, this shouldn't be necessary
@@ -1017,7 +1063,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
       // TODO: have a split strategy for bare loops. They could be infinite, and
       // thus have no exit block. This shouldn't be an issue but it currently is.
       EK::Loop(_block, _label, LoopSource::Loop, _span) => {
-        todo!("bare loops aren't working yet, sorry!")
+        self.report_unsupported(expr.hir_id, "Bare loops aren't working yet, sorry! Can I interest you in a `for` or `while` loop?");
       }
 
       EK::If(cnd, then, else_opt) => {
@@ -1050,7 +1096,10 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
           .iter()
           .map(|arm| {
             if arm.guard.is_some() {
-              todo!("Arm guards are not supported, sorry!");
+              self.report_unsupported(
+                arm.hir_id,
+                "Arm guards are not supported, sorry!",
+              )
             }
 
             arm.body.hir_id

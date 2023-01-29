@@ -74,11 +74,11 @@ window.addEventListener("load", () => {
   // vimKeybindingToggle.addEventListener("click", toggleVim);
 
   showBoundariesButton.addEventListener("click", _ => {
-    return globals.editor.renderOperation("boundaries");
+    return globals.editor.renderOperation("permissions");
   });
 
   permStepsButton.addEventListener("click", _ => {
-    return globals.editor.renderOperation("stepper");
+    return globals.editor.renderOperation("permissions");
   });
 
   interpretButton.addEventListener("click", () =>

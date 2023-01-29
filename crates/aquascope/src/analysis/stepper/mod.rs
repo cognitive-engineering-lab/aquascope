@@ -3,6 +3,7 @@ mod segment_tree;
 
 use std::collections::hash_map::Entry;
 
+use anyhow::Result;
 use fluid_let::fluid_let;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_middle::mir::Place;
@@ -12,7 +13,7 @@ use ts_rs::TS;
 use crate::{
   analysis::{
     permissions::{Permissions, PermissionsData, PermissionsDomain},
-    AquascopeAnalysis, KeyShifter, LoanKey,
+    AquascopeAnalysis, LoanKey,
   },
   Range,
 };
@@ -163,17 +164,6 @@ impl PermissionsDataDiff {
   }
 }
 
-impl KeyShifter for PermissionsDataDiff {
-  fn shift_keys(self, loan_shift: LoanKey) -> Self {
-    PermissionsDataDiff {
-      loan_read_refined: self.loan_read_refined.shift_keys(loan_shift),
-      loan_write_refined: self.loan_write_refined.shift_keys(loan_shift),
-      loan_drop_refined: self.loan_drop_refined.shift_keys(loan_shift),
-      ..self
-    }
-  }
-}
-
 impl Difference for bool {
   type Diff = ValueStep<bool>;
   fn diff(&self, rhs: bool) -> Self::Diff {
@@ -193,26 +183,6 @@ where
 {
   fn is_empty(&self) -> bool {
     matches!(self, Self::None { .. })
-  }
-}
-
-impl<T> KeyShifter for ValueStep<T>
-where
-  T: KeyShifter
-    + Clone
-    + std::fmt::Debug
-    + std::cmp::PartialEq
-    + Eq
-    + Serialize
-    + TS,
-{
-  fn shift_keys(self, loan_shift: LoanKey) -> Self {
-    match self {
-      ValueStep::None { value: Some(v) } => ValueStep::None {
-        value: Some(v.shift_keys(loan_shift)),
-      },
-      _ => self,
-    }
   }
 }
 
@@ -291,31 +261,9 @@ impl<'tcx> Difference for &PermissionsDomain<'tcx> {
   }
 }
 
-impl KeyShifter for PermissionsStepTable {
-  fn shift_keys(self, loan_shift: LoanKey) -> Self {
-    PermissionsStepTable {
-      state: self
-        .state
-        .into_iter()
-        .map(|(s, dff)| (s, dff.shift_keys(loan_shift)))
-        .collect::<Vec<_>>(),
-      ..self
-    }
-  }
-}
-
-impl KeyShifter for PermissionsLineDisplay {
-  fn shift_keys(self, loan_shift: LoanKey) -> Self {
-    PermissionsLineDisplay {
-      state: self.state.shift_keys(loan_shift),
-      ..self
-    }
-  }
-}
-
 pub fn compute_permission_steps<'a, 'tcx>(
   ctxt: &AquascopeAnalysis<'a, 'tcx>,
-) -> Vec<PermissionsLineDisplay>
+) -> Result<Vec<PermissionsLineDisplay>>
 where
   'tcx: 'a,
 {

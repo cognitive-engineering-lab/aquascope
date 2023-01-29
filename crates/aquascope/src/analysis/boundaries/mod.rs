@@ -1,6 +1,7 @@
 //! Analysis for finding expected vs actual permission on path usage.
 mod path_visitor;
 
+use anyhow::Result;
 use either::Either;
 use flowistry::mir::utils::{OperandExt, SpanExt};
 use path_visitor::get_path_boundaries;
@@ -14,7 +15,7 @@ use crate::{
   analysis::{
     ir_mapper::GatherDepth,
     permissions::{Permissions, PermissionsData},
-    AquascopeAnalysis, KeyShifter, LoanKey,
+    AquascopeAnalysis,
   },
   mir::utils::PlaceExt,
 };
@@ -28,15 +29,6 @@ pub struct PermissionsBoundary {
   pub location: usize,
   pub expected: Permissions,
   pub actual: PermissionsData,
-}
-
-impl KeyShifter for PermissionsBoundary {
-  fn shift_keys(self, loan_shift: LoanKey) -> Self {
-    PermissionsBoundary {
-      actual: self.actual.shift_keys(loan_shift),
-      ..self
-    }
-  }
 }
 
 // A previous implementation of the permission boundaries
@@ -180,15 +172,11 @@ impl IntoMany for PathBoundary<'_, '_> {
 #[allow(clippy::module_name_repetitions)]
 pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
   ctxt: &AquascopeAnalysis<'a, 'tcx>,
-) -> Vec<PermissionsBoundary> {
-  // -----------------------------------
-  // TODO cleanup and move mod elsewhere
-  // -----------------------------------
-
+) -> Result<Vec<PermissionsBoundary>> {
   let path_use_points =
     get_path_boundaries(ctxt.permissions.tcx, ctxt.permissions.body_id, ctxt)
       .into_iter()
       .map(IntoMany::into_many);
 
-  path_use_points.flatten().collect::<Vec<_>>()
+  Ok(path_use_points.flatten().collect::<Vec<_>>())
 }
