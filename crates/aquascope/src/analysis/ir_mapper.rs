@@ -389,7 +389,7 @@ pub(crate) struct CleanedBody<'a, 'tcx: 'a>(&'a Body<'tcx>);
 #[allow(dead_code)]
 impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
   pub fn body(&self) -> &'a Body<'tcx> {
-    &self.0
+    self.0
   }
 
   // TODO: cache the results

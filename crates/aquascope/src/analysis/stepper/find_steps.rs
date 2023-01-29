@@ -367,11 +367,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     // A body must have an entry location.
     let from = mol.entry_location().unwrap();
 
-    assert_eq!(from, Location {
-      block: mir::START_BLOCK,
-      statement_index: 0,
-    });
-
     // A body with an infinite loop will not generate MIR that
     // contains an exit location.
     let to = mol.exit_location().unwrap_or_else(|| {

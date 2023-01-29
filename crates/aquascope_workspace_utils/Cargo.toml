@@ -1,5 +1,9 @@
 [package]
 name = "aquascope_workspace_utils"
+authors = [
+  "Will Crichton <wcrichto@cs.stanford.edu>",
+  "Gavin Gray <gavinleroy6@gmail.com>"
+]
 version = "0.1.0"
 license = "MIT"
 edition = "2021"
