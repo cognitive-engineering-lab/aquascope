@@ -15,7 +15,10 @@ jobs:
       - name: Standalone connect
         run: |
           cd frontend
-          graco build -w &
+          graco build
+          cd packages/aquascope-standalone/dist
+          python3 -m http.server 8000 &
+          cd ../../../
           graco test
 
   publish-standalone-and-docs:
