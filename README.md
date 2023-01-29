@@ -14,9 +14,12 @@ _Aquascope_ is a tool that generates interactive visualizations from Rust progra
 
 ### From crates.io
 
+> :exclamation: `mdbook-aquascope` will be released in a few days on crates.io, stay tuned.
+
+<!--
 ```sh
 cargo install mdbook-aquascope
-```
+``` -->
 
 ### From source
 
@@ -37,75 +40,79 @@ cargo install --path crates/mdbook-aquascope
 
 Currently, Aquascope supports three types of visualizations:
 
-- _Permission boundaries_: Aquascope will determine the permission expected for a path usage and display this along with the actual permissions on the path. Unsatisfied permissions provide additional information on hover to help explain the discrepancy.
+#### Permission boundaries 
+
+Aquascope will determine the permission expected for a path usage and display this along with the actual permissions on the path. Unsatisfied permissions provide additional information on hover to help explain the discrepancy.
 
 <table>
     <tr>
         <td>
 <pre>
-<code style="display: block; padding: 15px;">
+<code style="display: block;">
 ```aquascope,boundaries
 fn main() {
     let mut x = 1;
     let y = &mut x;
     println!("{} = {}", x, *y);
-}
-```
+}```
 </code>
 </pre>
         </td>
         <td>
-        <img src="https://user-images.githubusercontent.com/20209337/215225832-fb5842bb-ad7e-42d1-be36-ecb418d24e8e.png" />
+            <img src="https://user-images.githubusercontent.com/20209337/215321806-bba27857-70ed-4371-98bd-5e7b5dfd884f.png" />
         </td>
     </tr>
 </table>
 
-- _Permission steps_: tracking how permissions change throughout a program is difficult, especially when factors such as [liveness](https://en.wikipedia.org/wiki/Live-variable_analysis) influence the static analysis. Aquascope will insert _steps_ that show how and _why_ permissions change.
+#### Permission steps
+
+Tracking how permissions change throughout a program is difficult, especially when factors such as [liveness](https://en.wikipedia.org/wiki/Live-variable_analysis) influence the static analysis. Aquascope will insert _steps_ that show how and _why_ permissions change.
 
 <table>
     <tr>
         <td>
 <pre>
-<code style="display: block; padding: 15px;">
+<code style="display: block;">
 ```aquascope,stepper
 fn main() {
     let mut x = 1;
     let y = &mut x;
     println!("{} = {}", x, *y);
-}
-```
+}```
 </code>
 </pre>
         </td>
         <td>
-        TODO: insert image
+            <img src="https://user-images.githubusercontent.com/20209337/215321846-377f3adb-9e4b-4d9c-8223-fd344296b32d.png" />
         </td>
     </tr>
 </table>
 
-- _Runtime execution_: program state visualization is a well-known tool that visualizes the runtime execution of a program. With Aquascope, you can specify which states of a program you'd like to show, and even run programs that don't pass the borrow checker!
+#### Runtime execution 
+
+Program state visualization is a well-known tool that visualizes the runtime execution of a program. With Aquascope, you can specify which states of a program you'd like to show, and even run programs that don't pass the borrow checker!
 
 <table>
     <tr>
         <td>
 <pre>
-<code style="display: block; padding: 15px;">
+<code style="display: block;">
 ```aquascope,interpreter,concreteTypes=true
 fn main() {
-    let s1 = String::from("Hello");
-    let s3 = add_suffix(s1);
-    println!("{s3}");
+    let m1 = String::from("Hello");
+    let m2 = String::from("world");`[]`
+    greet(&m1, &m2); // note the ampersands
+    let s = format!("{} {}", m1, m2);
 }
-fn add_suffix(mut s2: String) -> String {
-    s2.push_str(" world");
-    s2
-}
-```
+
+fn greet(g1: &String, g2: &String) { // note the ampersands
+    `[]`println!("{} {}!", g1, g2);
+}```
 </code>
 </pre>
         </td>
         <td>
-        TODO: insert image
+            <img src="https://user-images.githubusercontent.com/20209337/215325005-6c613d98-8b69-45f3-879a-c68c86940f83.png" />
         </td>
     </tr>
 
@@ -113,36 +120,37 @@ fn add_suffix(mut s2: String) -> String {
 
 ### Aquascope annotations
 
-Aquascope provides a set of annotations for each visualization to allow for simple customization. Similar to `mdBook`
+Aquascope provides a set of annotations for simple customization. Similar to mdBook, any line of code with a preceding `#` is _hidden_. Additionally, each visualization may provide its own set of specific annotations, these are outlined below.
 
 #### Permission steps
 
-Visualizing permission steps can be quite intrusive but oftentimes you may want to just focus on a handful of lines, or even specific paths. This can be achieved by providing a _step annotation_ at the end of a line. For example, the annotation `` `(focus,paths:x)` `` indicates that this line should be focused (shown by default) and all paths except `x` are hidden.
-These annotations are line specific. Note, that if no lines are specified to be focused then _all_ lines are focused by default, and a similar rule applies per-line for paths.
+Visualizing permission steps can be quite intrusive but oftentimes you may want to just focus on a handful of lines, or even specific paths. This can be achieved by providing a _step annotation_ at the end of a line. For example, the annotation `` `(focus,paths:x)` `` indicates that this line should be focused (shown by default) and all paths except `x` are hidden in a dropdown.
+
+> Note, these annotations are line specific. The default is to show _all_ lines and paths unless something is specified.
 
 <table>
     <tr>
         <td>
 <pre>
-<code style="display: block; padding: 15px;">
+<code style="display: block;">
 ```aquascope,stepper
-fn main() {
-    let mut x = 1;
-    let y = &mut x; `(focus,paths:x)`
-    println!("{} = {}", x, *y);
-}
-```
+# fn main() {
+  let mut x = 1;
+  let y = &x; `(focus,paths:x)`
+  let z = *y; `(focus,paths:x)`
+  x += z;
+# }```
 </code>
 </pre>
         </td>
         <td>
-        TODO: insert image
+            <kbd>
+                <img src="https://user-images.githubusercontent.com/20209337/215325679-5ffc4ea8-6246-4d2e-965c-3baddfc26ad4.gif" />
+            </kbd>
         </td>
     </tr>
 </table>
 
-### Interpreter Annotations
+## Having trouble?
 
-TODO
-
-## Limitations
+If you want to use Aquascope but are having trouble finding the relevant information, please leave an issue or get in touch!
