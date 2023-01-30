@@ -402,6 +402,13 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
 
 (LeaderLine as any).positionByWindowResize = false;
 
+const PALETTE = {
+  // sns.color_palette("rocket", 15)[:6]
+  light: ["#221331", "#451c47", "#691f55", "#921c5b", "#b91657", "#d92847"],
+  // sns.color_palette("rocket_r", 20, desat=0.5).as_hex()[:6]
+  dark: ["#ebdbd0", "#e3cbbc", "#dcbca9", "#d6ac98", "#d19d88", "#cb8c7a"],
+};
+
 let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
   let ref = useRef<HTMLDivElement>(null);
   let config = useContext(ConfigContext);
@@ -421,10 +428,9 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
     let mdbookEmbed = getComputedStyle(document.body).getPropertyValue(
       "--inline-code-color"
     );
-    let color = mdbookEmbed ? "var(--inline-code-color)" : "black";
 
     let lines = Array.from(pointers)
-      .map(src => {
+      .map((src, i) => {
         try {
           let dstSel = src.dataset.pointTo!;
           let dst = query(dstSel);
@@ -444,6 +450,14 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
             : dstSel.startsWith("stack")
             ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
             : dst;
+
+          const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
+          let isDark = MDBOOK_DARK_THEMES.some(s =>
+            document.documentElement.classList.contains(s)
+          );
+          let theme: "dark" | "light" = isDark ? "dark" : "light";
+          let palette = PALETTE[theme];
+          let color = palette[i % palette.length];
 
           let line = new LeaderLine(src, dstAnchor, {
             color,
