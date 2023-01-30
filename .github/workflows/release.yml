@@ -15,7 +15,10 @@ jobs:
       - name: Standalone connect
         run: |
           cd frontend
-          graco build -w &
+          graco build
+          cd packages/aquascope-standalone/dist
+          python3 -m http.server 8000 &
+          cd ../../../
           graco test
 
   publish-standalone-and-docs:
@@ -37,7 +40,12 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v1
-      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }} && cargo install cargo-workspaces
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-workspaces
+          version: latest
+          use-tool-cache: true
+      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
       - uses: actions-rs/cargo@v1
         with:
           command: ws

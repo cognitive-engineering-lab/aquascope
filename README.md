@@ -1,16 +1,18 @@
-# <span>Aquascope: looking under the surface of rustc, _at a safe distance_</span><img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" style="float: right; border: 1px solid #555;" height="300" /></p>
+# <span>Aquascope: Look Beneath the Surface of Rust</span><img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" style="float: right; border: 1px solid #555;" height="300" /></p>
 
 [![tests](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml/badge.svg)](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/mdbook-aquascope.svg)](https://crates.io/crates/mdbook-aquascope)
 [![docs](https://img.shields.io/badge/docs-unpublished-red)](https://cognitive-engineering-lab/aquascope/docs)
 
-_Aquascope_ is a tool that generates interactive visualizations from Rust programs. These visualizations aim to help learners intuit correct semantics for the borrow checker and the difference between safe and unsafe programs. Aquascope is distributed as an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor or you can try it out [in the browser](https://gavinleroy.com/aquascope).
+_Aquascope_ is a tool that generates interactive visualizations of Rust programs. These visualizations show how Rust's borrow checker "thinks" about a program, and how a Rust program actually executes. [Click here for a live demo.](https://gavinleroy.com/aquascope)
 
 <!-- Borrow check information is reformulated in terms of _permissions_, a new pedagogy of ownership to provide learners with a notional machine for this kind of static analysis. Example visualizations and this new pedagogy are demonstrated in the [Rust Book Experiment](https://rust-book.cs.brown.edu/). -->
 
 > :warning: Aquascope is experimental and under active development!
 
 ## Installation
+
+We provide an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor `mdbook-aquascope` that embeds Aquascope diagrams into an mdBook. You can install `mdbook-aquascope` either via <https://crates.io> or from source.
 
 ### From crates.io
 
@@ -40,7 +42,7 @@ cargo install --path crates/mdbook-aquascope
 
 Currently, Aquascope supports three types of visualizations:
 
-#### Permission boundaries 
+#### Permission boundaries
 
 Aquascope will determine the permission expected for a path usage and display this along with the actual permissions on the path. Unsatisfied permissions provide additional information on hover to help explain the discrepancy.
 
@@ -88,7 +90,7 @@ fn main() {
     </tr>
 </table>
 
-#### Runtime execution 
+#### Runtime execution
 
 Program state visualization is a well-known tool that visualizes the runtime execution of a program. With Aquascope, you can specify which states of a program you'd like to show, and even run programs that don't pass the borrow checker!
 
@@ -106,9 +108,10 @@ fn main() {
 }
 
 fn greet(g1: &String, g2: &String) { // note the ampersands
-    `[]`println!("{} {}!", g1, g2);
+`[]`println!("{} {}!", g1, g2);
 }```
 </code>
+
 </pre>
         </td>
         <td>

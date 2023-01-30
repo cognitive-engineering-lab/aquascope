@@ -21,11 +21,14 @@ jobs:
         with:
           command: insta
           args: test --features=no-docker
+      - name: Build Aquascope server
+        run: cargo build -p aquascope_serve --features=no-docker
+      - name: Build standalone
+        run: cd frontend && graco build
       - name: Frontend tests
         run: |
-          cd crates/aquascope_serve && cargo run --features=no-docker &
-          sleep 120
-          cd frontend
-          graco build -w &
-          sleep 15
+          cargo run -p aquascope_serve --features=no-docker &
+          cd frontend/packages/aquascope-standalone/dist
+          python3 -m http.server 8000 &
+          cd ../../../
           graco test
