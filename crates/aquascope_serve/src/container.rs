@@ -427,14 +427,15 @@ impl Container {
         let cwd = self.cwd();
 
         let mut cmd = Command::new("cargo");
-        cmd.args(["--quiet", "aquascope", "interpreter"])
-            .current_dir(cwd);
+        cmd.args(["--quiet", "aquascope"]).current_dir(cwd);
 
         if let Some(config) = req.config.as_object() {
             if config.contains_key("shouldFail") {
                 cmd.arg("--should-fail");
             }
         }
+
+        cmd.arg("interpreter");
 
         if cfg!(feature = "no-docker") {
             let _ = cmd.env("RUST_LOG", "debug").env("RUST_BACKTRACE", "1");

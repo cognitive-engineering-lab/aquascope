@@ -26,11 +26,16 @@ const FRONTEND_ASSETS: [Asset; 2] =
 struct AquascopePreprocessor {
   miri_sysroot: PathBuf,
   target_libdir: PathBuf,
-  cache: RwLock<Cache<(String, String), String>>,
+  cache: RwLock<Cache<(String, String, Vec<(String, String)>), String>>,
 }
 
 impl AquascopePreprocessor {
-  fn run_aquascope(&self, code: &str, operation: &str) -> Result<String> {
+  fn run_aquascope(
+    &self,
+    code: &str,
+    operation: &str,
+    config: &[(String, String)],
+  ) -> Result<String> {
     let tempdir = tempdir()?;
     let root = tempdir.path();
     let status = Command::new("cargo")
@@ -45,13 +50,22 @@ impl AquascopePreprocessor {
 
     fs::write(root.join("example/src/main.rs"), code)?;
 
-    let output = Command::new("cargo")
-      .args(["aquascope", operation])
+    let mut cmd = Command::new("cargo");
+    cmd
+      .arg("aquascope")
       .env("SYSROOT", &self.miri_sysroot)
       .env("DYLD_LIBRARY_PATH", &self.target_libdir)
       .env("RUST_BACKTRACE", "1")
-      .current_dir(root.join("example"))
-      .output()?;
+      .current_dir(root.join("example"));
+
+    let should_fail = config.iter().any(|(k, _)| k == "shouldFail");
+    if should_fail {
+      cmd.arg("--should-fail");
+    }
+
+    cmd.arg(operation);
+
+    let output = cmd.output()?;
     if !output.status.success() {
       let error = String::from_utf8(output.stderr)?;
       bail!("Aquascope failed for program:\n{code}\nwith error:\n{error}")
@@ -81,7 +95,7 @@ impl AquascopePreprocessor {
     let (cleaned, annot) =
       mdbook_aquascope::annotations::parse_annotations(&code)?;
 
-    let key = (cleaned.clone(), operation.clone());
+    let key = (cleaned.clone(), operation.clone(), config.clone());
     let cached_response = {
       let cache = self.cache.read().unwrap();
       cache.get(&key).cloned()
@@ -89,7 +103,7 @@ impl AquascopePreprocessor {
     let response = match cached_response {
       Some(response) => response,
       None => {
-        let response = self.run_aquascope(&cleaned, &operation)?;
+        let response = self.run_aquascope(&cleaned, &operation, &config)?;
         self.cache.write().unwrap().set(key, response.clone());
         response
       }

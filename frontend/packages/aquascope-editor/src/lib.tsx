@@ -258,7 +258,11 @@ export class Editor {
 
     let result = (response as any).Ok;
 
-    if (annotations?.hidden_lines) {
+    if (
+      annotations &&
+      annotations.hidden_lines &&
+      annotations.hidden_lines.length > 0
+    ) {
       this.view.dispatch({
         effects: annotations.hidden_lines.map(line => hideLine.of({ line })),
       });

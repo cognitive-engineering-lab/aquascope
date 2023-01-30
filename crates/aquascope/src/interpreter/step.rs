@@ -6,14 +6,14 @@ use anyhow::{anyhow, bail, Context, Result};
 use either::Either;
 use flowistry::mir::utils::PlaceExt;
 use miri::{
-  AllocId, AllocMap, AllocRange, Immediate, InterpCx, InterpError,
-  InterpErrorInfo, InterpResult, LocalValue, Machine, MiriConfig, MiriMachine,
-  Operand, UndefinedBehaviorInfo,
+  AllocId, AllocMap, AllocRange, Frame, Immediate, InterpCx, InterpError,
+  InterpErrorInfo, InterpResult, LocalState, LocalValue, Machine, MiriConfig,
+  MiriMachine, OpTy, Operand, UndefinedBehaviorInfo,
 };
 use rustc_abi::Size;
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
-  mir::{Body, ClearCrossCrate, LocalInfo, Location, Place, RETURN_PLACE},
+  mir::{ClearCrossCrate, Local, LocalInfo, Location, Place, RETURN_PLACE},
   ty::{layout::TyAndLayout, InstanceDef, TyCtxt},
 };
 use rustc_session::CtfeBacktrace;
@@ -135,90 +135,15 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     *memory_map.alloc_id_remapping.entry(alloc_id).or_insert(n)
   }
 
-  fn build_locals(
-    &self,
-    frame: &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
-    index: usize,
-    body: &Body<'tcx>,
-  ) -> InterpResult<'tcx, Vec<(String, MValue)>> {
-    let mut locals = Vec::new();
-    for (local, state) in frame.locals.iter_enumerated() {
-      let decl = &body.local_decls[local];
-      let name = if local == RETURN_PLACE {
-        // Don't include unit return types in locals
-        if decl.ty.is_unit() {
-          continue;
-        }
-
-        "(return)".into()
-      } else {
-        // Only keep locals corresponding to user-defined variables
-        if !matches!(
-          decl.local_info,
-          Some(box LocalInfo::User(ClearCrossCrate::Set(_)))
-        ) {
-          continue;
-        }
-
-        Place::from_local(local, *self.ecx.tcx)
-          .to_string(*self.ecx.tcx, body)
-          .unwrap()
-      };
-
-      let layout = state.layout.get();
-
-      // Ignore dead locals
-      let LocalValue::Live(op) = state.value else { continue };
-
-      match op {
-        // Ignore uninitialized locals
-        Operand::Immediate(Immediate::Uninit) => continue,
-
-        // If a local is Indirect, meaning there exists a pointer to it,
-        // then save its allocation in `MemoryMap::stack_slots`
-        Operand::Indirect(mplace) => {
-          let mut memory_map = self.memory_map.borrow_mut();
-          let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
-
-          // Have to handle the case that a local is uninitialized and indirect
-          // by checking the init_mask in the local's allocation
-          let (_, allocation) =
-            self.ecx.memory.alloc_map().get(alloc_id).unwrap();
-          let initialized = allocation
-            .init_mask()
-            .is_range_initialized(AllocRange {
-              start: Size::ZERO,
-              size: allocation.size(),
-            })
-            .is_ok();
-          if !initialized {
-            continue;
-          }
-
-          memory_map
-            .stack_slots
-            .insert(alloc_id, (index, name.clone(), layout.unwrap()));
-        }
-        _ => {}
-      };
-
-      // Read the value of the local
-      let op_ty = self.ecx.local_to_op(frame, local, layout)?;
-      let value = self.read(&op_ty)?;
-
-      locals.push((name, value));
-    }
-
-    Ok(locals)
-  }
-
   fn build_frame(
     &self,
     frame: &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
     index: usize,
     loc_override: Option<MirLoc<'tcx>>,
+    locals: Vec<(String, OpTy<'tcx, miri::Provenance>)>,
   ) -> InterpResult<'tcx, MFrame<MirLoc<'tcx>>> {
-    let body = &frame.body;
+    log::trace!("Building frame {index}");
+
     let def_id = frame.instance.def_id();
 
     let tcx = *self.ecx.tcx;
@@ -241,7 +166,14 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     let current_loc =
       loc_override.unwrap_or((frame.instance.def, frame.current_loc()));
 
-    let locals = self.build_locals(frame, index, body)?;
+    let locals = locals
+      .into_iter()
+      .map(|(name, op_ty)| {
+        log::trace!("Reading local {name:?}");
+        let value = self.read(&op_ty)?;
+        Ok((name, value))
+      })
+      .collect::<InterpResult<'_, Vec<_>>>()?;
 
     Ok(MFrame {
       name,
@@ -251,15 +183,105 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     })
   }
 
+  fn test_local(
+    &self,
+    frame: &Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
+    frame_index: usize,
+    local: Local,
+    state: &LocalState<'tcx, miri::Provenance>,
+  ) -> InterpResult<'tcx, Option<(String, OpTy<'tcx, miri::Provenance>)>> {
+    let decl = &frame.body.local_decls[local];
+    let name = if local == RETURN_PLACE {
+      // Don't include unit return types in locals
+      if decl.ty.is_unit() {
+        return Ok(None);
+      }
+
+      "(return)".into()
+    } else {
+      // Only keep locals corresponding to user-defined variables
+      if !matches!(
+        decl.local_info,
+        Some(box LocalInfo::User(ClearCrossCrate::Set(_)))
+      ) {
+        return Ok(None);
+      }
+
+      Place::from_local(local, *self.ecx.tcx)
+        .to_string(*self.ecx.tcx, frame.body)
+        .unwrap()
+    };
+
+    let layout = state.layout.get();
+
+    // Ignore dead locals
+    let LocalValue::Live(op) = state.value else { return Ok(None) };
+
+    match op {
+      // Ignore uninitialized locals
+      Operand::Immediate(Immediate::Uninit) => return Ok(None),
+
+      // If a local is Indirect, meaning there exists a pointer to it,
+      // then save its allocation in `MemoryMap::stack_slots`
+      Operand::Indirect(mplace) => {
+        let mut memory_map = self.memory_map.borrow_mut();
+        let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
+
+        // Have to handle the case that a local is uninitialized and indirect
+        // by checking the init_mask in the local's allocation
+        let (_, allocation) =
+          self.ecx.memory.alloc_map().get(alloc_id).unwrap();
+        let initialized = allocation
+          .init_mask()
+          .is_range_initialized(AllocRange {
+            start: Size::ZERO,
+            size: allocation.size(),
+          })
+          .is_ok();
+        if !initialized {
+          return Ok(None);
+        }
+
+        memory_map
+          .stack_slots
+          .insert(alloc_id, (frame_index, name.clone(), layout.unwrap()));
+      }
+      _ => {}
+    };
+
+    let op_ty = self.ecx.local_to_op(frame, local, layout)?;
+    Ok(Some((name, op_ty)))
+  }
+
+  fn find_locals(
+    &self,
+  ) -> InterpResult<'tcx, Vec<Vec<(String, OpTy<'tcx, miri::Provenance>)>>> {
+    self
+      .local_frames()
+      .enumerate()
+      .map(|(index, (_, frame))| {
+        frame
+          .locals
+          .iter_enumerated()
+          .filter_map(|(local, state)| {
+            self.test_local(frame, index, local, state).transpose()
+          })
+          .collect::<InterpResult<'tcx, Vec<_>>>()
+      })
+      .collect()
+  }
+
   fn build_stack(
     &self,
     current_loc: MirLoc<'tcx>,
   ) -> InterpResult<'tcx, MStack<MirLoc<'tcx>>> {
+    let locals = self.find_locals()?;
     let frames = self
       .local_frames()
       .enumerate()
-      .map(|(index, (is_last, frame))| {
-        self.build_frame(frame, index, is_last.then_some(current_loc))
+      .zip(locals)
+      .map(|((index, (is_last, frame)), locals)| {
+        self.build_frame(frame, index, is_last.then_some(current_loc), locals)
       })
       .collect::<InterpResult<'_, _>>()?;
     Ok(MStack { frames })
@@ -273,12 +295,18 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     &self,
     current_loc: MirLoc<'tcx>,
   ) -> InterpResult<'tcx, Option<MStep<MirLoc<'tcx>>>> {
+    log::trace!("Building step for {current_loc:?}");
+
+    log::trace!("Building stack");
     let stack = self.build_stack(current_loc)?;
     if stack.frames.is_empty() {
       return Ok(None);
     }
 
+    log::trace!("Building heap");
     let heap = self.build_heap();
+
+    log::trace!("Step built!");
     Ok(Some(MStep { stack, heap }))
   }
 

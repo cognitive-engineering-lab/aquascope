@@ -220,9 +220,10 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
             match memory_map.stack_slots.get(&alloc_id) {
               Some(t) => t.clone(),
               None => {
+                drop(memory_map);
                 return Ok(MValue::Unallocated {
                   alloc_id: Some(self.ev.remap_alloc_id(alloc_id)),
-                })
+                });
               }
             };
           (MMemorySegment::Stack { frame, local }, layout)
@@ -454,10 +455,11 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         let val = self.ev.ecx.read_immediate(op)?;
         let mplace = self.ev.ecx.ref_to_mplace(&val)?;
         if self.ev.ecx.check_mplace(mplace).is_err() {
-          let (alloc_id, _, _) = self.ev.ecx.ptr_get_alloc_id(mplace.ptr)?;
-          return Ok(MValue::Unallocated {
-            alloc_id: Some(self.ev.remap_alloc_id(alloc_id)),
-          });
+          let alloc_id = match self.ev.ecx.ptr_get_alloc_id(mplace.ptr) {
+            Ok((alloc_id, _, _)) => Some(self.ev.remap_alloc_id(alloc_id)),
+            Err(_) => None,
+          };
+          return Ok(MValue::Unallocated { alloc_id });
         }
         self.read_pointer(mplace)?
       }
