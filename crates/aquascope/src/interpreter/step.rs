@@ -106,6 +106,8 @@ fn body_span(tcx: TyCtxt, def_id: DefId, body_span_type: BodySpanType) -> Span {
   }
 }
 
+type FrameLocals<'tcx> = Vec<(String, OpTy<'tcx, miri::Provenance>)>;
+
 impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   pub fn new(tcx: TyCtxt<'tcx>) -> Result<Self> {
     let (main_id, entry_fn_type) = tcx
@@ -140,7 +142,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     frame: &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
     index: usize,
     loc_override: Option<MirLoc<'tcx>>,
-    locals: Vec<(String, OpTy<'tcx, miri::Provenance>)>,
+    locals: FrameLocals<'tcx>,
   ) -> InterpResult<'tcx, MFrame<MirLoc<'tcx>>> {
     log::trace!("Building frame {index}");
 
@@ -253,9 +255,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     Ok(Some((name, op_ty)))
   }
 
-  fn find_locals(
-    &self,
-  ) -> InterpResult<'tcx, Vec<Vec<(String, OpTy<'tcx, miri::Provenance>)>>> {
+  fn find_locals(&self) -> InterpResult<'tcx, Vec<FrameLocals<'tcx>>> {
     self
       .local_frames()
       .enumerate()

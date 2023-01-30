@@ -1,4 +1,6 @@
-use std::ops::Range;
+//! Parser for Aquascope code blocks within Markdown.
+
+use std::{hash::Hash, ops::Range};
 
 use nom::{
   branch::alt,
@@ -11,11 +13,14 @@ use nom::{
 };
 use nom_locate::LocatedSpan;
 
-#[derive(PartialEq, Eq, Debug)]
+use crate::annotations::AquascopeAnnotations;
+
+#[derive(PartialEq, Hash, Debug, Clone)]
 pub struct AquascopeBlock {
   pub operation: String,
   pub config: Vec<(String, String)>,
   pub code: String,
+  pub annotations: AquascopeAnnotations,
 }
 
 impl AquascopeBlock {
@@ -39,11 +44,14 @@ impl AquascopeBlock {
       tag("```"),
     ));
     let (i, (_, operation, config, code, _)) = parser(i)?;
-    let code = code.fragment().trim().to_string();
+    let code = code.fragment().trim();
+    let (code, annotations) =
+      crate::annotations::parse_annotations(code).unwrap();
     Ok((i, AquascopeBlock {
       operation,
       config,
       code,
+      annotations,
     }))
   }
 
@@ -79,6 +87,7 @@ content!
   assert_eq!(blocks, vec![(0 .. inp.len(), AquascopeBlock {
     operation: s("interpreter"),
     config: vec![(s("foo"), s("bar")), (s("baz"), s("true"))],
-    code: s("content!")
+    code: s("content!"),
+    annotations: Default::default()
   })]);
 }
