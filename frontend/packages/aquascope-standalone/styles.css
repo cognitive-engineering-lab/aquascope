@@ -59,16 +59,12 @@ nav {
   width: 100%;
   max-height: 700px;
   max-width: 1200px;
-
-  /* position: relative; */
-  /* padding-left: 25px; */
 }
 
 .top-right {
   z-index: 10;
   position: absolute;
   top: 8px;
-  right: 1em;
   display: flex;
   flex-direction: column;
   gap: 0.25em;
@@ -78,9 +74,106 @@ nav {
   padding: 5px 10px;
   background: #f5f5f5;
   display: inline-block;
-  border: 1px #f5f5f5;
+
+  border-width: 1px;
   border-color: #e8e8e8;
   border-radius: 2px;
+}
+
+.dropdown {
+  /* position: absolute; */
+  display: inline-block;
+}
+
+.dropdown-content {
+  display: none;
+  padding: 12px 6px;
+  position: absolute;
+  background-color: #f5f5f5;
+  min-width: 160px;
+  z-index: 1;
+}
+
+.dropdown-content label {
+  color: black;
+  text-decoration: none;
+  display: block;
+  font-size: 0.8rem;
+}
+
+.dropdown-content a:hover {
+  background-color: #ddd;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+.cm-button:hover,
+.dropdown:hover .btn {
+  background-color: #ddd;
+}
+
+/* The container */
+.container {
+  display: block;
+  position: relative;
+  padding-left: 35px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Hide the browser's default checkbox */
+.container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+/* Create a custom checkbox */
+.checkmark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 20px;
+  width: 20px;
+  background-color: #e8e8e8;
+}
+
+.container:hover input ~ .checkmark {
+  background-color: #ddd;
+}
+
+.container input:checked ~ .checkmark {
+  background-color: #ddd;
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+.container input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.container .checkmark:after {
+  left: 9px;
+  top: 5px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 3px 3px 0;
+  -webkit-transform: rotate(45deg);
+  -ms-transform: rotate(45deg);
+  transform: rotate(45deg);
 }
 
 /* XXX: tabs **************************************** */

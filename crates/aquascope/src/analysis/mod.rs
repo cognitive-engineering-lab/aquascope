@@ -147,7 +147,7 @@ pub fn compute_permissions<'a, 'tcx>(
 
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
-#[serde(tag = "variant")]
+#[serde(tag = "type")]
 pub enum AquascopeError {
   // An error occured before the intended analysis could run.
   BuildError,

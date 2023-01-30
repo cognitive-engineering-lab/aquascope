@@ -72,7 +72,9 @@ where
     + Serialize
     + TS,
 {
-  High,
+  High {
+    value: A,
+  },
   Low,
   None {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -91,7 +93,7 @@ where
 {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      ValueStep::High => write!(f, "↑"),
+      ValueStep::High { .. } => write!(f, "↑"),
       ValueStep::Low => write!(f, "↓"),
       ValueStep::None { value } => write!(f, "―<{value:?}>―"),
     }
@@ -170,7 +172,7 @@ impl Difference for bool {
     if *self && !rhs {
       ValueStep::Low
     } else if !*self && rhs {
-      ValueStep::High
+      ValueStep::High { value: true }
     } else {
       ValueStep::None { value: Some(*self) }
     }
@@ -196,7 +198,7 @@ where
     match (self, rhs) {
       (None, None) => ValueStep::None { value: None },
       (Some(_), None) => ValueStep::Low,
-      (None, Some(_)) => ValueStep::High,
+      (None, Some(value)) => ValueStep::High { value },
       (Some(v0), Some(v1)) => {
         if *v0 != v1 {
           log::warn!(

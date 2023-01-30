@@ -1,3 +1,4 @@
+import { Card } from "@mui/material";
 import { vim } from "@replit/codemirror-vim";
 import * as Ed from "aquascope-editor";
 
@@ -12,19 +13,21 @@ export let globals: {
 };
 
 window.addEventListener("load", () => {
-  const showBoundariesButton = document.getElementById(
+  const showBoundariesChck = document.getElementById(
     "showBoundaries"
   ) as HTMLInputElement;
-  const permStepsButton = document.getElementById(
-    "showPermSteps"
+
+  const showStepsChck = document.getElementById(
+    "showSteps"
   ) as HTMLInputElement;
+
+  const showPermissionsButton = document.getElementById(
+    "showPermissions"
+  ) as HTMLInputElement;
+
   const interpretButton = document.getElementById(
     "showInterpret"
   ) as HTMLInputElement;
-
-  // const vimKeybindingToggle = document.getElementById(
-  //   "vimKeybindings"
-  // ) as HTMLInputElement;
 
   const editorElement =
     document.querySelector<HTMLDivElement>(".static-editor")!;
@@ -54,8 +57,10 @@ window.addEventListener("load", () => {
       (err: Ed.types.BackendError) => {
         if (err.type === "FileNotFound") {
           alert("A backend problem occurred!");
-        } else {
+        } else if (err.type === "ServerStderr") {
           stdErr.textContent = err.error;
+        } else {
+          console.error("an unknown error occurred:", err);
         }
       },
       Ed.defaultCodeExample,
@@ -73,12 +78,11 @@ window.addEventListener("load", () => {
 
   // vimKeybindingToggle.addEventListener("click", toggleVim);
 
-  showBoundariesButton.addEventListener("click", _ => {
-    return globals.editor.renderOperation("permissions");
-  });
-
-  permStepsButton.addEventListener("click", _ => {
-    return globals.editor.renderOperation("permissions");
+  showPermissionsButton.addEventListener("click", _ => {
+    return globals.editor.renderPermissions({
+      stepper: showStepsChck.checked,
+      boundaries: showBoundariesChck.checked,
+    });
   });
 
   interpretButton.addEventListener("click", () =>

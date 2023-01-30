@@ -16,7 +16,7 @@
 </head>
 
 <body>
-  <script src="./src/index.ts" type="module">
+  <script src="./src/index.tsx" type="module">
 </script>
 
   <div class="center">
@@ -44,10 +44,26 @@
     <div class="aquascope static-editor tab-pane active" data-pane=
     "0">
       <div class="top-right">
-        <button class="cm-button" id="showBoundaries">Perm
-        Boundary</button> <button class="cm-button" id=
-        "showPermSteps">Perm Step</button> <button class=
-        "cm-button" id="showInterpret">Interpret</button>
+        <button class="cm-button" id="showInterpret">Interpret</button>
+
+        <div>
+          <div class="dropdown">
+            <button class="cm-button" style="border-left:1px solid #e8e8e8">
+              <i class="fa fa-caret-down"></i>
+            </button>
+            <div class="dropdown-content">
+              <label class="container">Boundaries
+                <input type="checkbox" id="showBoundaries" checked>
+                <span class="checkmark"></span>
+              </label>
+              <label class="container">Steps
+                <input type="checkbox" id="showSteps" checked>
+                <span class="checkmark"></span>
+              </label>
+            </div>
+          </div>
+          <button class="cm-button" id="showPermissions">Permissions</button>
+        </div>
       </div>
     </div>
 
