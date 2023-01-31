@@ -11,8 +11,8 @@ import {
 import { makeStepDecorations, stepEffect } from "./stepper";
 
 export interface PermissionsCfg {
-  stepper?: boolean;
-  boundaries?: boolean;
+  stepper?: any;
+  boundaries?: any;
 }
 
 export interface PermissionsDecorations {

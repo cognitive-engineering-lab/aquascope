@@ -92,6 +92,8 @@ let HideButton = ({ container }: { container: HTMLDivElement }) => {
 
 interface CommonConfig {
   shouldFail?: boolean;
+  stepper?: any;
+  boundaries?: any;
 }
 
 export class Editor {
