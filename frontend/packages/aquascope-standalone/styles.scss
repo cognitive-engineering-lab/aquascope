@@ -1,5 +1,26 @@
 @import "aquascope-editor/dist/lib.css";
 
+$monospace: "Source Code Pro", monospace;
+$color-lightest: white;
+$color-light: #f5f5f5;
+$color-dark: #e8e8e8;
+$color-darkest: #ddd;
+$color-bg: white;
+$color-error: #cc0000;
+$color-warn: #a88905;
+
+@mixin with-border {
+  border-style: solid;
+  border-width: 5px;
+  border-radius: 5px;
+  border-color: $color-dark;
+}
+
+@mixin shaded-and-outlined {
+  @include with-border;
+  background-color: $color-light;
+}
+
 /* span configuration */
 
 html,
@@ -8,7 +29,7 @@ body {
   height: 100%;
   font-family: "Verdana", sans-serif;
   font-size: 18px;
-  background-color: white;
+  background-color: $color-bg;
 }
 
 span.scp {
@@ -22,23 +43,17 @@ div.center {
 }
 
 div.blurb {
+  @include shaded-and-outlined;
   width: 50%;
   display: inline-block;
   margin: auto;
   padding: 5px;
-
-  border-style: solid;
-  border-width: 5px;
-  border-radius: 5px;
-  border-color: #e8e8e8;
-  background-color: #f5f5f5;
-
   margin-bottom: 4em;
 }
 
 nav {
   width: 100%;
-  background-color: #f5f5f5;
+  background-color: $color-bg;
   padding-left: 30px;
   padding-right: 10px;
 }
@@ -47,11 +62,11 @@ nav {
   display: inline-block;
   padding: 10px 15px;
   font-weight: bold;
-  color: white;
+  color: $color-lightest;
 }
 
 .nav-item:hover {
-  color: #f5f5f5;
+  color: $color-light;
 }
 
 .static-editor {
@@ -62,7 +77,7 @@ nav {
 }
 
 .top-right {
-  z-index: 10;
+  z-index: 5;
   position: absolute;
   top: 8px;
   display: flex;
@@ -71,13 +86,9 @@ nav {
 }
 
 .cm-button {
+  @include shaded-and-outlined;
   padding: 5px 10px;
-  background: #f5f5f5;
   display: inline-block;
-
-  border-width: 1px;
-  border-color: #e8e8e8;
-  border-radius: 2px;
 }
 
 .dropdown {
@@ -89,7 +100,7 @@ nav {
   display: none;
   padding: 12px 6px;
   position: absolute;
-  background-color: #f5f5f5;
+  background-color: $color-light;
   min-width: 160px;
   z-index: 1;
 }
@@ -98,11 +109,11 @@ nav {
   color: black;
   text-decoration: none;
   display: block;
-  font-size: 0.8rem;
+  font-size: 0.8em;
 }
 
 .dropdown-content a:hover {
-  background-color: #ddd;
+  background-color: $color-darkest;
 }
 
 .dropdown:hover .dropdown-content {
@@ -111,7 +122,7 @@ nav {
 
 .cm-button:hover,
 .dropdown:hover .btn {
-  background-color: #ddd;
+  background-color: $color-darkest;
 }
 
 /* The container */
@@ -143,15 +154,15 @@ nav {
   left: 0;
   height: 20px;
   width: 20px;
-  background-color: #e8e8e8;
+  background-color: $color-dark;
 }
 
 .container:hover input ~ .checkmark {
-  background-color: #ddd;
+  background-color: $color-dark;
 }
 
 .container input:checked ~ .checkmark {
-  background-color: #ddd;
+  background-color: $color-dark;
 }
 
 .checkmark:after {
@@ -169,11 +180,91 @@ nav {
   top: 5px;
   width: 5px;
   height: 10px;
-  border: solid white;
+  border: solid $color-lightest;
   border-width: 0 3px 3px 0;
   -webkit-transform: rotate(45deg);
   -ms-transform: rotate(45deg);
   transform: rotate(45deg);
+}
+
+.analysis-error-card {
+  @include shaded-and-outlined;
+  border-color: $color-error;
+  z-index: 6;
+  min-width: 25%;
+  max-width: 50%;
+
+  font-size: 0.8em;
+  padding: 1em;
+  visibility: hidden;
+
+  // trying to center it in the screen ...
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+
+  > h3 {
+    font-size: 1.4em;
+    font-weight: 800;
+  }
+
+  & a {
+    text-decoration: underline 2px $color-darkest;
+  }
+
+  &.live {
+    visibility: visible !important;
+  }
+
+  & .analysis-error-msg {
+    background-color: $color-lightest;
+    overflow: scroll;
+    font-family: monospace;
+  }
+}
+
+.build-error-card {
+  @include with-border;
+
+  border-color: $color-darkest;
+  background-color: $color-warn;
+  color: white;
+  font-style: bold;
+
+  z-index: 5;
+
+  position: fixed;
+  top: 50%;
+  right: 10%;
+
+  max-width: 250px;
+  display: inline-block;
+  font-size: 0.8em;
+  padding: 1em;
+  opacity: 0;
+  transition: all 0.5s ease;
+
+  > h3 {
+    font-size: 1.4em;
+    font-weight: 800;
+  }
+
+  &.live {
+    opacity: 1 !important;
+  }
+}
+
+#close {
+  float: right;
+  display: inline-block;
+  padding: 2px 5px;
+  background: $color-dark;
+}
+
+#close:hover {
+  cursor: pointer;
+  background: $color-darkest;
+  color: black;
 }
 
 /* XXX: tabs **************************************** */
@@ -195,18 +286,18 @@ nav {
 }
 
 .tab {
-  font-family: monospace;
+  font-family: $monospace;
   padding: 5px 10px;
-  background: white;
+  background: $color-lightest;
   width: fit-content;
   display: inline-block;
-  border: 1px white;
+  border: 1px $color-lightest;
   border-radius: 2px;
 }
 
 .tab.active {
-  background: #f5f5f5;
-  border-bottom-color: #f5f5f5 !important;
+  background: $color-light;
+  border-bottom-color: $color-light !important;
 }
 
 .tab-pane {
@@ -219,8 +310,9 @@ nav {
   /* padding-left: 25px; */
 
   display: none;
-  border: 1px solid #e8e8e8;
+  border: 1px solid $color-dark;
 }
+
 .tab-pane.active {
   display: block;
 }
@@ -228,15 +320,10 @@ nav {
 /* XXX: editor **************************************** */
 
 .cm-editor {
+  @include with-border;
+  background-color: $color-bg;
   height: 100%;
   width: 100%;
-
-  border-style: solid;
-  border-width: 5px;
-  border-radius: 5px;
-  border-color: #e8e8e8;
-
-  background-color: white;
 }
 
 a {

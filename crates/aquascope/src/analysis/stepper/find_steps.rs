@@ -389,7 +389,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     // A body with an infinite loop will not generate MIR that
     // contains an exit location.
     let Some(to) = mol.exit_location() else {
-      bail!("bodies containing an infinite loop is a stepper incompleteness, a fix is coming :)");
+      bail!("The function body under analysis has zero (or many) exit points. This currently isn't supported by the permissions stepper; I suggest trying to rewrite the function to contain a single `return`.");
     };
 
     let body_segment = MirSegment::new(from, to);

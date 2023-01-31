@@ -150,8 +150,8 @@ pub fn compute_permissions<'a, 'tcx>(
 #[serde(tag = "type")]
 pub enum AquascopeError {
   // An error occured before the intended analysis could run.
-  BuildError,
-  AnalysisError(String),
+  BuildError { range: Range },
+  AnalysisError { msg: String },
 }
 
 pub type AquascopeResult<T> = ::std::result::Result<T, AquascopeError>;
@@ -163,23 +163,7 @@ pub struct AquascopeAnalysis<'a, 'tcx: 'a> {
 
 impl From<anyhow::Error> for AquascopeError {
   fn from(e: anyhow::Error) -> Self {
-    //     let internal_error = format!(
-    //       r###"
-    // ATTN: this is an internal bug.\n
-
-    //   please file a bug report at: https://github.com/cognitive-engineering-lab/aquascope/issues/new
-
-    //   include:
-    //     1. the code you tried to analyze.
-    //     2. the following output:
-
-    //     === DBG Output ===
-    //     {:?}
-    // "###,
-    //       e.to_string()
-    //     );
-
-    AquascopeError::AnalysisError(e.to_string())
+    AquascopeError::AnalysisError { msg: e.to_string() }
   }
 }
 
@@ -203,7 +187,10 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     let body = &permissions.body_with_facts.body;
 
     if body.tainted_by_errors.is_some() {
-      return Err(AquascopeError::BuildError);
+      let span = body.span;
+      let source_map = permissions.tcx.sess.source_map();
+      let range = CharRange::from_span(span, source_map).unwrap().into();
+      return Err(AquascopeError::BuildError { range });
     }
 
     let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);

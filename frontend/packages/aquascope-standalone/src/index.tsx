@@ -29,6 +29,20 @@ window.addEventListener("load", () => {
     "showInterpret"
   ) as HTMLInputElement;
 
+  const buildErrorCard = document.getElementById(
+    "buildErrorCard"
+  ) as HTMLElement;
+
+  const analysisErrorCard = document.getElementById(
+    "analysisErrorCard"
+  ) as HTMLElement;
+
+  const analysisErrorMsg = document.getElementById(
+    "analysisErrorMsg"
+  ) as HTMLElement;
+
+  const analysisErrClose = document.getElementById("close") as HTMLElement;
+
   const editorElement =
     document.querySelector<HTMLDivElement>(".static-editor")!;
   const tabs = document.querySelectorAll<HTMLElement>(".tab");
@@ -59,6 +73,16 @@ window.addEventListener("load", () => {
           alert("A backend problem occurred!");
         } else if (err.type === "ServerStderr") {
           stdErr.textContent = err.error;
+        } else if (err.type === "BuildError") {
+          console.log("showing the build error card");
+          buildErrorCard.classList.add("live");
+          window.setTimeout(() => {
+            console.log("removing the build error card");
+            buildErrorCard.classList.remove("live");
+          }, 2500);
+        } else if (err.type === "AnalysisError") {
+          analysisErrorCard.classList.add("live");
+          analysisErrorMsg.innerText = err.msg;
         } else {
           console.error("an unknown error occurred:", err);
         }
@@ -78,12 +102,16 @@ window.addEventListener("load", () => {
 
   // vimKeybindingToggle.addEventListener("click", toggleVim);
 
-  showPermissionsButton.addEventListener("click", _ => {
-    return globals.editor.renderPermissions({
+  analysisErrClose.addEventListener("click", _ =>
+    analysisErrorCard.classList.remove("live")
+  );
+
+  showPermissionsButton.addEventListener("click", _ =>
+    globals.editor.renderPermissions({
       stepper: showStepsChck.checked,
       boundaries: showBoundariesChck.checked,
-    });
-  });
+    })
+  );
 
   interpretButton.addEventListener("click", () =>
     globals.editor.renderOperation("interpreter")

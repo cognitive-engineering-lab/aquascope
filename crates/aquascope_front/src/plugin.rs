@@ -11,6 +11,7 @@ use aquascope::{
     AquascopeError, AquascopeResult,
   },
   errors::{initialize_error_tracking, track_body_diagnostics},
+  Range,
 };
 use clap::{Parser, Subcommand};
 use flowistry::{
@@ -132,7 +133,7 @@ impl RustcPlugin for AquascopePlugin {
           callbacks
             .result
             .unwrap()
-            .map_err(|e| AquascopeError::AnalysisError(e.to_string())),
+            .map_err(|e| AquascopeError::AnalysisError { msg: e.to_string() }),
         )
       }
       _ => unreachable!(),
@@ -169,7 +170,9 @@ pub fn run_with_callbacks(
 
   log::debug!("building compiler ...");
 
-  compiler.run().map_err(|_| AquascopeError::BuildError)
+  compiler.run().map_err(|_| AquascopeError::BuildError {
+    range: Range::default(),
+  })
 }
 
 fn run<A: AquascopeAnalysis>(
