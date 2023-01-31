@@ -2,7 +2,7 @@
 
 ## Some introduction
 
-```aquascope,stepper
+```aquascope,permissions,stepper=true
 fn main() {
 let mut x = 1;
 let y = &x;
@@ -10,12 +10,20 @@ println!("{} = {}", x, *y); `(focus,paths:x)`
 }
 ```
 
-```aquascope,boundaries
+```aquascope,permissions,boundaries=true
 # fn main() {
 let mut x = 1;
 let y = &mut x;
 println!("{} = {}", x, *y);
 # }
+```
+
+```aquascope,permissions,stepper=true,boundaries=true
+fn main() {
+let mut x = 1;
+let y = &x;
+println!("{} = {}", x, *y); `(focus,paths:x)`
+}
 ```
 
 ```aquascope,interpreter,concreteTypes=true
