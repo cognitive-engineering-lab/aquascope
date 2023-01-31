@@ -28,6 +28,9 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Debug, Parser, Serialize, Deserialize)]
 #[clap(version = VERSION)]
 pub struct AquascopePluginArgs {
+  #[clap(long)]
+  should_fail: bool,
+
   #[clap(subcommand)]
   command: AquascopeCommand,
 }
@@ -104,7 +107,7 @@ impl RustcPlugin for AquascopePlugin {
     let flags = match &args.command {
       Boundaries { flags } => flags,
       Stepper { flags, .. } => flags,
-      Interpreter { flags } => flags,
+      Interpreter { flags, .. } => flags,
       _ => unreachable!(),
     };
 
@@ -136,8 +139,9 @@ impl RustcPlugin for AquascopePlugin {
         postprocess(run(crate::permissions::permission_diffs, &compiler_args))
       }
       Interpreter { .. } => {
-        let mut callbacks =
-          aquascope::interpreter::InterpretCallbacks::default();
+        let mut callbacks = aquascope::interpreter::InterpretCallbacks::new(
+          plugin_args.should_fail,
+        );
         let _ = run_with_callbacks(&compiler_args, &mut callbacks);
         postprocess(
           callbacks

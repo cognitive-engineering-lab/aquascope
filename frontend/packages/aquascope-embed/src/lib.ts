@@ -38,6 +38,18 @@ let initEditors = () => {
       ? new URL(elem.dataset.serverUrl)
       : undefined;
 
+    let shouldFailHtml = `
+    <div class="ferris-container">
+      <a href="ch00-00-introduction.html#ferris" target="_blank">
+        <img
+          src="img/ferris/does_not_compile.svg"
+          title="This code does not compile!"
+          class="ferris ferris-large"
+        />
+      </a>
+    </div>
+    `;
+
     let ed = new Editor(
       elem,
       setup,
@@ -48,7 +60,8 @@ let initEditors = () => {
       },
       initialCode,
       serverUrl,
-      readOnly
+      readOnly,
+      shouldFailHtml
     );
 
     let operation = elem.dataset.operation;

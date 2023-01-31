@@ -11,18 +11,10 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use mdbook_aquascope::cache::Cache;
+use mdbook_aquascope::{block::AquascopeBlock, cache::Cache};
 use mdbook_preprocessor_utils::{
   mdbook::preprocess::PreprocessorContext, Asset, SimplePreprocessor,
 };
-use nom::{
-  bytes::complete::{tag, take_until},
-  character::complete::{anychar, char, none_of},
-  multi::many0,
-  sequence::{preceded, separated_pair, tuple},
-  IResult,
-};
-use nom_locate::LocatedSpan;
 use rayon::prelude::*;
 use tempfile::tempdir;
 
@@ -34,11 +26,14 @@ const FRONTEND_ASSETS: [Asset; 2] =
 struct AquascopePreprocessor {
   miri_sysroot: PathBuf,
   target_libdir: PathBuf,
-  cache: RwLock<Cache<(String, String), String>>,
+  cache: RwLock<Cache<AquascopeBlock, String>>,
 }
 
 impl AquascopePreprocessor {
-  fn run_aquascope(&self, code: &str, operation: &str) -> Result<String> {
+  /// Runs cargo-aquascope on code from a given Aquascope block.
+  fn run_aquascope(&self, block: &AquascopeBlock) -> Result<String> {
+    // TODO: this code shares a lot of structure w/ aquascope_serve.
+    // Can we unify them?
     let tempdir = tempdir()?;
     let root = tempdir.path();
     let status = Command::new("cargo")
@@ -51,18 +46,30 @@ impl AquascopePreprocessor {
       bail!("Cargo failed");
     }
 
-    fs::write(root.join("example/src/main.rs"), code)?;
+    fs::write(root.join("example/src/main.rs"), &block.code)?;
 
-    let output = Command::new("cargo")
-      .args(["aquascope", operation])
+    let mut cmd = Command::new("cargo");
+    cmd
+      .arg("aquascope")
       .env("SYSROOT", &self.miri_sysroot)
       .env("DYLD_LIBRARY_PATH", &self.target_libdir)
       .env("RUST_BACKTRACE", "1")
-      .current_dir(root.join("example"))
-      .output()?;
+      .current_dir(root.join("example"));
+
+    let should_fail = block.config.iter().any(|(k, _)| k == "shouldFail");
+    if should_fail {
+      cmd.arg("--should-fail");
+    }
+
+    cmd.arg(&block.operation);
+
+    let output = cmd.output()?;
     if !output.status.success() {
       let error = String::from_utf8(output.stderr)?;
-      bail!("Aquascope failed for program:\n{code}\nwith error:\n{error}")
+      bail!(
+        "Aquascope failed for program:\n{}\nwith error:\n{error}",
+        block.code
+      )
     }
 
     let response = String::from_utf8(output.stdout)?;
@@ -70,7 +77,8 @@ impl AquascopePreprocessor {
     if let Some(err) = response_json.get("Err") {
       let stderr = String::from_utf8(output.stderr)?;
       bail!(
-        "Aquascope failed for program:\n{code}\nwith error: {}\n{stderr}",
+        "Aquascope failed for program:\n{}\nwith error: {}\n{stderr}",
+        block.code,
         err.as_str().unwrap()
       )
     }
@@ -78,27 +86,21 @@ impl AquascopePreprocessor {
     Ok(response)
   }
 
-  fn process_code(
-    &self,
-    AquascopeBlock {
-      operation,
-      config,
-      code,
-    }: AquascopeBlock,
-  ) -> Result<String> {
-    let (cleaned, annot) =
-      mdbook_aquascope::annotations::parse_annotations(&code)?;
-
-    let key = (cleaned.clone(), operation.clone());
+  /// Get the HTML output for an Aquascope block
+  fn process_code(&self, block: AquascopeBlock) -> Result<String> {
     let cached_response = {
       let cache = self.cache.read().unwrap();
-      cache.get(&key).cloned()
+      cache.get(&block).cloned()
     };
     let response = match cached_response {
       Some(response) => response,
       None => {
-        let response = self.run_aquascope(&cleaned, &operation)?;
-        self.cache.write().unwrap().set(key, response.clone());
+        let response = self.run_aquascope(&block)?;
+        self
+          .cache
+          .write()
+          .unwrap()
+          .set(block.clone(), response.clone());
         response
       }
     };
@@ -114,56 +116,24 @@ impl AquascopePreprocessor {
       )
     };
 
-    add_data("code", &serde_json::to_string(&cleaned)?)?;
-    add_data("annotations", &serde_json::to_string(&annot)?)?;
-    add_data("operation", &operation)?;
+    add_data("code", &serde_json::to_string(&block.code)?)?;
+    add_data("annotations", &serde_json::to_string(&block.annotations)?)?;
+    add_data("operation", &block.operation)?;
     add_data("response", response.trim_end())?;
-    let config = config
+    let config = block
+      .config
       .iter()
       .map(|(k, v)| (k, v))
       .collect::<HashMap<_, _>>();
     add_data("config", &serde_json::to_string(&config)?)?;
 
-    // TODO: make this configurable?
+    // TODO: make this configurable
     add_data("no-interact", "true")?;
 
     write!(html, "></div>")?;
 
     Ok(html)
   }
-}
-
-struct AquascopeBlock {
-  operation: String,
-  config: Vec<(String, String)>,
-  code: String,
-}
-
-fn parse_aquascope_block(
-  i: LocatedSpan<&str>,
-) -> IResult<LocatedSpan<&str>, AquascopeBlock> {
-  fn parse_sym(i: LocatedSpan<&str>) -> IResult<LocatedSpan<&str>, String> {
-    let (i, v) = many0(none_of(",=\n"))(i)?;
-    Ok((i, v.into_iter().collect::<String>()))
-  }
-
-  let mut parser = tuple((
-    tag("```aquascope"),
-    preceded(char(','), parse_sym),
-    many0(preceded(
-      char(','),
-      separated_pair(parse_sym, char('='), parse_sym),
-    )),
-    take_until("```"),
-    tag("```"),
-  ));
-  let (i, (_, operation, config, code, _)) = parser(i)?;
-  let code = code.fragment().trim().to_string();
-  Ok((i, AquascopeBlock {
-    operation,
-    config,
-    code,
-  }))
 }
 
 impl SimplePreprocessor for AquascopePreprocessor {
@@ -210,23 +180,7 @@ impl SimplePreprocessor for AquascopePreprocessor {
     _chapter_dir: &Path,
     content: &str,
   ) -> Result<Vec<(std::ops::Range<usize>, String)>> {
-    let mut content = LocatedSpan::new(content);
-    let mut to_process = Vec::new();
-    loop {
-      if let Ok((next, block)) = parse_aquascope_block(content) {
-        let range = content.location_offset() .. next.location_offset();
-        to_process.push((range, block));
-        content = next;
-      } else {
-        match anychar::<_, nom::error::Error<LocatedSpan<&str>>>(content) {
-          Ok((next, _)) => {
-            content = next;
-          }
-          Err(_) => break,
-        }
-      }
-    }
-
+    let to_process = AquascopeBlock::parse_all(content);
     let replacements = to_process
       .into_par_iter()
       .map(|(range, block)| {

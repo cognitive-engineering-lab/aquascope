@@ -17,9 +17,34 @@ steps:
           locals: []
     heap:
       locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 67
+            filename: 0
+          location:
+            char_start: 56
+            char_end: 65
+            filename: 0
+          locals: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 67
+            filename: 0
+          location:
+            char_start: 66
+            char_end: 67
+            filename: 0
+          locals: []
+    heap:
+      locations: []
 result:
-  type: Error
-  value:
-    type: Other
-    value: "using uninitialized data, but this operation requires initialized memory"
+  type: Success
 
