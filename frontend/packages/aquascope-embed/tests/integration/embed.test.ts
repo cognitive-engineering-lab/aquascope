@@ -24,14 +24,15 @@ describe("Aquascope Embed", () => {
     let crashedElement = await page.$(".aquascope-crash");
     let embedElement = await page.$(".aquascope-embed");
 
-    // There must have been an editor on the screen.
-    expect(editors).not.toBeNull();
-    expect(editors.length).toBeGreaterThan(0);
-
     // No embed elements that didn't get rendered
     expect(embedElement).toBeNull();
 
     // No crashed elements
     expect(crashedElement).toBeNull();
+    
+    // There must have been an editor on the screen.
+    expect(editors).not.toBeNull();
+    expect(editors.length).toBeGreaterThan(0);
+
   });
 });
