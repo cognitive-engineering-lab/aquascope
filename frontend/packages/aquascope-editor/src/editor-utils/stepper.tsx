@@ -82,9 +82,6 @@ let PermRow = ({
 
   let w = (idx: number) =>
     (idx / content.length) * 100 + 100 / content.length - 5 + "%";
-  let nullF = () => {
-    return;
-  };
 
   let getKind = (c: string) => {
     if (c === "R") {

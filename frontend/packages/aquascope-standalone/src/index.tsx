@@ -1,4 +1,3 @@
-import { Card } from "@mui/material";
 import { vim } from "@replit/codemirror-vim";
 import * as Ed from "aquascope-editor";
 

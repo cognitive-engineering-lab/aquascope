@@ -14,7 +14,6 @@ describe("Aquascope Standalone", () => {
   });
 
   afterAll(async () => {
-    await page.close();
     await browser.close();
   });
 
@@ -24,24 +23,19 @@ describe("Aquascope Standalone", () => {
     });
   });
 
-  it("runs permission boundaries", async () => {
-    await page.click("#showBoundaries");
+  it("runs permissions", async () => {
+    await page.click("#showPermissions");
     let crashedElement = await page.$(".aquascope-crash");
     // No crashed elements
     expect(crashedElement).toBeNull();
-    await page.waitForSelector(permStackSelector);
-    let widgets = await page.$$(permStackSelector);
-    expect(widgets.length).toBeGreaterThan(0);
-  });
 
-  it("runs permissions steps", async () => {
-    await page.click("#showPermSteps");
-    let crashedElement = await page.$(".aquascope-crash");
-    // No crashed elements
-    expect(crashedElement).toBeNull();
+    await page.waitForSelector(permStackSelector);
+    let stackWidgets = await page.$$(permStackSelector);
+    expect(stackWidgets.length).toBeGreaterThan(0);
+
     await page.waitForSelector(permStepSelector);
-    let widgets = await page.$$(permStepSelector);
-    expect(widgets.length).toBeGreaterThan(0);
+    let stepWidgets = await page.$$(permStepSelector);
+    expect(stepWidgets.length).toBeGreaterThan(0);
   });
 
   // it("runs the interpreter", async () => {

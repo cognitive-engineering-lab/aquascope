@@ -54,11 +54,13 @@ export function renderPermissions(
 ) {
   console.log("rendering permissions with", cfg);
   if (decorations !== undefined) {
+    let useSteps = String(cfg?.stepper) === "true";
+    let useBoundaries = String(cfg?.boundaries) === "true";
     view.dispatch({
       effects: [
         loanFactsStateType.of(decorations.facts),
-        stepEffect.of(cfg?.stepper ? decorations.stepper : []),
-        boundaryEffect.of(cfg?.boundaries ? decorations.boundaries : []),
+        stepEffect.of(useSteps ? decorations.stepper : []),
+        boundaryEffect.of(useBoundaries ? decorations.boundaries : []),
       ],
     });
   }
