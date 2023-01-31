@@ -6,6 +6,7 @@ description: find_nth@illegal_promotion_0.test
   - - - "*elems"
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: false
@@ -24,6 +25,7 @@ description: find_nth@illegal_promotion_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
@@ -33,6 +35,7 @@ description: find_nth@illegal_promotion_0.test
     - - "*elems[]"
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: false
@@ -51,6 +54,7 @@ description: find_nth@illegal_promotion_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
@@ -60,8 +64,10 @@ description: find_nth@illegal_promotion_0.test
     - - elems
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: High
+          value: true
         type_writeable:
           type: None
           value: false
@@ -77,16 +83,20 @@ description: find_nth@illegal_promotion_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
     - - n
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: High
+          value: true
         type_writeable:
           type: None
           value: false
@@ -102,8 +112,11 @@ description: find_nth@illegal_promotion_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
+

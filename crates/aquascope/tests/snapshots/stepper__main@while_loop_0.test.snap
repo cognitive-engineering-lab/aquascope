@@ -6,6 +6,7 @@ description: main@while_loop_0.test
   - - - s1
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -24,14 +25,18 @@ description: main@while_loop_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
 - - 2
   - - - "*b"
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: false
@@ -50,14 +55,17 @@ description: main@while_loop_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: None
             value: false
     - - b
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -75,11 +83,13 @@ description: main@while_loop_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
     - - s1
       - is_live:
           type: None
@@ -95,10 +105,13 @@ description: main@while_loop_0.test
           value: false
         loan_read_refined:
           type: High
+          value: 0
         loan_write_refined:
           type: High
+          value: 0
         loan_drop_refined:
           type: High
+          value: 0
         permissions:
           read:
             type: Low
@@ -181,10 +194,13 @@ description: main@while_loop_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
 - - 8
   - - - s1
       - is_live:
