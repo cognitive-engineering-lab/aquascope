@@ -57,7 +57,7 @@ impl Config {
 #[derive(Debug, Clone, Deserialize)]
 struct SingleFileRequest {
     code: String,
-    config: Value,
+    config: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]

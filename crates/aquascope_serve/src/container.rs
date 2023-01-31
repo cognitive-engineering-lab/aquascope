@@ -1,28 +1,30 @@
-use bollard::{
-    container::{
-        Config, CreateContainerOptions, LogOutput, RemoveContainerOptions, StartContainerOptions,
-        UploadToContainerOptions,
-    },
-    exec::{CreateExecOptions, StartExecResults},
-    models::{ContainerCreateResponse, HostConfig},
-    Docker,
-};
-use futures::StreamExt;
-use serde::Serialize;
 use serde_json::Value;
 use snafu::prelude::*;
-#[cfg(feature = "no-docker")]
-use std::fs;
+
 use std::process::Command;
-use std::{
-    env, io, iter,
-    os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
-    str,
-    sync::Arc,
+use std::{io, os::unix::fs::PermissionsExt, path::PathBuf, str};
+
+#[cfg(not(feature = "no-docker"))]
+use {
+    bollard::{
+        container::{
+            Config, CreateContainerOptions, LogOutput, RemoveContainerOptions,
+            StartContainerOptions, UploadToContainerOptions,
+        },
+        exec::{CreateExecOptions, StartExecResults},
+        models::{ContainerCreateResponse, HostConfig},
+        Docker,
+    },
+    futures::StreamExt,
+    serde::Serialize,
+    std::{env, iter, path::Path, sync::Arc},
 };
+
 #[cfg(feature = "no-docker")]
-use tempfile::{tempdir, TempDir};
+use {
+    std::fs,
+    tempfile::{tempdir, TempDir},
+};
 
 const DEFAULT_IMAGE: &str = "aquascope";
 const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
@@ -429,7 +431,7 @@ impl Container {
         let mut cmd = Command::new("cargo");
         cmd.args(["--quiet", "aquascope"]).current_dir(cwd);
 
-        if let Some(config) = req.config.as_object() {
+        if let Some(config) = req.config.as_ref().and_then(|cfg| cfg.as_object()) {
             if config.contains_key("shouldFail") {
                 cmd.arg("--should-fail");
             }
@@ -492,7 +494,7 @@ impl From<bollard::errors::Error> for Error {
 #[derive(Debug, Clone)]
 pub struct SingleFileRequest {
     pub code: String,
-    pub config: Value,
+    pub config: Option<Value>,
 }
 
 #[derive(Debug, Clone)]

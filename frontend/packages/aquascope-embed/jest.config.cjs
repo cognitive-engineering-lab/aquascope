@@ -4,7 +4,6 @@ module.exports = {
   // from the current module's dist directory
   preset: "ts-jest/presets/js-with-ts-esm",
   testEnvironment: "node",
-  testTimeout: 15000,
   maxWorkers: 2,
   roots: ['<rootDir>/tests']
 };
