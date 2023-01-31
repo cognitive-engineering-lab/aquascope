@@ -12,6 +12,23 @@
   --code-bg: #191f26;
 }
 
+:root {
+  --aq-fg: var(--fg);
+  --aq-bg: var(--bg);
+
+  --aq-button-border: var(--icons);
+  --aq-button-text: var(--icons);
+  --aq-button-background: var(--theme-popup-bg);
+  --aq-button-border-hover: var(--icons-hover);
+  --aq-button-text-hover: var(--sidebar-active);
+  --aq-button-background-hover: var(--theme-hover);
+
+  --aq-step-widget-text: var(--table-header-bg);
+  --aq-step-table-text: var(--sidebar-fg);
+  --aq-step-table-border: var(--table-header-bg);
+  --aq-step-table-background: var(--sidebar-bg);
+}
+
 .aquascope {
   border: 2px dashed var(--theme-popup-border);
 
@@ -35,66 +52,9 @@
     padding: 0;
   }
 
-  .cm-button {
-    // Same as `pre > .buttons button`
-    border-color: var(--icons);
-    background-color: var(--theme-popup-bg);
-    color: var(--icons);
-
-    &:hover {
-      color: var(--sidebar-active);
-      border-color: var(--icons-hover);
-      background-color: var(--theme-hover);
-    }
-  }
-
-  .perm-step-widget {
-    color: var(--table-header-bg);
-  }
-
-  .perm-step-table, .step-table-container {
-    color: var(--sidebar-fg);
-    background-color: var(--sidebar-bg);
-    border-color: var(--table-header-bg);
-
-    td {
-      padding: 1px 4px;
-    }
-  }
-
-  span.perm-diff-none, span.perm-diff-none-high, span.perm-diff-none-low  {
-    color: var(--fg);
-  }
-
-  .step-widget-toggle {
-    &:hover {
-      color: var(--fg);
-    }
-  }
-
-  .step-table-dropdown {
-    color: var(--table-header-bg);
-  }
-}
-
-.step-marker {
-  background-color: var(--bg);
-  border-color: var(--fg);
-
-  > span {
-    color: var(--fg);
-  }
 }
 
 .interpreter {
-  background: var(--bg);
-
-  .step {
-    .header .header-bg {
-      background: var(--bg);
-    }
-  }
-
   table {
     margin: 0;
 

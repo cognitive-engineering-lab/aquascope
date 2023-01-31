@@ -1,3 +1,5 @@
+//! Disk cache for persisting computed Aquascope results.
+
 use std::{
   collections::{hash_map::DefaultHasher, HashMap},
   fs::{File, OpenOptions},

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use snafu::prelude::*;
 use std::{env, net::SocketAddr};
 
@@ -56,6 +57,7 @@ impl Config {
 #[derive(Debug, Clone, Deserialize)]
 struct SingleFileRequest {
     code: String,
+    config: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -73,7 +75,10 @@ struct ServerResponse {
 impl TryFrom<SingleFileRequest> for container::SingleFileRequest {
     type Error = Error;
     fn try_from(this: SingleFileRequest) -> Result<Self> {
-        Ok(container::SingleFileRequest { code: this.code })
+        Ok(container::SingleFileRequest {
+            code: this.code,
+            config: this.config,
+        })
     }
 }
 

@@ -26,23 +26,34 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
   let mut evaluator = step::VisEvaluator::new(tcx).unwrap();
   let mir_steps = evaluator.eval()?;
 
-  // eprintln!("{mir_steps:#?}");
+  if log::log_enabled!(log::Level::Trace) {
+    for step in &mir_steps.steps {
+      let (inst, mir_body_loc) = step.stack.frames.last().unwrap().location;
+      eprintln!("{}", match mir_body_loc {
+        Either::Left(loc) => {
+          let body = evaluator.ecx.load_mir(inst, None).unwrap();
+          format!("{:?}", body.stmt_at(loc))
+        }
+        Either::Right(span) =>
+          tcx.sess.source_map().span_to_snippet(span).unwrap(),
+      })
+    }
+  }
 
   let mapper = Mapper::new(&evaluator.ecx);
   let hir_steps =
     mapper::group_steps(mir_steps, |loc| mapper.abstract_loc(loc));
 
-  // for step in &hir_steps {
-  //   let (_, hir_body_loc) = step.stack.frames.last().unwrap().location;
-  //   eprintln!(
-  //     "{:?}",
-  //     match hir_body_loc {
-  //       Either::Left(node_id) => tcx.hir().node_to_string(node_id),
-  //       Either::Right(span) => tcx.sess.source_map().span_to_snippet(span).unwrap(),
-  //     }
-  //   );
-  // }
-  // eprintln!("{hir_steps:#?}");
+  if log::log_enabled!(log::Level::Trace) {
+    for step in &hir_steps.steps {
+      let (_, hir_body_loc) = step.stack.frames.last().unwrap().location;
+      eprintln!("{:?}", match hir_body_loc {
+        Either::Left(node_id) => tcx.hir().node_to_string(node_id),
+        Either::Right(span) =>
+          tcx.sess.source_map().span_to_snippet(span).unwrap(),
+      });
+    }
+  }
 
   let src_steps = mapper::group_steps(hir_steps, |(owner_id, hir_body_loc)| {
     let hir = tcx.hir();
@@ -60,11 +71,19 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
   Ok(src_steps)
 }
 
-#[derive(Default)]
 pub struct InterpretCallbacks {
+  should_fail: bool,
   pub result: Option<Result<MTrace<Range>>>,
 }
 
+impl InterpretCallbacks {
+  pub fn new(should_fail: bool) -> Self {
+    InterpretCallbacks {
+      should_fail,
+      result: None,
+    }
+  }
+}
 // We disable `mir_borrowck` to allow programs with Rust-caught UB to execute
 // rather than being rejected out of hand.
 fn fake_mir_borrowck(
@@ -91,7 +110,9 @@ pub fn override_queries(
 impl rustc_driver::Callbacks for InterpretCallbacks {
   // See `fake_mir_borrowck`
   fn config(&mut self, config: &mut rustc_interface::interface::Config) {
-    config.override_queries = Some(override_queries);
+    if self.should_fail {
+      config.override_queries = Some(override_queries);
+    }
   }
 
   fn after_parsing<'tcx>(

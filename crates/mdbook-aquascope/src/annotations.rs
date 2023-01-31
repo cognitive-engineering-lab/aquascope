@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+//! Parser for annotations within an Aquascope code block body.
+
+use std::{collections::HashMap, hash::Hash};
 
 use anyhow::Result;
 use regex::Regex;
@@ -13,20 +15,20 @@ pub struct CharPos(usize);
 #[ts(export)]
 pub struct LinePos(usize);
 
-#[derive(PartialEq, Eq, Debug, TS, Serialize, Default)]
+#[derive(PartialEq, Eq, Debug, TS, Serialize, Default, Clone)]
 #[ts(export)]
 pub struct StepperAnnotations {
   focused_lines: Vec<LinePos>,
   focused_paths: HashMap<LinePos, String>,
 }
 
-#[derive(PartialEq, Eq, Debug, TS, Serialize, Default)]
+#[derive(PartialEq, Eq, Debug, TS, Serialize, Default, Clone)]
 #[ts(export)]
 pub struct InterpAnnotations {
   state_locations: Vec<CharPos>,
 }
 
-#[derive(PartialEq, Eq, Debug, Default, TS, Serialize)]
+#[derive(PartialEq, Eq, Debug, Default, TS, Serialize, Clone)]
 #[ts(export)]
 pub struct AquascopeAnnotations {
   hidden_lines: Vec<LinePos>,
@@ -34,7 +36,14 @@ pub struct AquascopeAnnotations {
   stepper: StepperAnnotations,
 }
 
-#[allow(clippy::comparison_to_empty)]
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for AquascopeAnnotations {
+  fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
+    // HashMaps aren't hashable, and we can ignore annotations when hashing
+    // anyway since they don't change the result of an aquascope computation.
+  }
+}
+
 pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
   let marker_interp = ("`[", "]`", "interp");
   let marker_stepper = ("`(", ")`", "stepper");

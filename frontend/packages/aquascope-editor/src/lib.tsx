@@ -3,6 +3,8 @@ import { indentUnit } from "@codemirror/language";
 import { Compartment, EditorState, Extension } from "@codemirror/state";
 import { EditorView, ViewUpdate } from "@codemirror/view";
 import _ from "lodash";
+import React, { useEffect, useState } from "react";
+import ReactDOM from "react-dom/client";
 
 import { boundaryField } from "./editor-utils/boundaries";
 import { renderInterpreter } from "./editor-utils/interpreter";
@@ -56,11 +58,50 @@ fn main() {
 let readOnly = new Compartment();
 let mainKeybinding = new Compartment();
 
+interface Button {
+  icon: string;
+  index: number;
+}
+
+type ButtonName = "copy" | "eye";
+const BUTTON_ORDER: ButtonName[] = ["copy", "eye"];
+
+let CopyButton = ({ view }: { view: EditorView }) => (
+  <i
+    className="fa fa-copy"
+    onClick={() => {
+      let contents = view.state.doc.toJSON().join("\n");
+      navigator.clipboard.writeText(contents);
+    }}
+  />
+);
+
+let HideButton = ({ container }: { container: HTMLDivElement }) => {
+  let [hidden, setHidden] = useState(true);
+  useEffect(() => {
+    if (!hidden) container.classList.add("show-hidden");
+    else container.classList.remove("show-hidden");
+  }, [hidden]);
+  return (
+    <i
+      className={`fa ${hidden ? "fa-eye" : "fa-eye-slash"}`}
+      onClick={() => setHidden(!hidden)}
+    />
+  );
+};
+
+interface CommonConfig {
+  shouldFail?: boolean;
+}
+
 export class Editor {
   private view: EditorView;
   private interpreterContainer: HTMLDivElement;
   private editorContainer: HTMLDivElement;
   private permissionsDecos?: PermissionsDecorations;
+  private metaContainer: ReactDOM.Root;
+  private buttons: Set<ButtonName>;
+  private shouldFail: boolean = false;
 
   public constructor(
     dom: HTMLDivElement,
@@ -71,7 +112,8 @@ export class Editor {
     },
     code: string = defaultCodeExample,
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
-    readonly noInteract: boolean = false
+    readonly noInteract: boolean = false,
+    readonly shouldFailHtml: string = "This code does not compile!"
   ) {
     let resetMarkedRangesOnEdit = EditorView.updateListener.of(
       (upd: ViewUpdate) => {
@@ -80,6 +122,8 @@ export class Editor {
         }
       }
     );
+
+    this.buttons = new Set(["copy"]);
 
     let initialState = EditorState.create({
       doc: code,
@@ -97,19 +141,43 @@ export class Editor {
       ],
     });
 
-    let editorContainer = document.createElement("div");
-    let initialView = new EditorView({
+    this.editorContainer = document.createElement("div");
+    this.view = new EditorView({
       state: initialState,
-      parent: editorContainer,
+      parent: this.editorContainer,
     });
+
+    let buttonContainer = document.createElement("div");
+    this.metaContainer = ReactDOM.createRoot(buttonContainer);
+    this.renderMeta();
+
+    this.editorContainer.appendChild(buttonContainer);
 
     this.interpreterContainer = document.createElement("div");
 
-    dom.appendChild(editorContainer);
+    dom.appendChild(this.editorContainer);
     dom.appendChild(this.interpreterContainer);
+  }
 
-    this.editorContainer = dom;
-    this.view = initialView;
+  renderMeta() {
+    this.metaContainer.render(
+      <div className="meta-container">
+        <div className="top-right">
+          {Array.from(this.buttons).map((button, i) => (
+            <button className="cm-button" key={i}>
+              {button == "copy" ? (
+                <CopyButton view={this.view} />
+              ) : button == "eye" ? (
+                <HideButton container={this.editorContainer} />
+              ) : null}
+            </button>
+          ))}
+        </div>
+        {this.shouldFail ? (
+          <div dangerouslySetInnerHTML={{ __html: this.shouldFailHtml }} />
+        ) : null}
+      </div>
+    );
   }
 
   public getCurrentCode(): string {
@@ -138,7 +206,6 @@ export class Editor {
       effects: [f.effectType.of(newEffects)],
     });
   }
-  // Actions to communicate with the aquascope server
 
   public renderPermissions(cfg?: PermissionsCfg) {
     if (this.permissionsDecos === undefined) {
@@ -150,7 +217,11 @@ export class Editor {
     renderPermissions(this.view, this.permissionsDecos, cfg);
   }
 
-  async callBackendWithCode(endpoint: string): Promise<ServerResponse> {
+  // Actions to communicate with the aquascope server
+  async callBackendWithCode(
+    endpoint: string,
+    config?: any
+  ): Promise<ServerResponse> {
     let inEditor = this.getCurrentCode();
     let endpointUrl = new URL(endpoint, this.serverUrl);
     let serverResponseRaw = await fetch(endpointUrl, {
@@ -160,6 +231,7 @@ export class Editor {
       },
       body: JSON.stringify({
         code: inEditor,
+        config,
       }),
     });
     let serverResponse: ServerResponse = await serverResponseRaw.json();
@@ -174,14 +246,14 @@ export class Editor {
       annotations,
     }: {
       response?: Result<any>;
-      config?: any;
+      config?: CommonConfig & object;
       annotations?: AquascopeAnnotations;
     } = {}
   ) {
     console.debug(`Rendering operation: ${operation}`);
 
     if (!response) {
-      let serverResponse = await this.callBackendWithCode(operation);
+      let serverResponse = await this.callBackendWithCode(operation, config);
       if (serverResponse.success) {
         response = JSON.parse(serverResponse.stdout);
         this.reportStdErr({
@@ -196,11 +268,24 @@ export class Editor {
       }
     }
 
-    if (annotations?.hidden_lines) {
+    let result = (response as any).Ok;
+
+    if (
+      annotations &&
+      annotations.hidden_lines &&
+      annotations.hidden_lines.length > 0
+    ) {
       this.view.dispatch({
         effects: annotations.hidden_lines.map(line => hideLine.of({ line })),
       });
+      this.buttons.add("eye");
     }
+
+    if (config?.shouldFail) {
+      this.shouldFail = true;
+    }
+
+    this.renderMeta();
 
     if (operation == "interpreter") {
       let result = (response as any).Ok;
@@ -209,7 +294,7 @@ export class Editor {
         this.interpreterContainer,
         result,
         this.view.state.doc.toJSON().join("\n"),
-        config,
+        config as any,
         annotations?.interp
       );
     } else if (operation == "permissions") {
