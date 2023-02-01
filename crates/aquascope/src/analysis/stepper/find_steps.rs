@@ -229,12 +229,12 @@ where
     hir_visitor.mir_segments
   );
 
-  if !hir_visitor.fatal_error.is_empty() {
-    bail!(hir_visitor.fatal_error);
-  }
-
   if let Some((_, msg)) = hir_visitor.unsupported_encounter {
     bail!(msg);
+  }
+
+  if !hir_visitor.fatal_error.is_empty() {
+    bail!(hir_visitor.fatal_error);
   }
 
   Ok(prettify_permission_steps(
@@ -464,7 +464,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       SegmentSearchResult::NotFound => {
         fatal!(self, "{location:?} should always be enclosed in the graph");
       }
-      SegmentSearchResult::StepExisits(segment, ..) => {
+      SegmentSearchResult::StepExists(segment, ..) => {
         log::warn!(
           "linear step had slice conflict at {location:?} with {segment:?}"
         );

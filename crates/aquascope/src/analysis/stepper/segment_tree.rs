@@ -71,7 +71,7 @@ pub enum SegmentTree {
 #[derive(Clone, Debug)]
 pub enum SegmentSearchResult<'a> {
   Enclosing(&'a SegmentTree),
-  StepExisits(MirSegment, Span),
+  StepExists(MirSegment, Span),
   NotFound,
 }
 
@@ -341,7 +341,7 @@ impl SegmentTree {
       }
 
       SegmentTree::Single { segment, span, .. } => {
-        SegmentSearchResult::StepExisits(*segment, *span)
+        SegmentSearchResult::StepExists(*segment, *span)
       }
 
       SegmentTree::Split {

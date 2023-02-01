@@ -50,70 +50,45 @@ pub(crate) async fn serve(cfg: Config) {
         .unwrap();
 }
 
-async fn permissions(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
-    log::trace!("Received requeset for permission differences");
+macro_rules! make_single_file_endpoint {
+    ($name:ident, $ectx:path) => {
+        async fn $name(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
+            log::trace!("Received requeset for {}", stringify!($name));
 
-    let json = with_container(
-        req,
-        |knt, req| {
-            async move {
-                let v = knt.permissions(req).await;
-                if let Err(e) = knt.cleanup().await {
-                    log::warn!("Error cleaning up container: {:?}", e);
-                }
-                v
-            }
-            .boxed()
-        },
-        PermissionsSnafu,
-    )
-    .await
-    .map(Json);
+            let json = with_container(
+                req,
+                |knt, req| {
+                    async move {
+                        let v = knt.$name(req).await;
+                        if let Err(e) = knt.cleanup().await {
+                            log::warn!("Error cleaning up container: {:?}", e);
+                        }
+                        v
+                    }
+                    .boxed()
+                },
+                $ectx,
+            )
+            .await
+            .map(Json);
 
-    log::debug!("returning JSON {:?}", json);
+            log::debug!("returning JSON {:?}", json);
 
-    json
+            json
+        }
+    };
 }
 
-async fn interpreter(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
-    log::trace!("Received request for interpret");
+make_single_file_endpoint!(permissions, PermissionsSnafu);
+make_single_file_endpoint!(interpreter, InterpreterSnafu);
 
-    let json = with_container(
-        req,
-        |knt, req| {
-            async move {
-                let v = knt.interpreter(req).await;
-                if let Err(e) = knt.cleanup().await {
-                    log::warn!("Error cleaning up container: {:?}", e);
-                }
-                v
-            }
-            .boxed()
-        },
-        InterpreterSnafu,
-    )
-    .await
-    .map(Json);
-
-    log::debug!("returning JSON {:?}", json);
-
-    json
-}
-
-async fn with_container<F, Req, Resp, KReq, KResp, Ctx>(
-    req: Req,
-    f: F,
-    ctx: Ctx,
-) -> Result<Resp, Error>
+async fn with_container<F, Req, Resp, Ctx>(req: Req, f: F, ctx: Ctx) -> Result<Resp, Error>
 where
-    for<'req> F: FnOnce(Container, &'req KReq) -> BoxFuture<'req, container::Result<KResp>>,
-    Resp: From<KResp>,
-    KReq: TryFrom<Req, Error = Error>,
+    for<'req> F: FnOnce(Container, &'req Req) -> BoxFuture<'req, container::Result<Resp>>,
     Ctx: IntoError<Error, Source = container::Error>,
 {
     let container = Container::new().await.context(ContainerCreationSnafu)?;
-    let request = req.try_into()?;
-    f(container, &request).await.map(Into::into).context(ctx)
+    f(container, &req).await.map(Into::into).context(ctx)
 }
 
 /// Axum handler for any request that fails to match the router routes.

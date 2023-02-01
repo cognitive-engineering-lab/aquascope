@@ -55,41 +55,16 @@ impl Config {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct SingleFileRequest {
+pub struct SingleFileRequest {
     code: String,
     config: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct ServerResponse {
+pub struct ServerResponse {
     success: bool,
     stdout: String,
     stderr: String,
-}
-
-// NOTE this layer of indirection "might" be helpful in the future
-// if anything needs to be validated or converted between types, but
-// currently it is overkill.
-// FIXME probably simpify this when you have a ground zero version running.
-
-impl TryFrom<SingleFileRequest> for container::SingleFileRequest {
-    type Error = Error;
-    fn try_from(this: SingleFileRequest) -> Result<Self> {
-        Ok(container::SingleFileRequest {
-            code: this.code,
-            config: this.config,
-        })
-    }
-}
-
-impl From<container::ServerResponse> for ServerResponse {
-    fn from(this: container::ServerResponse) -> Self {
-        ServerResponse {
-            success: this.success,
-            stdout: this.stdout,
-            stderr: this.stderr,
-        }
-    }
 }
 
 #[derive(Debug, Snafu)]

@@ -1,8 +1,9 @@
-use serde_json::Value;
 use snafu::prelude::*;
 
 use std::process::Command;
 use std::{io, os::unix::fs::PermissionsExt, path::PathBuf, str};
+
+use crate::{ServerResponse, SingleFileRequest};
 
 #[cfg(not(feature = "no-docker"))]
 use {
@@ -457,19 +458,6 @@ impl From<bollard::errors::Error> for Error {
     fn from(item: bollard::errors::Error) -> Self {
         Error::Bollard { source: item }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct SingleFileRequest {
-    pub code: String,
-    pub config: Option<Value>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ServerResponse {
-    pub success: bool,
-    pub stdout: String,
-    pub stderr: String,
 }
 
 #[tokio::test]
