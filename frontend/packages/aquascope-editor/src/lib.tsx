@@ -116,7 +116,7 @@ export class Editor {
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false,
     readonly shouldFailHtml: string = "This code does not compile!",
-    readonly buttonList?: string[] = []
+    readonly buttonList?: ButtonName[]
   ) {
     let resetMarkedRangesOnEdit = EditorView.updateListener.of(
       (upd: ViewUpdate) => {
