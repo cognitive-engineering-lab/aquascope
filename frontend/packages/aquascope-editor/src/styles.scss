@@ -1,8 +1,5 @@
 $monospace: "Source Code Pro", monospace;
 $transparent: rgba(0, 0, 0, 0);
-$color-read: #4ebeef;
-$color-write: #5dca36;
-$color-drop: #ff4244;
 
 :root {
   --aq-bg: white;
@@ -12,6 +9,11 @@ $color-drop: #ff4244;
   --aq-read-color: #4ebeef;
   --aq-write-color: #5dca36;
   --aq-drop-color: #ff4244;
+
+  // Permission stacks colors for use with CSS color mixing
+  --aq-read-rgb-color: 78, 190, 239;
+  --aq-write-rgb-color: 93, 202, 54;
+  --aq-drop-rgb-color: 255, 66, 68;
 
   --aq-error: red;
   --aq-error-text: white;
@@ -147,15 +149,15 @@ $glyph-width: 14px;
 
     &.show-hidden {
       &.read {
-        background-color: rgba($color-read, 0.4) !important;
+        background-color: rgba(var(--aq-read-rgb-color), 0.4) !important;
       }
 
       &.write {
-        background-color: rgba($color-write, 0.4) !important;
+        background-color: rgba(var(--aq-write-rgb-color), 0.4) !important;
       }
 
       &.drop {
-        background-color: rgba($color-drop, 0.4) !important;
+        background-color: rgba(var(--aq-drop-rgb-color), 0.4) !important;
       }
     }
   }

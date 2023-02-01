@@ -59,7 +59,8 @@ let initEditors = () => {
       initialCode,
       serverUrl,
       readOnly,
-      shouldFailHtml
+      shouldFailHtml,
+      ["copy"]
     );
 
     let operation = elem.dataset.operation;
