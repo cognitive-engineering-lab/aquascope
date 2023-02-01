@@ -115,7 +115,8 @@ export class Editor {
     code: string = defaultCodeExample,
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false,
-    readonly shouldFailHtml: string = "This code does not compile!"
+    readonly shouldFailHtml: string = "This code does not compile!",
+    readonly buttonList?: string[] = []
   ) {
     let resetMarkedRangesOnEdit = EditorView.updateListener.of(
       (upd: ViewUpdate) => {
@@ -125,7 +126,7 @@ export class Editor {
       }
     );
 
-    this.buttons = new Set(["copy"]);
+    this.buttons = new Set(buttonList ?? ["copy"]);
 
     let initialState = EditorState.create({
       doc: code,

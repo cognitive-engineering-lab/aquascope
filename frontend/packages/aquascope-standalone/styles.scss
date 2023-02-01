@@ -9,6 +9,16 @@ $color-bg: white;
 $color-error: #cc0000;
 $color-warn: #a88905;
 
+// Override some of the variables defined in the editor stylesheet
+:root {
+  --aq-button-border: #e8e8e8;
+  --aq-button-text: black;
+  --aq-button-background: #f5f5f5;
+  --aq-button-border-hover: #e8e8e8;
+  --aq-button-text-hover: black;
+  --aq-button-background-hover: #e8e8e8;
+}
+
 @mixin with-border {
   border-style: solid;
   border-width: 5px;
@@ -20,8 +30,6 @@ $color-warn: #a88905;
   @include with-border;
   background-color: $color-light;
 }
-
-/* span configuration */
 
 html,
 body {
@@ -37,37 +45,39 @@ span.scp {
   font-weight: bolder;
 }
 
-div.center {
-  width: 100%;
-  text-align: center;
+div {
+  &.center {
+    width: 100%;
+    text-align: center;
+  }
+
+  &.blurb {
+    @include shaded-and-outlined;
+    width: 50%;
+    display: inline-block;
+    margin: auto;
+    padding: 5px;
+    margin-bottom: 4em;
+  }
 }
 
-div.blurb {
-  @include shaded-and-outlined;
-  width: 50%;
-  display: inline-block;
-  margin: auto;
-  padding: 5px;
-  margin-bottom: 4em;
-}
+// nav {
+//   width: 100%;
+//   background-color: $color-bg;
+//   padding-left: 30px;
+//   padding-right: 10px;
+// }
 
-nav {
-  width: 100%;
-  background-color: $color-bg;
-  padding-left: 30px;
-  padding-right: 10px;
-}
+// .nav-item {
+//   display: inline-block;
+//   padding: 10px 15px;
+//   font-weight: bold;
+//   color: $color-lightest;
+// }
 
-.nav-item {
-  display: inline-block;
-  padding: 10px 15px;
-  font-weight: bold;
-  color: $color-lightest;
-}
-
-.nav-item:hover {
-  color: $color-light;
-}
+// .nav-item:hover {
+//   color: $color-light;
+// }
 
 .static-editor {
   height: 100%;
@@ -76,24 +86,33 @@ nav {
   max-width: 1200px;
 }
 
-.top-right {
-  z-index: 5;
-  position: absolute;
-  top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25em;
-}
+.aquascope {
+  .top-right {
+    z-index: 5;
+    position: absolute;
+    top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25em;
+  }
 
-.cm-button {
-  @include shaded-and-outlined;
-  padding: 5px 10px;
-  display: inline-block;
-}
+  .cm-button {
+    @include shaded-and-outlined;
+    border-width: 3px;
+    padding: 5px 10px;
+    display: inline-block;
+    &:hover {
+      background-color: $color-dark;
+    }
+  }
 
-.dropdown {
-  /* position: absolute; */
-  display: inline-block;
+  .dropdown {
+    display: inline-block;
+
+    &:hover {
+      background-color: $color-dark;
+    }
+  }
 }
 
 .dropdown-content {
@@ -120,13 +139,12 @@ nav {
   display: block;
 }
 
-.cm-button:hover,
-.dropdown:hover .btn {
-  background-color: $color-darkest;
+a:hover {
+  opacity: 0.5;
 }
 
-/* The container */
-.container {
+/* The container for a custom checkbox */
+.dropdown-container {
   display: block;
   position: relative;
   padding-left: 35px;
@@ -139,7 +157,7 @@ nav {
 }
 
 /* Hide the browser's default checkbox */
-.container input {
+.dropdown-container input {
   position: absolute;
   opacity: 0;
   cursor: pointer;
@@ -152,17 +170,17 @@ nav {
   position: absolute;
   top: 0;
   left: 0;
-  height: 20px;
-  width: 20px;
+  height: 22px;
+  width: 22px;
   background-color: $color-dark;
 }
 
-.container:hover input ~ .checkmark {
-  background-color: $color-dark;
+.dropdown-container:hover input ~ .checkmark {
+  background-color: $color-darkest;
 }
 
-.container input:checked ~ .checkmark {
-  background-color: $color-dark;
+.dropdown-container input:checked ~ .checkmark {
+  background-color: $color-darkest;
 }
 
 .checkmark:after {
@@ -171,11 +189,11 @@ nav {
   display: none;
 }
 
-.container input:checked ~ .checkmark:after {
+.dropdown-container input:checked ~ .checkmark:after {
   display: block;
 }
 
-.container .checkmark:after {
+.dropdown-container .checkmark:after {
   left: 9px;
   top: 5px;
   width: 5px;

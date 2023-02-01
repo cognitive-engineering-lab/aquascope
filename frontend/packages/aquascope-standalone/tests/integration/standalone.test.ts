@@ -24,7 +24,10 @@ describe("Aquascope Standalone", () => {
   });
 
   it("runs permissions", async () => {
+    await page.waitForSelector("#showPermissions");
     await page.click("#showPermissions");
+    await page.waitForNetworkIdle();
+
     let crashedElement = await page.$(".aquascope-crash");
     // No crashed elements
     expect(crashedElement).toBeNull();
