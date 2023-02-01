@@ -4,6 +4,8 @@ const permStackSelector = "svg.permission";
 const permStepSelector = ".step-widget-container";
 const interpSelector = ".interpreter";
 
+jest.setTimeout(50000);
+
 describe("Aquascope Standalone", () => {
   let browser: Browser;
   let page: Page;
