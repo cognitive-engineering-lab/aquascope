@@ -54,14 +54,13 @@ let initEditors = () => {
       elem,
       setup,
       err => {
-        if (err.type == "BuildError") console.error(err.error);
-        else if (err.type == "AnalysisError") console.error(err.error);
-        else console.error(err);
+        console.error(err);
       },
       initialCode,
       serverUrl,
       readOnly,
-      shouldFailHtml
+      shouldFailHtml,
+      ["copy"]
     );
 
     let operation = elem.dataset.operation;

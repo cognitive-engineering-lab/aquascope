@@ -6,11 +6,13 @@ description: reverse@vec_0.test
   - - - "*v"
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: false
         type_writeable:
           type: High
+          value: true
         path_moved:
           type: None
           value: false
@@ -23,16 +25,20 @@ description: reverse@vec_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: None
             value: false
     - - v
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: High
+          value: true
         type_writeable:
           type: None
           value: false
@@ -48,15 +54,18 @@ description: reverse@vec_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
 - - 3
   - - - n
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -75,15 +84,18 @@ description: reverse@vec_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
 - - 4
   - - - i
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -101,15 +113,18 @@ description: reverse@vec_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
 - - 5
   - - - "*a"
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: false
@@ -128,10 +143,13 @@ description: reverse@vec_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
     - - "*v"
       - is_live:
           type: None
@@ -147,10 +165,13 @@ description: reverse@vec_0.test
           value: false
         loan_read_refined:
           type: High
+          value: 3
         loan_write_refined:
           type: High
+          value: 3
         loan_drop_refined:
           type: High
+          value: 3
         permissions:
           read:
             type: Low
@@ -162,6 +183,7 @@ description: reverse@vec_0.test
     - - a
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -179,11 +201,13 @@ description: reverse@vec_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
     - - v
       - is_live:
           type: None
@@ -199,10 +223,13 @@ description: reverse@vec_0.test
           value: false
         loan_read_refined:
           type: High
+          value: 3
         loan_write_refined:
           type: High
+          value: 3
         loan_drop_refined:
           type: High
+          value: 3
         permissions:
           read:
             type: Low
@@ -211,3 +238,4 @@ description: reverse@vec_0.test
             value: false
           drop:
             type: Low
+

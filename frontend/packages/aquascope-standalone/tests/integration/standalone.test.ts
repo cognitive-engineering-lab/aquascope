@@ -4,6 +4,8 @@ const permStackSelector = "svg.permission";
 const permStepSelector = ".step-widget-container";
 const interpSelector = ".interpreter";
 
+jest.setTimeout(50000);
+
 describe("Aquascope Standalone", () => {
   let browser: Browser;
   let page: Page;
@@ -14,7 +16,6 @@ describe("Aquascope Standalone", () => {
   });
 
   afterAll(async () => {
-    await page.close();
     await browser.close();
   });
 
@@ -24,24 +25,22 @@ describe("Aquascope Standalone", () => {
     });
   });
 
-  it("runs permission boundaries", async () => {
-    await page.click("#showBoundaries");
-    let crashedElement = await page.$(".aquascope-crash");
-    // No crashed elements
-    expect(crashedElement).toBeNull();
-    await page.waitForSelector(permStackSelector);
-    let widgets = await page.$$(permStackSelector);
-    expect(widgets.length).toBeGreaterThan(0);
-  });
+  it("runs permissions", async () => {
+    await page.waitForSelector("#showPermissions");
+    await page.click("#showPermissions");
+    await page.waitForNetworkIdle();
 
-  it("runs permissions steps", async () => {
-    await page.click("#showPermSteps");
     let crashedElement = await page.$(".aquascope-crash");
     // No crashed elements
     expect(crashedElement).toBeNull();
+
+    await page.waitForSelector(permStackSelector);
+    let stackWidgets = await page.$$(permStackSelector);
+    expect(stackWidgets.length).toBeGreaterThan(0);
+
     await page.waitForSelector(permStepSelector);
-    let widgets = await page.$$(permStepSelector);
-    expect(widgets.length).toBeGreaterThan(0);
+    let stepWidgets = await page.$$(permStepSelector);
+    expect(stepWidgets.length).toBeGreaterThan(0);
   });
 
   // it("runs the interpreter", async () => {

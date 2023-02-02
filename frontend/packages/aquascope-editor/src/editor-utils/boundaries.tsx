@@ -188,7 +188,7 @@ class BoundaryPointWidget extends WidgetType {
   }
 }
 
-let boundaryEffect = StateEffect.define<Range<Decoration>[]>();
+export let boundaryEffect = StateEffect.define<Range<Decoration>[]>();
 
 export let boundaryField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
@@ -206,12 +206,12 @@ export let boundaryField = StateField.define<DecorationSet>({
   provide: f => EditorView.decorations.from(f),
 });
 
-export function renderBoundaries(
+export function makeBoundaryDecorations(
   view: EditorView,
   facts: AnalysisFacts,
   boundaries: PermissionsBoundary[]
-) {
-  let decos = _.sortBy(
+): Range<Decoration>[] {
+  return _.sortBy(
     boundaries.map(b =>
       Decoration.widget({
         widget: new BoundaryPointWidget(facts, b),
@@ -219,8 +219,4 @@ export function renderBoundaries(
     ),
     deco => deco.from
   );
-
-  view.dispatch({
-    effects: [boundaryEffect.of(decos)],
-  });
 }

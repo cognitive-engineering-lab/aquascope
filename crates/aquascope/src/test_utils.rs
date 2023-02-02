@@ -300,7 +300,8 @@ pub fn test_steps_in_file(
                 .into()
             })
           },
-        );
+        )
+        .unwrap();
 
         // NOTE: we normalize the permission steps to be
         // - usize: the line number of the corresponding statement.

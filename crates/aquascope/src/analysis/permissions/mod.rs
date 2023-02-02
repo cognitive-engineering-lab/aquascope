@@ -21,7 +21,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::{
-  analysis::{KeyShifter, LoanKey, MoveKey},
+  analysis::{LoanKey, MoveKey},
   Range,
 };
 
@@ -202,16 +202,5 @@ impl<'tcx> Deref for PermissionsDomain<'tcx> {
 impl DerefMut for PermissionsDomain<'_> {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.0
-  }
-}
-
-impl KeyShifter for PermissionsData {
-  fn shift_keys(self, loan_shift: LoanKey) -> Self {
-    PermissionsData {
-      loan_read_refined: self.loan_read_refined.map(|l| l + loan_shift),
-      loan_write_refined: self.loan_write_refined.map(|l| l + loan_shift),
-      loan_drop_refined: self.loan_drop_refined.map(|l| l + loan_shift),
-      ..self
-    }
   }
 }

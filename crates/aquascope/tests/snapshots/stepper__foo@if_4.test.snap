@@ -6,10 +6,13 @@ description: foo@if_4.test
   - - - b
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: High
+          value: true
         type_writeable:
           type: High
+          value: true
         path_moved:
           type: None
           value: false
@@ -22,14 +25,18 @@ description: foo@if_4.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
 - - 1
   - - - "*a"
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: false
@@ -48,13 +55,17 @@ description: foo@if_4.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
     - - a
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -73,11 +84,13 @@ description: foo@if_4.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
     - - b
       - is_live:
           type: None
@@ -93,10 +106,13 @@ description: foo@if_4.test
           value: false
         loan_read_refined:
           type: High
+          value: 0
         loan_write_refined:
           type: High
+          value: 0
         loan_drop_refined:
           type: High
+          value: 0
         permissions:
           read:
             type: Low
@@ -108,6 +124,7 @@ description: foo@if_4.test
   - - - z
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -125,15 +142,18 @@ description: foo@if_4.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
 - - 6
   - - - q
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -151,11 +171,13 @@ description: foo@if_4.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
 - - 7
   - - - q
       - is_live:
@@ -335,10 +357,13 @@ description: foo@if_4.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
 - - 11
   - - - b
       - is_live:
@@ -365,3 +390,4 @@ description: foo@if_4.test
             type: Low
           drop:
             type: Low
+

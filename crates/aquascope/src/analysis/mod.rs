@@ -14,6 +14,7 @@ use std::{
 };
 
 pub use boundaries::compute_permission_boundaries;
+use boundaries::PermissionsBoundary;
 pub use find_bindings::find_bindings;
 use flowistry::{
   mir::{
@@ -30,6 +31,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 use serde::Serialize;
 pub use stepper::compute_permission_steps;
+use stepper::PermissionsLineDisplay;
 use ts_rs::TS;
 
 use crate::Range;
@@ -125,94 +127,6 @@ impl DerefMut for LoanRegions {
   }
 }
 
-impl KeyShifter for LoanKey {
-  fn shift_keys(self, loan_shift: LoanKey) -> Self {
-    self + loan_shift
-  }
-}
-
-// Join two analysis on two separate bodies together!
-pub trait BodyAnalysisJoin {
-  fn analysis_join(self, other: Self) -> Self;
-}
-
-impl<T> BodyAnalysisJoin for Vec<T> {
-  fn analysis_join(mut self, other: Self) -> Self {
-    self.extend(other.into_iter());
-    self
-  }
-}
-
-impl<O: BodyAnalysisJoin> BodyAnalysisJoin for anyhow::Result<O> {
-  fn analysis_join(self, other: Self) -> Self {
-    let v1 = self?;
-    let v2 = other?;
-    Ok(v1.analysis_join(v2))
-  }
-}
-
-trait KeyShifter {
-  fn shift_keys(self, loan_shift: LoanKey) -> Self;
-}
-
-impl<T: KeyShifter> KeyShifter for Vec<T> {
-  fn shift_keys(self, loan_shift: LoanKey) -> Self {
-    self
-      .into_iter()
-      .map(|v| v.shift_keys(loan_shift))
-      .collect::<Vec<_>>()
-  }
-}
-
-impl<O> BodyAnalysisJoin for AnalysisOutput<O>
-where
-  O: KeyShifter + std::fmt::Debug + Clone + Serialize + TS,
-{
-  fn analysis_join(mut self, other: Self) -> Self {
-    let current_max = self
-      .loan_points
-      .iter()
-      .fold(LoanKey(0), |acc, (k, _)| std::cmp::max(acc, *k));
-
-    let shift_by = LoanKey(self.loan_points.len() as u32);
-
-    log::debug!(
-      "The current_max: {current_max:?} and the shift_by: {shift_by:?}"
-    );
-    assert!(current_max == LoanKey(0) || current_max < shift_by);
-
-    // Shift the RHS values to be greater than those currently stored
-
-    let num_loan_points = self.loan_points.len() + other.loan_points.len();
-    let num_loan_regions = self.loan_regions.len() + other.loan_regions.len();
-
-    let loan_points = other
-      .loan_points
-      .0
-      .into_iter()
-      .map(|(k, v)| (k + shift_by, v))
-      .collect::<HashMap<_, _>>();
-
-    let loan_regions = other
-      .loan_regions
-      .0
-      .into_iter()
-      .map(|(k, v)| (k + shift_by, v))
-      .collect::<HashMap<_, _>>();
-
-    let values = other.values.into_iter().map(|v| v.shift_keys(shift_by));
-
-    self.values.extend(values);
-    self.loan_points.extend(loan_points);
-    self.loan_regions.extend(loan_regions);
-
-    assert_eq!(num_loan_points, self.loan_points.len());
-    assert_eq!(num_loan_regions, self.loan_regions.len());
-
-    self
-  }
-}
-
 pub fn compute_permissions<'a, 'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
@@ -231,36 +145,54 @@ pub fn compute_permissions<'a, 'tcx>(
 
 // ------------------------------------------------
 
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export)]
+#[serde(tag = "type")]
+pub enum AquascopeError {
+  // An error occured before the intended analysis could run.
+  BuildError { range: Range },
+  AnalysisError { msg: String },
+}
+
+pub type AquascopeResult<T> = ::std::result::Result<T, AquascopeError>;
+
 pub struct AquascopeAnalysis<'a, 'tcx: 'a> {
   pub(crate) permissions: PermissionsCtxt<'a, 'tcx>,
   pub(crate) ir_mapper: IRMapper<'a, 'tcx>,
 }
 
+impl From<anyhow::Error> for AquascopeError {
+  fn from(e: anyhow::Error) -> Self {
+    AquascopeError::AnalysisError { msg: e.to_string() }
+  }
+}
+
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
-pub struct AnalysisOutput<O>
-where
-  O: std::fmt::Debug + Clone + Serialize + TS,
-{
-  pub values: Vec<O>,
+pub struct AnalysisOutput {
+  pub boundaries: Vec<PermissionsBoundary>,
+  pub steps: Vec<PermissionsLineDisplay>,
   pub loan_points: LoanPoints,
   pub loan_regions: LoanRegions,
 }
 
 impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
-  pub fn run<F, O>(
+  pub fn run(
     tcx: TyCtxt<'tcx>,
     body_id: BodyId,
-    f: F,
-  ) -> AnalysisOutput<O>
-  where
-    O: std::fmt::Debug + Clone + Serialize + TS,
-    F: Fn(&AquascopeAnalysis<'a, 'tcx>) -> Vec<O>,
-  {
+  ) -> AquascopeResult<AnalysisOutput> {
     let def_id = tcx.hir().body_owner_def_id(body_id);
     let bwf = get_body_with_borrowck_facts(tcx, def_id);
     let permissions = compute_permissions(tcx, body_id, bwf);
     let body = &permissions.body_with_facts.body;
+
+    if body.tainted_by_errors.is_some() {
+      let span = body.span;
+      let source_map = permissions.tcx.sess.source_map();
+      let range = CharRange::from_span(span, source_map).unwrap().into();
+      return Err(AquascopeError::BuildError { range });
+    }
+
     let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
     let analysis_ctxt = AquascopeAnalysis {
       permissions,
@@ -272,13 +204,17 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
       &analysis_ctxt.permissions,
     );
 
-    let values = f(&analysis_ctxt);
+    let boundaries = compute_permission_boundaries(&analysis_ctxt)?;
+    let steps = compute_permission_steps(&analysis_ctxt)?;
+
     let (loan_points, loan_regions) = analysis_ctxt.construct_loan_info();
-    AnalysisOutput {
-      values,
+
+    Ok(AnalysisOutput {
+      boundaries,
+      steps,
       loan_points,
       loan_regions,
-    }
+    })
   }
 
   pub fn span_to_range(&self, span: Span) -> Range {

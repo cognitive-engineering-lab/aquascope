@@ -1,5 +1,5 @@
 $monospace: "Source Code Pro", monospace;
-$transparent: rgba(0,0,0,0);
+$transparent: rgba(0, 0, 0, 0);
 
 :root {
   --aq-bg: white;
@@ -8,14 +8,19 @@ $transparent: rgba(0,0,0,0);
   // Colors for permission stacks
   --aq-read-color: #4ebeef;
   --aq-write-color: #5dca36;
-  --aq-drop-color: #ff4244;  
+  --aq-drop-color: #ff4244;
+
+  // Permission stacks colors for use with CSS color mixing
+  --aq-read-rgb-color: 78, 190, 239;
+  --aq-write-rgb-color: 93, 202, 54;
+  --aq-drop-rgb-color: 255, 66, 68;
 
   --aq-error: red;
   --aq-error-text: white;
 
   --aq-button-border: gray;
   --aq-button-text: gray;
-  --aq-button-background: lightgray;  
+  --aq-button-background: lightgray;
   --aq-button-border-hover: black;
   --aq-button-text-hover: black;
   --aq-button-background-hover: white;
@@ -108,12 +113,12 @@ $glyph-width: 14px;
   }
 
   .cm-line.hidden-line {
-    display: none;    
+    display: none;
   }
 
   .show-hidden .cm-line.hidden-line {
     display: block;
-    opacity: 0.6;      
+    opacity: 0.6;
   }
 
   /* Loan Highlighting */
@@ -144,15 +149,15 @@ $glyph-width: 14px;
 
     &.show-hidden {
       &.read {
-        background-color: rgba(var(--aq-read-color), 0.4) !important;
+        background-color: rgba(var(--aq-read-rgb-color), 0.4) !important;
       }
 
       &.write {
-        background-color: rgba(var(--aq-write-color), 0.4) !important;
+        background-color: rgba(var(--aq-write-rgb-color), 0.4) !important;
       }
 
       &.drop {
-        background-color: rgba(var(--aq-drop-color), 0.4) !important;
+        background-color: rgba(var(--aq-drop-rgb-color), 0.4) !important;
       }
     }
   }
@@ -197,7 +202,7 @@ $glyph-width: 14px;
 
       &.missing {
         stroke-width: 1;
-        fill: $transparent!important;
+        fill: $transparent !important;
       }
     }
   }
@@ -287,12 +292,13 @@ $glyph-width: 14px;
     display: inline-flex;
     margin-bottom: 5px;
 
-    background-color: var(--aq-step-table-background);    
+    background-color: var(--aq-step-table-background);
     border: 2px solid var(--aq-step-table-border);
     border-radius: 4px;
   }
 
-  .perm-step-table, .step-table-container {
+  .perm-step-table,
+  .step-table-container {
     color: var(--aq-step-table-text);
 
     td {
@@ -360,7 +366,7 @@ $glyph-width: 14px;
 
   &.fail {
     background: var(--aq-error);
-    
+
     > span {
       color: var(--aq-error-text);
     }
@@ -385,7 +391,7 @@ $glyph-width: 14px;
 
     &.active {
       border-color: var(--aq-fg);
-      background-color: var(--aq-bg);      
+      background-color: var(--aq-bg);
       color: var(--aq-fg);
     }
   }
@@ -513,8 +519,8 @@ $glyph-width: 14px;
 
         color: var(--aq-error);
         border: 1px dashed var(--aq-error);
-        border-radius: 50%;    
-        text-align: center;  
+        border-radius: 50%;
+        text-align: center;
       }
     }
   }

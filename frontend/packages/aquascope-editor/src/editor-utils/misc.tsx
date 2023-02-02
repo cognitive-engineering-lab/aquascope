@@ -97,11 +97,11 @@ export let makeTag = (length: number) => {
   return "tag" + result;
 };
 
-export let genStateField = <T>(
+export function genStateField<T>(
   ty: StateEffectType<T>,
   transform: (t: T) => Array<Range<Decoration>>
-): StateField<DecorationSet> =>
-  StateField.define<DecorationSet>({
+): StateField<DecorationSet> {
+  return StateField.define<DecorationSet>({
     create: () => Decoration.none,
 
     update(points, transactions) {
@@ -117,6 +117,7 @@ export let genStateField = <T>(
 
     provide: f => EditorView.decorations.from(f),
   });
+}
 
 export type LoanFacts = {
   refinerTag: string;
@@ -125,7 +126,7 @@ export type LoanFacts = {
   region: RefinementRegion;
 };
 
-export const loanFactsStateType = StateEffect.define<Array<LoanFacts>>();
+export const loanFactsStateType = StateEffect.define<LoanFacts[]>();
 
 export const loanFactsField = genStateField<Array<LoanFacts>>(
   loanFactsStateType,
@@ -157,9 +158,9 @@ function loanFactsToDecoration({
   return [loanDeco, ...regionDecos];
 }
 
-export function generateAnalysisDecorationFacts<T>(
-  output: AnalysisOutput<T>
-): [AnalysisFacts, Array<LoanFacts>] {
+export function generateAnalysisDecorationFacts(
+  output: AnalysisOutput
+): [AnalysisFacts, LoanFacts[]] {
   let points: Record<LoanKey, string> = {};
   let regions: Record<LoanKey, string> = {};
 

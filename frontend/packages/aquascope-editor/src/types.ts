@@ -1,3 +1,4 @@
+import { AquascopeError } from "./bindings/AquascopeError";
 import { LoanKey } from "./bindings/LoanKey";
 
 // Re-export auto-generated types
@@ -7,6 +8,7 @@ export { Range } from "./bindings/Range";
 export { Permissions } from "./bindings/Permissions";
 export { PermissionsBoundary } from "./bindings/PermissionsBoundary";
 
+export { AquascopeError } from "./bindings/AquascopeError";
 export { AnalysisOutput } from "./bindings/AnalysisOutput";
 export { ValueStep } from "./bindings/ValueStep";
 export { LoanPoints } from "./bindings/LoanPoints";
@@ -41,21 +43,16 @@ export { StepperAnnotations } from "./bindings/StepperAnnotations";
 export { InterpAnnotations } from "./bindings/InterpAnnotations";
 export { AquascopeAnnotations } from "./bindings/AquascopeAnnotations";
 
-interface BuildError {
-  type: "BuildError";
-  error: string;
-}
-
-interface AnalysisError {
-  type: "AnalysisError";
-  error: string;
-}
-
 interface FileNotFound {
   type: "FileNotFound";
 }
 
-export type BackendError = BuildError | AnalysisError | FileNotFound;
+interface StderrMsg {
+  type: "ServerStderr";
+  error: string;
+}
+
+export type BackendError = AquascopeError | StderrMsg | FileNotFound;
 
 export interface BackendOutput<T> {
   type: "output";

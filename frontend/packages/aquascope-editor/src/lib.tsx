@@ -6,20 +6,29 @@ import _ from "lodash";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
-import { boundaryField, renderBoundaries } from "./editor-utils/boundaries";
+import { boundaryField } from "./editor-utils/boundaries";
 import { renderInterpreter } from "./editor-utils/interpreter";
 import {
   IconField,
   LoanFacts,
-  generateAnalysisDecorationFacts,
   hiddenLines,
   hideLine,
   loanFactsField,
-  loanFactsStateType,
 } from "./editor-utils/misc";
-import { renderSteps, stepField } from "./editor-utils/stepper";
+import {
+  PermissionsCfg,
+  PermissionsDecorations,
+  makePermissionsDecorations,
+  renderPermissions,
+} from "./editor-utils/permissions";
+import { stepField } from "./editor-utils/stepper";
 import "./styles.scss";
-import { AnalysisFacts, AquascopeAnnotations, BackendError } from "./types";
+import {
+  AnalysisFacts,
+  AnalysisOutput,
+  AquascopeAnnotations,
+  BackendError,
+} from "./types";
 
 export * as types from "./types";
 
@@ -83,12 +92,15 @@ let HideButton = ({ container }: { container: HTMLDivElement }) => {
 
 interface CommonConfig {
   shouldFail?: boolean;
+  stepper?: any;
+  boundaries?: any;
 }
 
 export class Editor {
   private view: EditorView;
   private interpreterContainer: HTMLDivElement;
   private editorContainer: HTMLDivElement;
+  private permissionsDecos?: PermissionsDecorations;
   private metaContainer: ReactDOM.Root;
   private buttons: Set<ButtonName>;
   private shouldFail: boolean = false;
@@ -97,23 +109,24 @@ export class Editor {
     dom: HTMLDivElement,
     readonly setup: Extension,
     readonly reportStdErr: (err: BackendError) => void = function (err) {
-      console.log("An error occurred: ");
-      console.log(err);
+      console.error("An error occurred: ");
+      console.error(err);
     },
     code: string = defaultCodeExample,
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false,
-    readonly shouldFailHtml: string = "This code does not compile!"
+    readonly shouldFailHtml: string = "This code does not compile!",
+    readonly buttonList: ButtonName[] = []
   ) {
     let resetMarkedRangesOnEdit = EditorView.updateListener.of(
       (upd: ViewUpdate) => {
         if (upd.docChanged) {
-          // this.cfg = { markedRanges: [], stepsCfg: {} };
+          this.permissionsDecos = undefined;
         }
       }
     );
 
-    this.buttons = new Set(["copy"]);
+    this.buttons = new Set(buttonList);
 
     let initialState = EditorState.create({
       doc: code,
@@ -186,14 +199,6 @@ export class Editor {
     });
   }
 
-  // NOTE: Exchanges the analysis facts for loan points and regions. Currently,
-  // this is only used by the permission boundaries (stacks) visualization.
-  public addAnalysisFacts(vs: Array<LoanFacts>) {
-    this.view.dispatch({
-      effects: [loanFactsStateType.of(vs)],
-    });
-  }
-
   public addPermissionsField<B, T, F extends IconField<B, T>>(
     f: F,
     methodCallPoints: Array<B>,
@@ -203,6 +208,16 @@ export class Editor {
     this.view.dispatch({
       effects: [f.effectType.of(newEffects)],
     });
+  }
+
+  public renderPermissions(cfg?: PermissionsCfg) {
+    if (this.permissionsDecos === undefined) {
+      this.renderOperation("permissions", {
+        config: cfg,
+      });
+    }
+
+    renderPermissions(this.view, this.permissionsDecos, cfg);
   }
 
   // Actions to communicate with the aquascope server
@@ -245,12 +260,12 @@ export class Editor {
       if (serverResponse.success) {
         response = JSON.parse(serverResponse.stdout);
         this.reportStdErr({
-          type: "BuildError",
+          type: "ServerStderr",
           error: serverResponse.stderr,
         });
       } else {
         return this.reportStdErr({
-          type: "BuildError",
+          type: "ServerStderr",
           error: serverResponse.stderr,
         });
       }
@@ -276,6 +291,7 @@ export class Editor {
     this.renderMeta();
 
     if (operation == "interpreter") {
+      let result = (response as any).Ok;
       renderInterpreter(
         this.view,
         this.interpreterContainer,
@@ -284,12 +300,37 @@ export class Editor {
         config as any,
         annotations?.interp
       );
-    } else if (operation == "stepper") {
-      renderSteps(this.view, result.values, annotations?.stepper);
-    } else if (operation == "boundaries") {
-      let [facts, loanFacts] = generateAnalysisDecorationFacts(result);
-      this.addAnalysisFacts(loanFacts);
-      renderBoundaries(this.view, facts, result.values);
+    } else if (operation == "permissions") {
+      // The permissions analysis results are sent as an array of
+      // body analyses. Each body could have analyzed successfuly,
+      // or had a
+      // 1. analysis error
+      // 2. build error
+      // A build error signifies that something went wrong *before*
+      // our analysis was run. This should be reported to the user,
+      // currently, information is available on stderr but nothing
+      // more specific (or visual) is given TODO.
+      // For an analysis error, this is something that went wrong
+      // internally, usually means a feature was used that we don't support
+      // or something actually went terribly wrong. These should be logged
+      // somewhere, but the user should also be prompted to open a GitHub issue.
+      let cast = response as any as Result<AnalysisOutput>[];
+      let results: AnalysisOutput[] = [];
+
+      for (var res of cast) {
+        if ("Ok" in res) {
+          results.push(res.Ok);
+        } else {
+          this.reportStdErr(res.Err);
+        }
+      }
+
+      this.permissionsDecos = makePermissionsDecorations(
+        this.view,
+        results,
+        annotations
+      );
+      renderPermissions(this.view, this.permissionsDecos, config);
     }
   }
 }

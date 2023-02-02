@@ -6,7 +6,6 @@
 
 _Aquascope_ is a tool that generates interactive visualizations of Rust programs. These visualizations show how Rust's borrow checker "thinks" about a program, and how a Rust program actually executes. [Click here for a live demo.](https://gavinleroy.com/aquascope)
 
-
 <!-- Borrow check information is reformulated in terms of _permissions_, a new pedagogy of ownership to provide learners with a notional machine for this kind of static analysis. Example visualizations and this new pedagogy are demonstrated in the [Rust Book Experiment](https://rust-book.cs.brown.edu/). -->
 
 > :warning: Aquascope is experimental and under active development!
@@ -43,7 +42,7 @@ cargo install --path crates/mdbook-aquascope
 
 Currently, Aquascope supports three types of visualizations:
 
-#### Permission boundaries 
+#### Permission boundaries
 
 Aquascope will determine the permission expected for a path usage and display this along with the actual permissions on the path. Unsatisfied permissions provide additional information on hover to help explain the discrepancy.
 
@@ -91,7 +90,7 @@ fn main() {
     </tr>
 </table>
 
-#### Runtime execution 
+#### Runtime execution
 
 Program state visualization is a well-known tool that visualizes the runtime execution of a program. With Aquascope, you can specify which states of a program you'd like to show, and even run programs that don't pass the borrow checker!
 
@@ -109,9 +108,10 @@ fn main() {
 }
 
 fn greet(g1: &String, g2: &String) { // note the ampersands
-    `[]`println!("{} {}!", g1, g2);
+`[]`println!("{} {}!", g1, g2);
 }```
 </code>
+
 </pre>
         </td>
         <td>

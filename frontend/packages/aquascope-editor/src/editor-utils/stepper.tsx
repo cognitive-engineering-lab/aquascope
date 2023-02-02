@@ -17,13 +17,21 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import {
+  AnalysisFacts,
+  LoanKey,
   PermissionsDataDiff,
   PermissionsLineDisplay,
   PermissionsStepTable,
   StepperAnnotations,
   ValueStep,
 } from "../types";
-import { dropChar, readChar, writeChar } from "./misc";
+import {
+  dropChar,
+  hideLoanRegion,
+  readChar,
+  showLoanRegion,
+  writeChar,
+} from "./misc";
 
 let PermChar = ({
   content,
@@ -54,7 +62,13 @@ let PermChar = ({
   </text>
 );
 
-let PermRow = ({ content }: { content: [ValueStep<boolean>, string][] }) => {
+let PermRow = ({
+  content,
+  facts,
+}: {
+  content: [ValueStep<boolean>, string, LoanKey | undefined][];
+  facts: AnalysisFacts;
+}) => {
   let getClassAndContent = ([diff, content]: [ValueStep<boolean>, string]) =>
     diff.type == "High"
       ? { content: content, names: ["perm-diff-add"] }
@@ -68,20 +82,27 @@ let PermRow = ({ content }: { content: [ValueStep<boolean>, string][] }) => {
 
   let w = (idx: number) =>
     (idx / content.length) * 100 + 100 / content.length - 5 + "%";
-  let nullF = () => {
-    return;
+
+  let getKind = (c: string) => {
+    if (c === "R") {
+      return "write";
+    } else if (c === "W") {
+      return "write";
+    } else {
+      return "drop";
+    }
   };
 
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="permission-row">
-      {content.map(([diff, content], i: number) => (
+      {content.map(([diff, content, loanKey], i: number) => (
         <PermChar
           key={content}
           x={w(i)}
           y="95%"
           act={true}
-          showit={nullF}
-          hideit={nullF}
+          showit={() => showLoanRegion(facts, loanKey, [getKind(content)])}
+          hideit={() => hideLoanRegion(facts, loanKey, [getKind(content)])}
           {...getClassAndContent([diff, content])!}
         />
       ))}
@@ -92,9 +113,11 @@ let PermRow = ({ content }: { content: [ValueStep<boolean>, string][] }) => {
 let PermDiffRow = ({
   path,
   diffs,
+  facts,
 }: {
   path: string;
   diffs: PermissionsDataDiff;
+  facts: AnalysisFacts;
 }) => {
   interface VisualFact<K extends keyof PermissionsDataDiff> {
     fact: K;
@@ -126,7 +149,7 @@ let PermDiffRow = ({
       fact: "is_live",
       states: [
         {
-          value: { type: "High" },
+          value: { type: "High", value: 0 },
           icon: "level-up",
           desc: "Path is initialized here",
         },
@@ -141,7 +164,7 @@ let PermDiffRow = ({
       fact: "path_moved",
       states: [
         {
-          value: { type: "High" },
+          value: { type: "High", value: 0 },
           icon: "sign-out",
           desc: "Path is moved here",
         },
@@ -156,7 +179,7 @@ let PermDiffRow = ({
       fact: "loan_read_refined",
       states: [
         {
-          value: { type: "High" },
+          value: { type: "High", value: 0 },
           icon: "arrow-right",
           desc: "Path is borrowed here",
         },
@@ -171,7 +194,7 @@ let PermDiffRow = ({
       fact: "loan_write_refined",
       states: [
         {
-          value: { type: "High" },
+          value: { type: "High", value: 0 },
           icon: "arrow-right",
           desc: "Path is borrowed here",
         },
@@ -187,7 +210,7 @@ let PermDiffRow = ({
   let ico = null;
   loop: for (let { fact, states } of visualFacts) {
     for (let { value, icon, desc } of states) {
-      if (_.isEqual(diffs[fact], value)) {
+      if (_.isEqual(diffs[fact].type, value.type)) {
         ico = (
           <i
             className={`fa fa-${icon} aquascope-action-indicator`}
@@ -199,10 +222,13 @@ let PermDiffRow = ({
     }
   }
 
-  let perms: [ValueStep<boolean>, string][] = [
-    [diffs.permissions.read, readChar],
-    [diffs.permissions.write, writeChar],
-    [diffs.permissions.drop, dropChar],
+  let unwrap = (v: ValueStep<LoanKey>): LoanKey | undefined =>
+    v.type === "None" || v.type === "High" ? v.value : undefined;
+
+  let perms: [ValueStep<boolean>, string, LoanKey | undefined][] = [
+    [diffs.permissions.read, readChar, unwrap(diffs.loan_read_refined)],
+    [diffs.permissions.write, writeChar, unwrap(diffs.loan_write_refined)],
+    [diffs.permissions.drop, dropChar, unwrap(diffs.loan_drop_refined)],
   ];
 
   let pathCol = <td className="perm-step-path">{path}</td>;
@@ -212,7 +238,7 @@ let PermDiffRow = ({
       {pathCol}
       <td>{ico}</td>
       <td>
-        <PermRow content={perms} />
+        <PermRow facts={facts} content={perms} />
       </td>
     </tr>
   );
@@ -222,10 +248,16 @@ let stepLocation = (step: PermissionsLineDisplay): number => {
   return step.location.char_end;
 };
 
-let StepTable = ({ rows }: { rows: [string, PermissionsDataDiff][] }) => (
+let StepTable = ({
+  rows,
+  facts,
+}: {
+  rows: [string, PermissionsDataDiff][];
+  facts: AnalysisFacts;
+}) => (
   <table className="perm-step-table">
     {rows.map(([path, diffs], i: number) => (
-      <PermDiffRow key={i} path={path} diffs={diffs} />
+      <PermDiffRow key={i} path={path} diffs={diffs} facts={facts} />
     ))}
   </table>
 );
@@ -235,9 +267,11 @@ let StepTable = ({ rows }: { rows: [string, PermissionsDataDiff][] }) => (
 let StepTableIndividual = ({
   focused,
   hidden,
+  facts,
 }: {
   focused: [string, PermissionsDataDiff][];
   hidden: [string, PermissionsDataDiff][];
+  facts: AnalysisFacts;
 }): JSX.Element => {
   let [displayAll, setDisplayAll] = useState(false);
 
@@ -246,7 +280,7 @@ let StepTableIndividual = ({
       <>
         <div className="step-table-dropdown step-widget-toggle">● ● ●</div>
         <div className={classNames({ "hidden-height": !displayAll })}>
-          <StepTable rows={hidden} />
+          <StepTable rows={hidden} facts={facts} />
         </div>
       </>
     ) : null;
@@ -256,7 +290,7 @@ let StepTableIndividual = ({
       className="step-table-container"
       onClick={() => setDisplayAll(!displayAll)}
     >
-      <StepTable rows={focused} />
+      <StepTable rows={focused} facts={facts} />
       {hiddenDropdown}
     </div>
   );
@@ -269,11 +303,13 @@ let StepLine = ({
   focusedRegex,
   tables,
   init,
+  facts,
 }: {
   spaces: string;
   focusedRegex: RegExp;
   tables: PermissionsStepTable[];
   init: boolean;
+  facts: AnalysisFacts;
 }): JSX.Element => {
   let [display, setDisplay] = useState(init);
   let arrowOut = "»";
@@ -290,6 +326,7 @@ let StepLine = ({
         key={i}
         focused={focusedDiffs}
         hidden={hiddenDiffs}
+        facts={facts}
       />
     );
   });
@@ -318,6 +355,7 @@ class PermissionStepLineWidget extends WidgetType {
   constructor(
     readonly view: EditorView,
     readonly step: PermissionsLineDisplay,
+    readonly facts: AnalysisFacts,
     readonly annotations?: StepperAnnotations
   ) {
     super();
@@ -359,6 +397,7 @@ class PermissionStepLineWidget extends WidgetType {
         focusedRegex={r}
         tables={tables}
         init={initDisplay}
+        facts={this.facts}
       />
     );
 
@@ -370,7 +409,7 @@ class PermissionStepLineWidget extends WidgetType {
   }
 }
 
-let stepEffect = StateEffect.define<Range<Decoration>[]>();
+export let stepEffect = StateEffect.define<Range<Decoration>[]>();
 
 export let stepField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
@@ -388,21 +427,18 @@ export let stepField = StateField.define<DecorationSet>({
   provide: f => EditorView.decorations.from(f),
 });
 
-export function renderSteps(
+export function makeStepDecorations(
   view: EditorView,
+  facts: AnalysisFacts,
   stateSteps: PermissionsLineDisplay[],
   annotations?: StepperAnnotations
-) {
-  let decos = _.sortBy(
+): Range<Decoration>[] {
+  return _.sortBy(
     stateSteps.map(step =>
       Decoration.widget({
-        widget: new PermissionStepLineWidget(view, step, annotations),
+        widget: new PermissionStepLineWidget(view, step, facts, annotations),
       }).range(stepLocation(step))
     ),
     deco => deco.from
   );
-
-  view.dispatch({
-    effects: [stepEffect.of(decos)],
-  });
 }

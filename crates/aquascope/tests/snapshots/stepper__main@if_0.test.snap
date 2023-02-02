@@ -6,6 +6,7 @@ description: main@if_0.test
   - - - s1
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -24,14 +25,18 @@ description: main@if_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
 - - 2
   - - - s2
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -49,10 +54,13 @@ description: main@if_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
 - - 5
   - - - s1
       - is_live:
@@ -69,10 +77,13 @@ description: main@if_0.test
           value: false
         loan_read_refined:
           type: High
+          value: 0
         loan_write_refined:
           type: High
+          value: 0
         loan_drop_refined:
           type: High
+          value: 0
         permissions:
           read:
             type: Low
@@ -96,10 +107,13 @@ description: main@if_0.test
           value: false
         loan_read_refined:
           type: High
+          value: 4
         loan_write_refined:
           type: High
+          value: 4
         loan_drop_refined:
           type: High
+          value: 4
         permissions:
           read:
             type: Low
@@ -111,6 +125,7 @@ description: main@if_0.test
   - - - "*b"
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: false
@@ -129,14 +144,17 @@ description: main@if_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: None
             value: false
     - - b
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -154,11 +172,13 @@ description: main@if_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
 - - 10
   - - - "*b"
       - is_live:
@@ -234,10 +254,13 @@ description: main@if_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
     - - s2
       - is_live:
           type: None
@@ -260,10 +283,13 @@ description: main@if_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
 - - 12
   - - - s1
       - is_live:

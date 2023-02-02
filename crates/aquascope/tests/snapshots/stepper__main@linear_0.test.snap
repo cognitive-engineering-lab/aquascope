@@ -6,6 +6,7 @@ description: main@linear_0.test
   - - - x
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -24,14 +25,18 @@ description: main@linear_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
 - - 5
   - - - y
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -49,14 +54,18 @@ description: main@linear_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
 - - 7
   - - - "*z"
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: false
@@ -75,10 +84,13 @@ description: main@linear_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: High
+            value: true
           drop:
             type: High
+            value: true
     - - x
       - is_live:
           type: Low
@@ -93,10 +105,13 @@ description: main@linear_0.test
           value: false
         loan_read_refined:
           type: High
+          value: 0
         loan_write_refined:
           type: High
+          value: 0
         loan_drop_refined:
           type: High
+          value: 0
         permissions:
           read:
             type: Low
@@ -107,6 +122,7 @@ description: main@linear_0.test
     - - z
       - is_live:
           type: High
+          value: true
         type_droppable:
           type: None
           value: true
@@ -124,11 +140,13 @@ description: main@linear_0.test
         permissions:
           read:
             type: High
+            value: true
           write:
             type: None
             value: false
           drop:
             type: High
+            value: true
 - - 9
   - - - y
       - is_live:
