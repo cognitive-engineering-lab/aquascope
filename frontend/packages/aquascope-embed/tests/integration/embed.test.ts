@@ -21,18 +21,17 @@ describe("Aquascope Embed", () => {
       }
     );
     let editors = await page.$$(".aquascope");
-    let crashedElement = await page.$(".aquascope-crash");
-    let embedElement = await page.$(".aquascope-embed");
+    let crashedElements = await page.$$(".aquascope-crash");
+    let embedElements = await page.$$(".aquascope-embed");
 
     // No embed elements that didn't get rendered
-    expect(embedElement).toBeNull();
+    expect(embedElements.length).toBe(0);
 
     // No crashed elements
-    expect(crashedElement).toBeNull();
-    
+    expect(crashedElements.length).toBe(0);
+
     // There must have been an editor on the screen.
     expect(editors).not.toBeNull();
     expect(editors.length).toBeGreaterThan(0);
-
   });
 });
