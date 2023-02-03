@@ -1,5 +1,7 @@
 import puppeteer, { Browser, Page } from "puppeteer";
 
+jest.setTimeout(30000);
+
 describe("Aquascope Embed", () => {
   let browser: Browser;
   let page: Page;
@@ -20,19 +22,25 @@ describe("Aquascope Embed", () => {
         waitUntil: "domcontentloaded",
       }
     );
+
+    await page.waitForSelector(".aquascope");
+    // The embeded editors don't have to call out to aquascope,
+    // they just need to render their contents. After the first editor has been
+    // rendered they should all follow shortly.
+    await page.waitForTimeout(5000);
+
     let editors = await page.$$(".aquascope");
-    let crashedElement = await page.$(".aquascope-crash");
-    let embedElement = await page.$(".aquascope-embed");
+    let crashedElements = await page.$$(".aquascope-crash");
+    let embedElements = await page.$$(".aquascope-embed");
 
     // No embed elements that didn't get rendered
-    expect(embedElement).toBeNull();
+    expect(embedElements.length).toBe(0);
 
     // No crashed elements
-    expect(crashedElement).toBeNull();
-    
+    expect(crashedElements.length).toBe(0);
+
     // There must have been an editor on the screen.
     expect(editors).not.toBeNull();
     expect(editors.length).toBeGreaterThan(0);
-
   });
 });
