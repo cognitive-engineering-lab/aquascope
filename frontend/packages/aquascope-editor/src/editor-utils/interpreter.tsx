@@ -94,40 +94,40 @@ let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) => {
   );
 };
 
-type MValueStruct = MValue & { type: "Struct" };
-type MStruct = MValueStruct["value"];
+type MValueAdt = MValue & { type: "Adt" };
+type MAdt = MValueAdt["value"];
 
 type MValuePointer = MValue & { type: "Pointer" };
 type MPointer = MValuePointer["value"];
 
-let StructView = ({ value }: { value: MStruct }) => {
+let AdtView = ({ value }: { value: MAdt }) => {
   let pathCtx = useContext(PathContext);
   let config = useContext(ConfigContext);
 
   if (value.alloc_kind !== null && !config.concreteTypes) {
     let alloc_type = value.alloc_kind.type;
 
-    let read_field = (v: MStruct, k: string): MStruct => {
+    let read_field = (v: MAdt, k: string): MAdt => {
       let field = v.fields.find(([k2]) => k == k2);
       if (!field) {
         let v_pretty = JSON.stringify(v, undefined, 2);
         throw new Error(`Could not find field "${k}" in struct: ${v_pretty}`);
       }
-      return (field[1] as MValueStruct).value;
+      return (field[1] as MValueAdt).value;
     };
 
-    let read_unique = (unique: MStruct): MStruct => {
+    let read_unique = (unique: MAdt): MAdt => {
       let non_null = read_field(unique, "pointer");
       return non_null;
     };
 
-    let read_vec = (vec: MStruct): MStruct => {
+    let read_vec = (vec: MAdt): MAdt => {
       let raw_vec = read_field(vec, "buf");
       let unique = read_field(raw_vec, "ptr");
       return read_unique(unique);
     };
 
-    let non_null: MStruct;
+    let non_null: MAdt;
     if (alloc_type == "String") {
       let vec = read_field(value, "vec");
       non_null = read_vec(vec);
@@ -145,28 +145,37 @@ let StructView = ({ value }: { value: MStruct }) => {
     return <ValueView value={ptr} />;
   }
 
+  let adtName = (
+    <>
+      {value.name}
+      {value.variant ? <>::{value.variant}</> : null}
+    </>
+  );
+
   if (value.fields.length == 1) {
     let path = [...pathCtx, "field", "0"];
     return (
       <span className={path.join("-")}>
         <PathContext.Provider value={path}>
-          {value.name} /&nbsp;
+          {adtName} /&nbsp;
           <ValueView value={value.fields[0][1]} />
         </PathContext.Provider>
       </span>
     );
   }
 
+  let isTuple = value.fields.length > 0 && value.fields[0][0] == "0";
+
   return (
     <>
-      {value.name}
+      {adtName}
       <table>
         <tbody>
           {value.fields.map(([k, v], i) => {
             let path = [...pathCtx, "field", i.toString()];
             return (
               <tr key={k}>
-                <td>{k}</td>
+                {!isTuple ? <td>{k}</td> : null}
                 <td className={path.join("-")}>
                   <PathContext.Provider value={path}>
                     <ValueView value={v} />
@@ -270,29 +279,8 @@ let ValueView = ({ value }: { value: MValue }) => {
             </tbody>
           </table>
         </>
-      ) : value.type == "Struct" ? (
-        <StructView value={value.value} />
-      ) : value.type == "Enum" ? (
-        <>
-          {value.value.name} ({value.value.variant})
-          <table>
-            <tbody>
-              {value.value.fields.map(([k, v], i) => {
-                let path = [...pathCtx, "field", i.toString()];
-                return (
-                  <tr key={k}>
-                    <td>{k}</td>
-                    <td className={path.join("-")}>
-                      <PathContext.Provider value={path}>
-                        <ValueView value={v} />
-                      </PathContext.Provider>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </>
+      ) : value.type == "Adt" ? (
+        <AdtView value={value.value} />
       ) : value.type == "Pointer" ? (
         <PointerView value={value.value} />
       ) : value.type == "Array" ? (
@@ -416,9 +404,11 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
   useEffect(() => {
     let stepContainer = ref.current!;
     let query = (sel: string): HTMLElement => {
-      let dst = stepContainer.querySelector<HTMLElement>("." + sel);
+      let dst = stepContainer.querySelector<HTMLElement>("." + CSS.escape(sel));
       if (!dst)
-        throw new Error(`Could not find endpoint for pointer selector: ${sel}`);
+        throw new Error(
+          `Could not find endpoint for pointer selector: ${CSS.escape(sel)}`
+        );
       return dst;
     };
     let pointers = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
@@ -530,8 +520,6 @@ let InterpreterView = ({
   let flexDirection: CSSProperties["flexDirection"] = config?.horizontal
     ? "row"
     : "column";
-
-  console.log(trace.result);
 
   return (
     <ConfigContext.Provider value={{ ...config, concreteTypes: concreteTypes }}>

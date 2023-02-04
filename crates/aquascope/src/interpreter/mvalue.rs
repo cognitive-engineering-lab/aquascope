@@ -108,15 +108,11 @@ pub enum MValue {
   // Composites
   Tuple(Vec<MValue>),
   Array(Abbreviated<MValue>),
-  Struct {
+  Adt {
     name: String,
+    variant: Option<String>,
     fields: Vec<(String, MValue)>,
     alloc_kind: Option<MHeapAllocKind>,
-  },
-  Enum {
-    name: String,
-    variant: String,
-    fields: Vec<(String, MValue)>,
   },
   Pointer {
     path: MPath,
@@ -304,8 +300,9 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         let unique = op.project_field(&self.ev.ecx, 0)?;
         let result = self.read(&unique)?;
         self.heap_alloc_kinds.pop();
-        MValue::Struct {
+        MValue::Adt {
           name: "Box".into(),
+          variant: None,
           fields: vec![("0".into(), result)],
           alloc_kind: Some(MHeapAllocKind::Box),
         }
@@ -377,8 +374,9 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
               self.heap_alloc_kinds.pop();
             }
 
-            MValue::Struct {
+            MValue::Adt {
               name,
+              variant: None,
               fields,
               alloc_kind,
             }
@@ -391,10 +389,11 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
             let fields = process_fields!(casted, variant_def.fields.iter());
 
-            MValue::Enum {
+            MValue::Adt {
               name,
-              variant,
+              variant: Some(variant),
               fields,
+              alloc_kind: None,
             }
           }
           _ => todo!(),

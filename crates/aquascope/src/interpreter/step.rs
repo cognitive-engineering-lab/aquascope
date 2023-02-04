@@ -201,7 +201,9 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
       "(return)".into()
     } else {
-      // Only keep locals corresponding to user-defined variables
+      // TODO: this excludes compiler-generated temporaries which we sometimes need to
+      // visualize in the case of f(&Some(x)). Need to figure out a good strategy for
+      // deciding when a temp should be included.
       if !matches!(
         decl.local_info,
         Some(box LocalInfo::User(ClearCrossCrate::Set(_)))
@@ -211,7 +213,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
       Place::from_local(local, *self.ecx.tcx)
         .to_string(*self.ecx.tcx, frame.body)
-        .unwrap()
+        .unwrap_or_else(|| String::from("(tmp)"))
     };
 
     let layout = state.layout.get();
