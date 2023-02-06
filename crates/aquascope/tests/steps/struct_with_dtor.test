@@ -1,0 +1,12 @@
+struct S {
+    first: String,
+    second: String,
+}
+
+impl Drop for S {
+    fn drop(&mut self) {}
+}
+
+fn foo(s: S) -> String {
+    s.first
+}
