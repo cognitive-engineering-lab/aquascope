@@ -163,19 +163,14 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     //
     // See: https://github.com/rust-lang/rust/blob/master/compiler/rustc_mir_dataflow/src/move_paths/mod.rs#L359-L363
     let has_adt_prefix_with_dtor = || {
-      for (i, _) in place.projection.iter().enumerate() {
+      place.projection.iter().enumerate().any(|(i, _)| {
         let proj_base = &place.projection[.. i];
         let body = &self.body_with_facts.body;
         let tcx = self.tcx;
         let place_ty = Place::ty_from(place.local, proj_base, body, tcx).ty;
-        match place_ty.kind() {
-          ty::Adt(adt, _) if adt.has_dtor(tcx) && !adt.is_box() => {
-            return true;
-          }
-          _ => continue,
-        }
-      }
-      false
+        matches!(place_ty.kind(),
+          ty::Adt(adt, _) if adt.has_dtor(tcx) && !adt.is_box())
+      })
     };
 
     !is_indirect && !has_adt_prefix_with_dtor()

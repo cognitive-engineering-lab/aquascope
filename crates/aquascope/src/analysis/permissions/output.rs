@@ -56,7 +56,9 @@ where
   /// .decl cannot_read(Path:path, Point:point)
   ///
   /// cannot_read(Path, Loan, Point) :-
-  ///    path_maybe_uninitialized_on_entry(Path, Point);
+  ///    path_maybe_uninitialized_on_entry(Path, Point).
+  ///
+  /// cannot_read(Path, Loan, Point) :-
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point),
   ///    loan_mutable(Loan).
@@ -68,7 +70,9 @@ where
   /// .decl cannot_write(Path:path, Point:point)
   ///
   /// cannot_write(Path, Loan, Point) :-
-  ///    path_maybe_uninitialized_on_entry(Path, Point);
+  ///    path_maybe_uninitialized_on_entry(Path, Point).
+  ///
+  /// cannot_write(Path, Loan, Point) :-
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point).
   ///
@@ -78,8 +82,10 @@ where
   ///
   /// .decl cannot_drop(Path, Loan, Point)
   ///
-  /// cannot_drop(Path, Loan, Point)
-  ///    path_maybe_uninitialized_on_entry(Path, Point);
+  /// cannot_drop(Path, Loan, Point) :-
+  ///    path_maybe_uninitialized_on_entry(Path, Point).
+  ///
+  /// cannot_drop(Path, Loan, Point) :-
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point).
   ///
