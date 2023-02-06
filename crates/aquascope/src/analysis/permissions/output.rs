@@ -51,7 +51,7 @@ where
   ///
   pub(crate) never_write: HashSet<T::Path>,
 
-  /// A [`Path`] whose read permissions are refiend at [`Point`] due to an active [`Loan`].
+  /// A [`Path`] whose read permissions are refined at [`Point`] due to an active [`Loan`].
   ///
   /// .decl cannot_read(Path:path, Point:point)
   ///
@@ -63,7 +63,7 @@ where
   ///
   pub(crate) cannot_read: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
-  /// A [`Path`] whose write permissions are refiend at [`Point`] due to an active [`Loan`].
+  /// A [`Path`] whose write permissions are refined at [`Point`] due to an active [`Loan`].
   ///
   /// .decl cannot_write(Path:path, Point:point)
   ///
@@ -74,7 +74,7 @@ where
   ///
   pub(crate) cannot_write: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
-  /// A [`Path`] whose drop permissions are refiend at [`Point`] due to an active [`Loan`].
+  /// A [`Path`] whose drop permissions are refined at [`Point`] due to an active [`Loan`].
   ///
   /// .decl cannot_drop(Path, Loan, Point)
   ///

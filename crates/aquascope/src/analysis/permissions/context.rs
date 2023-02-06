@@ -10,7 +10,7 @@ use rustc_index::vec::IndexVec;
 use rustc_infer::infer::TyCtxtInferExt;
 use rustc_middle::{
   mir::{BorrowKind, Local, Location, Place},
-  ty::{ParamEnv, Ty, TyCtxt},
+  ty::{self, ParamEnv, Ty, TyCtxt},
 };
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
@@ -146,13 +146,39 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   /// Does a Path's type allow it to be dropped?
+  /// NOTE: the utility is the negation of the datalog rule.
   ///
   /// .decl never_drop(Path)
   ///
   /// never_drop(Path) :-
-  ///    !is_direct(Path).
+  ///    !is_direct(Path),
+  ///    has_adt_prefix_with_dtor(Path).
   pub fn is_path_drop_enabled(&self, path: Path) -> bool {
-    !self.path_to_place(path).is_indirect()
+    let place = self.path_to_place(path);
+    let is_indirect = place.is_indirect();
+    // Rust maintains invariant that all `Drop`
+    // ADT's remain fully-initialized so that user-defined destructor
+    // can safely read from all of the ADT's fields. If a prefix of this
+    // path is such an ADT then it cannot be moved.
+    //
+    // See: https://github.com/rust-lang/rust/blob/master/compiler/rustc_mir_dataflow/src/move_paths/mod.rs#L359-L363
+    let has_adt_prefix_with_dtor = || {
+      for (i, _) in place.projection.iter().enumerate() {
+        let proj_base = &place.projection[.. i];
+        let body = &self.body_with_facts.body;
+        let tcx = self.tcx;
+        let place_ty = Place::ty_from(place.local, proj_base, body, tcx).ty;
+        match place_ty.kind() {
+          ty::Adt(adt, _) if adt.has_dtor(tcx) && !adt.is_box() => {
+            return true;
+          }
+          _ => continue,
+        }
+      }
+      false
+    };
+
+    !is_indirect && !has_adt_prefix_with_dtor()
   }
 
   // Permission utilities

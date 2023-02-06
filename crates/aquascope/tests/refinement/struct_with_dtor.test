@@ -1,0 +1,24 @@
+// Illegal move due to attempt to move from field of an ADT that
+// implements `Drop`. Rust maintains invariant that all `Drop`
+// ADT's remain fully-initialized so that user-defined destructor
+// can safely read from all of the ADT's fields.
+//
+// REF: https://github.com/rust-lang/rust/blob/master/compiler/rustc_mir_dataflow/src/move_paths/mod.rs#L359-L363
+
+struct S {
+    first: String,
+    second: String,
+}
+
+impl Drop for S {
+    fn drop(&mut self) {}
+}
+
+fn foo(s: S) {
+    let _a = `[s.first R--]`;
+    let _a = `[s.second R--]`;
+    let _a = `[s R-D]`;
+    let first = s.first;
+}
+
+fn main() {}
