@@ -8,7 +8,7 @@
 
 use std::time::Instant;
 
-use datafrog::{Relation, RelationLeaper, ValueFilter};
+use datafrog::{Iteration, Relation, RelationLeaper, ValueFilter};
 use flowistry::mir::utils::PlaceExt;
 use polonius_engine::{Algorithm, FactTypes, Output as PEOutput};
 use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
@@ -85,6 +85,10 @@ where
   /// cannot_drop(Path, Loan, Point) :-
   ///    path_maybe_uninitialized_on_entry(Path, Point).
   ///
+  /// cannot_read(PathParent, Loan, Point) :-
+  ///    ancestor_path(PathParent, PathChild),
+  ///    path_maybe_uninitialized_on_entry(PathChild, Point).
+  ///
   /// cannot_drop(Path, Loan, Point) :-
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point).
@@ -96,6 +100,10 @@ where
   /// path_maybe_uninitialized_on_entry(Point1, Path) :-
   ///    path_maybe_uninitialized_on_exit(Point0, Path)
   ///    cfg_edge(Point0, Point1)
+  ///
+  /// path_maybe_uninitialized_on_entry(Point, PathParent) :-
+  ///    ancestor_path(PathParent, PathChild),
+  ///    path_maybe_uninitialized_on_entry(PathChild, Point).
   ///
   pub(crate) path_maybe_uninitialized_on_entry:
     HashMap<T::Point, HashSet<T::Path>>,
@@ -114,6 +122,8 @@ impl Default for Output<AquascopeFacts> {
 }
 
 /// Populate the [`Output`] facts in the current [`PermissionsCtxt`].
+// TODO(gavinleroy) lots of data is kept around below for clarity,
+// but this could definitely be optimized.
 pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
   let body = &ctxt.body_with_facts.body;
@@ -143,6 +153,74 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
     .iter()
     .map(|place| ctxt.new_path(*place))
     .collect::<Vec<_>>();
+
+  // See: https://github.com/rust-lang/polonius/blob/master/polonius-engine/src/facts.rs#L58
+  //
+  // Stores (Child, Parent) relationships
+  let child_path: Relation<(Path, Path)> =
+    Relation::from_iter(ctxt.polonius_input_facts.child_path.iter().map(
+      |&(child, parent)| {
+        (
+          ctxt.moveable_path_to_path(child),
+          ctxt.moveable_path_to_path(parent),
+        )
+      },
+    ));
+
+  // We only need iteration for crawling a cross child paths
+  // Paths that are partially moved can not have R/O permissions,
+  // thus, if a child path is uninitialized (moved or non-initialized),
+  // then the parent must also be uninitialized.
+
+  let mut iteration = Iteration::new();
+
+  let path_maybe_uninitialized_on_entry =
+    iteration.variable::<(Path, Point)>("path_maybe_uninitialized_on_entry");
+
+  let cfg_edge: Relation<(Point, Point)> = Relation::from_iter(
+    ctxt
+      .polonius_input_facts
+      .cfg_edge
+      .iter()
+      .map(|&(p1, p2)| (p1, p2)),
+  );
+
+  let path_maybe_uninitialized_on_exit: Relation<(Point, Path)> =
+    Relation::from_iter(
+      ctxt
+        .polonius_output
+        .path_maybe_uninitialized_on_exit
+        .iter()
+        .flat_map(|(point, paths)| {
+          paths.iter().map(|path| {
+            let path = ctxt.moveable_path_to_path(*path);
+            (*point, path)
+          })
+        }),
+    );
+
+  // path_maybe_uninitialized_on_entry(Point1, Path) :-
+  //    path_maybe_uninitialized_on_exit(Point0, Path)
+  //    cfg_edge(Point0, Point1)
+  path_maybe_uninitialized_on_entry.insert(Relation::from_join(
+    &path_maybe_uninitialized_on_exit,
+    &cfg_edge,
+    |&_point1, &path, &point2| (path, point2),
+  ));
+
+  while iteration.changed() {
+    // path_maybe_uninitialized_on_entry(PathParent, Point) :-
+    //    ancestor_path(PathParent, PathChild),
+    //    path_maybe_uninitialized_on_entry(PathChild, Point).
+    path_maybe_uninitialized_on_entry.from_join(
+      &path_maybe_uninitialized_on_entry,
+      &child_path,
+      |&_child, &point, &parent| (parent, point),
+    );
+  }
+
+  let path_maybe_uninitialized_on_entry =
+    path_maybe_uninitialized_on_entry.complete();
 
   let loan_to_borrow = |l: Loan| &ctxt.borrow_set[l];
 
@@ -223,36 +301,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
 
   ctxt.permissions_output.never_write = never_write;
 
-  let cfg_edge: Relation<(Point, Point)> = Relation::from_iter(
-    ctxt
-      .polonius_input_facts
-      .cfg_edge
-      .iter()
-      .map(|&(p1, p2)| (p1, p2)),
-  );
-
-  let path_maybe_uninitialized_on_exit: Relation<(Point, Path)> =
-    Relation::from_iter(
-      ctxt
-        .polonius_output
-        .path_maybe_uninitialized_on_exit
-        .iter()
-        .flat_map(|(point, paths)| {
-          paths.iter().map(|path| {
-            let path = ctxt.moveable_path_to_path(*path);
-            (*point, path)
-          })
-        }),
-    );
-
-  let path_maybe_uninitialized_on_entry: Relation<(Point, Path)> =
-    Relation::from_join(
-      &path_maybe_uninitialized_on_exit,
-      &cfg_edge,
-      |&_point1, &path, &point2| (point2, path),
-    );
-
-  for &(point, path) in path_maybe_uninitialized_on_entry.iter() {
+  for &(path, point) in path_maybe_uninitialized_on_entry.iter() {
     ctxt
       .permissions_output
       .path_maybe_uninitialized_on_entry
