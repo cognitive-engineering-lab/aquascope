@@ -137,6 +137,16 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     *memory_map.alloc_id_remapping.entry(alloc_id).or_insert(n)
   }
 
+  pub(super) fn fn_name(&self, def_id: DefId) -> String {
+    let full_name = self.ecx.tcx.def_path_debug_str(def_id);
+    // Strip crate name prefix from debug str
+    full_name
+      .split("::")
+      .skip(1)
+      .intersperse("::")
+      .collect::<String>()
+  }
+
   fn build_frame(
     &self,
     frame: &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
@@ -147,16 +157,9 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     log::trace!("Building frame {index}");
 
     let def_id = frame.instance.def_id();
+    let name = self.fn_name(def_id);
 
     let tcx = *self.ecx.tcx;
-    let full_name = tcx.def_path_debug_str(def_id);
-    // Strip crate name prefix from debug str
-    let name = full_name
-      .split("::")
-      .skip(1)
-      .intersperse("::")
-      .collect::<String>();
-
     let body_span = Range::from(
       flowistry::source_map::CharRange::from_span(
         body_span(tcx, frame.instance.def_id(), BodySpanType::Whole),

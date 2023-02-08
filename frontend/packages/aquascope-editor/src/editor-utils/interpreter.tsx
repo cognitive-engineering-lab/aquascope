@@ -152,7 +152,9 @@ let AdtView = ({ value }: { value: MAdt }) => {
     </>
   );
 
-  if (value.fields.length == 1) {
+  let isTuple = value.fields.length > 0 && value.fields[0][0] == "0";
+
+  if (isTuple && value.fields.length == 1) {
     let path = [...pathCtx, "field", "0"];
     return (
       <span className={path.join("-")}>
@@ -163,8 +165,6 @@ let AdtView = ({ value }: { value: MAdt }) => {
       </span>
     );
   }
-
-  let isTuple = value.fields.length > 0 && value.fields[0][0] == "0";
 
   return (
     <>

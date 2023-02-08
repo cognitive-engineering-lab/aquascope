@@ -142,6 +142,11 @@ pub fn locate_address_in_type<'mir, 'tcx>(
   let mut offset = 0;
   if alloc_layout.size.bytes() < alloc_size.bytes() {
     let array_elem_size = alloc_layout.size.bytes();
+    assert!(
+      array_elem_size > 0,
+      "Array has zero-sized elements: {alloc_layout:#?}"
+    );
+
     offset = target.bytes() / array_elem_size * array_elem_size;
     let index = offset / array_elem_size;
     // dbg!((array_elem_size, offset, index));
