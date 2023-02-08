@@ -1,16 +1,19 @@
 //! Interpreting memory as Rust data types
 
+use std::collections::HashMap;
+
 use miri::{
-  AllocMap, Immediate, InterpError, InterpErrorInfo, InterpResult, MPlaceTy,
-  MemPlaceMeta, MemoryKind, OpTy, UndefinedBehaviorInfo, Value,
+  AllocKind, AllocMap, Immediate, InterpError, InterpErrorInfo, InterpResult,
+  MPlaceTy, MemPlaceMeta, MemoryKind, OpTy, UndefinedBehaviorInfo, Value,
 };
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
+use rustc_hir::def_id::DefId;
 use rustc_middle::{
-  mir::PlaceElem,
+  mir::{PlaceElem, ProjectionElem, VarDebugInfo, VarDebugInfoContents},
   ty::{
     layout::{LayoutOf, TyAndLayout},
-    AdtKind, Ty, TyKind,
+    AdtKind, ClosureKind, Instance, SubstsRef, Ty, TyKind,
   },
 };
 use rustc_target::abi::Size;
@@ -108,15 +111,11 @@ pub enum MValue {
   // Composites
   Tuple(Vec<MValue>),
   Array(Abbreviated<MValue>),
-  Struct {
+  Adt {
     name: String,
+    variant: Option<String>,
     fields: Vec<(String, MValue)>,
     alloc_kind: Option<MHeapAllocKind>,
-  },
-  Enum {
-    name: String,
-    variant: String,
-    fields: Vec<(String, MValue)>,
   },
   Pointer {
     path: MPath,
@@ -190,6 +189,11 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
   ) -> InterpResult<'tcx, MValue> {
     // Determine the base allocation from the mplace's provenance
     let (alloc_id, offset, _) = self.ev.ecx.ptr_get_alloc_id(mplace.ptr)?;
+    let (alloc_size, _, alloc_status) = self.ev.ecx.get_alloc_info(alloc_id);
+
+    if matches!(alloc_status, AllocKind::Dead) {
+      log::warn!("Reading a dead allocation");
+    }
 
     // Check if we have seen this allocation before
     let alloc_discovered = self
@@ -246,7 +250,6 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
     let (segment, alloc_layout) =
       self.ev.memory_map.borrow().place_to_loc[&alloc_id].clone();
-    let (alloc_size, _, _) = self.ev.ecx.get_alloc_info(alloc_id);
 
     // The pointer could point anywhere inside the allocation, so we use
     // `get_path_segments` to reverse-engineer a path from the memory location.
@@ -304,8 +307,9 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         let unique = op.project_field(&self.ev.ecx, 0)?;
         let result = self.read(&unique)?;
         self.heap_alloc_kinds.pop();
-        MValue::Struct {
+        MValue::Adt {
           name: "Box".into(),
+          variant: None,
           fields: vec![("0".into(), result)],
           alloc_kind: Some(MHeapAllocKind::Box),
         }
@@ -377,8 +381,9 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
               self.heap_alloc_kinds.pop();
             }
 
-            MValue::Struct {
+            MValue::Adt {
               name,
+              variant: None,
               fields,
               alloc_kind,
             }
@@ -391,10 +396,11 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
             let fields = process_fields!(casted, variant_def.fields.iter());
 
-            MValue::Enum {
+            MValue::Adt {
               name,
-              variant,
+              variant: Some(variant),
               fields,
+              alloc_kind: None,
             }
           }
           _ => todo!(),
@@ -464,6 +470,25 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         self.read_pointer(mplace)?
       }
 
+      TyKind::Closure(def_id, substs) => {
+        let closure = substs.as_closure();
+
+        let name = self.ev.fn_name(*def_id);
+        let upvar_names = self.ev.closure_upvar_names(*def_id, substs)?;
+
+        let env_ty = closure.tupled_upvars_ty();
+        let mut env_op = op.clone();
+        env_op.layout.ty = env_ty;
+        let MValue::Tuple(env) = self.read(&env_op)? else { unreachable!() };
+        let fields = upvar_names.into_iter().zip(env).collect();
+        MValue::Adt {
+          name,
+          variant: None,
+          fields,
+          alloc_kind: None,
+        }
+      }
+
       kind => todo!("{:?} / {:?}", **op, kind),
     };
 
@@ -481,5 +506,45 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
       heap_alloc_kinds: Vec::new(),
     }
     .read(op)
+  }
+
+  fn closure_upvar_names(
+    &self,
+    def_id: DefId,
+    substs: SubstsRef<'tcx>,
+  ) -> InterpResult<'tcx, Vec<String>> {
+    let closure = substs.as_closure();
+    let inst = Instance::new(def_id, substs);
+    let body = self.ecx.load_mir(inst.def, None)?;
+    let mut upvar_names = body
+      .var_debug_info
+      .iter()
+      .filter_map(|VarDebugInfo { name, value, .. }| match value {
+        VarDebugInfoContents::Place(place) if place.local.as_usize() == 1 => {
+          // If it's a FnOnce closure, then the environment is moved
+          // and the places are like _1.0, _1.1, etc.
+          // Otherwise, the environment is passed by reference and the
+          // places are like (*_1).0, (*_1).1, so we need to index
+          // the appropriate projection.
+          let projection_idx = match closure.kind() {
+            ClosureKind::FnOnce => 0,
+            ClosureKind::Fn | ClosureKind::FnMut => 1,
+          };
+          match place.projection.get(projection_idx)? {
+            ProjectionElem::Field(field, _) => {
+              Some((field.as_usize(), name.to_ident_string()))
+            }
+            _ => None,
+          }
+        }
+        _ => None,
+      })
+      .collect::<HashMap<_, _>>();
+
+    Ok(
+      (0 .. closure.upvar_tys().count())
+        .map(|i| upvar_names.remove(&i).unwrap_or_else(|| "(tmp)".into()))
+        .collect(),
+    )
   }
 }

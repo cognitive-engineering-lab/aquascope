@@ -7,7 +7,7 @@ use nom::{
   bytes::complete::{tag, take_until},
   character::complete::{anychar, char, none_of},
   combinator::map,
-  multi::many0,
+  multi::{many0, separated_list1},
   sequence::{preceded, separated_pair, tuple},
   IResult,
 };
@@ -17,7 +17,7 @@ use crate::annotations::AquascopeAnnotations;
 
 #[derive(PartialEq, Hash, Debug, Clone)]
 pub struct AquascopeBlock {
-  pub operation: String,
+  pub operations: Vec<String>,
   pub config: Vec<(String, String)>,
   pub code: String,
   pub annotations: AquascopeAnnotations,
@@ -26,13 +26,13 @@ pub struct AquascopeBlock {
 impl AquascopeBlock {
   fn parse(i: LocatedSpan<&str>) -> IResult<LocatedSpan<&str>, Self> {
     fn parse_sym(i: LocatedSpan<&str>) -> IResult<LocatedSpan<&str>, String> {
-      let (i, v) = many0(none_of(",=\n"))(i)?;
+      let (i, v) = many0(none_of(",=\n+"))(i)?;
       Ok((i, v.into_iter().collect::<String>()))
     }
 
     let mut parser = tuple((
       tag("```aquascope"),
-      preceded(char(','), parse_sym),
+      preceded(char(','), separated_list1(char('+'), parse_sym)),
       many0(preceded(
         char(','),
         alt((
@@ -43,12 +43,12 @@ impl AquascopeBlock {
       take_until("```"),
       tag("```"),
     ));
-    let (i, (_, operation, config, code, _)) = parser(i)?;
+    let (i, (_, operations, config, code, _)) = parser(i)?;
     let code = code.fragment().trim();
     let (code, annotations) =
       crate::annotations::parse_annotations(code).unwrap();
     Ok((i, AquascopeBlock {
-      operation,
+      operations,
       config,
       code,
       annotations,
@@ -85,7 +85,7 @@ content!
   let s = |s: &str| s.to_string();
   let blocks = AquascopeBlock::parse_all(inp);
   assert_eq!(blocks, vec![(0 .. inp.len(), AquascopeBlock {
-    operation: s("interpreter"),
+    operations: vec![s("interpreter")],
     config: vec![(s("foo"), s("bar")), (s("baz"), s("true"))],
     code: s("content!"),
     annotations: Default::default()

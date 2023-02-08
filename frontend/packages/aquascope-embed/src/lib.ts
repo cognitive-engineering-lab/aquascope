@@ -63,23 +63,29 @@ let initEditors = () => {
       ["copy"]
     );
 
-    let operation = elem.dataset.operation;
-    if (!operation) throw new Error("Missing data-operation attribute");
+    let operations = maybeParseJson<string[]>(elem.dataset.operations);
+    if (!operations) throw new Error("Missing data-operations attribute");
 
-    let response = maybeParseJson<Result<any>>(elem.dataset.response);
+    let responses = maybeParseJson<{ [op: string]: Result<any> }>(
+      elem.dataset.responses
+    );
     let config = maybeParseJson<any>(elem.dataset.config);
     let annotations = maybeParseJson<types.AquascopeAnnotations>(
       elem.dataset.annotations
     );
 
-    ed.renderOperation(operation, {
-      response,
-      config,
-      annotations,
-    });
+    if (responses) {
+      operations.forEach(operation => {
+        ed.renderOperation(operation, {
+          response: responses![operation],
+          config,
+          annotations,
+        });
+      });
+    }
 
     computePermBtn?.addEventListener("click", _ => {
-      ed.renderOperation(operation!, {});
+      operations!.forEach(operation => ed.renderOperation(operation!, {}));
     });
   });
 };

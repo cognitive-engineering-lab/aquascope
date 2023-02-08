@@ -1,0 +1,240 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: closure.test
+---
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 59
+            filename: 0
+          location:
+            char_start: 14
+            char_end: 24
+            filename: 0
+          locals:
+            - - x
+              - type: Int
+                value: 0
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 59
+            filename: 0
+          location:
+            char_start: 27
+            char_end: 40
+            filename: 0
+          locals:
+            - - x
+              - type: Int
+                value: 0
+            - - f
+              - type: Adt
+                value:
+                  name: "main::{closure#0}"
+                  variant: ~
+                  fields:
+                    - - x
+                      - type: Pointer
+                        value:
+                          path:
+                            segment:
+                              type: Stack
+                              value:
+                                frame: 0
+                                local: x
+                            parts: []
+                          range: ~
+                  alloc_kind: ~
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 59
+            filename: 0
+          location:
+            char_start: 43
+            char_end: 55
+            filename: 0
+          locals:
+            - - x
+              - type: Int
+                value: 0
+            - - f
+              - type: Adt
+                value:
+                  name: "main::{closure#0}"
+                  variant: ~
+                  fields:
+                    - - x
+                      - type: Pointer
+                        value:
+                          path:
+                            segment:
+                              type: Stack
+                              value:
+                                frame: 0
+                                local: x
+                            parts: []
+                          range: ~
+                  alloc_kind: ~
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 59
+            filename: 0
+          location:
+            char_start: 43
+            char_end: 55
+            filename: 0
+          locals:
+            - - x
+              - type: Int
+                value: 0
+            - - f
+              - type: Adt
+                value:
+                  name: "main::{closure#0}"
+                  variant: ~
+                  fields:
+                    - - x
+                      - type: Pointer
+                        value:
+                          path:
+                            segment:
+                              type: Stack
+                              value:
+                                frame: 0
+                                local: x
+                            parts: []
+                          range: ~
+                  alloc_kind: ~
+        - name: "main::{closure#0}"
+          body_span:
+            char_start: 35
+            char_end: 39
+            filename: 0
+          location:
+            char_start: 35
+            char_end: 37
+            filename: 0
+          locals: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 59
+            filename: 0
+          location:
+            char_start: 43
+            char_end: 55
+            filename: 0
+          locals:
+            - - x
+              - type: Int
+                value: 0
+            - - f
+              - type: Adt
+                value:
+                  name: "main::{closure#0}"
+                  variant: ~
+                  fields:
+                    - - x
+                      - type: Pointer
+                        value:
+                          path:
+                            segment:
+                              type: Stack
+                              value:
+                                frame: 0
+                                local: x
+                            parts: []
+                          range: ~
+                  alloc_kind: ~
+        - name: "main::{closure#0}"
+          body_span:
+            char_start: 35
+            char_end: 39
+            filename: 0
+          location:
+            char_start: 38
+            char_end: 39
+            filename: 0
+          locals:
+            - - (return)
+              - type: Int
+                value: 0
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 59
+            filename: 0
+          location:
+            char_start: 43
+            char_end: 55
+            filename: 0
+          locals:
+            - - x
+              - type: Int
+                value: 0
+            - - f
+              - type: Adt
+                value:
+                  name: "main::{closure#0}"
+                  variant: ~
+                  fields:
+                    - - x
+                      - type: Pointer
+                        value:
+                          path:
+                            segment:
+                              type: Stack
+                              value:
+                                frame: 0
+                                local: x
+                            parts: []
+                          range: ~
+                  alloc_kind: ~
+            - - y
+              - type: Int
+                value: 0
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            char_start: 0
+            char_end: 59
+            filename: 0
+          location:
+            char_start: 58
+            char_end: 59
+            filename: 0
+          locals: []
+    heap:
+      locations: []
+result:
+  type: Success
+

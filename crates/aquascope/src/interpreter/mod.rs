@@ -4,10 +4,10 @@ use anyhow::Result;
 use either::Either;
 use flowistry::mir::utils::SpanExt;
 use rustc_data_structures::vec_map::VecMap;
-use rustc_hir::def_id::LocalDefId;
+use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_middle::{
-  mir::BorrowCheckResult,
-  ty::{self, TyCtxt},
+  mir::{Body, BorrowCheckResult},
+  ty::{self, query::Providers, TyCtxt},
 };
 
 mod mapper;
@@ -98,6 +98,17 @@ fn fake_mir_borrowck(
   })
 }
 
+// Some optimizations like drop elaboration depend on MoveData, and will raise an error
+// if the MoveData is empty. Thankfully we can reset and ignore that error via
+// `Handler::reset_err_count` which we do by overriding optimized_mir.
+fn fake_optimized_mir(tcx: TyCtxt<'_>, did: DefId) -> &'_ Body<'_> {
+  let mut providers = Providers::default();
+  rustc_mir_transform::provide(&mut providers);
+  let body = (providers.optimized_mir)(tcx, did);
+  tcx.sess.diagnostic().reset_err_count();
+  body
+}
+
 // See `fake_mir_borrowck`
 pub fn override_queries(
   _session: &Session,
@@ -105,6 +116,7 @@ pub fn override_queries(
   _extern_providers: &mut ty::query::ExternProviders,
 ) {
   providers.mir_borrowck = fake_mir_borrowck;
+  providers.optimized_mir = fake_optimized_mir;
 }
 
 impl rustc_driver::Callbacks for InterpretCallbacks {

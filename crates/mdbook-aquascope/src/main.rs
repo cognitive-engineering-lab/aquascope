@@ -8,6 +8,7 @@ use std::{
   path::{Path, PathBuf},
   process::{Command, Stdio},
   sync::RwLock,
+  time::Duration,
 };
 
 use anyhow::{bail, Result};
@@ -17,6 +18,7 @@ use mdbook_preprocessor_utils::{
 };
 use rayon::prelude::*;
 use tempfile::tempdir;
+use wait_timeout::ChildExt;
 
 mdbook_preprocessor_utils::asset_generator!("../dist/");
 
@@ -48,42 +50,55 @@ impl AquascopePreprocessor {
 
     fs::write(root.join("example/src/main.rs"), &block.code)?;
 
-    let mut cmd = Command::new("cargo");
-    cmd
-      .arg("aquascope")
-      .env("SYSROOT", &self.miri_sysroot)
-      .env("DYLD_LIBRARY_PATH", &self.target_libdir)
-      .env("RUST_BACKTRACE", "1")
-      .current_dir(root.join("example"));
+    let mut responses = HashMap::new();
+    for operation in &block.operations {
+      let mut cmd = Command::new("cargo");
+      cmd
+        .arg("aquascope")
+        .env("SYSROOT", &self.miri_sysroot)
+        .env("DYLD_LIBRARY_PATH", &self.target_libdir)
+        .env("RUST_BACKTRACE", "1")
+        .current_dir(root.join("example"));
 
-    let should_fail = block.config.iter().any(|(k, _)| k == "shouldFail");
-    if should_fail {
-      cmd.arg("--should-fail");
+      let should_fail = block.config.iter().any(|(k, _)| k == "shouldFail");
+      if should_fail {
+        cmd.arg("--should-fail");
+      }
+
+      cmd.arg(operation);
+
+      let mut child =
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+      if child.wait_timeout(Duration::from_secs(10))?.is_none() {
+        child.kill()?;
+        bail!("Aquascope timed out on program:\n{}", block.code)
+      };
+
+      let output = child.wait_with_output()?;
+
+      if !output.status.success() {
+        let error = String::from_utf8(output.stderr)?;
+        bail!(
+          "Aquascope failed for program:\n{}\nwith error:\n{error}",
+          block.code
+        )
+      }
+
+      let response = String::from_utf8(output.stdout)?;
+      let response_json: serde_json::Value = serde_json::from_str(&response)?;
+      if let Some(err) = response_json.get("Err") {
+        let stderr = String::from_utf8(output.stderr)?;
+        bail!(
+          "Aquascope failed for program:\n{}\nwith error: {}\n{stderr}",
+          block.code,
+          err.as_str().unwrap()
+        )
+      }
+
+      responses.insert(operation, response_json);
     }
 
-    cmd.arg(&block.operation);
-
-    let output = cmd.output()?;
-    if !output.status.success() {
-      let error = String::from_utf8(output.stderr)?;
-      bail!(
-        "Aquascope failed for program:\n{}\nwith error:\n{error}",
-        block.code
-      )
-    }
-
-    let response = String::from_utf8(output.stdout)?;
-    let response_json: serde_json::Value = serde_json::from_str(&response)?;
-    if let Some(err) = response_json.get("Err") {
-      let stderr = String::from_utf8(output.stderr)?;
-      bail!(
-        "Aquascope failed for program:\n{}\nwith error: {}\n{stderr}",
-        block.code,
-        err.as_str().unwrap()
-      )
-    }
-
-    Ok(response)
+    Ok(serde_json::to_string(&responses)?)
   }
 
   /// Get the HTML output for an Aquascope block
@@ -118,8 +133,8 @@ impl AquascopePreprocessor {
 
     add_data("code", &serde_json::to_string(&block.code)?)?;
     add_data("annotations", &serde_json::to_string(&block.annotations)?)?;
-    add_data("operation", &block.operation)?;
-    add_data("response", response.trim_end())?;
+    add_data("operations", &serde_json::to_string(&block.operations)?)?;
+    add_data("responses", response.trim_end())?;
     let config = block
       .config
       .iter()

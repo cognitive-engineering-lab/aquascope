@@ -256,9 +256,11 @@ let StepTable = ({
   facts: AnalysisFacts;
 }) => (
   <table className="perm-step-table">
-    {rows.map(([path, diffs], i: number) => (
-      <PermDiffRow key={i} path={path} diffs={diffs} facts={facts} />
-    ))}
+    <tbody>
+      {rows.map(([path, diffs], i: number) => (
+        <PermDiffRow key={i} path={path} diffs={diffs} facts={facts} />
+      ))}
+    </tbody>
   </table>
 );
 

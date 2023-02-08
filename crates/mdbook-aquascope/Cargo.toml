@@ -34,6 +34,7 @@ rayon = "1"
 aquascope_workspace_utils = { path = "../aquascope_workspace_utils" }
 regex = "1"
 flate2 = "1"
+wait-timeout = "0.2"
 
 [dev-dependencies]
 mdbook-aquascope = { path = ".", features = ["dev"] }

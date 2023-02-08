@@ -16,24 +16,28 @@ steps:
             filename: 0
           locals:
             - - v
-              - type: Struct
+              - type: Adt
                 value:
                   name: Vec
+                  variant: ~
                   fields:
                     - - buf
-                      - type: Struct
+                      - type: Adt
                         value:
                           name: RawVec
+                          variant: ~
                           fields:
                             - - ptr
-                              - type: Struct
+                              - type: Adt
                                 value:
                                   name: Unique
+                                  variant: ~
                                   fields:
                                     - - pointer
-                                      - type: Struct
+                                      - type: Adt
                                         value:
                                           name: NonNull
+                                          variant: ~
                                           fields:
                                             - - pointer
                                               - type: Pointer
@@ -85,24 +89,28 @@ steps:
             filename: 0
           locals:
             - - v
-              - type: Struct
+              - type: Adt
                 value:
                   name: Vec
+                  variant: ~
                   fields:
                     - - buf
-                      - type: Struct
+                      - type: Adt
                         value:
                           name: RawVec
+                          variant: ~
                           fields:
                             - - ptr
-                              - type: Struct
+                              - type: Adt
                                 value:
                                   name: Unique
+                                  variant: ~
                                   fields:
                                     - - pointer
-                                      - type: Struct
+                                      - type: Adt
                                         value:
                                           name: NonNull
+                                          variant: ~
                                           fields:
                                             - - pointer
                                               - type: Pointer
@@ -166,24 +174,28 @@ steps:
             filename: 0
           locals:
             - - v
-              - type: Struct
+              - type: Adt
                 value:
                   name: Vec
+                  variant: ~
                   fields:
                     - - buf
-                      - type: Struct
+                      - type: Adt
                         value:
                           name: RawVec
+                          variant: ~
                           fields:
                             - - ptr
-                              - type: Struct
+                              - type: Adt
                                 value:
                                   name: Unique
+                                  variant: ~
                                   fields:
                                     - - pointer
-                                      - type: Struct
+                                      - type: Adt
                                         value:
                                           name: NonNull
+                                          variant: ~
                                           fields:
                                             - - pointer
                                               - type: Pointer
@@ -241,24 +253,28 @@ steps:
             filename: 0
           locals:
             - - v
-              - type: Struct
+              - type: Adt
                 value:
                   name: Vec
+                  variant: ~
                   fields:
                     - - buf
-                      - type: Struct
+                      - type: Adt
                         value:
                           name: RawVec
+                          variant: ~
                           fields:
                             - - ptr
-                              - type: Struct
+                              - type: Adt
                                 value:
                                   name: Unique
+                                  variant: ~
                                   fields:
                                     - - pointer
-                                      - type: Struct
+                                      - type: Adt
                                         value:
                                           name: NonNull
+                                          variant: ~
                                           fields:
                                             - - pointer
                                               - type: Pointer
