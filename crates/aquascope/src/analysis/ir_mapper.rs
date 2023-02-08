@@ -286,9 +286,10 @@ where
     let basic_blocks = total_location_map.keys().collect::<Vec<_>>();
 
     let entry_block = basic_blocks.iter().find(|&&&b1| {
-      basic_blocks
-        .iter()
-        .all(|&&b2| b1 == b2 || self.dominators.is_dominated_by(b2, b1))
+      basic_blocks.iter().all(|&&b2| {
+        self.dominators.is_reachable(b2)
+          && (b1 == b2 || self.dominators.is_dominated_by(b2, b1))
+      })
     });
 
     let exit_block = basic_blocks.iter().find(|&&&b1| {
