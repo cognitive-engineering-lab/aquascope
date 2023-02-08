@@ -1,0 +1,5 @@
+fn foo(b: Box<String>) -> String {
+    let s = *b;
+    let _a = `[s R-D]`;
+    s
+}

@@ -51,35 +51,41 @@ where
   ///
   pub(crate) never_write: HashSet<T::Path>,
 
-  /// A [`Path`] whose read permissions are refiend at [`Point`] due to an active [`Loan`].
+  /// A [`Path`] whose read permissions are refined at [`Point`] due to an active [`Loan`].
   ///
   /// .decl cannot_read(Path:path, Point:point)
   ///
   /// cannot_read(Path, Loan, Point) :-
-  ///    path_moved_at(Path, Point);
+  ///    path_maybe_uninitialized_on_entry(Path, Point).
+  ///
+  /// cannot_read(Path, Loan, Point) :-
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point),
   ///    loan_mutable(Loan).
   ///
   pub(crate) cannot_read: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
-  /// A [`Path`] whose write permissions are refiend at [`Point`] due to an active [`Loan`].
+  /// A [`Path`] whose write permissions are refined at [`Point`] due to an active [`Loan`].
   ///
   /// .decl cannot_write(Path:path, Point:point)
   ///
   /// cannot_write(Path, Loan, Point) :-
-  ///    path_moved_at(Path, Point);
+  ///    path_maybe_uninitialized_on_entry(Path, Point).
+  ///
+  /// cannot_write(Path, Loan, Point) :-
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point).
   ///
   pub(crate) cannot_write: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
-  /// A [`Path`] whose drop permissions are refiend at [`Point`] due to an active [`Loan`].
+  /// A [`Path`] whose drop permissions are refined at [`Point`] due to an active [`Loan`].
   ///
   /// .decl cannot_drop(Path, Loan, Point)
   ///
-  /// cannot_drop(Path, Loan, Point)
-  ///    path_moved_at(Path, Point);
+  /// cannot_drop(Path, Loan, Point) :-
+  ///    path_maybe_uninitialized_on_entry(Path, Point).
+  ///
+  /// cannot_drop(Path, Loan, Point) :-
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point).
   ///

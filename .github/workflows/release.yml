@@ -12,10 +12,12 @@ jobs:
       AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
     steps:
       - uses: actions/checkout@v2
+      - name: Setup
+        uses: ./.github/workflows/setup
       - name: Standalone connect
         run: |
           cd frontend
-          graco build
+          graco prepare
           cd packages/aquascope-standalone/dist
           python3 -m http.server 8000 &
           cd ../../../
@@ -25,9 +27,8 @@ jobs:
     needs: test
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v1
-      - run: npm install -g graco && cd frontend && graco prepare
-      - run: cargo doc --lib && mv ./target/doc ./frontend/packages/aquascope-standalone/dist/doc
+      - run: cargo doc --lib
+      - run: mv ./target/doc ./frontend/packages/aquascope-standalone/dist/doc
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:
           branch: gh-pages
