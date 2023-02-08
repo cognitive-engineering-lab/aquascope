@@ -1,3 +1,6 @@
+// NOTE: this is the same as interior_move.test but using a struct.
+
+#[derive(Debug)]
 struct Both {
     left: String,
     right: String,
@@ -13,14 +16,14 @@ fn main() {
 
     let _a = &`[left RWD]`;
 
-    let _a = &`[both RWD]`;
-    let _a = &`[both.left ---]`;
+    let _a = &`[both -W-]`;
+    let _a = &`[both.left -W-]`;
     let _a = &`[both.right RWD]`;
 
     println!("{left:?}");
 
-    let _a = &`[both RWD]`;
-    let _a = &`[both.left ---]`;
+    let _a = &`[both -W-]`;
+    let _a = &`[both.left -W-]`;
     let _a = &`[both.right RWD]`;
 
     both.left = "again".to_string();
@@ -28,4 +31,6 @@ fn main() {
     let _a = &`[both RWD]`;
     let _a = &`[both.left RWD]`;
     let _a = &`[both.right RWD]`;
+
+    println!("{both:?}");
 }
