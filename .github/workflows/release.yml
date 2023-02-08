@@ -27,7 +27,6 @@ jobs:
     needs: test
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v1
       - run: cargo doc --lib && mv ./target/doc ./frontend/packages/aquascope-standalone/dist/doc
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:
