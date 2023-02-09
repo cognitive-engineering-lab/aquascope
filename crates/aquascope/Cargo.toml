@@ -28,7 +28,7 @@ fluid-let = "1.0"
 
 # interpret module
 miri = {git = "https://github.com/rust-lang/miri.git", rev = "98ad06d856abb9b85ef1e3b234c2370076873b1b"}
-aquascope_workspace_utils = { path = "../aquascope_workspace_utils" }
+aquascope_workspace_utils = { version = "0.1", path = "../aquascope_workspace_utils" }
 
 # testing
 lazy_static = { version = "1.4", optional = true }
