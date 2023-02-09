@@ -12,8 +12,8 @@ jobs:
       AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
     steps:
       - uses: actions/checkout@v2
-      - name: Quick Setup
-        uses: ./.github/workflows/quick-setup
+      - name: Setup
+        uses: ./.github/workflows/setup
       - name: Standalone connect
         run: |
           cd frontend
