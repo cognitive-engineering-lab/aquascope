@@ -1,0 +1,25 @@
+fn use_s(s: String) {}
+fn use_t<T>(t: (T, T)) {}
+
+fn foo() {
+  let mut t = (String::from("1"), String::from("2"));
+
+  let s = t.0;
+
+  let _a = &`[t ---]`;
+  let _a = &`[t.0 ---]`;
+  let _a = &`[t.1 RWO]`;
+  let _a = &`[s R-O]`;
+
+  use_s(s);
+
+  let _a = &`[s ---]`;
+
+  t.0 = String::from("viola");
+
+  let _a = &`[t RWO]`;
+  let _a = &`[t.0 RWO]`;
+  let _a = &`[t.1 RWO]`;
+
+  use_t(t);
+}
