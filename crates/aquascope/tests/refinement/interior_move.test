@@ -6,8 +6,8 @@ fn foo() {
 
   let s = t.0;
 
-  let _a = &`[t -W-]`;
-  let _a = &`[t.0 -W-]`;
+  let _a = &`[t ---]`;
+  let _a = &`[t.0 ---]`;
   let _a = &`[t.1 RWO]`;
   let _a = &`[s R-O]`;
 

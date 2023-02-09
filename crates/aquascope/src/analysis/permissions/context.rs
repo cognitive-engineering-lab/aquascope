@@ -270,8 +270,10 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
       // A path is writeable IFF:
       // - the path's declared type allows for mutability.
+      // - the path is readable (you can't write if you can't read)
+      //   this implies that the path isn't moved.
       // - there doesn't exist a write-refining loan at this point.
-      let write = type_writeable && loan_write_refined.is_none();
+      let write = type_writeable && read && loan_write_refined.is_none();
 
       // A path is droppable if it is doppable or copyable.
       //

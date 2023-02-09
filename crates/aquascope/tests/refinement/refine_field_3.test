@@ -16,14 +16,14 @@ fn main() {
 
     let _a = &`[left RWD]`;
 
-    let _a = &`[both -W-]`;
-    let _a = &`[both.left -W-]`;
+    let _a = &`[both ---]`;
+    let _a = &`[both.left ---]`;
     let _a = &`[both.right RWD]`;
 
     println!("{left:?}");
 
-    let _a = &`[both -W-]`;
-    let _a = &`[both.left -W-]`;
+    let _a = &`[both ---]`;
+    let _a = &`[both.left ---]`;
     let _a = &`[both.right RWD]`;
 
     both.left = "again".to_string();

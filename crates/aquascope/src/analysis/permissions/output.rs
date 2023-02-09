@@ -38,6 +38,7 @@ where
   // only hold data referring to a live Loan regions.
   /// Paths which are *declared* as immutable.
   ///
+  /// ```text
   /// .decl never_write(Path)
   ///
   /// never_write(Path) :-
@@ -48,11 +49,13 @@ where
   ///    !is_direct(Path),
   ///    prefix_of(Prefix, Path),
   ///    is_immut_ref(Prefix).
+  /// ```
   ///
   pub(crate) never_write: HashSet<T::Path>,
 
   /// A [`Path`] whose read permissions are refined at [`Point`] due to an active [`Loan`].
   ///
+  /// ```text
   /// .decl cannot_read(Path:path, Point:point)
   ///
   /// cannot_read(Path, Loan, Point) :-
@@ -62,11 +65,13 @@ where
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point),
   ///    loan_mutable(Loan).
+  /// ```
   ///
   pub(crate) cannot_read: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
   /// A [`Path`] whose write permissions are refined at [`Point`] due to an active [`Loan`].
   ///
+  /// ```text
   /// .decl cannot_write(Path:path, Point:point)
   ///
   /// cannot_write(Path, Loan, Point) :-
@@ -75,11 +80,13 @@ where
   /// cannot_write(Path, Loan, Point) :-
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point).
+  /// ```
   ///
   pub(crate) cannot_write: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
   /// A [`Path`] whose drop permissions are refined at [`Point`] due to an active [`Loan`].
   ///
+  /// ```text
   /// .decl cannot_drop(Path, Loan, Point)
   ///
   /// cannot_drop(Path, Loan, Point) :-
@@ -92,9 +99,18 @@ where
   /// cannot_drop(Path, Loan, Point) :-
   ///    loan_conflicts_with(Loan, Path),
   ///    loan_live_at(Loan, Point).
+  /// ```
   ///
   pub(crate) cannot_drop: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
+  /// A [`Path`] that may be uninitialized on [`Point`] entry.
+  ///
+  /// Uninitialized can mean one of three things:
+  /// - The path was never initialized.
+  /// - The path has been moved.
+  /// - The path is partially moved (for ADTs).
+  ///
+  /// ```text
   /// .decl path_maybe_uninitialized_on_entry(Point, Path)
   ///
   /// path_maybe_uninitialized_on_entry(Point1, Path) :-
@@ -102,8 +118,9 @@ where
   ///    cfg_edge(Point0, Point1)
   ///
   /// path_maybe_uninitialized_on_entry(Point, PathParent) :-
-  ///    ancestor_path(PathParent, PathChild),
+  ///    child_path(PathChild, PathParent),
   ///    path_maybe_uninitialized_on_entry(PathChild, Point).
+  /// ```
   ///
   pub(crate) path_maybe_uninitialized_on_entry:
     HashMap<T::Point, HashSet<T::Path>>,

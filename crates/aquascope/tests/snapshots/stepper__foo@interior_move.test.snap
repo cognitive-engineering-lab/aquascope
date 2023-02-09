@@ -142,8 +142,7 @@ description: foo@interior_move.test
           read:
             type: Low
           write:
-            type: None
-            value: true
+            type: Low
           drop:
             type: Low
     - - t.0
@@ -169,8 +168,7 @@ description: foo@interior_move.test
           read:
             type: Low
           write:
-            type: None
-            value: true
+            type: Low
           drop:
             type: Low
 - - 5
@@ -224,7 +222,7 @@ description: foo@interior_move.test
             type: High
             value: true
           write:
-            type: None
+            type: High
             value: true
           drop:
             type: High
@@ -252,7 +250,7 @@ description: foo@interior_move.test
             type: High
             value: true
           write:
-            type: None
+            type: High
             value: true
           drop:
             type: High
