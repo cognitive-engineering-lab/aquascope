@@ -38,4 +38,4 @@ wait-timeout = "0.2"
 
 [dev-dependencies]
 mdbook-aquascope = { path = ".", features = ["dev"] }
-maplit = "*"
+maplit = "1.0"
