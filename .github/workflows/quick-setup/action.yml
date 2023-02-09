@@ -1,0 +1,18 @@
+name: setup
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v2
+    - uses: davidB/rust-cargo-make@v1
+    - uses: actions-rs/install@v0.1
+      with:
+        crate: cargo-insta
+        version: latest
+        use-tool-cache: true
+    - name: Gen bindings
+      run: cargo make init-bindings
+      shell: bash
+
+    - name: Prepare frontend
+      run: npm install -g graco && cd frontend && graco prepare
+      shell: bash

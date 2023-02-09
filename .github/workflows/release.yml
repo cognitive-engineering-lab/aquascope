@@ -26,8 +26,14 @@ jobs:
   publish-standalone-and-docs:
     needs: test
     runs-on: ubuntu-20.04
+    env:
+      AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
     steps:
+      - uses: actions/checkout@v2
+      - name: Quick Setup
+        uses: ./.github/workflows/quick-setup
       - run: cargo doc --lib
+      - run: cd frontend && graco build
       - run: mv ./target/doc ./frontend/packages/aquascope-standalone/dist/doc
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:

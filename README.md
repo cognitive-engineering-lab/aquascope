@@ -2,9 +2,9 @@
 
 [![tests](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml/badge.svg)](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/mdbook-aquascope.svg)](https://crates.io/crates/mdbook-aquascope)
-[![docs](https://img.shields.io/badge/docs-unpublished-red)](https://cognitive-engineering-lab/aquascope/docs)
+[![docs](https://img.shields.io/badge/docs-built-blue)](https://cognitive-engineering-lab.github.io/aquascope/doc/aquascope/)
 
-_Aquascope_ is a tool that generates interactive visualizations of Rust programs. These visualizations show how Rust's borrow checker "thinks" about a program, and how a Rust program actually executes. [Click here for a live demo.](https://gavinleroy.com/aquascope)
+_Aquascope_ is a tool that generates interactive visualizations of Rust programs. These visualizations show how Rust's borrow checker "thinks" about a program, and how a Rust program actually executes. [Click here for a live demo.](https://cognitive-engineering-lab.github.io/aquascope/)
 
 <!-- Borrow check information is reformulated in terms of _permissions_, a new pedagogy of ownership to provide learners with a notional machine for this kind of static analysis. Example visualizations and this new pedagogy are demonstrated in the [Rust Book Experiment](https://rust-book.cs.brown.edu/). -->
 
@@ -12,11 +12,15 @@ _Aquascope_ is a tool that generates interactive visualizations of Rust programs
 
 ## Installation
 
-We provide an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor `mdbook-aquascope` that embeds Aquascope diagrams into an mdBook. You can install `mdbook-aquascope` either via <https://crates.io> or from source.
+We provide an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor `mdbook-aquascope` that embeds Aquascope diagrams into an mdBook. You can install `mdbook-aquascope` either via [crates.io](https://crates.io) or from source.
 
 ### From crates.io
 
-> :exclamation: `mdbook-aquascope` will be released in a few days on crates.io, stay tuned.
+You can run `cargo install mdbook-aquascope` to install from [crates.io](https://crates.io). 
+
+> Note, Aquascope is tied to a specific version of `rustc` and you will need to use toolchain `nightly-2022-12-07`.
+
+To embed the visualizations you will also need the crate [`aquascope_front`](https://github.com/cognitive-engineering-lab/aquascope/tree/main/crates/aquascope_front). Due to unpublished dependencies this crate is not available from crates.io but can be installed via `cargo install --git https://github.com/cognitive-engineering-lab/aquascope aquascope_front`. 
 
 <!--
 ```sh

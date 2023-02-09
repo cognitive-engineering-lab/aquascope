@@ -7,6 +7,7 @@ authors = [
 version = "0.1.0"
 license = "MIT"
 edition = "2021"
+description = "Handy utilities for working in the Aquascope workspace"
 repository = "https://github.com/cognitive-engineering-lab/aquascope"
 include = [
   "src/**/*",
