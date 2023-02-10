@@ -17,6 +17,7 @@ use crate::{
     permissions::{Permissions, PermissionsData},
     AquascopeAnalysis,
   },
+  errors,
   mir::utils::PlaceExt,
 };
 
@@ -169,14 +170,28 @@ impl IntoMany for PathBoundary<'_, '_> {
 // ----------------------------------
 // Entry
 
-#[allow(clippy::module_name_repetitions)]
+#[allow(clippy::module_name_repetitions, clippy::similar_names)]
 pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
   ctxt: &AquascopeAnalysis<'a, 'tcx>,
 ) -> Result<Vec<PermissionsBoundary>> {
-  let path_use_points =
-    get_path_boundaries(ctxt.permissions.tcx, ctxt.permissions.body_id, ctxt)
-      .into_iter()
-      .map(IntoMany::into_many);
+  let pctxt = &ctxt.permissions;
+  let tcx = pctxt.tcx;
 
-  Ok(path_use_points.flatten().collect::<Vec<_>>())
+  let path_use_points = get_path_boundaries(tcx, pctxt.body_id, ctxt)
+    .into_iter()
+    .map(IntoMany::into_many);
+
+  let first_error_span_opt =
+    errors::get_span_of_first_error(pctxt.def_id.expect_local())
+      .and_then(|s| s.as_local(pctxt.body_with_facts.body.span));
+
+  let boundaries = path_use_points
+    .flatten()
+    .filter(|pb| {
+      first_error_span_opt
+        .map_or(true, |error_span| (pb.location as u32) <= error_span.hi().0)
+    })
+    .collect::<Vec<_>>();
+
+  Ok(boundaries)
 }

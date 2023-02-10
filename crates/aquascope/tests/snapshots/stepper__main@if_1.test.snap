@@ -73,8 +73,7 @@ description: main@if_1.test
           type: None
           value: true
         path_moved:
-          type: None
-          value: false
+          type: Low
         loan_read_refined:
           type: None
         loan_write_refined:
@@ -160,8 +159,7 @@ description: main@if_1.test
           type: None
           value: true
         path_moved:
-          type: None
-          value: false
+          type: Low
         loan_read_refined:
           type: None
         loan_write_refined:

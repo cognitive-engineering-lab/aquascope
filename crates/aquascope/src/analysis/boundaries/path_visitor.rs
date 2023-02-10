@@ -1,6 +1,7 @@
 use rustc_hir::{
+  def::Res,
   intravisit::{self, Visitor},
-  BodyId, Expr, ExprKind, Mutability,
+  BodyId, Expr, ExprKind, Mutability, Path, QPath,
 };
 use rustc_middle::{
   hir::nested_filter::OnlyBodies,
@@ -27,7 +28,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
     let hir_id = expr.hir_id;
 
     log::debug!(
-      "visiting {}",
+      "visiting {}\n\n",
       self.nested_visit_map().node_to_string(hir_id)
     );
 
@@ -78,15 +79,28 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
                 };
 
                 self.data.push(pb);
-
-                if !matches!(inner.kind, ExprKind::Path(..)) {
-                    intravisit::walk_expr(self, expr);
-                }
             }
+
+
+            // NOTE: it feels natural to say that the LHS of an assignment
+            // should expect W permissions. However, this isn't always the case.
+            // It's true that the path should be declared as *Mutable*, but
+            // this doesn't mean that there's write permissions. Example:
+            //
+            // ```text
+            // let s;
+            // s = "all good".to_string();
+            // ```
+            //
+            // `s` would not have write permissions because it is not yet initialized.
+            // For now, the LHS is simply ignored from the boundaries analysis.
+            ExprKind::Assign(_, rhs, _) => {
+                self.visit_expr(rhs);
+            },
 
             ExprKind::AssignOp(_, lhs, rhs) => {
                 let lhs_ty = self.typeck_res.expr_ty_adjusted(lhs);
-                log::debug!("Type of LHS: {:?}", lhs_ty);
+                log::debug!("Type of LHS: {:#?}", lhs_ty);
 
 
                 let pb = PathBoundary {
@@ -107,43 +121,29 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
             }
 
             // XXX: we only want to attach permissions to path resolved to `Local` ids.
-            // FIXME: the commented out region produced some hard-to-resolve bugs
-            // which I will come back to later. An example,
-            // ```
-            // fn foo(s: &String, b: &mut String) {}
-            //
-            // fn main() {
-            //   let mut x = "s".to_owned();
-            //   let w: &mut String = &mut x;
-            //   foo(&x, w);
-            // }
-            // ```
-            // if you allow a permission stack to be placed at the `w` in
-            // the Call `foo( &x, w )`, the analysis will currently
-            // find the permissions for the path `(*w)`, even though,
-            // it is actually reborrowed before the call. Thus, falsely
-            // showing that the drop permission is missing.
-            //
-            // ExprKind::Path(QPath::Resolved(
-            //   _,
-            //   Path {
-            //     span,
-            //     res: Res::Local(_),
-            //     ..
-            //   },
-            // )) if !span.from_expansion() => {
-            //   let pb = PathBoundary {
-            //     hir_id,
-            //     location: span.shrink_to_lo(),
-            //     expected: Permissions {
-            //       read: true,
-            //       write: false,
-            //       drop: true,
-            //     },
-            //     analysis_ctxt: self.ctxt,
-            //   };
-            //   self.data.push(pb);
-            // }
+            ExprKind::Path(QPath::Resolved(
+                _,
+                Path {
+                    span,
+                    res: Res::Local(_),
+                    ..
+                },
+            )) if !span.from_expansion() => {
+
+                log::warn!("Path usage TYPE: {:#?}", self.typeck_res.expr_ty_adjusted(expr));
+
+                let pb = PathBoundary {
+                    hir_id,
+                    location: span.shrink_to_lo(),
+                    expected: Permissions {
+                        read: true,
+                        write: false,
+                        drop: true,
+                    },
+                    analysis_ctxt: self.ctxt,
+                };
+                self.data.push(pb);
+            }
 
             _ => {
                 intravisit::walk_expr(self, expr);

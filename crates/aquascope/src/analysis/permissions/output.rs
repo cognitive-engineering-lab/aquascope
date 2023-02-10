@@ -239,6 +239,28 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   let path_maybe_uninitialized_on_entry =
     path_maybe_uninitialized_on_entry.complete();
 
+  // FIXME(gavinleroy): it feels a little uncomfortable to have type-level logic at this point.
+  // `child_path` does not consider "unmoveable" paths. However, if a reference
+  // is ever uninitialized, this means that any interior
+  // place is also not initialized.
+  let path_maybe_uninitialized_on_entry: Relation<(Path, Point)> =
+    Relation::from_iter(path_maybe_uninitialized_on_entry.iter().flat_map(
+      |&(path, point)| {
+        let place = ctxt.path_to_place(path);
+        if place.ty(body, tcx).ty.is_ref() {
+          // Memory regions cannot be accessed through uninitialied references.
+          place
+            .interior_paths(tcx, body, def_id.to_def_id())
+            .into_iter()
+            .map(|pl| (ctxt.place_to_path(&pl), point))
+            .collect::<Vec<_>>()
+        } else {
+          // Direct paths do not affect interior initialization
+          vec![(path, point)]
+        }
+      },
+    ));
+
   let loan_to_borrow = |l: Loan| &ctxt.borrow_set[l];
 
   let is_never_write = |path: Path| {

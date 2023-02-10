@@ -44,8 +44,7 @@ description: main@for_loop_0.test
           type: None
           value: true
         path_moved:
-          type: None
-          value: false
+          type: Low
         loan_read_refined:
           type: None
         loan_write_refined:
