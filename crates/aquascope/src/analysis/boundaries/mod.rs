@@ -177,7 +177,7 @@ pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
   let pctxt = &ctxt.permissions;
   let tcx = pctxt.tcx;
 
-  let path_use_points = get_path_boundaries(tcx, pctxt.body_id, ctxt)
+  let path_use_points = get_path_boundaries(tcx, pctxt.body_id, ctxt)?
     .into_iter()
     .map(IntoMany::into_many);
 

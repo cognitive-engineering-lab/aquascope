@@ -1,12 +1,16 @@
+use anyhow::{bail, Result};
+use flowistry::mir::utils::SpanExt;
 use rustc_hir::{
   def::Res,
   intravisit::{self, Visitor},
-  BodyId, Expr, ExprKind, Mutability, Path, QPath,
+  BodyId, Expr, ExprKind, HirId, Local, Mutability, Path, QPath, Stmt,
+  StmtKind,
 };
 use rustc_middle::{
   hir::nested_filter::OnlyBodies,
   ty::{TyCtxt, TypeckResults},
 };
+use rustc_span::Span;
 
 use super::{AquascopeAnalysis, PathBoundary, Permissions};
 
@@ -14,7 +18,25 @@ struct HirExprScraper<'a, 'tcx: 'a> {
   tcx: TyCtxt<'tcx>,
   typeck_res: &'a TypeckResults<'tcx>,
   data: Vec<PathBoundary<'a, 'tcx>>,
+  unsupported_feature: Option<(Span, String)>,
   ctxt: &'a AquascopeAnalysis<'a, 'tcx>,
+}
+
+impl<'a, 'tcx: 'a> HirExprScraper<'a, 'tcx> {
+  fn span_of(&self, id: HirId) -> Span {
+    let hir = self.ctxt.permissions.tcx.hir();
+    let span = hir.span(id);
+    span
+      .as_local(self.ctxt.permissions.body_with_facts.body.span)
+      .unwrap_or(span)
+  }
+
+  fn report_unsupported(&mut self, id: HirId, msg: &str) {
+    if self.unsupported_feature.is_none() {
+      let span = self.span_of(id);
+      self.unsupported_feature = Some((span, String::from(msg)));
+    }
+  }
 }
 
 impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
@@ -22,6 +44,17 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
 
   fn nested_visit_map(&mut self) -> Self::Map {
     self.tcx.hir()
+  }
+
+  fn visit_stmt(&mut self, stmt: &'tcx Stmt) {
+    if matches!(stmt.kind, StmtKind::Local(Local { ty: Some(_), .. })) {
+      self.report_unsupported(
+        stmt.hir_id,
+        "A local assignment with user-specified type annotation is unsupported",
+      )
+    } else {
+      intravisit::walk_stmt(self, stmt)
+    }
   }
 
   fn visit_expr(&mut self, expr: &'tcx Expr) {
@@ -156,14 +189,21 @@ pub(super) fn get_path_boundaries<'a, 'tcx: 'a>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
   ctxt: &'a AquascopeAnalysis<'a, 'tcx>,
-) -> Vec<PathBoundary<'a, 'tcx>> {
+) -> Result<Vec<PathBoundary<'a, 'tcx>>> {
   let typeck_res = tcx.typeck_body(body_id);
   let mut finder = HirExprScraper {
     tcx,
     typeck_res,
+    unsupported_feature: None,
     ctxt,
     data: Vec::default(),
   };
+
   finder.visit_nested_body(body_id);
-  finder.data
+
+  if let Some((_, msg)) = finder.unsupported_feature {
+    bail!(msg);
+  }
+
+  Ok(finder.data)
 }
