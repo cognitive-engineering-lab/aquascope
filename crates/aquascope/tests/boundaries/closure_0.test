@@ -1,0 +1,11 @@
+fn main() {
+  let mut s = String::from("");
+  let yay = || {
+    s.push_str("yay");
+  };
+
+  yay();
+  yay();
+  yay();
+  println!("{}", s);
+}

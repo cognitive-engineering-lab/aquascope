@@ -272,5 +272,10 @@ where
   let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
   let permissions_ctxt = &ctxt.permissions;
   let span_to_range = |span| ctxt.span_to_range(span);
-  find_steps::compute_permission_steps(permissions_ctxt, mode, span_to_range)
+  find_steps::compute_permission_steps(
+    permissions_ctxt,
+    &ctxt.ir_mapper,
+    mode,
+    span_to_range,
+  )
 }

@@ -1,0 +1,80 @@
+---
+source: crates/aquascope/tests/boundaries.rs
+description: main@if_0.test
+---
+- location: 108
+  expected:
+    read: true
+    write: true
+    drop: false
+  actual:
+    type_droppable: true
+    type_writeable: true
+    type_copyable: false
+    is_live: true
+    path_moved: false
+    permissions:
+      read: true
+      write: true
+      drop: true
+- location: 131
+  expected:
+    read: true
+    write: true
+    drop: false
+  actual:
+    type_droppable: true
+    type_writeable: true
+    type_copyable: false
+    is_live: true
+    path_moved: false
+    permissions:
+      read: true
+      write: true
+      drop: true
+- location: 143
+  expected:
+    read: true
+    write: true
+    drop: false
+  actual:
+    type_droppable: false
+    type_writeable: true
+    type_copyable: false
+    is_live: true
+    path_moved: false
+    permissions:
+      read: true
+      write: true
+      drop: false
+- location: 165
+  expected:
+    read: true
+    write: true
+    drop: false
+  actual:
+    type_droppable: true
+    type_writeable: true
+    type_copyable: false
+    is_live: true
+    path_moved: false
+    permissions:
+      read: true
+      write: true
+      drop: true
+- location: 188
+  expected:
+    read: true
+    write: true
+    drop: false
+  actual:
+    type_droppable: true
+    type_writeable: true
+    type_copyable: false
+    is_live: true
+    path_moved: false
+    permissions:
+      read: true
+      write: true
+      drop: true
+

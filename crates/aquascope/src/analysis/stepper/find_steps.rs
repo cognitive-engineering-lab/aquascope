@@ -201,7 +201,7 @@ use super::{
 };
 use crate::{
   analysis::{
-    ir_mapper::{GatherDepth, GatherMode, IRMapper},
+    ir_mapper::{GatherDepth, IRMapper},
     permissions::{
       Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
     },
@@ -213,6 +213,7 @@ use crate::{
 
 pub fn compute_permission_steps<'a, 'tcx>(
   ctxt: &PermissionsCtxt<'a, 'tcx>,
+  ir_mapper: &IRMapper<'a, 'tcx>,
   mode: PermIncludeMode,
   span_to_range: impl Fn(Span) -> Range,
 ) -> Result<Vec<PermissionsLineDisplay>>
@@ -221,7 +222,7 @@ where
 {
   let body = &ctxt.body_with_facts.body;
   let _basic_blocks = body.basic_blocks.indices();
-  let mut hir_visitor = HirStepPoints::make(ctxt)?;
+  let mut hir_visitor = HirStepPoints::make(ctxt, ir_mapper)?;
   hir_visitor.visit_nested_body(ctxt.body_id);
 
   log::debug!(
@@ -281,7 +282,10 @@ fn prettify_permission_steps<'tcx>(
   perm_steps
     .into_iter()
     .fold(
-      HashMap::<Span, Vec<(MirSegment, Vec<(Place<'tcx>, PermissionsDataDiff)>)>>::default(),
+      HashMap::<
+        Range,
+        Vec<(MirSegment, Vec<(Place<'tcx>, PermissionsDataDiff)>)>,
+      >::default(),
       |mut acc, (span, (segment, place_to_diffs))| {
         // Attach the span to the end of the line. Later, all permission
         // steps appearing on the same line will be combined.
@@ -303,37 +307,34 @@ fn prettify_permission_steps<'tcx>(
           || first_error_span_opt
             .is_some_and(|err_span| err_span.hi() < span.lo()))
         {
-          acc.entry(span).or_default().push((segment, entries));
+          let range = span_to_range(span);
+          acc.entry(range).or_default().push((segment, entries));
         }
 
         acc
       },
     )
     .into_iter()
-    .map(|(span, mut entries)| {
-      let range = span_to_range(span);
-
+    .map(|(range, mut entries)| {
       for (_, v) in entries.iter_mut() {
         v.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection))
       }
 
       let state = entries
         .into_iter()
-        .map(|(MirSegment {from,to}, diffs)| {
-
-          let state = diffs.into_iter().map(|(place, diff)| {
-            let s = place_to_string!(place);
-            (s, diff)
-          }).collect::<Vec<_>>();
+        .map(|(MirSegment { from, to }, diffs)| {
+          let state = diffs
+            .into_iter()
+            .map(|(place, diff)| {
+              let s = place_to_string!(place);
+              (s, diff)
+            })
+            .collect::<Vec<_>>();
 
           let from = span_to_range(ctxt.location_to_span(from));
           let to = span_to_range(ctxt.location_to_span(to));
 
-          PermissionsStepTable {
-            from,
-            to,
-            state,
-          }
+          PermissionsStepTable { from, to, state }
         })
         .collect::<Vec<_>>();
 
@@ -363,18 +364,19 @@ where
   'tcx: 'a,
 {
   ctxt: &'a PermissionsCtxt<'a, 'tcx>,
-  ir_mapper: IRMapper<'a, 'tcx>,
+  ir_mapper: &'a IRMapper<'a, 'tcx>,
   mir_segments: Box<SegmentTree>,
   unsupported_encounter: Option<(Span, String)>,
   fatal_error: String,
 }
 
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
-  fn make(ctxt: &'a PermissionsCtxt<'a, 'tcx>) -> Result<Self> {
+  fn make(
+    ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+    ir_mapper: &'a IRMapper<'a, 'tcx>,
+  ) -> Result<Self> {
     let tcx = ctxt.tcx;
     let hir = tcx.hir();
-    let body = &ctxt.body_with_facts.body;
-    let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
     let body = &hir.body(ctxt.body_id);
     let body_hir_id = body.value.hir_id;
     let body_span = body.value.span;
