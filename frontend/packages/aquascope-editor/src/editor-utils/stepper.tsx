@@ -83,13 +83,16 @@ let PermRow = ({
   let w = (idx: number) =>
     (idx / content.length) * 100 + 100 / content.length - 5 + "%";
 
+  // FIXME: don't reverse the abbreviated content.
   let getKind = (c: string) => {
     if (c === "R") {
-      return "write";
+      return "read";
     } else if (c === "W") {
       return "write";
-    } else {
+    } else if (c == "O") {
       return "drop";
+    } else {
+      return "unknown";
     }
   };
 

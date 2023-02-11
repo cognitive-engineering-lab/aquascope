@@ -7,13 +7,21 @@ $transparent: rgba(0, 0, 0, 0);
 
   // Colors for permission stacks
   --aq-read-color: #4ebeef;
-  --aq-write-color: #5dca36;
-  --aq-drop-color: #ff4244;
+  // --aq-write-color: #5dca36;
+  // --aq-drop-color: #ff4244;
+  --aq-write-color: #ba18e7;
+  --aq-drop-color: #ffa500;
 
   // Permission stacks colors for use with CSS color mixing
   --aq-read-rgb-color: 78, 190, 239;
-  --aq-write-rgb-color: 93, 202, 54;
-  --aq-drop-rgb-color: 255, 66, 68;
+  // --aq-write-rgb-color: 93, 202, 54;
+  // --aq-drop-rgb-color: 255, 66, 68;
+  --aq-write-rgb-color: 186, 24, 231;
+  --aq-drop-rgb-color: 255, 165, 0;
+
+  // For step table permission colors
+  --aq-perm-gain-color: #5dca36;
+  --aq-perm-loss-color: #ff4244;
 
   --aq-error: red;
   --aq-error-text: white;
@@ -31,7 +39,7 @@ $transparent: rgba(0, 0, 0, 0);
   --aq-step-table-background: whitesmoke;
 }
 
-$glyph-width: 14px;
+$glyph-width: 16px;
 
 @mixin button {
   background-color: var(--aq-button-background);
@@ -210,8 +218,9 @@ $glyph-width: 14px;
   svg.permission-row {
     stroke-width: 2;
     paint-order: stroke;
-    width: 3 * $glyph-width + 10px;
+    width: 4 * $glyph-width + 10px;
     height: $glyph-width + 5px;
+    font-weight: bold;
 
     > text {
       font-family: "Verdana";
@@ -220,13 +229,13 @@ $glyph-width: 14px;
 
       // Specific to the step tables
       &.perm-diff-add {
-        stroke: rgb(93, 202, 54);
-        fill: rgb(93, 202, 54);
+        stroke: var(--aq-perm-gain-color);
+        fill: var(--aq-perm-gain-color);
       }
 
       &.perm-diff-sub {
-        stroke: rgb(255, 66, 68);
-        fill: rgb(255, 66, 68);
+        stroke: var(--aq-perm-loss-color);
+        fill: var(--aq-perm-loss-color);
       }
 
       &.perm-diff-none {
@@ -317,23 +326,23 @@ $glyph-width: 14px;
   }
 
   span.perm-diff-add {
-    color: rgb(93, 202, 54);
+    color: var(--aq-perm-gain-color);
   }
 
   span.perm-diff-sub {
-    color: rgb(255, 66, 68);
+    color: var(--aq-perm-loss-color);
   }
 
   span.perm-diff-none {
-    color: black;
+    color: var(--aq-step-table-text);
   }
 
   span.perm-diff-none-high {
-    color: black;
+    color: var(--aq-step-table-text);
   }
 
   span.perm-diff-none-low {
-    color: black;
+    color: var(--aq-step-table-text);
     // opacity: 0.4;
   }
 
