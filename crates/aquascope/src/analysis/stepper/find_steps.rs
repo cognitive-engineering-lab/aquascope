@@ -320,7 +320,7 @@ fn prettify_permission_steps<'tcx>(
         v.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection))
       }
 
-      let state = entries
+      let mut state = entries
         .into_iter()
         .map(|(MirSegment { from, to }, diffs)| {
           let state = diffs
@@ -338,9 +338,19 @@ fn prettify_permission_steps<'tcx>(
         })
         .collect::<Vec<_>>();
 
+      // HACK FIXME: we're at odds with the multi-table setup. This quick
+      // hack combines table entries into a single table until the
+      // visual explanation gets up-to-speed.
+      let initial_table = state.pop().unwrap();
+      let master_table =
+        state.into_iter().fold(initial_table, |mut acc, table| {
+          acc.state.extend(table.state);
+          acc
+        });
+
       PermissionsLineDisplay {
         location: range,
-        state,
+        state: vec![master_table],
       }
     })
     .collect::<Vec<_>>()
