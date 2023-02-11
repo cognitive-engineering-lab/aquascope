@@ -341,12 +341,10 @@ fn prettify_permission_steps<'tcx>(
       // HACK FIXME: we're at odds with the multi-table setup. This quick
       // hack combines table entries into a single table until the
       // visual explanation gets up-to-speed.
-      let initial_table = state.pop().unwrap();
-      let master_table =
-        state.into_iter().fold(initial_table, |mut acc, table| {
-          acc.state.extend(table.state);
-          acc
-        });
+      let mut master_table = state.pop().unwrap();
+      for table in state.into_iter() {
+        master_table.state.extend(table.state);
+      }
 
       PermissionsLineDisplay {
         location: range,
