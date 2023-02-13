@@ -6,9 +6,12 @@ import "./styles.scss";
 const AQUASCOPE_NAME = "aquascope";
 const EMBED_NAME = "aquascope-embed";
 
-let initEditors = () => {
-  // embedded aquascope editors should be <div> tags with the class 'aquascope'
-  document.querySelectorAll<HTMLDivElement>("." + EMBED_NAME).forEach(elem => {
+declare global {
+  function initAquascopeBlocks(root: HTMLElement): void;
+}
+
+window.initAquascopeBlocks = (root: HTMLElement) => {
+  root.querySelectorAll<HTMLDivElement>("." + EMBED_NAME).forEach(elem => {
     elem.classList.remove(EMBED_NAME);
     elem.classList.add(AQUASCOPE_NAME);
 
@@ -39,16 +42,16 @@ let initEditors = () => {
       : undefined;
 
     let shouldFailHtml = `
-    <div class="ferris-container">
-      <a href="ch00-00-introduction.html#ferris" target="_blank">
-        <img
-          src="img/ferris/does_not_compile.svg"
-          title="This code does not compile!"
-          class="ferris ferris-large"
-        />
-      </a>
-    </div>
-    `;
+  <div class="ferris-container">
+    <a href="ch00-00-introduction.html#ferris" target="_blank">
+      <img
+        src="img/ferris/does_not_compile.svg"
+        title="This code does not compile!"
+        class="ferris ferris-large"
+      />
+    </a>
+  </div>
+  `;
 
     let ed = new Editor(
       elem,
@@ -90,4 +93,8 @@ let initEditors = () => {
   });
 };
 
-window.addEventListener("load", initEditors, false);
+window.addEventListener(
+  "load",
+  () => initAquascopeBlocks(document.body),
+  false
+);

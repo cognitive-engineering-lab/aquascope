@@ -398,11 +398,14 @@ const PALETTE = {
 };
 
 let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
-  let ref = useRef<HTMLDivElement>(null);
+  let stepContainerRef = useRef<HTMLDivElement>(null);
+  let arrowContainerRef = useRef<HTMLDivElement>(null);
   let config = useContext(ConfigContext);
   let error = useContext(ErrorContext);
   useEffect(() => {
-    let stepContainer = ref.current!;
+    let stepContainer = stepContainerRef.current!;
+    let arrowContainer = arrowContainerRef.current!;
+
     let query = (sel: string): HTMLElement => {
       let dst = stepContainer.querySelector<HTMLElement>("." + CSS.escape(sel));
       if (!dst)
@@ -419,66 +422,62 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
       "--inline-code-color"
     );
 
-    let lines = Array.from(pointers)
-      .map((src, i) => {
-        try {
-          let dstSel = src.dataset.pointTo!;
-          let dst = query(dstSel);
-          let dstRange = src.dataset.pointToRange
-            ? query(src.dataset.pointToRange)
-            : undefined;
-          let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+    Array.from(pointers).forEach((src, i) => {
+      try {
+        let dstSel = src.dataset.pointTo!;
+        let dst = query(dstSel);
+        let dstRange = src.dataset.pointToRange
+          ? query(src.dataset.pointToRange)
+          : undefined;
+        let endSocket = dst.dataset.connector as LeaderLine.SocketType;
 
-          let dstAnchor = dstRange
-            ? LeaderLine.areaAnchor(dst, {
-                shape: "rect",
-                width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
-                height: 2,
-                y: "100%",
-                fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
-              })
-            : dstSel.startsWith("stack")
-            ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
-            : dst;
+        let dstAnchor = dstRange
+          ? LeaderLine.areaAnchor(dst, {
+              shape: "rect",
+              width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
+              height: 2,
+              y: "100%",
+              fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
+            })
+          : dstSel.startsWith("stack")
+          ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
+          : dst;
 
-          const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
-          let isDark = MDBOOK_DARK_THEMES.some(s =>
-            document.documentElement.classList.contains(s)
-          );
-          let theme: "dark" | "light" = isDark ? "dark" : "light";
-          let palette = PALETTE[theme];
-          let color = palette[i % palette.length];
+        const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
+        let isDark = MDBOOK_DARK_THEMES.some(s =>
+          document.documentElement.classList.contains(s)
+        );
+        let theme: "dark" | "light" = isDark ? "dark" : "light";
+        let palette = PALETTE[theme];
+        let color = palette[i % palette.length];
 
-          let line = new LeaderLine(src, dstAnchor, {
-            color,
-            size: 1,
-            endPlugSize: 2,
-            startSocket: "right",
-            endSocket,
-          });
-          return line;
-        } catch (e: any) {
-          console.error("Leader line failed to render", e.stack);
-          return undefined;
-        }
-      })
-      .filter(l => l) as LeaderLine[];
+        let line = new LeaderLine(src, dstAnchor, {
+          color,
+          size: 1,
+          endPlugSize: 2,
+          startSocket: "right",
+          endSocket,
+        });
 
-    let reposition = () => lines.forEach(line => line.position());
+        // Make arrows local to the diagram rather than global in the body
+        // See: https://github.com/anseki/leader-line/issues/54
+        let lineEl = document.body.querySelector(
+          ":scope > .leader-line:last-of-type"
+        );
+        if (!lineEl) throw new Error("Missing line el?");
+        arrowContainer.appendChild(lineEl);
 
-    let lastPos = stepContainer.getBoundingClientRect();
-    let interval = setInterval(() => {
-      let curPos = stepContainer.getBoundingClientRect();
-      if (curPos.x != lastPos.x || curPos.y != lastPos.y) reposition();
-      lastPos = curPos;
-    }, 300);
-    let timeout = setTimeout(() => reposition(), 300);
+        return line;
+      } catch (e: any) {
+        console.error("Leader line failed to render", e.stack);
+        return undefined;
+      }
+    });
 
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
-      lines.forEach(line => line.remove());
-    };
+    let stepBox = stepContainer.getBoundingClientRect();
+    let x = stepBox.left + window.scrollX;
+    let y = stepBox.top + window.scrollY;
+    arrowContainer.style.transform = `translate(-${x}px, -${y}px)`;
   }, [config.concreteTypes]);
 
   return (
@@ -496,9 +495,14 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
           </span>
         ) : null}
       </div>
-      <div className="memory-container" ref={ref}>
-        <StackView stack={step.stack} />
-        {step.heap.locations.length > 0 ? <HeapView heap={step.heap} /> : null}
+      <div className="memory-container" ref={stepContainerRef}>
+        <div className="arrow-container" ref={arrowContainerRef} />
+        <div className="memory-container-flex">
+          <StackView stack={step.stack} />
+          {step.heap.locations.length > 0 ? (
+            <HeapView heap={step.heap} />
+          ) : null}
+        </div>
       </div>
     </div>
   );

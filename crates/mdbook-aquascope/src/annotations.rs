@@ -3,6 +3,7 @@
 use std::{collections::HashMap, hash::Hash};
 
 use anyhow::Result;
+use itertools::Itertools;
 use regex::Regex;
 use serde::Serialize;
 use ts_rs::TS;
@@ -48,18 +49,20 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
   let marker_interp = ("`[", "]`", "interp");
   let marker_stepper = ("`(", ")`", "stepper");
 
-  let pattern = [marker_interp, marker_stepper]
-    .into_iter()
-    .map(|(open, close, name)| {
-      format!(
-        "{}(?P<{name}>[^{}]*){}",
-        regex::escape(open),
-        regex::escape(&close[.. 1]),
-        regex::escape(close)
-      )
-    })
-    .intersperse("|".into())
-    .collect::<String>();
+  let pattern = Itertools::intersperse(
+    [marker_interp, marker_stepper]
+      .into_iter()
+      .map(|(open, close, name)| {
+        format!(
+          "{}(?P<{name}>[^{}]*){}",
+          regex::escape(open),
+          regex::escape(&close[.. 1]),
+          regex::escape(close)
+        )
+      }),
+    "|".into(),
+  )
+  .collect::<String>();
   let re = Regex::new(&pattern)?;
 
   let mut annots = AquascopeAnnotations::default();
@@ -120,9 +123,7 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
     output_lines.push(fragments);
   }
 
-  let output = output_lines
-    .into_iter()
-    .intersperse(vec!["\n"])
+  let output = Itertools::intersperse(output_lines.into_iter(), vec!["\n"])
     .flatten()
     .collect::<String>();
   Ok((output, annots))

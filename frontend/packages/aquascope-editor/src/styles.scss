@@ -35,6 +35,7 @@ $transparent: rgba(0, 0, 0, 0);
   --aq-step-table-background: whitesmoke;
 }
 
+$base-z-index: 10;
 $glyph-width: 16px;
 
 @mixin button {
@@ -82,7 +83,7 @@ $glyph-width: 16px;
   }
 
   .top-right {
-    z-index: 10;
+    z-index: $base-z-index;
     position: absolute;
     top: 8px;
     right: 2px;
@@ -407,7 +408,7 @@ $glyph-width: 16px;
 
       .header-text {
         position: relative;
-        z-index: 12;
+        z-index: $base-z-index + 2;
       }
 
       .header-bg {
@@ -416,7 +417,7 @@ $glyph-width: 16px;
         left: 0;
         width: 100%;
         height: 100%;
-        z-index: 11;
+        z-index: $base-z-index + 1;
         background: var(--aq-bg);
         opacity: 0.8;
       }
@@ -441,11 +442,15 @@ $glyph-width: 16px;
       font-weight: bold;
     }
 
-    .memory-container {
-      display: flex;
-      flex-direction: row;
-      gap: 80px;
-      padding-left: 10px;
+    .memory-container {      
+      position: relative;
+
+      .memory-container-flex {
+        display: flex;
+        flex-direction: row;
+        gap: 80px;
+        padding-left: 10px;
+      }
 
       .memory {
         border: 1px dashed var(--aq-step-table-border);
@@ -532,5 +537,5 @@ $glyph-width: 16px;
 }
 
 .leader-line {
-  z-index: 10;
+  z-index: $base-z-index;
 }

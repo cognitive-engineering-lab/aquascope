@@ -35,6 +35,7 @@ aquascope_workspace_utils = {version = "0.1",  path = "../aquascope_workspace_ut
 regex = "1"
 flate2 = "1"
 wait-timeout = "0.2"
+itertools = "0.10"
 
 [dev-dependencies]
 mdbook-aquascope = { path = ".", features = ["dev"] }
