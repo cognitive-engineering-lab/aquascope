@@ -115,6 +115,7 @@ $glyph-width: 14px;
 
   .cm-scroller {
     overflow: auto;
+    z-index: inherit;
   }
 
   .cm-line.hidden-line {
@@ -316,6 +317,10 @@ $glyph-width: 14px;
     background-color: var(--aq-step-table-background);
     border: 2px solid var(--aq-step-table-border);
     border-radius: 4px;
+
+    // So the table appears above the Ferris icon
+    position: relative;
+    z-index: 100;
   }
 
   .perm-step-table,
