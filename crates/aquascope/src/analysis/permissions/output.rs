@@ -451,20 +451,6 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   insert_facts!(loan_drop_refined, ctxt.permissions_output.loan_drop_refined);
   insert_facts!(move_refined, ctxt.permissions_output.move_refined);
 
-  use itertools::Itertools;
-
-  for (point, path_move) in ctxt.permissions_output.move_refined.iter() {
-    log::debug!(
-      "Moved paths at location {:?}",
-      ctxt.point_to_location(*point)
-    );
-    for (path, movep) in path_move.iter().sorted() {
-      if movep.as_u32() == 6u32 {
-        log::debug!("  {movep:?} {:?}", ctxt.path_to_place(*path));
-      }
-    }
-  }
-
   log::debug!(
     "#loan_R_refined {} #loan_W_refined {} #loan_D_refined {} #move_refined{}",
     loan_read_refined.len(),

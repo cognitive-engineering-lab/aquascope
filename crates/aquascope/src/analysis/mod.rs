@@ -237,7 +237,15 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     })
   }
 
+  pub fn is_span_visible(&self, span: Span) -> bool {
+    // let source_map = self.permissions.tcx.sess.source_map();
+    span.is_dummy() || span.is_empty() // || !span.is_visible(source_map)
+  }
+
   pub fn span_to_range(&self, span: Span) -> Range {
+    // if span.is_dummy() || span.is_empty() {
+    //   panic!("HERE YOU GO");
+    // }
     let source_map = self.permissions.tcx.sess.source_map();
     CharRange::from_span(span, source_map).unwrap().into()
   }
@@ -333,10 +341,10 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
       .move_data
       .moves
       .iter_enumerated()
-      .map(|(movep, move_out)| {
+      .filter_map(|(movep, move_out)| {
         let span = ctxt.location_to_span(move_out.source);
         let move_key: MoveKey = movep.into();
-        (move_key, span)
+        self.is_span_visible(span).then_some((move_key, span))
       })
       .collect::<HashMap<_, _>>();
 
@@ -351,10 +359,15 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
 
     let move_regions = move_to_spans
       .into_iter()
-      .map(|(move_key, points)| {
+      .filter_map(|(move_key, points)| {
         // HACK FIXME: visually constraining the region to be
         // strictly after the initial action.
-        let lo = move_points.get(&move_key).unwrap().lo();
+        // Also, if the move point was removed for not being visible then
+        // we can just ignore computing the highlighted ranges as well.
+        let Some(lo) = move_points.get(&move_key).map(|s| s.lo()) else {
+          return None;
+        };
+
         let points = self
           .points_to_spans(
             points
@@ -373,7 +386,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
           refiner_point: Refiner::Move(move_key),
           refined_ranges,
         };
-        (move_key, region)
+        Some((move_key, region))
       })
       .collect::<HashMap<_, _>>();
 
@@ -456,7 +469,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
 
       macro_rules! insert_if_valid {
         ($sp:expr) => {
-          if !$sp.is_empty() {
+          if !$sp.is_empty() && !$sp.is_dummy() {
             spans.push($sp);
           }
         };

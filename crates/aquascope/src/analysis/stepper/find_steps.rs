@@ -315,41 +315,115 @@ fn prettify_permission_steps<'tcx>(
       },
     )
     .into_iter()
-    .map(|(range, mut entries)| {
+    // HACK FIXME: we're at odds with the multi-table setup. This quick
+    // hack combines table entries into a single table until the
+    // visual explanation gets up-to-speed.
+    // Another weird thing about this is that you can have a single
+    // table with two changes for one place.
+    // ```example
+    // # fn main() {
+    // let closure = |s: &str| s.len(); // s: +R+O
+    //                                  // s: -R-O
+    //                                  // closure: +R+O
+    // # }
+    // ```
+    // imagine that the comments to the right of the Let represent
+    // a pseudo combined table. The path `s` gains and loses the same
+    // set of permissions in the same table. This is kind of weird, we'd
+    // rather just show *no change*.
+    .filter_map(|(range, mut entries)| {
       for (_, v) in entries.iter_mut() {
         v.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection))
       }
 
-      let mut state = entries
-        .into_iter()
-        .map(|(MirSegment { from, to }, diffs)| {
-          let state = diffs
-            .into_iter()
-            .map(|(place, diff)| {
-              let s = place_to_string!(place);
-              (s, diff)
-            })
-            .collect::<Vec<_>>();
+      // Conforming to the above HACK this just takes any (from, to) pair.
+      let (from, to) = entries.first().map_or_else(
+        || (Range::default(), Range::default()),
+        |(MirSegment { from, to }, _)| {
+          let from = span_to_range(ctxt.location_to_span(*from));
+          let to = span_to_range(ctxt.location_to_span(*to));
+          (from, to)
+        },
+      );
 
-          let from = span_to_range(ctxt.location_to_span(from));
-          let to = span_to_range(ctxt.location_to_span(to));
+      // let mut state = entries
+      //   .into_iter()
+      //   .map(|(MirSegment { from, to }, diffs)| {
 
-          PermissionsStepTable { from, to, state }
-        })
-        .collect::<Vec<_>>();
+      //     let state = diffs
+      //       .into_iter()
+      //       .map(|(place, diff)| {
+      //         let s = place_to_string!(place);
+      //         (s, diff)
+      //       })
+      //       .collect::<Vec<_>>();
 
-      // HACK FIXME: we're at odds with the multi-table setup. This quick
-      // hack combines table entries into a single table until the
-      // visual explanation gets up-to-speed.
-      let mut master_table = state.pop().unwrap();
-      for table in state.into_iter() {
-        master_table.state.extend(table.state);
+      //     from = span_to_range(ctxt.location_to_span(from));
+      //     to = span_to_range(ctxt.location_to_span(to));
+
+      //     PermissionsStepTable { from, to, state }
+      //   })
+      //   .collect::<Vec<_>>();
+
+      let mut master_table: Vec<(Place<'tcx>, PermissionsDataDiff)> =
+        Vec::default();
+
+      let is_symmetric_diff =
+        |diff1: &PermissionsDataDiff, diff2: &PermissionsDataDiff| -> bool {
+          macro_rules! is_symmetric {
+            ($v1:expr, $v2:expr) => {
+              matches!(
+                (&$v1, &$v2),
+                (ValueStep::High { .. }, ValueStep::Low { .. })
+                  | (ValueStep::Low { .. }, ValueStep::High { .. })
+                  | (ValueStep::None { .. }, ValueStep::None { .. })
+              )
+            };
+          }
+          let p1 = &diff1.permissions;
+          let p2 = &diff2.permissions;
+          is_symmetric!(p1.read, p2.read)
+            && is_symmetric!(p1.write, p2.write)
+            && is_symmetric!(p1.drop, p2.drop)
+        };
+
+      // For all tables which fall on the same line, we combine them into a single table
+      // and remove all *SYMMETRIC* differences. That is, if you have permission changes such as:
+      // - path: +R+O
+      // - path: -R-O
+      // these are exactly symmetric, and will be removed.
+      for (_, diffs) in entries.into_iter() {
+        for (place, diff) in diffs.into_iter() {
+          let i_opt = master_table.iter().position(|(p, _)| *p == place);
+          if let Some(idx) = i_opt {
+            let (_, old_diff) = &master_table[idx];
+            if is_symmetric_diff(&diff, old_diff) {
+              master_table.remove(idx);
+              continue;
+            }
+          }
+          master_table.push((place, diff));
+        }
       }
 
-      PermissionsLineDisplay {
+      // This means the tables were symmetric and all were removed.
+      if master_table.is_empty() {
+        return None;
+      }
+
+      let master_table = PermissionsStepTable {
+        from,
+        to,
+        state: master_table
+          .into_iter()
+          .map(|(place, diff)| (place_to_string!(place), diff))
+          .collect::<Vec<_>>(),
+      };
+
+      Some(PermissionsLineDisplay {
         location: range,
         state: vec![master_table],
-      }
+      })
     })
     .collect::<Vec<_>>()
 }

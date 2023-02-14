@@ -107,7 +107,10 @@ fn path_to_perm_boundary(
             {
               Some((loc, *place))
             }
-            _ => None,
+            _ => {
+              log::warn!("couldn't find in RVALUE {rvalue:?}");
+              None
+            }
           }
         } else {
           None

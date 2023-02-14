@@ -1,5 +1,6 @@
 import { Range } from "@codemirror/state";
 import { Decoration, EditorView } from "@codemirror/view";
+import _ from "lodash";
 
 import { AnalysisOutput, AquascopeAnnotations } from "../types";
 import { boundaryEffect, makeBoundaryDecorations } from "./boundaries";
@@ -42,7 +43,7 @@ export function makePermissionsDecorations(
 
   return {
     stepper: stepDecos.flat(),
-    boundaries: boundaryDecos.flat(),
+    boundaries: _.uniqBy(boundaryDecos.flat(), d => d.from),
     facts: actionDecos.flat(),
   };
 }
