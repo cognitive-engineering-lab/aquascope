@@ -173,9 +173,16 @@ class BoundaryPointWidget extends WidgetType {
     return this.boundary.location === other.boundary.location;
   }
 
-  toDOM(_view: EditorView): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
+    let precedingText = view.state.sliceDoc(
+      this.boundary.location - 1,
+      this.boundary.location
+    );
     let container = document.createElement("div");
     container.classList.add("permission-stack");
+    container.classList.add(`stack-size-${this.numDisplayed}`);
+    if (precedingText === " ") container.classList.add("before-whitespace");
+    if (this.boundary.expected.write) container.classList.add("expects-write");
     ReactDOM.createRoot(container).render(
       <PermStack facts={this.facts} boundary={this.boundary} />
     );

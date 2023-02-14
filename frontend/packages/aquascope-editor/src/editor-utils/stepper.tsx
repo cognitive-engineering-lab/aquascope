@@ -33,35 +33,6 @@ import {
   writeChar,
 } from "./misc";
 
-let PermChar = ({
-  content,
-  names,
-  act,
-  x,
-  y,
-  showit,
-  hideit,
-}: {
-  content: string;
-  names: string[];
-  act: boolean;
-  x: string;
-  y: string;
-  showit: () => void;
-  hideit: () => void;
-}) => (
-  <text
-    className={classNames(...names, { missing: !act })}
-    textAnchor="end"
-    x={x}
-    y={y}
-    onMouseEnter={showit}
-    onMouseLeave={hideit}
-  >
-    {content}
-  </text>
-);
-
 let PermRow = ({
   content,
   facts,
@@ -71,17 +42,14 @@ let PermRow = ({
 }) => {
   let getClassAndContent = ([diff, content]: [ValueStep<boolean>, string]) =>
     diff.type == "High"
-      ? { content: content, names: ["perm-diff-add"] }
+      ? { children: content, className: "perm-diff-add" }
       : diff.type == "Low"
-      ? { content: content, names: ["perm-diff-sub"] }
+      ? { children: content, className: "perm-diff-sub" }
       : diff.type === "None" && diff.value
-      ? { content: content, names: ["perm-diff-none-high"] }
+      ? { children: content, className: "perm-diff-none-high" }
       : diff.type === "None" && !diff.value
-      ? { content: "‒", names: ["perm-diff-none-low"] }
+      ? { children: "‒", className: "perm-diff-none-low" }
       : null;
-
-  let w = (idx: number) =>
-    (idx / content.length) * 100 + 100 / content.length - 5 + "%";
 
   // FIXME: don't reverse the abbreviated content.
   let getKind = (c: string) => {
@@ -97,19 +65,20 @@ let PermRow = ({
   };
 
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="permission-row">
-      {content.map(([diff, content, loanKey], i: number) => (
-        <PermChar
+    <div className="permission-row">
+      {content.map(([diff, content, loanKey]) => (
+        <span
           key={content}
-          x={w(i)}
-          y="95%"
-          act={true}
-          showit={() => showLoanRegion(facts, loanKey, [getKind(content)])}
-          hideit={() => hideLoanRegion(facts, loanKey, [getKind(content)])}
+          onMouseEnter={() =>
+            showLoanRegion(facts, loanKey, [getKind(content)])
+          }
+          onMouseLeave={() =>
+            hideLoanRegion(facts, loanKey, [getKind(content)])
+          }
           {...getClassAndContent([diff, content])!}
         />
       ))}
-    </svg>
+    </div>
   );
 };
 
@@ -292,7 +261,9 @@ let StepTableIndividual = ({
 
   return (
     <div
-      className="step-table-container"
+      className={classNames("step-table-container", {
+        "contains-hidden": hidden.length > 0,
+      })}
       onClick={() => setDisplayAll(!displayAll)}
     >
       <StepTable rows={focused} facts={facts} />

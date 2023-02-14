@@ -36,7 +36,7 @@ $transparent: rgba(0, 0, 0, 0);
 }
 
 $base-z-index: 10;
-$glyph-width: 16px;
+$glyph-width: 14px;
 
 @mixin button {
   background-color: var(--aq-button-background);
@@ -171,14 +171,37 @@ $glyph-width: 16px;
 
   .permission-stack {
     display: inline-block;
-    position: relative;
-    top: 3px;
+    position: relative;    
+
+    &.expects-write {
+      margin-left: 2px;
+      margin-right: 2px;
+    }
+
+    &:not(.expects-write) {
+      margin-right: 1px;   
+      margin-left: 2px;       
+    }
+   
+    &.before-whitespace {
+      margin-left: -3px;
+    }    
+
+    &.stack-size-1 {
+      top: 2px;
+    }
+
+    &.stack-size-2 {
+      top: 7px;
+      margin-top: -3px;
+      margin-bottom: 3px;
+    }
   }
 
   svg.permission {
     stroke-width: 2;
     paint-order: stroke;
-    width: $glyph-width + 10px;
+    width: $glyph-width + 1px;
     height: 2 * $glyph-width;
 
     > text {
@@ -212,42 +235,34 @@ $glyph-width: 16px;
     }
   }
 
-  svg.permission-row {
-    stroke-width: 2;
-    paint-order: stroke;
-    width: 4 * $glyph-width + 10px;
-    height: $glyph-width + 5px;
-    font-weight: bold;
+  .permission-row {
 
-    > text {
+    > span {
       font-family: "Verdana";
       font-size: $glyph-width;
-      stroke-width: 1;
+      display: inline-block;
+      width: $glyph-width;
+      text-align: center;
 
       // Specific to the step tables
       &.perm-diff-add {
-        stroke: var(--aq-perm-gain-color);
-        fill: var(--aq-perm-gain-color);
+        color: var(--aq-perm-gain-color);        
       }
 
       &.perm-diff-sub {
-        stroke: var(--aq-perm-loss-color);
-        fill: var(--aq-perm-loss-color);
+        color: var(--aq-perm-loss-color);        
       }
 
       &.perm-diff-none {
-        stroke: var(--aq-fg);
-        fill: var(--aq-fg);
+        color: var(--aq-fg);        
       }
 
       &perm-diff-none-high {
-        stroke: var(--aq-fg);
-        fill: var(--aq-fg);
+        color: var(--aq-fg);        
       }
 
       &.perm-diff-none-low {
-        stroke: var(--aq-fg);
-        fill: var(--aq-fg);
+        color: var(--aq-fg);        
       }
     }
   }
@@ -320,6 +335,16 @@ $glyph-width: 16px;
   .perm-step-table tr td {
     border: 1px dotted;
     border-color: var(--aq-step-table-border);
+  }
+
+  .contains-hidden .perm-step-table tr {    
+    td:first-child {
+      border-left: none;
+    }
+
+    td:last-child {
+      border-right: none;
+    }    
   }
 
   span.perm-diff-add {

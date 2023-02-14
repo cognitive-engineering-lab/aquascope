@@ -32,7 +32,7 @@ import {
 
 const DEBUG: boolean = false;
 
-interface InterpreterConfig {
+export interface InterpreterConfig {
   horizontal?: boolean;
   concreteTypes?: boolean;
   hideCode?: boolean;
@@ -422,7 +422,7 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
       "--inline-code-color"
     );
 
-    Array.from(pointers).forEach((src, i) => {
+    let lines = Array.from(pointers).map((src, i) => {
       try {
         let dstSel = src.dataset.pointTo!;
         let dst = query(dstSel);
@@ -430,6 +430,11 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
           ? query(src.dataset.pointToRange)
           : undefined;
         let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+
+        let srcInHeap = src.closest(".heap") !== null;
+        let dstInStack = dstSel.startsWith("stack");
+        let startSocket: LeaderLine.SocketType =
+          srcInHeap && dstInStack ? "left" : "right";
 
         let dstAnchor = dstRange
           ? LeaderLine.areaAnchor(dst, {
@@ -439,7 +444,7 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
               y: "100%",
               fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
             })
-          : dstSel.startsWith("stack")
+          : dstInStack && !srcInHeap
           ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
           : dst;
 
@@ -451,11 +456,11 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
         let palette = PALETTE[theme];
         let color = palette[i % palette.length];
 
-        let line = new LeaderLine(src, dstAnchor, {
+        new LeaderLine(src, dstAnchor, {
           color,
           size: 1,
           endPlugSize: 2,
-          startSocket: "right",
+          startSocket,
           endSocket,
         });
 
@@ -467,7 +472,7 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
         if (!lineEl) throw new Error("Missing line el?");
         arrowContainer.appendChild(lineEl);
 
-        return line;
+        return lineEl;
       } catch (e: any) {
         console.error("Leader line failed to render", e.stack);
         return undefined;
@@ -478,6 +483,12 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
     let x = stepBox.left + window.scrollX;
     let y = stepBox.top + window.scrollY;
     arrowContainer.style.transform = `translate(-${x}px, -${y}px)`;
+
+    return () =>
+      lines.forEach(line => {
+        if (!line) return;
+        line.parentNode!.removeChild(line);
+      });
   }, [config.concreteTypes]);
 
   return (
@@ -613,10 +624,6 @@ export function renderInterpreter(
   config?: InterpreterConfig,
   annotations?: InterpAnnotations
 ) {
-  if (config && config.hideCode) {
-    view.destroy();
-  }
-
   let root = ReactDOM.createRoot(container);
   let marks = annotations?.state_locations || [];
   let widgetRanges;

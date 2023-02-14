@@ -7,10 +7,12 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { boundaryField } from "./editor-utils/boundaries";
-import { renderInterpreter } from "./editor-utils/interpreter";
 import {
-  IconField,
-  LoanFacts,
+  InterpreterConfig,
+  renderInterpreter,
+} from "./editor-utils/interpreter";
+import {
+  IconField,  
   hiddenLines,
   hideLine,
   loanFactsField,
@@ -28,6 +30,9 @@ import {
   AnalysisOutput,
   AquascopeAnnotations,
   BackendError,
+  InterpAnnotations,
+  MTrace,
+  Range,
 } from "./types";
 
 export * as types from "./types";
@@ -241,6 +246,27 @@ export class Editor {
     return serverResponse;
   }
 
+  renderInterpreter(
+    trace: MTrace<Range>,
+    config?: InterpreterConfig,
+    annotations?: InterpAnnotations
+  ) {
+    if (config && config.hideCode) {
+      this.view.destroy();
+      this.metaContainer.unmount();
+    }
+
+    let contents = this.view.state.doc.toJSON().join("\n");
+    renderInterpreter(
+      this.view,
+      this.interpreterContainer,
+      trace,
+      contents,
+      config,
+      annotations
+    );
+  }
+
   async renderOperation(
     operation: string,
     {
@@ -271,8 +297,6 @@ export class Editor {
       }
     }
 
-    let result = (response as any).Ok;
-
     if (
       annotations &&
       annotations.hidden_lines &&
@@ -292,14 +316,7 @@ export class Editor {
 
     if (operation == "interpreter") {
       let result = (response as any).Ok;
-      renderInterpreter(
-        this.view,
-        this.interpreterContainer,
-        result,
-        this.view.state.doc.toJSON().join("\n"),
-        config as any,
-        annotations?.interp
-      );
+      this.renderInterpreter(result, config as any, annotations?.interp);
     } else if (operation == "permissions") {
       // The permissions analysis results are sent as an array of
       // body analyses. Each body could have analyzed successfuly,
