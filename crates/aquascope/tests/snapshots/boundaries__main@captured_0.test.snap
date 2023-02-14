@@ -12,7 +12,7 @@ description: main@captured_0.test
     type_writeable: false
     type_copyable: false
     is_live: true
-    path_moved: false
+    path_uninitialized: false
     permissions:
       read: true
       write: false
@@ -27,7 +27,7 @@ description: main@captured_0.test
     type_writeable: false
     type_copyable: false
     is_live: true
-    path_moved: false
+    path_uninitialized: false
     loan_write_refined: 0
     loan_drop_refined: 0
     permissions:

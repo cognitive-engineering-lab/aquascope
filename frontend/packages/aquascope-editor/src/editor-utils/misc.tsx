@@ -12,6 +12,7 @@ import {
   AnalysisFacts,
   AnalysisOutput,
   LoanKey,
+  MoveKey,
   Range as RangeT,
   RefinementRegion,
 } from "../types";
@@ -119,18 +120,18 @@ export function genStateField<T>(
   });
 }
 
-export type LoanFacts = {
+export type ActionFacts = {
   refinerTag: string;
   regionTag: string;
   refinerPoint: RangeT;
   region: RefinementRegion;
 };
 
-export const loanFactsStateType = StateEffect.define<LoanFacts[]>();
+export const loanFactsStateType = StateEffect.define<ActionFacts[]>();
 
-export const loanFactsField = genStateField<Array<LoanFacts>>(
+export const loanFactsField = genStateField<Array<ActionFacts>>(
   loanFactsStateType,
-  (ts: Array<LoanFacts>): Array<Range<Decoration>> =>
+  (ts: Array<ActionFacts>): Array<Range<Decoration>> =>
     ts.flatMap(loanFactsToDecoration)
 );
 
@@ -139,7 +140,7 @@ function loanFactsToDecoration({
   regionTag,
   refinerPoint,
   region,
-}: LoanFacts): Array<Range<Decoration>> {
+}: ActionFacts): Array<Range<Decoration>> {
   let loanDeco = Decoration.mark({
     class: "aquascope-loan",
     tagName: refinerTag,
@@ -160,28 +161,39 @@ function loanFactsToDecoration({
 
 export function generateAnalysisDecorationFacts(
   output: AnalysisOutput
-): [AnalysisFacts, LoanFacts[]] {
-  let points: Record<LoanKey, string> = {};
-  let regions: Record<LoanKey, string> = {};
+): [AnalysisFacts, ActionFacts[]] {
+  let lPoints: Record<LoanKey, string> = {};
+  let lRegions: Record<LoanKey, string> = {};
+  let mPoints: Record<MoveKey, string> = {};
+  let mRegions: Record<MoveKey, string> = {};
 
   let stateFacts = [];
 
   for (const loan in output.loan_regions) {
-    let loanTag = makeTag(26);
+    let tag = makeTag(26);
     let regionTag = makeTag(26);
     let refinedRegion = output.loan_regions[loan];
-
-    // TODO: the refined region stores whether it is for a Loan or Move.
-    // When moves get reported this needs to be updated accordingly to
-    // accommodate for this scenario.
-
     let loanPoint = output.loan_points[loan];
-
-    points[loan] = loanTag;
-    regions[loan] = regionTag;
-
+    lPoints[loan] = tag;
+    lRegions[loan] = regionTag;
     let loanFacts = {
-      refinerTag: loanTag,
+      refinerTag: tag,
+      regionTag: regionTag,
+      refinerPoint: loanPoint,
+      region: refinedRegion,
+    };
+    stateFacts.push(loanFacts);
+  }
+
+  for (const loan in output.move_regions) {
+    let tag = makeTag(26);
+    let regionTag = makeTag(26);
+    let refinedRegion = output.move_regions[loan];
+    let loanPoint = output.move_points[loan];
+    mPoints[loan] = tag;
+    mRegions[loan] = regionTag;
+    let loanFacts = {
+      refinerTag: tag,
       regionTag: regionTag,
       refinerPoint: loanPoint,
       region: refinedRegion,
@@ -190,8 +202,10 @@ export function generateAnalysisDecorationFacts(
   }
 
   let facts = {
-    loanPoints: points,
-    loanRegions: regions,
+    loanPoints: lPoints,
+    loanRegions: lRegions,
+    movePoints: mPoints,
+    moveRegions: mRegions,
   };
 
   return [facts, stateFacts];
@@ -221,24 +235,54 @@ let forCustomTag = (tag: string, callback: (e: HTMLElement) => void) => {
   ).forEach(callback);
 };
 
+function showRegion<
+  I extends number | string | symbol,
+  P extends Record<I, string>,
+  R extends Record<I, string>
+>(points: P, regions: R, key?: I, names: string[] = []) {
+  if (key !== undefined) {
+    const pTag = points[key];
+    const rTag = regions[key];
+
+    forCustomTag(pTag, elem => {
+      elem.classList.add("show-hidden");
+      names.forEach((n: string) => elem.classList.add(n));
+    });
+
+    forCustomTag(rTag, elem => {
+      elem.classList.add("show-hidden");
+      names.forEach((n: string) => elem.classList.add(n));
+    });
+  }
+}
+
+function hideRegion<
+  I extends number | string | symbol,
+  P extends Record<I, string>,
+  R extends Record<I, string>
+>(points: P, regions: R, key?: I, names: string[] = []) {
+  if (key !== undefined) {
+    const pTag = points[key];
+    const rTag = regions[key];
+
+    forCustomTag(pTag, elem => {
+      elem.classList.remove("show-hidden");
+      names.forEach((n: string) => elem.classList.remove(n));
+    });
+
+    forCustomTag(rTag, elem => {
+      elem.classList.remove("show-hidden");
+      names.forEach((n: string) => elem.classList.remove(n));
+    });
+  }
+}
+
 export let showLoanRegion = (
   facts: AnalysisFacts,
   key?: LoanKey,
   names: string[] = []
 ) => {
-  if (key !== undefined) {
-    const loanTag = facts.loanPoints[key];
-    const regionTag = facts.loanRegions[key];
-
-    forCustomTag(loanTag, elem => {
-      elem.classList.add("show-hidden");
-      names.forEach((n: string) => elem.classList.add(n));
-    });
-    forCustomTag(regionTag, elem => {
-      elem.classList.add("show-hidden");
-      names.forEach((n: string) => elem.classList.add(n));
-    });
-  }
+  showRegion(facts.loanPoints, facts.loanRegions, key, names);
 };
 
 export let hideLoanRegion = (
@@ -246,17 +290,21 @@ export let hideLoanRegion = (
   key?: LoanKey,
   names: string[] = []
 ) => {
-  if (key !== undefined) {
-    const loanTag = facts.loanPoints[key];
-    const regionTag = facts.loanRegions[key];
+  hideRegion(facts.loanPoints, facts.loanRegions, key, names);
+};
 
-    forCustomTag(loanTag, elem => {
-      elem.classList.remove("show-hidden");
-      names.forEach((n: string) => elem.classList.remove(n));
-    });
-    forCustomTag(regionTag, elem => {
-      elem.classList.remove("show-hidden");
-      names.forEach((n: string) => elem.classList.remove(n));
-    });
-  }
+export let showMoveRegion = (
+  facts: AnalysisFacts,
+  key?: MoveKey,
+  names: string[] = []
+) => {
+  showRegion(facts.movePoints, facts.moveRegions, key, names);
+};
+
+export let hideMoveRegion = (
+  facts: AnalysisFacts,
+  key?: MoveKey,
+  names: string[] = []
+) => {
+  hideRegion(facts.movePoints, facts.moveRegions, key, names);
 };

@@ -4,7 +4,7 @@ import { Decoration, EditorView } from "@codemirror/view";
 import { AnalysisOutput, AquascopeAnnotations } from "../types";
 import { boundaryEffect, makeBoundaryDecorations } from "./boundaries";
 import {
-  LoanFacts,
+  ActionFacts,
   generateAnalysisDecorationFacts,
   loanFactsStateType,
 } from "./misc";
@@ -18,7 +18,7 @@ export interface PermissionsCfg {
 export interface PermissionsDecorations {
   stepper: Range<Decoration>[];
   boundaries: Range<Decoration>[];
-  facts: LoanFacts[];
+  facts: ActionFacts[];
 }
 
 export function makePermissionsDecorations(
@@ -28,22 +28,22 @@ export function makePermissionsDecorations(
 ): PermissionsDecorations {
   let stepDecos: Range<Decoration>[][] = [];
   let boundaryDecos: Range<Decoration>[][] = [];
-  let loanDecos: LoanFacts[][] = [];
+  let actionDecos: ActionFacts[][] = [];
 
   results.forEach(res => {
-    let [facts, loanFacts] = generateAnalysisDecorationFacts(res);
+    let [facts, actionFacts] = generateAnalysisDecorationFacts(res);
 
     let bs = makeBoundaryDecorations(view, facts, res.boundaries);
     let ss = makeStepDecorations(view, facts, res.steps, annotations?.stepper);
     boundaryDecos.push(bs);
     stepDecos.push(ss);
-    loanDecos.push(loanFacts);
+    actionDecos.push(actionFacts);
   });
 
   return {
     stepper: stepDecos.flat(),
     boundaries: boundaryDecos.flat(),
-    facts: loanDecos.flat(),
+    facts: actionDecos.flat(),
   };
 }
 
@@ -52,7 +52,7 @@ export function renderPermissions(
   decorations?: PermissionsDecorations,
   cfg?: PermissionsCfg
 ) {
-  console.log("rendering permissions with", cfg);
+  console.debug("rendering permissions with", cfg);
   if (decorations !== undefined) {
     let useSteps = String(cfg?.stepper) === "true";
     let useBoundaries = String(cfg?.boundaries) === "true";

@@ -13,7 +13,7 @@ use ts_rs::TS;
 use crate::{
   analysis::{
     permissions::{Permissions, PermissionsData, PermissionsDomain},
-    AquascopeAnalysis, LoanKey,
+    AquascopeAnalysis, LoanKey, MoveKey,
   },
   Range,
 };
@@ -139,7 +139,8 @@ pub struct PermissionsDataDiff {
   pub is_live: ValueStep<bool>,
   pub type_droppable: ValueStep<bool>,
   pub type_writeable: ValueStep<bool>,
-  pub path_moved: ValueStep<bool>,
+  pub path_moved: ValueStep<MoveKey>,
+  pub path_uninitialized: ValueStep<bool>,
   pub loan_read_refined: ValueStep<LoanKey>,
   pub loan_write_refined: ValueStep<LoanKey>,
   pub loan_drop_refined: ValueStep<LoanKey>,
@@ -235,6 +236,7 @@ impl Difference for PermissionsData {
       loan_write_refined: self.loan_write_refined.diff(rhs.loan_write_refined),
       loan_drop_refined: self.loan_drop_refined.diff(rhs.loan_drop_refined),
       path_moved: self.path_moved.diff(rhs.path_moved),
+      path_uninitialized: self.path_uninitialized.diff(rhs.path_uninitialized),
       permissions: self.permissions.diff(rhs.permissions),
     }
   }

@@ -14,8 +14,10 @@ import { AnalysisFacts, PermissionsBoundary } from "../types";
 import {
   dropChar,
   hideLoanRegion,
+  hideMoveRegion,
   readChar,
   showLoanRegion,
+  showMoveRegion,
   writeChar,
 } from "./misc";
 
@@ -119,24 +121,42 @@ let PermStack = ({
       names: ["permission", "read"],
       exp: boundary.expected.read,
       act: data.permissions.read,
-      showit: () => showLoanRegion(facts, data.loan_read_refined, ["read"]),
-      hideit: () => hideLoanRegion(facts, data.loan_read_refined, ["read"]),
+      showit: () => {
+        showLoanRegion(facts, data.loan_read_refined, ["read"]);
+        showMoveRegion(facts, data.path_moved, ["read"]);
+      },
+      hideit: () => {
+        hideLoanRegion(facts, data.loan_read_refined, ["read"]);
+        hideMoveRegion(facts, data.path_moved, ["read"]);
+      },
     },
     {
       content: writeChar,
       names: ["permission", "write"],
       exp: boundary.expected.write,
       act: data.permissions.write,
-      showit: () => showLoanRegion(facts, data.loan_write_refined, ["write"]),
-      hideit: () => hideLoanRegion(facts, data.loan_write_refined, ["write"]),
+      showit: () => {
+        showLoanRegion(facts, data.loan_write_refined, ["write"]);
+        showMoveRegion(facts, data.path_moved, ["write"]);
+      },
+      hideit: () => {
+        hideLoanRegion(facts, data.loan_write_refined, ["write"]);
+        hideMoveRegion(facts, data.path_moved, ["write"]);
+      },
     },
     {
       content: dropChar,
       names: ["permission", "drop"],
       exp: boundary.expected.drop,
       act: data.permissions.drop,
-      showit: () => showLoanRegion(facts, data.loan_drop_refined, ["drop"]),
-      hideit: () => hideLoanRegion(facts, data.loan_drop_refined, ["drop"]),
+      showit: () => {
+        showLoanRegion(facts, data.loan_drop_refined, ["drop"]);
+        showMoveRegion(facts, data.path_moved, ["drop"]);
+      },
+      hideit: () => {
+        hideLoanRegion(facts, data.loan_drop_refined, ["drop"]);
+        hideMoveRegion(facts, data.path_moved, ["drop"]);
+      },
     },
   ];
 
