@@ -31,6 +31,20 @@ pub struct PermissionsBoundary {
   pub actual: PermissionsData,
 }
 
+impl PermissionsBoundary {
+  pub fn is_violation(&self) -> bool {
+    macro_rules! is_missing {
+      ($this:ident, $perm:ident) => {
+        ($this.expected.$perm && !$this.actual.permissions.$perm)
+      };
+    }
+
+    is_missing!(self, read)
+      || is_missing!(self, write)
+      || is_missing!(self, drop)
+  }
+}
+
 // ----------------------------------
 // Permission boundaries on path uses
 
