@@ -6,18 +6,17 @@ $transparent: rgba(0, 0, 0, 0);
   --aq-fg: black;
 
   // Colors for permission stacks
-  --aq-read-color: #3a809e;
-  --aq-write-color: #b73184;
-  --aq-drop-color: #9f7931;
+  --aq-read-color: #FF9500;
+  --aq-write-color: #0C7BDC;
+  --aq-drop-color: #DC0055;
 
-  // Permission stacks colors for use with CSS color mixing
   --aq-read-rgb-color: 78, 190, 239;
   --aq-write-rgb-color: 186, 24, 231;
   --aq-drop-rgb-color: 255, 165, 0;
 
   // For step table permission colors
-  --aq-perm-gain-color: #aaa; //#5dca36;
-  --aq-perm-loss-color: #666; //#ff4244;
+  --aq-perm-gain-color: #333;
+  --aq-perm-loss-color: #666;
 
   --aq-error: red;
   --aq-error-text: white;
@@ -214,7 +213,7 @@ $glyph-width: 14px;
 
   .permission {
     font: $glyph-width "Verdana";    
-    text-align: center;    
+    text-align: right;    
     display: grid;
     grid-template-columns: 1fr;
 
@@ -390,47 +389,33 @@ $glyph-width: 14px;
   }
 
   .perm-diff-add {
-    border: 1px solid var(--aq-perm-gain-color);
-    border-radius: 4px;
-    // position: absolute;
-    // right: -4px;
-    // top: -2px;
-    // font-size: 8px;
-    // color: var(--aq-perm-gain-color) ;    
-
-    // &::before {
-    //   content: "+";      
-    // }
+    color: var(--aq-perm-gain-color);
+    margin-right: -2px;
+    position: relative;
+    bottom: 1px;
+    font-size: 80%;
   }
 
+  .perm-diff-sub-container {
+    position: relative;
+    width: min-content;
+    display: inline-block;    
+  }
   .perm-diff-sub {
     position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
+    left: calc((100% - $glyph-width) / 2);
+    top: calc((100% - $glyph-width) / 2);
+    width: $glyph-width;
+    height: $glyph-width;
     background: 
       linear-gradient(to top left,
         rgba(0,0,0,0) 0%,
         rgba(0,0,0,0) calc(50% - 1px),
-        var(--aq-perm-loss-color) calc(50% - 0.5px),        
-        var(--aq-perm-loss-color) calc(50% + 0.5px),
+        var(--aq-perm-loss-color) calc(50% - 0.75px),        
+        var(--aq-perm-loss-color) calc(50% + 0.75px),
         rgba(0,0,0,0) calc(50% + 1px),
         rgba(0,0,0,0) 100%);
   }
-
-  .perm-diff-none {
-    // color: var(--aq-step-table-text);
-  }
-
-  .perm-diff-none-high {
-    // color: var(--aq-step-table-text);
-  }
-
-  .perm-diff-none-low {
-    // color: var(--aq-step-table-text);
-  }
-
 
   .read {
     color: var(--aq-read-color);

@@ -98,7 +98,7 @@
     box-shadow: 1px 1px 4px var(--theme-popup-border);
 
     z-index: 1000;
-    width: 400px;        
+    width: calc(min(400px, 70vw));        
 
     h3 {
       margin-top: 0;

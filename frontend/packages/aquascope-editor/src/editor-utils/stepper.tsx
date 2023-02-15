@@ -64,17 +64,33 @@ let PermChar = ({
   };
 
   let getInner = () => {
+    let Perm: React.FC<React.PropsWithChildren> = ({ children }) => (
+      <span className={getKind(perm.perm)}>{children}</span>
+    );
     if (perm.step.type === "None") {
-      return perm.step.value ? <>{perm.perm}</> : <>‒</>;
+      return perm.step.value ? (
+        <div className="perm-diff-present">
+          <Perm>{perm.perm}</Perm>
+        </div>
+      ) : (
+        <div className="perm-diff-none">
+          <Perm>‒</Perm>
+        </div>
+      );
     } else if (perm.step.type == "Low") {
       return (
-        <>
+        <div className="perm-diff-sub-container">
           <div className="perm-diff-sub" />
-          {perm.perm}
-        </>
+          <Perm>{perm.perm}</Perm>
+        </div>
       );
     } /* perm.step.type === "High" */ else {
-      return <div className="perm-diff-add">{perm.perm}</div>;
+      return (
+        <>
+          <span className="perm-diff-add">+</span>
+          <Perm>{perm.perm}</Perm>
+        </>
+      );
     }
   };
 
@@ -88,7 +104,7 @@ let PermChar = ({
         hideLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
         hideMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
       }}
-      className={classNames("perm-char", getKind(perm.perm))}
+      className={classNames("perm-char")}
     >
       {getInner()}
     </td>
