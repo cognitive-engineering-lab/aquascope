@@ -56,6 +56,7 @@ pub type Path = <AquascopeFacts as FactTypes>::Path;
 pub type Point = <AquascopeFacts as FactTypes>::Point;
 pub type Loan = <AquascopeFacts as FactTypes>::Loan;
 pub type Variable = <AquascopeFacts as FactTypes>::Variable;
+pub type Move = rustc_mir_dataflow::move_paths::MoveOutIndex;
 
 // ------------------------------------------------
 // Permission Boundaries
@@ -93,10 +94,12 @@ pub struct PermissionsData {
   /// Is the [`Place`] currently live?
   pub is_live: bool,
 
-  // Initialization information
-  // TODO: this should be an Option<MoveKey> once moves are tracked.
+  /// Is this place uninitialized?
+  pub path_uninitialized: bool,
+
   /// Is the [`Place`] currently uninitialzed due to a move?
-  pub path_moved: bool,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub path_moved: Option<MoveKey>,
 
   #[serde(skip_serializing_if = "Option::is_none")]
   /// Is a live loan removing `read` permissions?

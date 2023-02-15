@@ -15,6 +15,8 @@ description: main@linear_0.test
           value: true
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -44,6 +46,8 @@ description: main@linear_0.test
           type: None
           value: true
         path_moved:
+          type: None
+        path_uninitialized:
           type: Low
         loan_read_refined:
           type: None
@@ -73,7 +77,10 @@ description: main@linear_0.test
           type: None
           value: true
         path_moved:
-          type: Low
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
         loan_read_refined:
           type: None
         loan_write_refined:
@@ -100,6 +107,8 @@ description: main@linear_0.test
           type: None
           value: true
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:
@@ -129,6 +138,8 @@ description: main@linear_0.test
           type: None
           value: false
         path_moved:
+          type: None
+        path_uninitialized:
           type: Low
         loan_read_refined:
           type: None
@@ -158,6 +169,8 @@ description: main@linear_0.test
           value: true
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -184,6 +197,8 @@ description: main@linear_0.test
           value: true
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -208,6 +223,8 @@ description: main@linear_0.test
           type: None
           value: false
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:

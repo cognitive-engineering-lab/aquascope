@@ -10,6 +10,7 @@ pub mod stepper;
 use std::{
   cell::RefCell,
   collections::HashMap,
+  iter::IntoIterator,
   ops::{Add, Deref, DerefMut},
 };
 
@@ -24,8 +25,11 @@ use flowistry::{
   source_map::CharRange,
 };
 use ir_mapper::{GatherMode, IRMapper};
-use permissions::{Loan, PermissionsCtxt, Point, RefinementRegion, Refiner};
+use permissions::{
+  Loan, Move, PermissionsCtxt, Point, RefinementRegion, Refiner,
+};
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
+use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
@@ -63,7 +67,7 @@ pub struct LoanPoints(pub HashMap<LoanKey, Range>);
 
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
-pub struct MovePoints(pub HashMap<LoanKey, Range>);
+pub struct MovePoints(pub HashMap<MoveKey, Range>);
 
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
@@ -76,6 +80,18 @@ pub struct MoveRegions(pub HashMap<MoveKey, RefinementRegion>);
 impl From<&Loan> for LoanKey {
   fn from(f: &Loan) -> LoanKey {
     LoanKey(f.as_u32())
+  }
+}
+
+impl From<&Move> for MoveKey {
+  fn from(f: &Move) -> MoveKey {
+    MoveKey(f.as_u32())
+  }
+}
+
+impl From<Move> for MoveKey {
+  fn from(f: Move) -> MoveKey {
+    MoveKey(f.as_u32())
   }
 }
 
@@ -174,6 +190,8 @@ pub struct AnalysisOutput {
   pub steps: Vec<PermissionsLineDisplay>,
   pub loan_points: LoanPoints,
   pub loan_regions: LoanRegions,
+  pub move_points: MovePoints,
+  pub move_regions: MoveRegions,
 }
 
 impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
@@ -199,7 +217,6 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
       ir_mapper,
     };
 
-    // FIXME: remove
     crate::analysis::permissions::utils::dump_mir_debug(
       &analysis_ctxt.permissions,
     );
@@ -208,16 +225,27 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     let steps = compute_permission_steps(&analysis_ctxt)?;
 
     let (loan_points, loan_regions) = analysis_ctxt.construct_loan_info();
+    let (move_points, move_regions) = analysis_ctxt.construct_move_info();
 
     Ok(AnalysisOutput {
       boundaries,
       steps,
       loan_points,
       loan_regions,
+      move_points,
+      move_regions,
     })
   }
 
+  pub fn is_span_visible(&self, span: Span) -> bool {
+    // let source_map = self.permissions.tcx.sess.source_map();
+    span.is_dummy() || span.is_empty() // || !span.is_visible(source_map)
+  }
+
   pub fn span_to_range(&self, span: Span) -> Range {
+    // if span.is_dummy() || span.is_empty() {
+    //   panic!("HERE YOU GO");
+    // }
     let source_map = self.permissions.tcx.sess.source_map();
     CharRange::from_span(span, source_map).unwrap().into()
   }
@@ -275,8 +303,9 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
           start_span
         };
 
+        let loan_live_at = &self.permissions.polonius_output.loan_live_at;
         let active_nodes = self
-          .loan_to_spans(**loan, start_span, end_span)
+          .key_to_spans(**loan, loan_live_at, start_span, end_span)
           .into_iter()
           .map(|s| self.span_to_range(s))
           .collect::<Vec<_>>();
@@ -304,26 +333,92 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     (LoanPoints(loan_to_ranges), LoanRegions(loan_to_regions))
   }
 
-  pub fn loan_to_spans(
+  // FIXME(gavinleroy): the two `construct_XXX` methods could
+  // be abstracted away better into one generic algorithm.
+  fn construct_move_info(&self) -> (MovePoints, MoveRegions) {
+    let ctxt = &self.permissions;
+    let move_points = ctxt
+      .move_data
+      .moves
+      .iter_enumerated()
+      .filter_map(|(movep, move_out)| {
+        let span = ctxt.location_to_span(move_out.source);
+        let move_key: MoveKey = movep.into();
+        self.is_span_visible(span).then_some((move_key, span))
+      })
+      .collect::<HashMap<_, _>>();
+
+    let mut move_to_spans = HashMap::<MoveKey, Vec<Point>>::default();
+
+    for (&point, path_to_move) in ctxt.permissions_output.move_refined.iter() {
+      for (_, movep) in path_to_move.iter() {
+        let move_key = movep.into();
+        move_to_spans.entry(move_key).or_default().push(point);
+      }
+    }
+
+    let move_regions = move_to_spans
+      .into_iter()
+      .filter_map(|(move_key, points)| {
+        // HACK FIXME: visually constraining the region to be
+        // strictly after the initial action.
+        // Also, if the move point was removed for not being visible then
+        // we can just ignore computing the highlighted ranges as well.
+        let Some(lo) = move_points.get(&move_key).map(|s| s.lo()) else {
+          return None;
+        };
+
+        let points = self
+          .points_to_spans(
+            points
+              .into_iter()
+              .filter(|point| ctxt.is_point_operational(*point)),
+          )
+          .into_iter()
+          .filter_map(|span| (lo <= span.lo()).then_some(span))
+          .collect::<Vec<_>>();
+        let smoothed = Self::smooth_spans(points);
+        let refined_ranges = smoothed
+          .into_iter()
+          .map(|span| self.span_to_range(span))
+          .collect::<Vec<_>>();
+        let region = RefinementRegion {
+          refiner_point: Refiner::Move(move_key),
+          refined_ranges,
+        };
+        Some((move_key, region))
+      })
+      .collect::<HashMap<_, _>>();
+
+    let move_points = move_points
+      .into_iter()
+      .map(|(k, span)| (k, self.span_to_range(span)))
+      .collect::<HashMap<_, _>>();
+
+    (MovePoints(move_points), MoveRegions(move_regions))
+  }
+
+  pub fn key_to_spans<K>(
     &self,
-    loan: Loan,
+    loan: K,
+    live_at: &FxHashMap<Point, Vec<K>>,
     min_span: Span,
     max_span: Span,
-  ) -> Vec<Span> {
-    let points = self
-      .permissions
-      .polonius_output
-      .loan_live_at
+  ) -> Vec<Span>
+  where
+    K: PartialEq + Eq + std::marker::Copy,
+  {
+    let points = live_at
       .iter()
       .filter_map(|(point, loans)| loans.contains(&loan).then_some(*point));
 
-    let mut loan_spans = self.points_to_spans(points);
+    let mut spans = self.points_to_spans(points);
 
     // Pushing the `min_span` and `max_span` is also a HACK I should
     // get rid of. Only after there are unit tests to make sure the change
     // doesn't break any necessary examples.
-    loan_spans.push(min_span);
-    loan_spans.push(max_span);
+    spans.push(min_span);
+    spans.push(max_span);
 
     // HACK: ideally we don't need to use the min / max spans to
     // filter the others. This is needed when you have a HIR span
@@ -347,7 +442,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     // HIR node should be included in this span. However, if we don't constrain these
     // values it can happen that the entire `[ let x = if true { ... } else { ... }  ]`
     // is included in the returned ranges.
-    let loan_spans = loan_spans
+    let spans = spans
       .into_iter()
       .filter_map(|span| {
         (min_span.lo() <= span.lo() && span.hi() <= max_span.hi()).then(|| {
@@ -358,20 +453,23 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
       })
       .collect::<Vec<_>>();
 
-    Self::smooth_spans(loan_spans)
+    Self::smooth_spans(spans)
   }
 
-  fn points_to_spans(&self, points: impl Iterator<Item = Point>) -> Vec<Span> {
+  fn points_to_spans(
+    &self,
+    points: impl IntoIterator<Item = Point>,
+  ) -> Vec<Span> {
     let hir = self.permissions.tcx.hir();
     let body = &self.permissions.body_with_facts.body;
     let mut spans = Vec::default();
 
-    points.for_each(|point| {
+    points.into_iter().for_each(|point| {
       let loc = self.permissions.point_to_location(point);
 
       macro_rules! insert_if_valid {
         ($sp:expr) => {
-          if !$sp.is_empty() {
+          if !$sp.is_empty() && !$sp.is_dummy() {
             spans.push($sp);
           }
         };

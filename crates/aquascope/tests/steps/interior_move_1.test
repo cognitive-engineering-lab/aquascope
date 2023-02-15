@@ -1,0 +1,11 @@
+fn foo() {
+  let mut t = (String::from("1"), String::from("2"));
+
+  let s = t.0;
+
+  std::mem::drop(s);
+
+  t = (String::from("1"), String::from("2"));
+
+  std::mem::drop(t);
+}

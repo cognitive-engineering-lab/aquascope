@@ -15,6 +15,8 @@ description: ascii_capitalize@if_3.test
           value: true
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -43,6 +45,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: false
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:
@@ -74,6 +78,8 @@ description: ascii_capitalize@if_3.test
           value: false
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -102,6 +108,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: true
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:
@@ -133,6 +141,8 @@ description: ascii_capitalize@if_3.test
           value: false
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -161,6 +171,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: false
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:
@@ -192,6 +204,8 @@ description: ascii_capitalize@if_3.test
           value: false
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -218,6 +232,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: true
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:
@@ -247,6 +263,8 @@ description: ascii_capitalize@if_3.test
           value: false
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -273,6 +291,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: false
         path_moved:
+          type: None
+        path_uninitialized:
           type: Low
         loan_read_refined:
           type: None
@@ -301,6 +321,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: false
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:
@@ -331,6 +353,8 @@ description: ascii_capitalize@if_3.test
           value: true
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -357,6 +381,8 @@ description: ascii_capitalize@if_3.test
           value: false
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -382,6 +408,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: false
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:
@@ -410,6 +438,8 @@ description: ascii_capitalize@if_3.test
           value: false
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -436,6 +466,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: true
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:
@@ -465,6 +497,8 @@ description: ascii_capitalize@if_3.test
           value: false
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -491,6 +525,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: false
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:
@@ -521,6 +557,8 @@ description: ascii_capitalize@if_3.test
           value: true
         path_moved:
           type: None
+        path_uninitialized:
+          type: None
           value: false
         loan_read_refined:
           type: None
@@ -546,6 +584,8 @@ description: ascii_capitalize@if_3.test
           type: None
           value: false
         path_moved:
+          type: None
+        path_uninitialized:
           type: None
           value: false
         loan_read_refined:

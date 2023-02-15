@@ -19,6 +19,7 @@ import ReactDOM from "react-dom/client";
 import {
   AnalysisFacts,
   LoanKey,
+  MoveKey,
   PermissionsDataDiff,
   PermissionsLineDisplay,
   PermissionsStepTable,
@@ -28,8 +29,10 @@ import {
 import {
   dropChar,
   hideLoanRegion,
+  hideMoveRegion,
   readChar,
   showLoanRegion,
+  showMoveRegion,
   writeChar,
 } from "./misc";
 
@@ -37,6 +40,7 @@ interface PermInStep {
   step: ValueStep<boolean>;
   perm: "R" | "W" | "O";
   loanKey?: LoanKey;
+  moveKey?: MoveKey;
 }
 
 let PermChar = ({
@@ -59,30 +63,34 @@ let PermChar = ({
     }
   };
 
+  let getInner = () => {
+    if (perm.step.type === "None") {
+      return perm.step.value ? <>{perm.perm}</> : <>‒</>;
+    } else if (perm.step.type == "Low") {
+      return (
+        <>
+          <div className="perm-diff-sub" />
+          {perm.perm}
+        </>
+      );
+    } /* perm.step.type === "High" */ else {
+      return <div className="perm-diff-add">{perm.perm}</div>;
+    }
+  };
+
   return (
     <td
-      onMouseEnter={() =>
-        showLoanRegion(facts, perm.loanKey, [getKind(perm.perm)])
-      }
-      onMouseLeave={() =>
-        hideLoanRegion(facts, perm.loanKey, [getKind(perm.perm)])
-      }
+      onMouseEnter={() => {
+        showLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
+        showMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
+      }}
+      onMouseLeave={() => {
+        hideLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
+        hideMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
+      }}
       className={classNames("perm-char", getKind(perm.perm))}
     >
-      {(() => {
-        if (perm.step.type === "None") {
-          return perm.step.value ? <>{perm.perm}</> : <>‒</>;
-        } else if (perm.step.type == "Low") {
-          return (
-            <>
-              <div className="perm-diff-sub" />
-              {perm.perm}
-            </>
-          );
-        } /* perm.step.type === "High" */ else {
-          return <div className="perm-diff-add">{perm.perm}</div>;
-        }
-      })()}
+      {getInner()}
     </td>
   );
 };
@@ -110,6 +118,7 @@ let PermDiffRow = ({
   type Facts =
     | "is_live"
     | "path_moved"
+    | "path_uninitialized"
     | "loan_write_refined"
     | "loan_read_refined";
 
@@ -149,6 +158,21 @@ let PermDiffRow = ({
           value: { type: "Low" },
           icon: "recycle",
           desc: "Path is re-initialized after move here",
+        },
+      ],
+    },
+    {
+      fact: "path_uninitialized",
+      states: [
+        {
+          value: { type: "High", value: 0 },
+          icon: "sign-out",
+          desc: "Path contains uninitialized data",
+        },
+        {
+          value: { type: "Low" },
+          icon: "recycle",
+          desc: "Path data is initialized after move here",
         },
       ],
     },
@@ -195,28 +219,35 @@ let PermDiffRow = ({
           />
         );
         break loop;
+      } else {
+        console.log("unequal: ", diffs[fact].type, value.type);
       }
     }
   }
 
-  let unwrap = (v: ValueStep<LoanKey>): LoanKey | undefined =>
-    v.type === "None" || v.type === "High" ? v.value : undefined;
+  let unwrap = function <T>(v: ValueStep<T>): T | undefined {
+    return v.type === "None" || v.type === "High" ? v.value : undefined;
+  };
 
+  let moveKey = unwrap(diffs.path_moved);
   let perms: PermInStep[] = [
     {
       perm: readChar,
       step: diffs.permissions.read,
       loanKey: unwrap(diffs.loan_read_refined),
+      moveKey,
     },
     {
       perm: writeChar,
       step: diffs.permissions.write,
       loanKey: unwrap(diffs.loan_write_refined),
+      moveKey,
     },
     {
       perm: dropChar,
       step: diffs.permissions.drop,
       loanKey: unwrap(diffs.loan_drop_refined),
+      moveKey,
     },
   ];
 
@@ -226,11 +257,9 @@ let PermDiffRow = ({
     <tr>
       {pathCol}
       <td className="perm-step-event">{ico}</td>
-      {/* <td className="permission-row"> */}
       {perms.map(perm => (
         <PermChar key={perm.perm} perm={perm} facts={facts} />
       ))}
-      {/* </td> */}
     </tr>
   );
 };

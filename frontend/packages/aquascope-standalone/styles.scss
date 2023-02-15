@@ -259,7 +259,7 @@ a:hover {
   display: inline-block;
   font-size: 0.8em;
   padding: 1em;
-  opacity: 0;
+  visibility: hidden;
   transition: all 0.5s ease;
 
   > h3 {
@@ -268,7 +268,7 @@ a:hover {
   }
 
   &.live {
-    opacity: 1 !important;
+    visibility: visible !important;
   }
 }
 

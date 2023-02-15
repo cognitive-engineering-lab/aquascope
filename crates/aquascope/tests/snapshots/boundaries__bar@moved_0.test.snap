@@ -12,7 +12,7 @@ description: bar@moved_0.test
     type_writeable: true
     type_copyable: false
     is_live: true
-    path_moved: false
+    path_uninitialized: false
     permissions:
       read: true
       write: true
@@ -27,7 +27,7 @@ description: bar@moved_0.test
     type_writeable: false
     type_copyable: false
     is_live: true
-    path_moved: false
+    path_uninitialized: false
     permissions:
       read: true
       write: false
@@ -42,7 +42,7 @@ description: bar@moved_0.test
     type_writeable: true
     type_copyable: false
     is_live: true
-    path_moved: false
+    path_uninitialized: false
     permissions:
       read: true
       write: true
@@ -57,7 +57,8 @@ description: bar@moved_0.test
     type_writeable: true
     type_copyable: false
     is_live: true
-    path_moved: true
+    path_uninitialized: false
+    path_moved: 0
     permissions:
       read: false
       write: false

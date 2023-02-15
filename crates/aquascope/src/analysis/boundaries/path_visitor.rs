@@ -155,7 +155,6 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
         };
         self.data.push(pb);
       }
-
       _ => {
         intravisit::walk_expr(self, expr);
       }
@@ -175,6 +174,8 @@ pub(super) fn get_path_boundaries<'a, 'tcx: 'a>(
     unsupported_feature: None,
     data: Vec::default(),
   };
+
+  log::debug!("THE BODY OWNER: {:?}", tcx.hir().body_owner(body_id));
 
   finder.visit_nested_body(body_id);
 
