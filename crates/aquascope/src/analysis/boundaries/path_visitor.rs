@@ -81,7 +81,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
         self.data.push(pb);
 
         for a in args.iter() {
-          intravisit::walk_expr(self, a);
+          self.visit_expr(a);
         }
       }
 
