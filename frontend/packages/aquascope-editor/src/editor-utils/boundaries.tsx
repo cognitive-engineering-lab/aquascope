@@ -1,4 +1,10 @@
-import { Range, RangeSet, StateEffect, StateField } from "@codemirror/state";
+import {
+  Line,
+  Range,
+  RangeSet,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
@@ -10,7 +16,11 @@ import _ from "lodash";
 import React from "react";
 import ReactDOM from "react-dom/client";
 
-import { AnalysisFacts, PermissionsBoundary } from "../types";
+import {
+  AnalysisFacts,
+  BoundariesAnnotations,
+  PermissionsBoundary,
+} from "../types";
 import {
   dropChar,
   hideLoanRegion,
@@ -79,29 +89,23 @@ let PermChar = ({
   content,
   names,
   act,
-  x,
-  y,
   showit,
   hideit,
 }: {
   content: string;
   names: string[];
   act: boolean;
-  x: string;
-  y: string;
   showit: () => void;
   hideit: () => void;
 }) => (
-  <text
+  <div
     className={classNames(...names, { missing: !act })}
-    textAnchor="middle"
-    x={x}
-    y={y}
     onMouseEnter={showit}
     onMouseLeave={hideit}
   >
-    {content}
-  </text>
+    <div className="small">•</div>
+    <div className="big">{content}</div>
+  </div>
 );
 
 let PermStack = ({
@@ -141,23 +145,29 @@ let PermStack = ({
   ];
 
   let icons = allIcons.filter(i => i.exp);
-  let h = (idx: number) =>
-    (idx / icons.length) * 100 + 100 / icons.length - 5 + "%";
 
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="permission">
-      {icons.map((info, i: number) => (
-        <PermChar key={info.content} x="50%" y={h(i)} {...info} />
+    <>
+      {icons.map(info => (
+        <PermChar key={info.content} {...info} />
       ))}
-    </svg>
+    </>
   );
+  // <svg xmlns="http://www.w3.org/2000/svg" className="permission">
+  //   {icons.map((info, i: number) => (
+  //     <PermChar key={info.content} x="50%" y={h(i)} {...info} />
+  //   ))}
+  // </svg>
 };
 
 class BoundaryPointWidget extends WidgetType {
+  line: Line;
   numDisplayed: number;
   constructor(
+    readonly view: EditorView,
     readonly facts: AnalysisFacts,
-    readonly boundary: PermissionsBoundary
+    readonly boundary: PermissionsBoundary,
+    readonly annotations?: BoundariesAnnotations
   ) {
     super();
     let toi = (b: boolean) => (b ? 1 : 0);
@@ -166,6 +176,7 @@ class BoundaryPointWidget extends WidgetType {
       toi(this.boundary.expected.write),
       toi(this.boundary.expected.drop),
     ].reduce((a, b) => a + b, 0);
+    this.line = view.state.doc.lineAt(boundary.location);
   }
 
   eq(other: BoundaryPointWidget): boolean {
@@ -182,7 +193,8 @@ class BoundaryPointWidget extends WidgetType {
     container.classList.add("permission-stack");
     container.classList.add(`stack-size-${this.numDisplayed}`);
     if (precedingText === " ") container.classList.add("before-whitespace");
-    if (this.boundary.expected.write) container.classList.add("expects-write");
+    if (this.annotations?.focused_lines.includes(this.line.number))
+      container.classList.add("expanded");
     ReactDOM.createRoot(container).render(
       <PermStack facts={this.facts} boundary={this.boundary} />
     );
@@ -216,12 +228,13 @@ export let boundaryField = StateField.define<DecorationSet>({
 export function makeBoundaryDecorations(
   view: EditorView,
   facts: AnalysisFacts,
-  boundaries: PermissionsBoundary[]
+  boundaries: PermissionsBoundary[],
+  annotations?: BoundariesAnnotations
 ): Range<Decoration>[] {
   return _.sortBy(
     boundaries.map(b =>
       Decoration.widget({
-        widget: new BoundaryPointWidget(facts, b),
+        widget: new BoundaryPointWidget(view, facts, b, annotations),
       }).range(b.location)
     ),
     deco => deco.from

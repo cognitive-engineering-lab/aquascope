@@ -25,6 +25,12 @@ pub struct StepperAnnotations {
 
 #[derive(PartialEq, Eq, Debug, TS, Serialize, Default, Clone)]
 #[ts(export)]
+pub struct BoundariesAnnotations {
+  focused_lines: Vec<LinePos>,
+}
+
+#[derive(PartialEq, Eq, Debug, TS, Serialize, Default, Clone)]
+#[ts(export)]
 pub struct InterpAnnotations {
   state_locations: Vec<CharPos>,
 }
@@ -35,6 +41,7 @@ pub struct AquascopeAnnotations {
   hidden_lines: Vec<LinePos>,
   interp: InterpAnnotations,
   stepper: StepperAnnotations,
+  boundaries: BoundariesAnnotations,
 }
 
 #[allow(clippy::derive_hash_xor_eq)]
@@ -48,9 +55,10 @@ impl Hash for AquascopeAnnotations {
 pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
   let marker_interp = ("`[", "]`", "interp");
   let marker_stepper = ("`(", ")`", "stepper");
+  let marker_boundaries = ("`{", "}`", "boundaries");
 
   let pattern = Itertools::intersperse(
-    [marker_interp, marker_stepper]
+    [marker_interp, marker_stepper, marker_boundaries]
       .into_iter()
       .map(|(open, close, name)| {
         format!(
@@ -88,8 +96,10 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
         let match_str = matched.as_str();
         let match_type = if match_str.starts_with(marker_interp.0) {
           "interp"
-        } else {
+        } else if match_str.starts_with(marker_stepper.0) {
           "stepper"
+        } else {
+          "boundaries"
         };
 
         let interior = cap.name(match_type).unwrap();
@@ -101,18 +111,23 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
           };
         }
 
-        if match_type == "interp" {
-          annots.interp.state_locations.push(CharPos(idx));
-        } else {
-          if config.contains_key("focus") {
-            annots.stepper.focused_lines.push(line_pos);
+        match match_type {
+          "interp" => annots.interp.state_locations.push(CharPos(idx)),
+          "stepper" => {
+            if config.contains_key("focus") {
+              annots.stepper.focused_lines.push(line_pos);
+            }
+            if let Some(paths) = config.get("paths") {
+              annots
+                .stepper
+                .focused_paths
+                .insert(line_pos, paths.to_string());
+            }
           }
-          if let Some(paths) = config.get("paths") {
-            annots
-              .stepper
-              .focused_paths
-              .insert(line_pos, paths.to_string());
+          "boundaries" => {
+            annots.boundaries.focused_lines.push(line_pos);
           }
+          _ => unreachable!(),
         }
 
         line = &line[matched.end() ..];
@@ -133,7 +148,7 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
 fn test_parse_annotations() {
   let input = r#"#fn main() {
 let x = 1;`(focus,paths:x)`
-`[]`let y = 2;
+`[]`let y = 2;`{}`
 #}"#;
   let (cleaned, annot) = parse_annotations(input).unwrap();
   assert_eq!(
@@ -151,6 +166,9 @@ let y = 2;
     stepper: StepperAnnotations {
       focused_lines: vec![LinePos(2)],
       focused_paths: maplit::hashmap! { LinePos(2) => "x".into() }
+    },
+    boundaries: BoundariesAnnotations {
+      focused_lines: vec![LinePos(3)]
     }
   });
 }

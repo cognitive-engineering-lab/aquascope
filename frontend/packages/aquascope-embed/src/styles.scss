@@ -67,3 +67,58 @@
     }
   }
 }
+
+
+.aquascope {
+  margin-top: 2em;
+}
+
+.extra-info {
+  display: flex;
+  position: absolute;
+  right: 0;
+  top: -1.5em;
+  width: 50px;
+}
+
+.context-provider {
+  button {
+    filter: grayscale(100%);
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+  
+  .popup-context  {
+    background: var(--bg);
+    border: 2px solid var(--theme-popup-border);
+    padding: 0.5em;
+    text-align: left;
+    border-radius: 4px;
+    box-shadow: 1px 1px 4px var(--theme-popup-border);
+
+    z-index: 1000;
+    width: 400px;        
+
+    h3 {
+      margin-top: 0;
+      margin-bottom: 1em;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 4.5em;
+      font-family: "Open Sans", sans-serif;
+    }
+
+    .close {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+    }
+  }
+}

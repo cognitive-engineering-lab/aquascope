@@ -6,9 +6,9 @@ $transparent: rgba(0, 0, 0, 0);
   --aq-fg: black;
 
   // Colors for permission stacks
-  --aq-read-color: #4ebeef;
-  --aq-write-color: #ba18e7;
-  --aq-drop-color: #ffa500;
+  --aq-read-color: #3a809e;
+  --aq-write-color: #b73184;
+  --aq-drop-color: #9f7931;
 
   // Permission stacks colors for use with CSS color mixing
   --aq-read-rgb-color: 78, 190, 239;
@@ -16,8 +16,8 @@ $transparent: rgba(0, 0, 0, 0);
   --aq-drop-rgb-color: 255, 165, 0;
 
   // For step table permission colors
-  --aq-perm-gain-color: #5dca36;
-  --aq-perm-loss-color: #ff4244;
+  --aq-perm-gain-color: #aaa; //#5dca36;
+  --aq-perm-loss-color: #666; //#ff4244;
 
   --aq-error: red;
   --aq-error-text: white;
@@ -170,100 +170,122 @@ $glyph-width: 14px;
 
   /* Permission Boundaries */
 
+  $perm-animation-duration: 0.5s;
+
   .permission-stack {
-    display: inline-block;
-    position: relative;    
+    display: inline-flex;
+    flex-direction: column;
+    position: relative;
+    margin-left: 2px;
+    margin-right: 2px;
 
-    &.expects-write {
-      margin-left: 2px;
-      margin-right: 2px;
-    }
+    // Filter courtesy of: https://codepen.io/alvarotrigo/pen/eYEqPZa
+    filter: url('data:image/svg+xml,\
+      <svg xmlns="http://www.w3.org/2000/svg">\
+        <filter id="threshold">\
+          <feColorMatrix in="SourceGraphic" type="matrix" values="\
+            1 0 0 0 0\
+            0 1 0 0 0\
+            0 0 1 0 0\
+            0 0 0 255 -140" />\
+        </filter>\
+      </svg>#threshold');
 
-    &:not(.expects-write) {
-      margin-right: 1px;   
-      margin-left: 2px;       
-    }
-   
+    transition: 
+      margin-top $perm-animation-duration ease-in-out, 
+      margin-bottom $perm-animation-duration ease-in-out,     
+      bottom $perm-animation-duration ease-in-out;
+      
+    cursor: default;
+    
     &.before-whitespace {
       margin-left: -3px;
-    }    
+    }
 
     &.stack-size-1 {
-      top: 2px;
+      // no repositioning currently needed
     }
 
     &.stack-size-2 {
-      top: 7px;
-      margin-top: -3px;
-      margin-bottom: 3px;
+      bottom: 4px;
+      margin-top: 5px;
     }
   }
 
-  svg.permission {
-    stroke-width: 2;
-    paint-order: stroke;
-    width: $glyph-width + 1px;
-    height: 2 * $glyph-width;
+  .permission {
+    font: $glyph-width "Verdana";    
+    text-align: center;    
+    display: grid;
+    grid-template-columns: 1fr;
 
-    > text {
-      font-family: "Verdana";
-      font-weight: bold;
-      font-size: $glyph-width;
-
-      &.read {
-        stroke: var(--aq-read-color);
-        fill: var(--aq-read-color);
-      }
-
-      &.write {
-        stroke: var(--aq-write-color);
-        fill: var(--aq-write-color);
-      }
-
-      &.drop {
-        stroke: var(--aq-drop-color);
-        fill: var(--aq-drop-color);
-      }
-
-      &:not(.missing) {
-        stroke-width: 0;
-      }
-
-      &.missing {
-        stroke-width: 1;
-        fill: $transparent !important;
-      }
+    &.missing {
+      color: transparent !important;
     }
-  }
 
-  .permission-row {
-
-    > span {
-      font-family: "Verdana";
-      font-size: $glyph-width;
-      display: inline-block;
-      width: $glyph-width;
+    > div {
+      transition: 
+        filter $perm-animation-duration ease-in-out,
+        opacity $perm-animation-duration ease-in-out,
+        width $perm-animation-duration ease-in-out,
+        height $perm-animation-duration ease-in-out;
+    
+      grid-row-start: 1;
+      grid-column-start: 1;
       text-align: center;
+    }
 
-      // Specific to the step tables
-      &.perm-diff-add {
-        color: var(--aq-perm-gain-color);        
+    > .small {
+      filter: blur(0px);
+      width: 8px;
+      height: 10px;
+    }
+
+    > .big {
+      opacity: 0;
+      font-weight: bold;
+      filter: blur(3px);
+
+      // same as .small to avoid rubber-band visual effect
+      width: 8px; 
+      height: 10px;
+    }    
+
+    &.missing > .small {
+      -webkit-text-stroke-width: 1.5px;      
+    }
+
+    &.missing > .big {
+      -webkit-text-stroke-width: 1px;
+    }
+  }
+
+  .permission-stack:not(.expanded):hover, .permission-stack.expanded {    
+    &.stack-size-2 {
+      margin-top: 7px;      
+      margin-bottom: -3px;
+      bottom: 6px;
+    }
+
+    .permission {      
+      > .small {
+        opacity: 0;
+        filter: blur(3px);
+        width: 0;
+        height: 0;
       }
 
-      &.perm-diff-sub {
-        color: var(--aq-perm-loss-color);        
+      > .big {
+        opacity: 1;
+        filter: blur(0px);
+        height: 14px;
+      }
+  
+      &.write > .big {
+        width: 14px;
       }
 
-      &.perm-diff-none {
-        color: var(--aq-fg);        
-      }
-
-      &perm-diff-none-high {
-        color: var(--aq-fg);        
-      }
-
-      &.perm-diff-none-low {
-        color: var(--aq-fg);        
+      &:not(.write) > .big {
+        width: 12px;
       }
     }
   }
@@ -330,6 +352,10 @@ $glyph-width: 14px;
     td {
       padding: 1px 4px;
     }
+
+    td.perm-step-event {
+      text-align: center;
+    }
   }
 
   table.perm-step-table {
@@ -352,30 +378,76 @@ $glyph-width: 14px;
     }    
   }
 
-  span.perm-diff-add {
-    color: var(--aq-perm-gain-color);
+  .perm-char {
+    position: relative;
+    font: bold $glyph-width "Verdana";
+    text-align: center;
+
+    // TODO: fix the conflicts w/ other rules
+    border-left: none!important;
+    border-right: none!important;
+    padding: 1px 2px!important;
   }
 
-  span.perm-diff-sub {
-    color: var(--aq-perm-loss-color);
+  .perm-diff-add {
+    border: 1px solid var(--aq-perm-gain-color);
+    border-radius: 4px;
+    // position: absolute;
+    // right: -4px;
+    // top: -2px;
+    // font-size: 8px;
+    // color: var(--aq-perm-gain-color) ;    
+
+    // &::before {
+    //   content: "+";      
+    // }
   }
 
-  span.perm-diff-none {
-    color: var(--aq-step-table-text);
+  .perm-diff-sub {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+      linear-gradient(to top left,
+        rgba(0,0,0,0) 0%,
+        rgba(0,0,0,0) calc(50% - 1px),
+        var(--aq-perm-loss-color) calc(50% - 0.5px),        
+        var(--aq-perm-loss-color) calc(50% + 0.5px),
+        rgba(0,0,0,0) calc(50% + 1px),
+        rgba(0,0,0,0) 100%);
   }
 
-  span.perm-diff-none-high {
-    color: var(--aq-step-table-text);
+  .perm-diff-none {
+    // color: var(--aq-step-table-text);
   }
 
-  span.perm-diff-none-low {
-    color: var(--aq-step-table-text);
-    // opacity: 0.4;
+  .perm-diff-none-high {
+    // color: var(--aq-step-table-text);
+  }
+
+  .perm-diff-none-low {
+    // color: var(--aq-step-table-text);
+  }
+
+
+  .read {
+    color: var(--aq-read-color);
+    -webkit-text-stroke-color: var(--aq-read-color);
+  }
+
+  .write {
+    color: var(--aq-write-color);
+    -webkit-text-stroke-color: var(--aq-write-color);
+  }
+
+  .drop {
+    color: var(--aq-drop-color);
+    -webkit-text-stroke-color: var(--aq-drop-color);
   }
 
   .aquascope-action-indicator {
-    // color: var(--icons);
-    // border-color: var(--icons);
     font-size: 0.9em;
   }
 }

@@ -33,24 +33,19 @@ import {
   writeChar,
 } from "./misc";
 
-let PermRow = ({
-  content,
+interface PermInStep {
+  step: ValueStep<boolean>;
+  perm: "R" | "W" | "O";
+  loanKey?: LoanKey;
+}
+
+let PermChar = ({
+  perm,
   facts,
 }: {
-  content: [ValueStep<boolean>, string, LoanKey | undefined][];
+  perm: PermInStep;
   facts: AnalysisFacts;
 }) => {
-  let getClassAndContent = ([diff, content]: [ValueStep<boolean>, string]) =>
-    diff.type == "High"
-      ? { children: content, className: "perm-diff-add" }
-      : diff.type == "Low"
-      ? { children: content, className: "perm-diff-sub" }
-      : diff.type === "None" && diff.value
-      ? { children: content, className: "perm-diff-none-high" }
-      : diff.type === "None" && !diff.value
-      ? { children: "‒", className: "perm-diff-none-low" }
-      : null;
-
   // FIXME: don't reverse the abbreviated content.
   let getKind = (c: string) => {
     if (c === "R") {
@@ -65,20 +60,30 @@ let PermRow = ({
   };
 
   return (
-    <div className="permission-row">
-      {content.map(([diff, content, loanKey]) => (
-        <span
-          key={content}
-          onMouseEnter={() =>
-            showLoanRegion(facts, loanKey, [getKind(content)])
-          }
-          onMouseLeave={() =>
-            hideLoanRegion(facts, loanKey, [getKind(content)])
-          }
-          {...getClassAndContent([diff, content])!}
-        />
-      ))}
-    </div>
+    <td
+      onMouseEnter={() =>
+        showLoanRegion(facts, perm.loanKey, [getKind(perm.perm)])
+      }
+      onMouseLeave={() =>
+        hideLoanRegion(facts, perm.loanKey, [getKind(perm.perm)])
+      }
+      className={classNames("perm-char", getKind(perm.perm))}
+    >
+      {(() => {
+        if (perm.step.type === "None") {
+          return perm.step.value ? <>{perm.perm}</> : <>‒</>;
+        } else if (perm.step.type == "Low") {
+          return (
+            <>
+              <div className="perm-diff-sub" />
+              {perm.perm}
+            </>
+          );
+        } /* perm.step.type === "High" */ else {
+          return <div className="perm-diff-add">{perm.perm}</div>;
+        }
+      })()}
+    </td>
   );
 };
 
@@ -197,10 +202,22 @@ let PermDiffRow = ({
   let unwrap = (v: ValueStep<LoanKey>): LoanKey | undefined =>
     v.type === "None" || v.type === "High" ? v.value : undefined;
 
-  let perms: [ValueStep<boolean>, string, LoanKey | undefined][] = [
-    [diffs.permissions.read, readChar, unwrap(diffs.loan_read_refined)],
-    [diffs.permissions.write, writeChar, unwrap(diffs.loan_write_refined)],
-    [diffs.permissions.drop, dropChar, unwrap(diffs.loan_drop_refined)],
+  let perms: PermInStep[] = [
+    {
+      perm: readChar,
+      step: diffs.permissions.read,
+      loanKey: unwrap(diffs.loan_read_refined),
+    },
+    {
+      perm: writeChar,
+      step: diffs.permissions.write,
+      loanKey: unwrap(diffs.loan_write_refined),
+    },
+    {
+      perm: dropChar,
+      step: diffs.permissions.drop,
+      loanKey: unwrap(diffs.loan_drop_refined),
+    },
   ];
 
   let pathCol = <td className="perm-step-path">{path}</td>;
@@ -208,10 +225,12 @@ let PermDiffRow = ({
   return (
     <tr>
       {pathCol}
-      <td>{ico}</td>
-      <td>
-        <PermRow facts={facts} content={perms} />
-      </td>
+      <td className="perm-step-event">{ico}</td>
+      {/* <td className="permission-row"> */}
+      {perms.map(perm => (
+        <PermChar key={perm.perm} perm={perm} facts={facts} />
+      ))}
+      {/* </td> */}
     </tr>
   );
 };

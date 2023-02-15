@@ -41,6 +41,7 @@ export { CharPos } from "./bindings/CharPos";
 export { LinePos } from "./bindings/LinePos";
 export { StepperAnnotations } from "./bindings/StepperAnnotations";
 export { InterpAnnotations } from "./bindings/InterpAnnotations";
+export { BoundariesAnnotations } from "./bindings/BoundariesAnnotations";
 export { AquascopeAnnotations } from "./bindings/AquascopeAnnotations";
 
 interface FileNotFound {

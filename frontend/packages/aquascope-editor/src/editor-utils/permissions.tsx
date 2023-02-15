@@ -33,7 +33,12 @@ export function makePermissionsDecorations(
   results.forEach(res => {
     let [facts, loanFacts] = generateAnalysisDecorationFacts(res);
 
-    let bs = makeBoundaryDecorations(view, facts, res.boundaries);
+    let bs = makeBoundaryDecorations(
+      view,
+      facts,
+      res.boundaries,
+      annotations?.boundaries
+    );
     let ss = makeStepDecorations(view, facts, res.steps, annotations?.stepper);
     boundaryDecos.push(bs);
     stepDecos.push(ss);

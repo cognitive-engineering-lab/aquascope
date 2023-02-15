@@ -12,7 +12,7 @@ import {
   renderInterpreter,
 } from "./editor-utils/interpreter";
 import {
-  IconField,  
+  IconField,
   hiddenLines,
   hideLine,
   loanFactsField,
@@ -72,13 +72,15 @@ type ButtonName = "copy" | "eye";
 const BUTTON_ORDER: ButtonName[] = ["copy", "eye"];
 
 let CopyButton = ({ view }: { view: EditorView }) => (
-  <i
-    className="fa fa-copy"
+  <button
+    className="cm-button"
     onClick={() => {
       let contents = view.state.doc.toJSON().join("\n");
       navigator.clipboard.writeText(contents);
     }}
-  />
+  >
+    <i className="fa fa-copy" />
+  </button>
 );
 
 let HideButton = ({ container }: { container: HTMLDivElement }) => {
@@ -88,10 +90,9 @@ let HideButton = ({ container }: { container: HTMLDivElement }) => {
     else container.classList.remove("show-hidden");
   }, [hidden]);
   return (
-    <i
-      className={`fa ${hidden ? "fa-eye" : "fa-eye-slash"}`}
-      onClick={() => setHidden(!hidden)}
-    />
+    <button className="cm-button" onClick={() => setHidden(!hidden)}>
+      <i className={`fa ${hidden ? "fa-eye" : "fa-eye-slash"}`} />
+    </button>
   );
 };
 
@@ -171,15 +172,13 @@ export class Editor {
     this.metaContainer.render(
       <div className="meta-container">
         <div className="top-right">
-          {Array.from(this.buttons).map((button, i) => (
-            <button className="cm-button" key={i}>
-              {button == "copy" ? (
-                <CopyButton view={this.view} />
-              ) : button == "eye" ? (
-                <HideButton container={this.editorContainer} />
-              ) : null}
-            </button>
-          ))}
+          {Array.from(this.buttons).map((button, i) =>
+            button == "copy" ? (
+              <CopyButton key={i} view={this.view} />
+            ) : button == "eye" ? (
+              <HideButton key={i} container={this.editorContainer} />
+            ) : null
+          )}
         </div>
         {this.shouldFail ? (
           <div dangerouslySetInnerHTML={{ __html: this.shouldFailHtml }} />
