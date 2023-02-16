@@ -19,6 +19,7 @@ import ReactDOM from "react-dom/client";
 import {
   AnalysisFacts,
   LoanKey,
+  MoveKey,
   PermissionsDataDiff,
   PermissionsLineDisplay,
   PermissionsStepTable,
@@ -28,8 +29,10 @@ import {
 import {
   dropChar,
   hideLoanRegion,
+  hideMoveRegion,
   readChar,
   showLoanRegion,
+  showMoveRegion,
   writeChar,
 } from "./misc";
 
@@ -66,7 +69,12 @@ let PermRow = ({
   content,
   facts,
 }: {
-  content: [ValueStep<boolean>, string, LoanKey | undefined][];
+  content: {
+    diff: ValueStep<boolean>;
+    content: string;
+    lk: LoanKey | undefined;
+    mk: MoveKey | undefined;
+  }[];
   facts: AnalysisFacts;
 }) => {
   let getClassAndContent = ([diff, content]: [ValueStep<boolean>, string]) =>
@@ -83,26 +91,35 @@ let PermRow = ({
   let w = (idx: number) =>
     (idx / content.length) * 100 + 100 / content.length - 5 + "%";
 
+  // FIXME: don't reverse the abbreviated content.
   let getKind = (c: string) => {
     if (c === "R") {
-      return "write";
+      return "read";
     } else if (c === "W") {
       return "write";
-    } else {
+    } else if (c == "O") {
       return "drop";
+    } else {
+      return "unknown";
     }
   };
 
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="permission-row">
-      {content.map(([diff, content, loanKey], i: number) => (
+      {content.map(({ diff, content, lk, mk }, i: number) => (
         <PermChar
           key={content}
           x={w(i)}
           y="95%"
           act={true}
-          showit={() => showLoanRegion(facts, loanKey, [getKind(content)])}
-          hideit={() => hideLoanRegion(facts, loanKey, [getKind(content)])}
+          showit={() => {
+            showLoanRegion(facts, lk, [getKind(content)]);
+            showMoveRegion(facts, mk, [getKind(content)]);
+          }}
+          hideit={() => {
+            hideLoanRegion(facts, lk, [getKind(content)]);
+            hideMoveRegion(facts, mk, [getKind(content)]);
+          }}
           {...getClassAndContent([diff, content])!}
         />
       ))}
@@ -133,6 +150,7 @@ let PermDiffRow = ({
   type Facts =
     | "is_live"
     | "path_moved"
+    | "path_uninitialized"
     | "loan_write_refined"
     | "loan_read_refined";
 
@@ -172,6 +190,21 @@ let PermDiffRow = ({
           value: { type: "Low" },
           icon: "recycle",
           desc: "Path is re-initialized after move here",
+        },
+      ],
+    },
+    {
+      fact: "path_uninitialized",
+      states: [
+        {
+          value: { type: "High", value: 0 },
+          icon: "sign-out",
+          desc: "Path contains uninitialized data",
+        },
+        {
+          value: { type: "Low" },
+          icon: "recycle",
+          desc: "Path data is initialized after move here",
         },
       ],
     },
@@ -218,17 +251,35 @@ let PermDiffRow = ({
           />
         );
         break loop;
+      } else {
+        console.log("unequal: ", diffs[fact].type, value.type);
       }
     }
   }
 
-  let unwrap = (v: ValueStep<LoanKey>): LoanKey | undefined =>
-    v.type === "None" || v.type === "High" ? v.value : undefined;
+  let unwrap = function <T>(v: ValueStep<T>): T | undefined {
+    return v.type === "None" || v.type === "High" ? v.value : undefined;
+  };
 
-  let perms: [ValueStep<boolean>, string, LoanKey | undefined][] = [
-    [diffs.permissions.read, readChar, unwrap(diffs.loan_read_refined)],
-    [diffs.permissions.write, writeChar, unwrap(diffs.loan_write_refined)],
-    [diffs.permissions.drop, dropChar, unwrap(diffs.loan_drop_refined)],
+  let perms = [
+    {
+      diff: diffs.permissions.read,
+      content: readChar,
+      lk: unwrap(diffs.loan_read_refined),
+      mk: unwrap(diffs.path_moved),
+    },
+    {
+      diff: diffs.permissions.write,
+      content: writeChar,
+      lk: unwrap(diffs.loan_write_refined),
+      mk: unwrap(diffs.path_moved),
+    },
+    {
+      diff: diffs.permissions.drop,
+      content: dropChar,
+      lk: unwrap(diffs.loan_drop_refined),
+      mk: unwrap(diffs.path_moved),
+    },
   ];
 
   let pathCol = <td className="perm-step-path">{path}</td>;

@@ -201,7 +201,7 @@ use super::{
 };
 use crate::{
   analysis::{
-    ir_mapper::{GatherDepth, GatherMode, IRMapper},
+    ir_mapper::{GatherDepth, IRMapper},
     permissions::{
       Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
     },
@@ -213,6 +213,7 @@ use crate::{
 
 pub fn compute_permission_steps<'a, 'tcx>(
   ctxt: &PermissionsCtxt<'a, 'tcx>,
+  ir_mapper: &IRMapper<'a, 'tcx>,
   mode: PermIncludeMode,
   span_to_range: impl Fn(Span) -> Range,
 ) -> Result<Vec<PermissionsLineDisplay>>
@@ -221,7 +222,7 @@ where
 {
   let body = &ctxt.body_with_facts.body;
   let _basic_blocks = body.basic_blocks.indices();
-  let mut hir_visitor = HirStepPoints::make(ctxt)?;
+  let mut hir_visitor = HirStepPoints::make(ctxt, ir_mapper)?;
   hir_visitor.visit_nested_body(ctxt.body_id);
 
   log::debug!(
@@ -281,7 +282,10 @@ fn prettify_permission_steps<'tcx>(
   perm_steps
     .into_iter()
     .fold(
-      HashMap::<Span, Vec<(MirSegment, Vec<(Place<'tcx>, PermissionsDataDiff)>)>>::default(),
+      HashMap::<
+        Range,
+        Vec<(MirSegment, Vec<(Place<'tcx>, PermissionsDataDiff)>)>,
+      >::default(),
       |mut acc, (span, (segment, place_to_diffs))| {
         // Attach the span to the end of the line. Later, all permission
         // steps appearing on the same line will be combined.
@@ -303,44 +307,123 @@ fn prettify_permission_steps<'tcx>(
           || first_error_span_opt
             .is_some_and(|err_span| err_span.hi() < span.lo()))
         {
-          acc.entry(span).or_default().push((segment, entries));
+          let range = span_to_range(span);
+          acc.entry(range).or_default().push((segment, entries));
         }
 
         acc
       },
     )
     .into_iter()
-    .map(|(span, mut entries)| {
-      let range = span_to_range(span);
-
+    // HACK FIXME: we're at odds with the multi-table setup. This quick
+    // hack combines table entries into a single table until the
+    // visual explanation gets up-to-speed.
+    // Another weird thing about this is that you can have a single
+    // table with two changes for one place.
+    // ```example
+    // # fn main() {
+    // let closure = |s: &str| s.len(); // s: +R+O
+    //                                  // s: -R-O
+    //                                  // closure: +R+O
+    // # }
+    // ```
+    // imagine that the comments to the right of the Let represent
+    // a pseudo combined table. The path `s` gains and loses the same
+    // set of permissions in the same table. This is kind of weird, we'd
+    // rather just show *no change*.
+    .filter_map(|(range, mut entries)| {
       for (_, v) in entries.iter_mut() {
         v.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection))
       }
 
-      let state = entries
-        .into_iter()
-        .map(|(MirSegment {from,to}, diffs)| {
+      // Conforming to the above HACK this just takes any (from, to) pair.
+      let (from, to) = entries.first().map_or_else(
+        || (Range::default(), Range::default()),
+        |(MirSegment { from, to }, _)| {
+          let from = span_to_range(ctxt.location_to_span(*from));
+          let to = span_to_range(ctxt.location_to_span(*to));
+          (from, to)
+        },
+      );
 
-          let state = diffs.into_iter().map(|(place, diff)| {
-            let s = place_to_string!(place);
-            (s, diff)
-          }).collect::<Vec<_>>();
+      // let mut state = entries
+      //   .into_iter()
+      //   .map(|(MirSegment { from, to }, diffs)| {
 
-          let from = span_to_range(ctxt.location_to_span(from));
-          let to = span_to_range(ctxt.location_to_span(to));
+      //     let state = diffs
+      //       .into_iter()
+      //       .map(|(place, diff)| {
+      //         let s = place_to_string!(place);
+      //         (s, diff)
+      //       })
+      //       .collect::<Vec<_>>();
 
-          PermissionsStepTable {
-            from,
-            to,
-            state,
+      //     from = span_to_range(ctxt.location_to_span(from));
+      //     to = span_to_range(ctxt.location_to_span(to));
+
+      //     PermissionsStepTable { from, to, state }
+      //   })
+      //   .collect::<Vec<_>>();
+
+      let mut master_table: Vec<(Place<'tcx>, PermissionsDataDiff)> =
+        Vec::default();
+
+      let is_symmetric_diff =
+        |diff1: &PermissionsDataDiff, diff2: &PermissionsDataDiff| -> bool {
+          macro_rules! is_symmetric {
+            ($v1:expr, $v2:expr) => {
+              matches!(
+                (&$v1, &$v2),
+                (ValueStep::High { .. }, ValueStep::Low { .. })
+                  | (ValueStep::Low { .. }, ValueStep::High { .. })
+                  | (ValueStep::None { .. }, ValueStep::None { .. })
+              )
+            };
           }
-        })
-        .collect::<Vec<_>>();
+          let p1 = &diff1.permissions;
+          let p2 = &diff2.permissions;
+          is_symmetric!(p1.read, p2.read)
+            && is_symmetric!(p1.write, p2.write)
+            && is_symmetric!(p1.drop, p2.drop)
+        };
 
-      PermissionsLineDisplay {
-        location: range,
-        state,
+      // For all tables which fall on the same line, we combine them into a single table
+      // and remove all *SYMMETRIC* differences. That is, if you have permission changes such as:
+      // - path: +R+O
+      // - path: -R-O
+      // these are exactly symmetric, and will be removed.
+      for (_, diffs) in entries.into_iter() {
+        for (place, diff) in diffs.into_iter() {
+          let i_opt = master_table.iter().position(|(p, _)| *p == place);
+          if let Some(idx) = i_opt {
+            let (_, old_diff) = &master_table[idx];
+            if is_symmetric_diff(&diff, old_diff) {
+              master_table.remove(idx);
+              continue;
+            }
+          }
+          master_table.push((place, diff));
+        }
       }
+
+      // This means the tables were symmetric and all were removed.
+      if master_table.is_empty() {
+        return None;
+      }
+
+      let master_table = PermissionsStepTable {
+        from,
+        to,
+        state: master_table
+          .into_iter()
+          .map(|(place, diff)| (place_to_string!(place), diff))
+          .collect::<Vec<_>>(),
+      };
+
+      Some(PermissionsLineDisplay {
+        location: range,
+        state: vec![master_table],
+      })
     })
     .collect::<Vec<_>>()
 }
@@ -363,18 +446,19 @@ where
   'tcx: 'a,
 {
   ctxt: &'a PermissionsCtxt<'a, 'tcx>,
-  ir_mapper: IRMapper<'a, 'tcx>,
+  ir_mapper: &'a IRMapper<'a, 'tcx>,
   mir_segments: Box<SegmentTree>,
   unsupported_encounter: Option<(Span, String)>,
   fatal_error: String,
 }
 
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
-  fn make(ctxt: &'a PermissionsCtxt<'a, 'tcx>) -> Result<Self> {
+  fn make(
+    ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+    ir_mapper: &'a IRMapper<'a, 'tcx>,
+  ) -> Result<Self> {
     let tcx = ctxt.tcx;
     let hir = tcx.hir();
-    let body = &ctxt.body_with_facts.body;
-    let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
     let body = &hir.body(ctxt.body_id);
     let body_hir_id = body.value.hir_id;
     let body_span = body.value.span;
@@ -658,7 +742,8 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
           type_droppable: false,
           type_writeable: false,
           type_copyable: false,
-          path_moved: false,
+          path_moved: None,
+          path_uninitialized: false,
           loan_read_refined: None,
           loan_write_refined: None,
           loan_drop_refined: None,

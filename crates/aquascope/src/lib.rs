@@ -97,7 +97,7 @@ use ts_rs::TS;
 
 // re-export Range from Flowistry with TS.
 #[derive(
-  Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, Default, TS,
+  Copy, Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, Default, TS,
 )]
 #[ts(export)]
 pub struct Range {

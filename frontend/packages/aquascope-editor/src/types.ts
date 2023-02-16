@@ -1,5 +1,6 @@
 import { AquascopeError } from "./bindings/AquascopeError";
 import { LoanKey } from "./bindings/LoanKey";
+import { MoveKey } from "./bindings/MoveKey";
 
 // Re-export auto-generated types
 
@@ -11,9 +12,14 @@ export { PermissionsBoundary } from "./bindings/PermissionsBoundary";
 export { AquascopeError } from "./bindings/AquascopeError";
 export { AnalysisOutput } from "./bindings/AnalysisOutput";
 export { ValueStep } from "./bindings/ValueStep";
-export { LoanPoints } from "./bindings/LoanPoints";
+
 export { LoanKey } from "./bindings/LoanKey";
+export { LoanPoints } from "./bindings/LoanPoints";
 export { LoanRegions } from "./bindings/LoanRegions";
+
+export { MoveKey } from "./bindings/MoveKey";
+export { MovePoints } from "./bindings/MovePoints";
+export { MoveRegions } from "./bindings/MoveRegions";
 
 export { Refiner } from "./bindings/Refiner";
 export { RefinementRegion } from "./bindings/RefinementRegion";
@@ -64,6 +70,8 @@ export type BackendResult<T> = BackendOutput<T> | BackendError;
 export type AnalysisFacts = {
   loanPoints: Record<LoanKey, string>;
   loanRegions: Record<LoanKey, string>;
+  movePoints: Record<MoveKey, string>;
+  moveRegions: Record<MoveKey, string>;
 };
 
 export let ok = <T>(value: T): BackendResult<T> => ({

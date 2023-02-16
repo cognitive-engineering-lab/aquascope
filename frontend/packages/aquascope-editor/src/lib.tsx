@@ -9,8 +9,8 @@ import ReactDOM from "react-dom/client";
 import { boundaryField } from "./editor-utils/boundaries";
 import { renderInterpreter } from "./editor-utils/interpreter";
 import {
+  ActionFacts,
   IconField,
-  LoanFacts,
   hiddenLines,
   hideLine,
   loanFactsField,

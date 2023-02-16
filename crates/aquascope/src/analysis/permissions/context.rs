@@ -17,8 +17,8 @@ use rustc_span::Span;
 use rustc_trait_selection::infer::InferCtxtExt;
 
 use crate::analysis::permissions::{
-  AquascopeFacts, Loan, LoanKey, Output, Path, Permissions, PermissionsData,
-  PermissionsDomain, Point, Variable,
+  AquascopeFacts, Loan, LoanKey, Move, MoveKey, Output, Path, Permissions,
+  PermissionsData, PermissionsDomain, Point, Variable,
 };
 
 /// A path as defined in rustc.
@@ -106,7 +106,43 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       .unwrap_or(span)
   }
 
+  // XXX: experimental predicates for Moves
+
+  pub fn move_to_moveable_path(&self, mv: Move) -> MoveablePath {
+    self.move_data.moves[mv].path
+  }
+
+  pub fn move_to_path(&self, mv: Move) -> Path {
+    let mpath = self.move_to_moveable_path(mv);
+    self.moveable_path_to_path(mpath)
+  }
+
   // Predicates
+
+  pub fn is_location_operational(&self, loc: Location) -> bool {
+    use either::Either::{Left, Right};
+    use rustc_middle::mir::{Statement, StatementKind as SK, Terminator};
+
+    let bb = loc.block;
+    let body = &self.body_with_facts.body;
+    let bbs = &body.basic_blocks;
+
+    !bbs[bb].is_cleanup
+      && !bbs[bb].is_empty_unreachable()
+      && matches!(
+        body.stmt_at(loc),
+        Right(Terminator { .. })
+          | Left(Statement {
+            kind: SK::Assign(..),
+            ..
+          })
+      )
+  }
+
+  pub fn is_point_operational(&self, point: Point) -> bool {
+    let loc = self.point_to_location(point);
+    self.is_location_operational(loc)
+  }
 
   pub fn is_mutable_borrow(&self, brw: &BorrowData<'tcx>) -> bool {
     matches!(brw.kind, BorrowKind::Mut {
@@ -213,7 +249,8 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       type_droppable: true,
       type_writeable: true,
       type_copyable,
-      path_moved: false,
+      path_moved: None,
+      path_uninitialized: false,
       loan_read_refined: None,
       loan_write_refined: None,
       loan_drop_refined: None,
@@ -226,12 +263,16 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   #[allow(clippy::if_not_else)]
+  // TODO: we can extend the PermissionsData type to incldue the move
+  // regions, this way, we can show the move region for a given path
+  // when it is missing. (exactly how we do the loans)
   pub fn permissions_data_at_point(
     &self,
     path: Path,
     point: Point,
   ) -> PermissionsData {
-    let empty_hash = &HashMap::default();
+    let empty_hash_move = &HashMap::default();
+    let empty_hash_loan = &HashMap::default();
     let empty_set = &HashSet::default();
     let is_live = self.is_path_live_at(path, point);
     let pms = &self.permissions_output;
@@ -239,26 +280,33 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let point = &point;
 
     // Get point-specific information
-    let path_moved_at = pms
+    let path_uninitialized = pms
       .path_maybe_uninitialized_on_entry
       .get(point)
       .unwrap_or(empty_set);
-    let cannot_read = pms.cannot_read.get(point).unwrap_or(empty_hash);
-    let cannot_write = pms.cannot_write.get(point).unwrap_or(empty_hash);
-    let cannot_drop = pms.cannot_drop.get(point).unwrap_or(empty_hash);
+    let path_moved = pms.move_refined.get(point).unwrap_or(empty_hash_move);
+    let loan_read_refined =
+      pms.loan_read_refined.get(point).unwrap_or(empty_hash_loan);
+    let loan_write_refined =
+      pms.loan_write_refined.get(point).unwrap_or(empty_hash_loan);
+    let loan_drop_refined =
+      pms.loan_drop_refined.get(point).unwrap_or(empty_hash_loan);
 
     let type_writeable = self.is_path_write_enabled(*path);
     let type_droppable = self.is_path_drop_enabled(*path);
     let type_copyable = self.is_path_copyable(*path);
+    let path_uninitialized = path_uninitialized.contains(path);
 
-    let path_moved = path_moved_at.contains(path);
-
+    let path_moved: Option<MoveKey> =
+      path_moved.get(path).map(Into::<MoveKey>::into);
     let loan_read_refined: Option<LoanKey> =
-      cannot_read.get(path).map(Into::<LoanKey>::into);
+      loan_read_refined.get(path).map(Into::<LoanKey>::into);
     let loan_write_refined: Option<LoanKey> =
-      cannot_write.get(path).map(Into::<LoanKey>::into);
+      loan_write_refined.get(path).map(Into::<LoanKey>::into);
     let loan_drop_refined: Option<LoanKey> =
-      cannot_drop.get(path).map(Into::<LoanKey>::into);
+      loan_drop_refined.get(path).map(Into::<LoanKey>::into);
+
+    let mem_uninit = path_moved.is_some() || path_uninitialized;
 
     let permissions = if !is_live {
       Permissions::bottom()
@@ -266,7 +314,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       // A path is readable IFF:
       // - it is not moved.
       // - there doesn't exist a read-refining loan at this point.
-      let read = !path_moved && loan_read_refined.is_none();
+      let read = !mem_uninit && loan_read_refined.is_none();
 
       // A path is writeable IFF:
       // - the path's declared type allows for mutability.
@@ -286,7 +334,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       //   - it isn't moved.
       //   - no drop-refining loan exists at this point.
       let drop = (type_copyable && read)
-        || (type_droppable && !path_moved && loan_drop_refined.is_none());
+        || (type_droppable && !mem_uninit && loan_drop_refined.is_none());
 
       Permissions { read, write, drop }
     };
@@ -296,6 +344,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       type_writeable,
       type_copyable,
       is_live,
+      path_uninitialized,
       path_moved,
       loan_read_refined,
       loan_write_refined,
