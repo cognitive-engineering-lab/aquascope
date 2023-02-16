@@ -122,7 +122,7 @@ let PermStack = ({
   let allIcons = [
     {
       content: readChar,
-      names: ["permission", "read"],
+      names: ["perm", "read"],
       exp: boundary.expected.read,
       act: data.permissions.read,
       showit: () => {
@@ -136,7 +136,7 @@ let PermStack = ({
     },
     {
       content: writeChar,
-      names: ["permission", "write"],
+      names: ["perm", "write"],
       exp: boundary.expected.write,
       act: data.permissions.write,
       showit: () => {
@@ -150,7 +150,7 @@ let PermStack = ({
     },
     {
       content: dropChar,
-      names: ["permission", "drop"],
+      names: ["perm", "drop"],
       exp: boundary.expected.drop,
       act: data.permissions.drop,
       showit: () => {
@@ -172,7 +172,7 @@ let PermStack = ({
         <PermChar key={info.content} {...info} />
       ))}
     </>
-  );  
+  );
 };
 
 class BoundaryPointWidget extends WidgetType {

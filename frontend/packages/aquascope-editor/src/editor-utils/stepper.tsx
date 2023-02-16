@@ -65,7 +65,7 @@ let PermChar = ({
 
   let getInner = () => {
     let Perm: React.FC<React.PropsWithChildren> = ({ children }) => (
-      <span className={getKind(perm.perm)}>{children}</span>
+      <span className={classNames("perm", getKind(perm.perm))}>{children}</span>
     );
     if (perm.step.type === "None") {
       return perm.step.value ? (
@@ -104,7 +104,7 @@ let PermChar = ({
         hideLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
         hideMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
       }}
-      className={classNames("perm-char")}
+      className="perm-char"
     >
       {getInner()}
     </td>
@@ -236,7 +236,7 @@ let PermDiffRow = ({
         );
         break loop;
       } else {
-        console.log("unequal: ", diffs[fact].type, value.type);
+        // console.log("unequal: ", diffs[fact].type, value.type);
       }
     }
   }
@@ -373,7 +373,6 @@ let StepLine = ({
 
   return (
     <div className="perm-step-widget">
-      {" "}
       <span className="step-widget-toggle" onClick={() => setDisplay(!display)}>
         {display ? arrowIn : arrowOut}
       </span>
@@ -382,7 +381,7 @@ let StepLine = ({
           "hidden-width": !display,
         })}
       >
-        {spaces}
+        <div className="step-widget-spacer">{spaces}</div>
         {together}
       </div>
     </div>

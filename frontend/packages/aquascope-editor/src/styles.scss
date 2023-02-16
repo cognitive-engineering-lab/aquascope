@@ -57,6 +57,151 @@ $glyph-width: 14px;
   }
 }
 
+.perm {
+  font-family: "Verdana";    
+  font-weight: bold;
+
+  &.missing {
+    color: transparent !important;
+    -webkit-text-stroke-width: 1px;
+  }
+
+  &.read {
+    color: var(--aq-read-color);
+    -webkit-text-stroke-color: var(--aq-read-color);
+  }
+  
+  &.write {
+    color: var(--aq-write-color);
+    -webkit-text-stroke-color: var(--aq-write-color);
+  }
+  
+  &.drop {
+    color: var(--aq-drop-color);
+    -webkit-text-stroke-color: var(--aq-drop-color);
+  }
+}
+
+
+/* Permission Boundaries */
+
+$perm-animation-duration: 0.5s;
+
+.permission-stack {
+  display: inline-flex;
+  flex-direction: column;
+  position: relative;
+  margin-left: 2px;
+  margin-right: 2px;
+
+  // Filter courtesy of: https://codepen.io/alvarotrigo/pen/eYEqPZa
+  filter: url('data:image/svg+xml,\
+    <svg xmlns="http://www.w3.org/2000/svg">\
+      <filter id="threshold">\
+        <feColorMatrix in="SourceGraphic" type="matrix" values="\
+          1 0 0 0 0\
+          0 1 0 0 0\
+          0 0 1 0 0\
+          0 0 0 255 -140" />\
+      </filter>\
+    </svg>#threshold');
+
+  transition: 
+    margin-top $perm-animation-duration ease-in-out, 
+    margin-bottom $perm-animation-duration ease-in-out,     
+    bottom $perm-animation-duration ease-in-out;
+    
+  cursor: default;
+  
+  &.before-whitespace {
+    margin-left: -3px;
+  }
+
+  &.stack-size-1 {
+    top: 1px;
+  }
+
+  &.stack-size-2 {
+    bottom: 4px;
+    margin-top: 5px;
+  }
+
+  .perm {
+    font-size: $glyph-width;
+    text-align: right; 
+    display: grid;
+    grid-template-columns: 1fr;
+    
+    > div {
+      transition: 
+        filter $perm-animation-duration ease-in-out,
+        opacity $perm-animation-duration ease-in-out,
+        width $perm-animation-duration ease-in-out,
+        height $perm-animation-duration ease-in-out;
+    
+      grid-row-start: 1;
+      grid-column-start: 1;
+      text-align: center;
+    }
+
+    > .small {
+      filter: blur(0px);
+      width: 10px;
+      height: 10px;        
+    }
+
+    > .big {
+      opacity: 0;
+      font-weight: bold;
+      filter: blur(3px);
+
+      // same as .small to avoid rubber-band visual effect
+      width: 10px; 
+      height: 10px;
+    }    
+
+    &.missing > .small {
+      -webkit-text-stroke-width: 1.5px;      
+    }
+
+    &.missing > .big {
+      -webkit-text-stroke-width: 1px;
+    }
+  }
+
+  &:not(.expanded):hover, &.expanded {    
+    &.stack-size-2 {
+      margin-top: 7px;      
+      margin-bottom: -3px;
+      bottom: 6px;
+    }
+
+    .perm {      
+      > .small {
+        opacity: 0;
+        filter: blur(3px);
+        width: 0;
+        height: 0;
+      }
+
+      > .big {
+        opacity: 1;
+        filter: blur(0px);
+        height: 14px;
+      }
+  
+      &.write > .big {
+        width: 14px;
+      }
+
+      &:not(.write) > .big {
+        width: 12px;
+      }
+    }
+  }
+}  
+
+
 .aquascope {
   position: relative;
   height: 100%;
@@ -167,128 +312,6 @@ $glyph-width: 14px;
     }
   }
 
-  /* Permission Boundaries */
-
-  $perm-animation-duration: 0.5s;
-
-  .permission-stack {
-    display: inline-flex;
-    flex-direction: column;
-    position: relative;
-    margin-left: 2px;
-    margin-right: 2px;
-
-    // Filter courtesy of: https://codepen.io/alvarotrigo/pen/eYEqPZa
-    filter: url('data:image/svg+xml,\
-      <svg xmlns="http://www.w3.org/2000/svg">\
-        <filter id="threshold">\
-          <feColorMatrix in="SourceGraphic" type="matrix" values="\
-            1 0 0 0 0\
-            0 1 0 0 0\
-            0 0 1 0 0\
-            0 0 0 255 -140" />\
-        </filter>\
-      </svg>#threshold');
-
-    transition: 
-      margin-top $perm-animation-duration ease-in-out, 
-      margin-bottom $perm-animation-duration ease-in-out,     
-      bottom $perm-animation-duration ease-in-out;
-      
-    cursor: default;
-    
-    &.before-whitespace {
-      margin-left: -3px;
-    }
-
-    &.stack-size-1 {
-      // no repositioning currently needed
-    }
-
-    &.stack-size-2 {
-      bottom: 4px;
-      margin-top: 5px;
-    }
-  }
-
-  .permission {
-    font: $glyph-width "Verdana";    
-    text-align: right;    
-    display: grid;
-    grid-template-columns: 1fr;
-
-    &.missing {
-      color: transparent !important;
-    }
-
-    > div {
-      transition: 
-        filter $perm-animation-duration ease-in-out,
-        opacity $perm-animation-duration ease-in-out,
-        width $perm-animation-duration ease-in-out,
-        height $perm-animation-duration ease-in-out;
-    
-      grid-row-start: 1;
-      grid-column-start: 1;
-      text-align: center;
-    }
-
-    > .small {
-      filter: blur(0px);
-      width: 8px;
-      height: 10px;
-    }
-
-    > .big {
-      opacity: 0;
-      font-weight: bold;
-      filter: blur(3px);
-
-      // same as .small to avoid rubber-band visual effect
-      width: 8px; 
-      height: 10px;
-    }    
-
-    &.missing > .small {
-      -webkit-text-stroke-width: 1.5px;      
-    }
-
-    &.missing > .big {
-      -webkit-text-stroke-width: 1px;
-    }
-  }
-
-  .permission-stack:not(.expanded):hover, .permission-stack.expanded {    
-    &.stack-size-2 {
-      margin-top: 7px;      
-      margin-bottom: -3px;
-      bottom: 6px;
-    }
-
-    .permission {      
-      > .small {
-        opacity: 0;
-        filter: blur(3px);
-        width: 0;
-        height: 0;
-      }
-
-      > .big {
-        opacity: 1;
-        filter: blur(0px);
-        height: 14px;
-      }
-  
-      &.write > .big {
-        width: 14px;
-      }
-
-      &:not(.write) > .big {
-        width: 12px;
-      }
-    }
-  }
-
   /* Permission Steps */
   .hidden-width {
     display: none !important;
@@ -310,7 +333,21 @@ $glyph-width: 14px;
     display: inline-block;
     color: var(--aq-step-widget-text);
     position: relative;
-    top: 0.5em;
+    top: 0.75em;
+    margin-bottom: 0.75em;
+
+    @media (max-width: 800px) {
+      & {
+        display: block;
+        top: 0;
+        margin-bottom: -0.5em;
+        margin-left: 10px;
+
+        .step-widget-spacer {
+          max-width: 20px;          
+        }
+      }
+    }
   }
 
   .step-widget-container {
@@ -415,21 +452,6 @@ $glyph-width: 14px;
         var(--aq-perm-loss-color) calc(50% + 0.75px),
         rgba(0,0,0,0) calc(50% + 1px),
         rgba(0,0,0,0) 100%);
-  }
-
-  .read {
-    color: var(--aq-read-color);
-    -webkit-text-stroke-color: var(--aq-read-color);
-  }
-
-  .write {
-    color: var(--aq-write-color);
-    -webkit-text-stroke-color: var(--aq-write-color);
-  }
-
-  .drop {
-    color: var(--aq-drop-color);
-    -webkit-text-stroke-color: var(--aq-drop-color);
   }
 
   .aquascope-action-indicator {

@@ -29,6 +29,15 @@
   --aq-step-table-background: var(--sidebar-bg);
 }
 
+.coal, .navy, .ayu {
+  --aq-error: #ff5151;
+  --aq-perm-gain-color: #eee;
+  --aq-perm-loss-color: #ccc;
+
+  --aq-write-color: #399cf2;
+  --aq-step-widget-text: #aaa;
+}
+
 .aquascope {
   border: 2px dashed var(--theme-popup-border);
 

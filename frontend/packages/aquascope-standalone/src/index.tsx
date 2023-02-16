@@ -73,10 +73,10 @@ window.addEventListener("load", () => {
         } else if (err.type === "ServerStderr") {
           stdErr.textContent = err.error;
         } else if (err.type === "BuildError") {
-          console.log("showing the build error card");
+          console.debug("showing the build error card");
           buildErrorCard.classList.add("live");
           window.setTimeout(() => {
-            console.log("removing the build error card");
+            console.debug("removing the build error card");
             buildErrorCard.classList.remove("live");
           }, 2500);
         } else if (err.type === "AnalysisError") {

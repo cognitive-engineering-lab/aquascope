@@ -76,6 +76,8 @@ let ContextProvider = ({
   // fullscreen
   useCaptureMdbookShortcuts(open);
 
+  let childEl = children(() => setOpen(false));
+
   return (
     <div className="context-provider">
       <button
@@ -98,7 +100,7 @@ let ContextProvider = ({
           <button className="close" onClick={() => setOpen(false)}>
             ✕
           </button>
-          {children(() => setOpen(false))}
+          {childEl}
         </div>
       ) : null}
     </div>
