@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use rustc_hir::{
   def::Res,
   intravisit::{self, Visitor},
-  BodyId, Expr, ExprKind, Mutability, Path, QPath,
+  BodyId, Expr, ExprKind, Mutability, Path, QPath, UnOp,
 };
 use rustc_middle::{
   hir::nested_filter::OnlyBodies,
@@ -134,9 +134,19 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
         };
 
         self.data.push(pb);
+        self.visit_expr(rhs);
+      }
 
-        intravisit::walk_expr(self, lhs);
-        intravisit::walk_expr(self, rhs);
+      ExprKind::Unary(UnOp::Deref, inner)
+        if inner.is_syntactic_place_expr() && !inner.span.from_expansion() =>
+      {
+        let pb = PathBoundary {
+          hir_id,
+          // We want the boundary to appear to the left of the deref.
+          location: expr.span.shrink_to_lo(),
+          expected: self.get_adjusted_permissions(expr),
+        };
+        self.data.push(pb);
       }
 
       // XXX: we only want to attach permissions to path resolved to `Local` ids.
