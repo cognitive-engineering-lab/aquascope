@@ -6,7 +6,10 @@ use either::Either;
 use flowistry::mir::utils::{OperandExt, SpanExt};
 use path_visitor::get_path_boundaries;
 use rustc_hir::HirId;
-use rustc_middle::mir::{Rvalue, Statement, StatementKind};
+use rustc_middle::{
+  mir::{Body, Location, Place, Rvalue, Statement, StatementKind},
+  ty::TyCtxt,
+};
 use rustc_span::Span;
 use serde::Serialize;
 use ts_rs::TS;
@@ -49,7 +52,13 @@ impl PermissionsBoundary {
 // Permission boundaries on path uses
 
 struct PathBoundary {
+  // The HirId node where we want to look for Places.
   pub hir_id: HirId,
+  // The HirId that could provide additional places we don't
+  // want to consider. This notably happens in an AssignOp where
+  // the LHS and RHS Places get found together, however, the RHS
+  // places can be more precisely identified.
+  pub conflicting_node: Option<HirId>,
   pub location: Span,
   pub expected: Permissions,
 }
@@ -64,10 +73,86 @@ impl std::fmt::Debug for PathBoundary {
   }
 }
 
-fn path_to_perm_boundary(
+// HACK: this is unsatisfying. Ideally, we would be able to take a (resolved) hir::Path
+// and turn it directly into its corresponding mir::Place, I (gavin)
+// haven't found a great way to do this, so for now, we consider all
+// Places occurring inside of a mapped HirId, and for some cases we can
+// remove Places from consideration depending on the hir::Node they came from.
+fn select_candidate_location<'tcx>(
+  _tcx: TyCtxt<'tcx>,
+  _body: &Body<'tcx>,
+  _hir_id: HirId,
+  subtract_from: impl FnOnce() -> Vec<(Location, Place<'tcx>)>,
+  candidates: &[(Location, Place<'tcx>)],
+) -> Option<(Location, Place<'tcx>)> {
+  match candidates.len() {
+    0 => None,
+    1 => Some(candidates[0]),
+    _ => {
+      let others = subtract_from();
+      candidates.iter().find(|t| !others.contains(t)).copied()
+    }
+  }
+}
+
+fn paths_at_hir_id<'a, 'tcx: 'a>(
+  tcx: TyCtxt<'tcx>,
+  body: &'a Body<'tcx>,
+  ir_mapper: &'a IRMapper<'a, 'tcx>,
+  hir_id: HirId,
+) -> Option<Vec<(Location, Place<'tcx>)>> {
+  let mir_locations_opt =
+    ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
+
+  macro_rules! maybe_in_op {
+    ($op:expr, $loc:expr) => {
+      $op
+        .to_place()
+        .and_then(|p| p.is_source_visible(tcx, body).then_some(($loc, p)))
+    };
+  }
+
+  let mir_locations = mir_locations_opt?
+    .values()
+    .filter_map(|loc| {
+      log::debug!("looking at {loc:?}");
+      if let Either::Left(Statement {
+        kind: StatementKind::Assign(box (_, rvalue)),
+        ..
+      }) = body.stmt_at(loc)
+      {
+        match rvalue {
+          Rvalue::Ref(_, _, place) if place.is_source_visible(tcx, body) => {
+            Some((loc, *place))
+          }
+          Rvalue::Use(op) => maybe_in_op!(op, loc),
+          Rvalue::BinaryOp(_, box (left_op, right_op)) => {
+            maybe_in_op!(left_op, loc).or_else(|| maybe_in_op!(right_op, loc))
+          }
+          Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
+            maybe_in_op!(left_op, loc).or_else(|| maybe_in_op!(right_op, loc))
+          }
+          Rvalue::CopyForDeref(place) if place.is_source_visible(tcx, body) => {
+            Some((loc, *place))
+          }
+          _ => {
+            log::warn!("couldn't find in RVALUE {rvalue:?}");
+            None
+          }
+        }
+      } else {
+        None
+      }
+    })
+    .collect::<Vec<_>>();
+
+  Some(mir_locations)
+}
+
+fn path_to_perm_boundary<'a, 'tcx: 'a>(
   path_boundary: PathBoundary,
-  ctxt: &PermissionsCtxt,
-  ir_mapper: &IRMapper,
+  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  ir_mapper: &'a IRMapper<'a, 'tcx>,
   span_to_range: impl Fn(Span) -> Range,
 ) -> Option<PermissionsBoundary> {
   let body = &ctxt.body_with_facts.body;
@@ -80,66 +165,35 @@ fn path_to_perm_boundary(
     hir.node_to_string(path_boundary.hir_id)
   );
 
-  // For a given Path, the MIR location may not be immediately associated with it.
-  // For example, in a function call `foo( &x );`, the Hir Node::Path `&x` will not
-  // have the MIR locations associated with it, the Hir Node::Call `foo( &x )` will,
-  // so we traverse upwards in the tree until we find a location associated with it.
   let search_at_hir_id = |hir_id| {
-    let mir_locations_opt =
-      ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
+    let path_locations = paths_at_hir_id(tcx, body, ir_mapper, hir_id)?;
 
-    macro_rules! maybe_in_op {
-      ($op:expr, $loc:expr) => {
-        $op
-          .to_place()
-          .and_then(|p| p.is_source_visible(tcx, body).then_some(($loc, p)))
-      };
-    }
+    let (loc, place) = select_candidate_location(
+      tcx,
+      body,
+      hir_id,
+      // thunk to compute the places within the conflicting HirId,
+      || {
+        path_boundary
+          .conflicting_node
+          .and_then(|hir_id| paths_at_hir_id(tcx, body, ir_mapper, hir_id))
+          .unwrap_or_default()
+      },
+      &path_locations,
+    )?;
 
-    let mir_locations = mir_locations_opt?
-      .values()
-      .filter_map(|loc| {
-        log::debug!("looking at {loc:?}");
-        if let Either::Left(Statement {
-          kind: StatementKind::Assign(box (_, rvalue)),
-          ..
-        }) = body.stmt_at(loc)
-        {
-          match rvalue {
-            Rvalue::Ref(_, _, place) if place.is_source_visible(tcx, body) => {
-              Some((loc, *place))
-            }
-            Rvalue::Use(op) => maybe_in_op!(op, loc),
-            Rvalue::BinaryOp(_, box (left_op, right_op)) => {
-              maybe_in_op!(left_op, loc).or_else(|| maybe_in_op!(right_op, loc))
-            }
-            Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
-              maybe_in_op!(left_op, loc).or_else(|| maybe_in_op!(right_op, loc))
-            }
-            Rvalue::CopyForDeref(place)
-              if place.is_source_visible(tcx, body) =>
-            {
-              Some((loc, *place))
-            }
-            _ => {
-              log::warn!("couldn't find in RVALUE {rvalue:?}");
-              None
-            }
-          }
-        } else {
-          None
-        }
-      })
-      .collect::<Vec<_>>();
+    log::debug!("Chosen place at location {place:#?} {loc:#?} other options: {path_locations:#?}");
 
-    let (loc, place) = mir_locations.first()?;
-    log::debug!("Chosen place at location {place:#?} {loc:#?}");
-    let point = ctxt.location_to_point(*loc);
-    let path = ctxt.place_to_path(place);
+    let point = ctxt.location_to_point(loc);
+    let path = ctxt.place_to_path(&place);
 
     Some((point, path))
   };
 
+  // For a given Path, the MIR location may not be immediately associated with it.
+  // For example, in a function call `foo( &x );`, the Hir Node::Path `&x` will not
+  // have the MIR locations associated with it, the Hir Node::Call `foo( &x )` will,
+  // so we traverse upwards in the tree until we find a location associated with it.
   search_at_hir_id(hir_id)
     .or_else(|| {
       hir.parent_iter(hir_id).find_map(|(hir_id, _)| {
@@ -171,9 +225,9 @@ fn path_to_perm_boundary(
     })
 }
 
-pub(crate) fn compute_boundaries(
-  ctxt: &PermissionsCtxt,
-  ir_mapper: &IRMapper,
+pub(crate) fn compute_boundaries<'a>(
+  ctxt: &PermissionsCtxt<'_, 'a>,
+  ir_mapper: &IRMapper<'_, 'a>,
   span_to_range: impl Fn(Span) -> Range + std::marker::Copy,
 ) -> Result<Vec<PermissionsBoundary>> {
   let tcx = ctxt.tcx;

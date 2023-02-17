@@ -1,0 +1,10 @@
+// This test is useful because the AssignOp expression
+// will not have an "easy" resolution when finding
+// the corresponding mir::Places.
+
+fn main() {
+  let mut x = 1;
+  let y = &x;
+  let z = *y;
+  x += x * z * *y;
+}
