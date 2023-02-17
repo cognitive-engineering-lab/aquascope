@@ -9,6 +9,7 @@ authors = [
 ]
 description = "Permissions analyzer for Rust code"
 repository = "https://github.com/cognitive-engineering-lab/aquascope"
+publish = false
 
 [package.metadata.rust-analyzer]
 rustc_private = true

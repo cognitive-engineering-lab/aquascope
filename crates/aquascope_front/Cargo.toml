@@ -9,6 +9,7 @@ authors = [
 ]
 description = "Interactive visualizations of Rust at compile-time and run-time"
 repository = "https://github.com/cognitive-engineering-lab/aquascope"
+publish = false
 
 [package.metadata.rust-analyzer]
 rustc_private = true
