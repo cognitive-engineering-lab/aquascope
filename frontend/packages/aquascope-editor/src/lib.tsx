@@ -12,6 +12,7 @@ import {
   renderInterpreter,
 } from "./editor-utils/interpreter";
 import {
+  ActionFacts,
   IconField,
   hiddenLines,
   hideLine,
