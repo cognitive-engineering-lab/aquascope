@@ -14,9 +14,83 @@ steps:
             char_start: 14
             char_end: 53
             filename: 0
-          locals: []
+          locals:
+            - - x
+              - type: Tuple
+                value:
+                  - type: Int
+                    value: 0
+                  - type: Adt
+                    value:
+                      name: String
+                      variant: ~
+                      fields:
+                        - - vec
+                          - type: Adt
+                            value:
+                              name: Vec
+                              variant: ~
+                              fields:
+                                - - buf
+                                  - type: Adt
+                                    value:
+                                      name: RawVec
+                                      variant: ~
+                                      fields:
+                                        - - ptr
+                                          - type: Adt
+                                            value:
+                                              name: Unique
+                                              variant: ~
+                                              fields:
+                                                - - pointer
+                                                  - type: Adt
+                                                    value:
+                                                      name: NonNull
+                                                      variant: ~
+                                                      fields:
+                                                        - - pointer
+                                                          - type: Pointer
+                                                            value:
+                                                              path:
+                                                                segment:
+                                                                  type: Heap
+                                                                  value:
+                                                                    index: 0
+                                                                parts:
+                                                                  - type: Index
+                                                                    value: 0
+                                                              range: ~
+                                                      alloc_kind: ~
+                                              alloc_kind: ~
+                                        - - cap
+                                          - type: Uint
+                                            value: 5
+                                      alloc_kind: ~
+                                - - len
+                                  - type: Uint
+                                    value: 5
+                              alloc_kind: ~
+                      alloc_kind:
+                        type: String
+                        value:
+                          len: 5
     heap:
-      locations: []
+      locations:
+        - type: Array
+          value:
+            type: All
+            value:
+              - type: Char
+                value: 72
+              - type: Char
+                value: 101
+              - type: Char
+                value: 108
+              - type: Char
+                value: 108
+              - type: Char
+                value: 111
   - stack:
       frames:
         - name: main
@@ -28,9 +102,83 @@ steps:
             char_start: 56
             char_end: 65
             filename: 0
-          locals: []
+          locals:
+            - - x
+              - type: Tuple
+                value:
+                  - type: Int
+                    value: 1
+                  - type: Adt
+                    value:
+                      name: String
+                      variant: ~
+                      fields:
+                        - - vec
+                          - type: Adt
+                            value:
+                              name: Vec
+                              variant: ~
+                              fields:
+                                - - buf
+                                  - type: Adt
+                                    value:
+                                      name: RawVec
+                                      variant: ~
+                                      fields:
+                                        - - ptr
+                                          - type: Adt
+                                            value:
+                                              name: Unique
+                                              variant: ~
+                                              fields:
+                                                - - pointer
+                                                  - type: Adt
+                                                    value:
+                                                      name: NonNull
+                                                      variant: ~
+                                                      fields:
+                                                        - - pointer
+                                                          - type: Pointer
+                                                            value:
+                                                              path:
+                                                                segment:
+                                                                  type: Heap
+                                                                  value:
+                                                                    index: 0
+                                                                parts:
+                                                                  - type: Index
+                                                                    value: 0
+                                                              range: ~
+                                                      alloc_kind: ~
+                                              alloc_kind: ~
+                                        - - cap
+                                          - type: Uint
+                                            value: 5
+                                      alloc_kind: ~
+                                - - len
+                                  - type: Uint
+                                    value: 5
+                              alloc_kind: ~
+                      alloc_kind:
+                        type: String
+                        value:
+                          len: 5
     heap:
-      locations: []
+      locations:
+        - type: Array
+          value:
+            type: All
+            value:
+              - type: Char
+                value: 72
+              - type: Char
+                value: 101
+              - type: Char
+                value: 108
+              - type: Char
+                value: 108
+              - type: Char
+                value: 111
   - stack:
       frames:
         - name: main
