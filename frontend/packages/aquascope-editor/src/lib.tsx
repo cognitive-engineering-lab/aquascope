@@ -224,7 +224,9 @@ export class Editor {
   }
 
   public async renderPermissions(cfg?: PermissionsCfg) {
-    if (this.permissionsDecos === undefined) {
+    // TODO: the permissions Decos are no longer removed on update
+    // so we have to recompute every time.
+    if (true || this.permissionsDecos === undefined) {
       await this.renderOperation("permissions", {
         config: cfg,
       });
