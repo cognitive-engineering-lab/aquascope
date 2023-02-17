@@ -296,7 +296,7 @@ let ValueView = ({ value }: { value: MValue }) => {
             error.value.alloc_id == value.value.alloc_id;
           return (
             <span className={classNames("unallocated", { error: isError })}>
-              X
+              ⦻
             </span>
           );
         })()
@@ -642,16 +642,13 @@ export function renderInterpreter(
     );
   }
 
-  let decos = _.sortBy(
-    widgetRanges.map((mark, i) =>
-      Decoration.widget({
-        widget: new StepMarkerWidget(
-          i,
-          i == trace.steps.length - 1 && trace.result.type == "Error"
-        ),
-      }).range(mark)
-    ),
-    deco => deco.from
+  let decos = widgetRanges.map((mark, i) =>
+    Decoration.widget({
+      widget: new StepMarkerWidget(
+        i,
+        i == trace.steps.length - 1 && trace.result.type == "Error"
+      ),
+    }).range(mark)
   );
 
   view.dispatch({

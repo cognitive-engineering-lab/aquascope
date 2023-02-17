@@ -445,13 +445,10 @@ export function makeStepDecorations(
   stateSteps: PermissionsLineDisplay[],
   annotations?: StepperAnnotations
 ): Range<Decoration>[] {
-  return _.sortBy(
-    stateSteps.map(step =>
-      Decoration.widget({
-        widget: new PermissionStepLineWidget(view, step, facts, annotations),
-        side: 1,
-      }).range(stepLocation(step))
-    ),
-    deco => deco.from
+  return stateSteps.map(step =>
+    Decoration.widget({
+      widget: new PermissionStepLineWidget(view, step, facts, annotations),
+      side: 1,
+    }).range(stepLocation(step))
   );
 }

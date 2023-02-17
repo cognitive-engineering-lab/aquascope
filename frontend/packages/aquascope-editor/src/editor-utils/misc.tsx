@@ -321,7 +321,8 @@ export let makeDecorationField = () => {
     update(widgets, tr) {
       widgets = widgets.map(tr.changes);
       for (let e of tr.effects)
-        if (e.is(setEffect)) widgets = RangeSet.of(e.value);
+        if (e.is(setEffect))
+          widgets = RangeSet.of(_.sortBy(e.value, range => range.from));
       return widgets;
     },
     provide: f => EditorView.decorations.from(f),
