@@ -23,3 +23,12 @@ script = """
 cargo test -p aquascope -p mdbook-aquascope --lib export_bindings
 mkdir -p frontend/packages/aquascope-editor/src/bindings
 cp crates/**/bindings/* frontend/packages/aquascope-editor/src/bindings"""
+
+[tasks.install-mdbook]
+dependencies = ["init-bindings"]
+script = """
+cd frontend && graco prepare && cd ..
+cargo miri setup
+cargo install --path crates/mdbook-aquascope        
+cargo install --path crates/aquascope_front
+"""
