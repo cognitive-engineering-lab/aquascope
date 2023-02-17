@@ -10,7 +10,7 @@ use miri::{
   InterpErrorInfo, InterpResult, LocalState, LocalValue, Machine, MiriConfig,
   MiriMachine, OpTy, Operand, UndefinedBehaviorInfo,
 };
-use rustc_abi::Size;
+use rustc_abi::{FieldsShape, Size};
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{ClearCrossCrate, Local, LocalInfo, Location, Place, RETURN_PLACE},
@@ -188,6 +188,37 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     })
   }
 
+  fn mem_is_initialized(
+    &self,
+    layout: TyAndLayout<'tcx>,
+    allocation: &miri::Allocation<miri::Provenance, miri::AllocExtra>,
+  ) -> bool {
+    // TODO: this should be recursive over the type. Only handles one-step right now.
+    let ranges = match &layout.fields {
+      FieldsShape::Primitive | FieldsShape::Array { .. } => vec![AllocRange {
+        start: Size::ZERO,
+        size: allocation.size(),
+      }],
+      FieldsShape::Arbitrary { offsets, .. } => offsets
+        .iter()
+        .enumerate()
+        .map(|(i, offset)| {
+          let field = layout.field(&self.ecx, i);
+          AllocRange {
+            start: *offset,
+            size: field.size,
+          }
+        })
+        .collect(),
+      FieldsShape::Union(_) => unimplemented!(),
+    };
+
+    let init_mask = allocation.init_mask();
+    ranges
+      .into_iter()
+      .all(|range| init_mask.is_range_initialized(range).is_ok())
+  }
+
   fn test_local(
     &self,
     frame: &Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
@@ -245,27 +276,9 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
 
         // Have to handle the case that a local is uninitialized and indirect
-        // by checking the init_mask in the local's allocation
         let (_, allocation) =
           self.ecx.memory.alloc_map().get(alloc_id).unwrap();
-
-        // Some types (like structs, due to alignment) may have uninitialized regions,
-        // so checking the entire range is too conservative (will ignore fully initialized types).
-        // This hack seems to work for basic structs... but TODO: need to figure out if this robust.
-        let range = match layout {
-          Some(TyAndLayout { layout, .. }) => match layout.largest_niche() {
-            Some(niche) => niche.offset,
-            _ => allocation.size(),
-          },
-          _ => allocation.size(),
-        };
-        let initialized_status =
-          allocation.init_mask().is_range_initialized(AllocRange {
-            start: Size::ZERO,
-            size: range,
-          });
-        if let Err(range) = initialized_status {
-          log::debug!("Rejecting uninitialized local due to range: {range:?}",);
+        if !self.mem_is_initialized(layout.unwrap(), allocation) {
           return Ok(None);
         }
 

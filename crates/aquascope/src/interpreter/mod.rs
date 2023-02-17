@@ -29,7 +29,7 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
   if log::log_enabled!(log::Level::Trace) {
     for step in &mir_steps.steps {
       let (inst, mir_body_loc) = step.stack.frames.last().unwrap().location;
-      eprintln!("{}", match mir_body_loc {
+      log::trace!("{}", match mir_body_loc {
         Either::Left(loc) => {
           let body = evaluator.ecx.load_mir(inst, None).unwrap();
           format!("{:?}", body.stmt_at(loc))
@@ -47,7 +47,7 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
   if log::log_enabled!(log::Level::Trace) {
     for step in &hir_steps.steps {
       let (_, hir_body_loc) = step.stack.frames.last().unwrap().location;
-      eprintln!("{:?}", match hir_body_loc {
+      log::trace!("{:?}", match hir_body_loc {
         Either::Left(node_id) => tcx.hir().node_to_string(node_id),
         Either::Right(span) =>
           tcx.sess.source_map().span_to_snippet(span).unwrap(),
