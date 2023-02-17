@@ -234,12 +234,9 @@ export function makeBoundaryDecorations(
   boundaries: PermissionsBoundary[],
   annotations?: BoundariesAnnotations
 ): Range<Decoration>[] {
-  return _.sortBy(
-    boundaries.map(b =>
-      Decoration.widget({
-        widget: new BoundaryPointWidget(view, facts, b, annotations),
-      }).range(b.location)
-    ),
-    deco => deco.from
+  return boundaries.map(b =>
+    Decoration.widget({
+      widget: new BoundaryPointWidget(view, facts, b, annotations),
+    }).range(b.location)
   );
 }
