@@ -501,10 +501,12 @@ $perm-animation-duration: 0.5s;
   background: var(--aq-bg);
   padding: 1rem;
   display: flex;
-  gap: 30px;
+  column-gap: 50px;
+  row-gap: 30px;
   flex-wrap: wrap;
   overflow-x: auto;
   position: relative;
+  font-size: 15px;
 
   .concrete-types {
     position: absolute;
@@ -545,7 +547,7 @@ $perm-animation-duration: 0.5s;
       margin-bottom: 5px;
 
       .step-marker {
-        font-size: 18px;
+        font-size: 1.1em;
         font-family: $monospace;
       }
 
@@ -566,7 +568,7 @@ $perm-animation-duration: 0.5s;
       .memory-container-flex {
         display: flex;
         flex-direction: row;
-        gap: 80px;
+        gap: 60px;
         padding-left: 10px;
       }
 
@@ -578,7 +580,7 @@ $perm-animation-duration: 0.5s;
         .frames {
           display: flex;
           flex-direction: column;
-          gap: 15px;
+          gap: 10px;
 
           .frame-header {
             display: inline-block;
@@ -586,7 +588,7 @@ $perm-animation-duration: 0.5s;
           }
 
           .empty-frame {
-            font-size: 0.85em;
+            font-size: 0.9em;
           }
         }
       }
@@ -594,12 +596,12 @@ $perm-animation-duration: 0.5s;
 
     h2 {
       margin-top: 0;
-      font-size: 18px;
+      font-size: 1.1em;
       font-weight: bold;
     }
 
     code {
-      font-size: 0.8em;
+      font-size: 0.9em;
     }
 
     table.locals,
@@ -608,7 +610,7 @@ $perm-animation-duration: 0.5s;
 
       > tbody > tr > td {
         border-width: 2px;
-        padding: 4px 6px;
+        padding: 2px 4px;
       }
     }
 
@@ -623,6 +625,7 @@ $perm-animation-duration: 0.5s;
         td {
           border-top: none;
           border-bottom: none;
+          padding: 0 2px;
 
           &:first-child {
             border-left: none;

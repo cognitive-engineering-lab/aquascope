@@ -400,12 +400,21 @@ const PALETTE = {
   dark: ["#ebdbd0", "#e3cbbc", "#dcbca9", "#d6ac98", "#d19d88", "#cb8c7a"],
 };
 
-let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
+let StepView = ({
+  step,
+  index,
+  containerRef,
+}: {
+  step: MStep<Range>;
+  index: number;
+  containerRef: React.RefObject<HTMLDivElement>;
+}) => {
   let stepContainerRef = useRef<HTMLDivElement>(null);
   let arrowContainerRef = useRef<HTMLDivElement>(null);
   let config = useContext(ConfigContext);
   let error = useContext(ErrorContext);
   useEffect(() => {
+    let container = containerRef.current!;
     let stepContainer = stepContainerRef.current!;
     let arrowContainer = arrowContainerRef.current!;
 
@@ -425,73 +434,99 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
       "--inline-code-color"
     );
 
-    let lines = Array.from(pointers).map((src, i) => {
-      try {
-        let dstSel = src.dataset.pointTo!;
-        let dst = query(dstSel);
-        let dstRange = src.dataset.pointToRange
-          ? query(src.dataset.pointToRange)
-          : undefined;
-        let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+    let lines = Array.from(pointers)
+      .map((src, i) => {
+        try {
+          let dstSel = src.dataset.pointTo!;
+          let dst = query(dstSel);
+          let dstRange = src.dataset.pointToRange
+            ? query(src.dataset.pointToRange)
+            : undefined;
+          let endSocket = dst.dataset.connector as LeaderLine.SocketType;
 
-        let srcInHeap = src.closest(".heap") !== null;
-        let dstInStack = dstSel.startsWith("stack");
-        let startSocket: LeaderLine.SocketType =
-          srcInHeap && dstInStack ? "left" : "right";
+          let srcInHeap = src.closest(".heap") !== null;
+          let dstInStack = dstSel.startsWith("stack");
+          let startSocket: LeaderLine.SocketType =
+            srcInHeap && dstInStack ? "left" : "right";
 
-        let dstAnchor = dstRange
-          ? LeaderLine.areaAnchor(dst, {
-              shape: "rect",
-              width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
-              height: 2,
-              y: "100%",
-              fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
-            })
-          : dstInStack && !srcInHeap
-          ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
-          : dst;
+          let dstAnchor = dstRange
+            ? LeaderLine.areaAnchor(dst, {
+                shape: "rect",
+                width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
+                height: 2,
+                y: "100%",
+                fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
+              })
+            : dstInStack && !srcInHeap
+            ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
+            : dst;
 
-        const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
-        let isDark = MDBOOK_DARK_THEMES.some(s =>
-          document.documentElement.classList.contains(s)
-        );
-        let theme: "dark" | "light" = isDark ? "dark" : "light";
-        let palette = PALETTE[theme];
-        let color = palette[i % palette.length];
+          const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
+          let isDark = MDBOOK_DARK_THEMES.some(s =>
+            document.documentElement.classList.contains(s)
+          );
+          let theme: "dark" | "light" = isDark ? "dark" : "light";
+          let palette = PALETTE[theme];
+          let color = palette[i % palette.length];
 
-        new LeaderLine(src, dstAnchor, {
-          color,
-          size: 1,
-          endPlugSize: 2,
-          startSocket,
-          endSocket,
-        });
+          let line = new LeaderLine(src, dstAnchor, {
+            color,
+            size: 1,
+            endPlugSize: 2,
+            startSocket,
+            endSocket,
+            startSocketGravity: 60,
+            endSocketGravity: 100,
+          });
 
-        // Make arrows local to the diagram rather than global in the body
-        // See: https://github.com/anseki/leader-line/issues/54
-        let lineEl = document.body.querySelector(
-          ":scope > .leader-line:last-of-type"
-        );
-        if (!lineEl) throw new Error("Missing line el?");
-        arrowContainer.appendChild(lineEl);
+          // Make arrows local to the diagram rather than global in the body
+          // See: https://github.com/anseki/leader-line/issues/54
+          let lineEl = document.body.querySelector(
+            ":scope > .leader-line:last-of-type"
+          );
+          if (!lineEl) throw new Error("Missing line el?");
+          arrowContainer.appendChild(lineEl);
 
-        return lineEl;
-      } catch (e: any) {
-        console.error("Leader line failed to render", e.stack);
-        return undefined;
+          return { line, lineEl };
+        } catch (e: any) {
+          console.error("Leader line failed to render", e.stack);
+          return undefined;
+        }
+      })
+      .filter(obj => obj !== undefined) as {
+      line: LeaderLine;
+      lineEl: Element;
+    }[];
+
+    let curCoords = (): [number, number] => {
+      let stepBox = stepContainer.getBoundingClientRect();
+      let x = stepBox.left + window.scrollX + container.scrollLeft;
+      let y = stepBox.top + window.scrollY + container.scrollTop;
+      return [x, y];
+    };
+
+    let positionArrowContainer = (x: number, y: number) => {
+      lines.forEach(({ line }) => line.position());
+      arrowContainer.style.transform = `translate(-${x}px, -${y}px)`;
+    };
+    let lastCoords = curCoords();
+    positionArrowContainer(...lastCoords);
+
+    let interval = setInterval(() => {
+      let newCoords = curCoords();
+      if (newCoords[0] != lastCoords[0] || newCoords[1] != lastCoords[1]) {
+        positionArrowContainer(...newCoords);
       }
-    });
+      lastCoords = newCoords;
+    }, 300);
 
-    let stepBox = stepContainer.getBoundingClientRect();
-    let x = stepBox.left + window.scrollX;
-    let y = stepBox.top + window.scrollY;
-    arrowContainer.style.transform = `translate(-${x}px, -${y}px)`;
-
-    return () =>
-      lines.forEach(line => {
-        if (!line) return;
-        line.parentNode!.removeChild(line);
+    return () => {
+      lines.forEach(({ lineEl }) => {
+        if (!lineEl) return;
+        lineEl.parentNode!.removeChild(lineEl);
       });
+      clearInterval(interval);
+    };
   }, [config.concreteTypes]);
 
   return (
@@ -562,7 +597,7 @@ let InterpreterView = ({
               : undefined;
           return (
             <ErrorContext.Provider key={i} value={error}>
-              <StepView index={i} step={step} />
+              <StepView index={i} step={step} containerRef={ref} />
             </ErrorContext.Provider>
           );
         })}
