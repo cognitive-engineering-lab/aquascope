@@ -114,7 +114,7 @@ let BugReporter = () => (
       let onSubmit: React.FormEventHandler<HTMLFormElement> = event => {
         let data = new FormData(event.target as any);
         let feedback = data.get("feedback")!.toString();
-        window.telemetry!.log("aquascope-bug", { code, feedback });
+        window.telemetry!.log("aquascopeBug", { code, feedback });
         event.preventDefault();
         close();
       };
