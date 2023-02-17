@@ -1,47 +1,65 @@
-# <span>Aquascope: Look Beneath the Surface of Rust</span><img src="https://user-images.githubusercontent.com/20209337/214093362-cb677ea0-8fe1-48b5-914b-839822dcf3ca.png" style="float: right; border: 1px solid #555;" height="300" /></p>
+# <span>Aquascope: Look Beneath the Surface of Rust</span><img src="https://user-images.githubusercontent.com/663326/219528078-e8792f31-02b3-447f-97ed-f3c0fbb4f557.png" style="float: right; border: 1px solid #555;" height="250" /></p>
 
 [![tests](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml/badge.svg)](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/mdbook-aquascope.svg)](https://crates.io/crates/mdbook-aquascope)
 [![docs](https://img.shields.io/badge/docs-built-blue)](https://cognitive-engineering-lab.github.io/aquascope/doc/aquascope/)
 
-_Aquascope_ is a tool that generates interactive visualizations of Rust programs. These visualizations show how Rust's borrow checker "thinks" about a program, and how a Rust program actually executes. [Click here for a live demo.](https://cognitive-engineering-lab.github.io/aquascope/)
+Aquascope is a tool that generates interactive visualizations of Rust programs. These visualizations show how Rust's borrow checker "thinks" about a program, and how a Rust program actually executes. Here is a sample output of Aquascope:
 
-<!-- Borrow check information is reformulated in terms of _permissions_, a new pedagogy of ownership to provide learners with a notional machine for this kind of static analysis. Example visualizations and this new pedagogy are demonstrated in the [Rust Book Experiment](https://rust-book.cs.brown.edu/). -->
+<img alt="Example Aquascope output" src="https://user-images.githubusercontent.com/663326/219532624-a9605540-dac9-4d9b-a5f2-8a3d1ca81f50.png" height="550" />
 
-> :warning: Aquascope is experimental and under active development!
+[Click here for a live demo.](https://cognitive-engineering-lab.github.io/aquascope/)
+
+:warning: **Aquascope is research software and under active development!** :warning:
 
 ## Installation
 
-We provide an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor `mdbook-aquascope` that embeds Aquascope diagrams into an mdBook. You can install `mdbook-aquascope` either via [crates.io](https://crates.io) or from source.
+We provide an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor that embeds Aquascope diagrams into an mdBook. To use it, you need to install the `mdbook-aquascope` and `cargo-aquascope` binaries as follows:
 
-### From crates.io
-
-You can run `cargo install mdbook-aquascope` to install from [crates.io](https://crates.io). 
-
-> Note, Aquascope is tied to a specific version of `rustc` and you will need to use toolchain `nightly-2022-12-07`.
-
-To embed the visualizations you will also need the crate [`aquascope_front`](https://github.com/cognitive-engineering-lab/aquascope/tree/main/crates/aquascope_front). Due to unpublished dependencies this crate is not available from crates.io but can be installed via `cargo install --git https://github.com/cognitive-engineering-lab/aquascope aquascope_front`. 
-
-<!--
 ```sh
 cargo install mdbook-aquascope
-``` -->
+rustup toolchain install nightly-2022-12-07 -c rust-src rustc-dev llvm-tools-preview miri
+cargo +nightly-2022-12-07 install --git https://github.com/cognitive-engineering-lab/aquascope aquascope_front
+cargo +nightly-2022-12-07 miri setup
+```
 
-### From source
+Note that `cargo-aquascope` is installed via `aquascope_front` and must be installed via git and with a specific nightly toolchain. The `miri setup` command is a necessary prerequisite to running the Aquascope interpreter.
 
-You will first need Cargo and [npm](https://www.npmjs.com/) installed, then you can run:
+### From Source
+
+If you want to install from source, you will first need Cargo and [npm](https://www.npmjs.com/) installed, then you can run:
 
 ```sh
 git clone https://github.com/cognitive-engineering-lab/aquascope.git
+cd aquascope
 npm install -g graco
 cargo make init-bindings
 cd frontend && graco prepare
-cargo miri setup
+cargo install --path crates/aquascope_front
 cargo install --path crates/mdbook-aquascope
 ```
 
 ## Usage
 
+First, enable `mdbook-aquascope` in your mdBook's `book.toml` like so:
+
+```toml
+# book.toml
+[preprocessor.aquascope]
+```
+
+Then add an Aquascope code block to one of your Markdown source files like this:
+
+    ```aquascope,interpreter
+    #fn main() {
+    let mut s = String::from("hello ");`[]`
+    s.push_str("world");`[]`
+    #}
+    ```
+
+Further documentation on the syntax and configuration of Aquascope blocks will be provided once the interface is more stable.
+
+<!--
 ### Available visualizations
 
 Currently, Aquascope supports three types of visualizations:
@@ -158,6 +176,8 @@ Visualizing permission steps can be quite intrusive but oftentimes you may want 
     </tr>
 </table>
 
+-->
+
 ## Having trouble?
 
-If you want to use Aquascope but are having trouble finding the relevant information, please leave an issue or get in touch!
+If you want to use Aquascope but are having trouble finding the relevant information, please leave an issue or email us at <wcrichto@brown.edu> and <gagray@ethz.ch>.
