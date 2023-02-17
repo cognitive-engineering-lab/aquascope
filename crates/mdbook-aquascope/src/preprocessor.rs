@@ -82,6 +82,7 @@ impl AquascopePreprocessor {
         .arg("aquascope")
         .env("SYSROOT", &self.miri_sysroot)
         .env("DYLD_LIBRARY_PATH", &self.target_libdir)
+        .env("LD_LIBRARY_PATH", &self.target_libdir)
         .env("RUST_BACKTRACE", "1")
         .current_dir(root.join("example"));
 
