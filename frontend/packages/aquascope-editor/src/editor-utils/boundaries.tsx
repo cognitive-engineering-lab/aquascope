@@ -13,7 +13,7 @@ import {
 } from "@codemirror/view";
 import classNames from "classnames";
 import _ from "lodash";
-import React from "react";
+import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import {
@@ -166,12 +166,26 @@ let PermStack = ({
 
   let icons = allIcons.filter(i => i.exp);
 
+  // Necessary so we can temporarily apply the CSS filter and remove it
+  // at the end of the animation. Sadly no way to do this in pure CSS AFAIK...
+  let [animating, setAnimating] = useState(false);
+  let [timer, setTimer] = useState<number | undefined>();
+  let triggerAnimation = () => {
+    setAnimating(true);
+    if (timer !== 0) clearTimeout(timer);
+    setTimer(setTimeout(() => setAnimating(false), 500));
+  };
+
   return (
-    <>
+    <div
+      onMouseEnter={triggerAnimation}
+      onMouseLeave={triggerAnimation}
+      className={classNames({ animating })}
+    >
       {icons.map(info => (
         <PermChar key={info.content} {...info} />
       ))}
-    </>
+    </div>
   );
 };
 

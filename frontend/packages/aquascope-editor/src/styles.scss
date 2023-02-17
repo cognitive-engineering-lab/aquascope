@@ -32,6 +32,7 @@ $transparent: rgba(0, 0, 0, 0);
   --aq-step-table-text: black;
   --aq-step-table-border: gainsboro;
   --aq-step-table-background: whitesmoke;
+  --aq-step-table-background-alternate: transparent;
 }
 
 $base-z-index: 10;
@@ -94,17 +95,19 @@ $perm-animation-duration: 0.5s;
   margin-left: 2px;
   margin-right: 2px;
 
-  // Filter courtesy of: https://codepen.io/alvarotrigo/pen/eYEqPZa
-  filter: url('data:image/svg+xml,\
-    <svg xmlns="http://www.w3.org/2000/svg">\
-      <filter id="threshold">\
-        <feColorMatrix in="SourceGraphic" type="matrix" values="\
-          1 0 0 0 0\
-          0 1 0 0 0\
-          0 0 1 0 0\
-          0 0 0 255 -140" />\
-      </filter>\
-    </svg>#threshold');
+  .animating {
+    // Filter courtesy of: https://codepen.io/alvarotrigo/pen/eYEqPZa
+    filter: url('data:image/svg+xml,\
+      <svg xmlns="http://www.w3.org/2000/svg">\
+        <filter id="threshold">\
+          <feColorMatrix in="SourceGraphic" type="matrix" values="\
+            1 0 0 0 0\
+            0 1 0 0 0\
+            0 0 1 0 0\
+            0 0 0 255 -140" />\
+        </filter>\
+      </svg>#threshold');
+  }
 
   transition: 
     margin-top $perm-animation-duration ease-in-out, 
@@ -223,7 +226,7 @@ $perm-animation-duration: 0.5s;
     display: inline-block;
     width: 0;
     overflow: hidden;
-    transition: 1s all;
+    transition: 1s background-color;
   }
 
   .top-right {
@@ -275,7 +278,7 @@ $perm-animation-duration: 0.5s;
 
   .aquascope-loan {
     text-decoration: underline 3px $transparent;
-    transition: 1s all;
+    transition: 1s text-decoration;
 
     &.show-hidden {
       &.read {
@@ -295,7 +298,7 @@ $perm-animation-duration: 0.5s;
   .aquascope-live-region {
     background-color: $transparent;
     border-radius: 5px;
-    transition: 1s all;
+    transition: 1s background-color;
 
     &.show-hidden {
       &.read {
@@ -397,6 +400,10 @@ $perm-animation-duration: 0.5s;
   table.perm-step-table {
     vertical-align: top;
     border-collapse: collapse;
+
+    tr:nth-child(2n) {
+      background-color: var(--aq-step-table-background-alternate);
+    }
   }
 
   .perm-step-table tr td {

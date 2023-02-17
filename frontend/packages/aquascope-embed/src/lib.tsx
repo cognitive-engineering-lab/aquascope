@@ -122,8 +122,8 @@ let BugReporter = () => (
         <>
           <h3>Report a bug</h3>
           <p>
-            If you found an issue in this question (e.g. a typo or an incorrect
-            answer), please describe the issue and report it:
+            If you found an issue in this diagram (e.g. a typo, a visual bug,
+            anything confusing), please describe the issue and report it:
           </p>
           <form onSubmit={onSubmit}>
             <div>
