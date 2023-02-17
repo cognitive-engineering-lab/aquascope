@@ -296,7 +296,7 @@ let ValueView = ({ value }: { value: MValue }) => {
             error.value.alloc_id == value.value.alloc_id;
           return (
             <span className={classNames("unallocated", { error: isError })}>
-              X
+              ⦻
             </span>
           );
         })()
