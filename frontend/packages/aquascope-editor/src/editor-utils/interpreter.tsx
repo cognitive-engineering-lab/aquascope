@@ -161,24 +161,32 @@ let AdtView = ({ value }: { value: MAdt }) => {
     );
   }
 
+  let cells = value.fields.map(([_k, v], i) => {
+    let path = [...pathCtx, "field", i.toString()];
+    return (
+      <td className={path.join("-")}>
+        <PathContext.Provider value={path}>
+          <ValueView value={v} />
+        </PathContext.Provider>
+      </td>
+    );
+  });
+
   return (
     <>
       {adtName}
       <table>
         <tbody>
-          {value.fields.map(([k, v], i) => {
-            let path = [...pathCtx, "field", i.toString()];
-            return (
-              <tr key={k}>
-                {!isTuple ? <td>{k}</td> : null}
-                <td className={path.join("-")}>
-                  <PathContext.Provider value={path}>
-                    <ValueView value={v} />
-                  </PathContext.Provider>
-                </td>
+          {isTuple ? (
+            <tr>{cells}</tr>
+          ) : (
+            value.fields.map(([k, _v], i) => (
+              <tr key={i}>
+                <td>{k}</td>
+                {cells[i]}
               </tr>
-            );
-          })}
+            ))
+          )}
         </tbody>
       </table>
     </>

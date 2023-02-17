@@ -226,7 +226,17 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
     match op {
       // Ignore uninitialized locals
-      Operand::Immediate(Immediate::Uninit) => return Ok(None),
+      Operand::Immediate(Immediate::Uninit) => {
+        // Special case: a unit struct is considered uninitialized, but we would still like to
+        // visualize it at the toplevel, so we handle that here. Might need to make this a configurable thing?
+        let not_zst = match layout {
+          Some(layout) => !layout.is_zst(),
+          None => true,
+        };
+        if not_zst {
+          return Ok(None);
+        }
+      }
 
       // If a local is Indirect, meaning there exists a pointer to it,
       // then save its allocation in `MemoryMap::stack_slots`
