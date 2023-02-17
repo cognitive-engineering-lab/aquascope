@@ -262,7 +262,9 @@ $perm-animation-duration: 0.5s;
 
   .cm-scroller {
     overflow: auto;
-    z-index: inherit;
+    // TODO: why was this rule originally here?
+    // It causes user selections to not appear in the codemirror editor.
+    // z-index: inherit;
   }
 
   .cm-line.hidden-line {

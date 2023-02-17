@@ -1,10 +1,4 @@
-import { StateEffect } from "@codemirror/state";
-import {
-  Decoration,
-  EditorView,
-  ViewPlugin,
-  WidgetType,
-} from "@codemirror/view";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
 import LeaderLine from "leader-line-new";
 import _ from "lodash";
@@ -29,6 +23,7 @@ import {
   MValue,
   Range,
 } from "../types";
+import { makeDecorationField } from "./misc";
 
 const DEBUG: boolean = false;
 
@@ -616,6 +611,8 @@ class StepMarkerWidget extends WidgetType {
   }
 }
 
+export let markerField = makeDecorationField();
+
 export function renderInterpreter(
   view: EditorView,
   container: HTMLDivElement,
@@ -649,11 +646,8 @@ export function renderInterpreter(
     deco => deco.from
   );
 
-  let plugin = ViewPlugin.fromClass(class {}, {
-    decorations: () => Decoration.set(decos),
-  });
   view.dispatch({
-    effects: [StateEffect.appendConfig.of(plugin)],
+    effects: [markerField.setEffect.of(decos)],
   });
 
   root.render(

@@ -1,16 +1,5 @@
-import {
-  Line,
-  Range,
-  RangeSet,
-  StateEffect,
-  StateField,
-} from "@codemirror/state";
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  WidgetType,
-} from "@codemirror/view";
+import { Line, Range } from "@codemirror/state";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
 import _ from "lodash";
 import React, { useState } from "react";
@@ -30,6 +19,7 @@ import {
   dropChar,
   hideLoanRegion,
   hideMoveRegion,
+  makeDecorationField,
   readChar,
   showLoanRegion,
   showMoveRegion,
@@ -448,23 +438,7 @@ class PermissionStepLineWidget extends WidgetType {
   }
 }
 
-export let stepEffect = StateEffect.define<Range<Decoration>[]>();
-
-export let stepField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-
-  update(values, trs) {
-    for (let e of trs.effects) {
-      if (e.is(stepEffect)) {
-        return RangeSet.of(e.value, true);
-      }
-    }
-
-    return trs.docChanged ? RangeSet.of([]) : values;
-  },
-
-  provide: f => EditorView.decorations.from(f),
-});
+export let stepField = makeDecorationField();
 
 export function makeStepDecorations(
   view: EditorView,
@@ -476,6 +450,7 @@ export function makeStepDecorations(
     stateSteps.map(step =>
       Decoration.widget({
         widget: new PermissionStepLineWidget(view, step, facts, annotations),
+        side: 1,
       }).range(stepLocation(step))
     ),
     deco => deco.from

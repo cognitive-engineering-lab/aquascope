@@ -1,16 +1,5 @@
-import {
-  Line,
-  Range,
-  RangeSet,
-  StateEffect,
-  StateField,
-} from "@codemirror/state";
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  WidgetType,
-} from "@codemirror/view";
+import { Line, Range } from "@codemirror/state";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
 import _ from "lodash";
 import React, { useState } from "react";
@@ -25,6 +14,7 @@ import {
   dropChar,
   hideLoanRegion,
   hideMoveRegion,
+  makeDecorationField,
   readChar,
   showLoanRegion,
   showMoveRegion,
@@ -236,23 +226,7 @@ class BoundaryPointWidget extends WidgetType {
   }
 }
 
-export let boundaryEffect = StateEffect.define<Range<Decoration>[]>();
-
-export let boundaryField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-
-  update(values, trs) {
-    for (let e of trs.effects) {
-      if (e.is(boundaryEffect)) {
-        return RangeSet.of(e.value, true);
-      }
-    }
-
-    return trs.docChanged ? RangeSet.of([]) : values;
-  },
-
-  provide: f => EditorView.decorations.from(f),
-});
+export let boundariesField = makeDecorationField();
 
 export function makeBoundaryDecorations(
   view: EditorView,

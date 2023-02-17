@@ -6,13 +6,13 @@ import _ from "lodash";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
-import { boundaryField } from "./editor-utils/boundaries";
+import { boundariesField } from "./editor-utils/boundaries";
 import {
   InterpreterConfig,
+  markerField,
   renderInterpreter,
 } from "./editor-utils/interpreter";
 import {
-  ActionFacts,
   IconField,
   hiddenLines,
   hideLine,
@@ -97,6 +97,20 @@ let HideButton = ({ container }: { container: HTMLDivElement }) => {
   );
 };
 
+let resetMarkedRangesOnEdit = EditorView.updateListener.of(
+  (upd: ViewUpdate) => {
+    if (upd.docChanged) {
+      upd.view.dispatch({
+        effects: [
+          boundariesField.setEffect.of([]),
+          stepField.setEffect.of([]),
+          markerField.setEffect.of([]),
+        ],
+      });
+    }
+  }
+);
+
 interface CommonConfig {
   shouldFail?: boolean;
   stepper?: any;
@@ -125,14 +139,6 @@ export class Editor {
     readonly shouldFailHtml: string = "This code does not compile!",
     readonly buttonList: ButtonName[] = []
   ) {
-    let resetMarkedRangesOnEdit = EditorView.updateListener.of(
-      (upd: ViewUpdate) => {
-        if (upd.docChanged) {
-          this.permissionsDecos = undefined;
-        }
-      }
-    );
-
     this.buttons = new Set(buttonList);
 
     let initialState = EditorState.create({
@@ -140,14 +146,16 @@ export class Editor {
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
+        EditorView.editable.of(!noInteract),
         resetMarkedRangesOnEdit,
         setup,
         rust(),
         indentUnit.of("  "),
         hiddenLines,
         loanFactsField,
-        boundaryField,
-        stepField,
+        boundariesField.field,
+        stepField.field,
+        markerField.field,
       ],
     });
 
@@ -215,9 +223,9 @@ export class Editor {
     });
   }
 
-  public renderPermissions(cfg?: PermissionsCfg) {
+  public async renderPermissions(cfg?: PermissionsCfg) {
     if (this.permissionsDecos === undefined) {
-      this.renderOperation("permissions", {
+      await this.renderOperation("permissions", {
         config: cfg,
       });
     }
