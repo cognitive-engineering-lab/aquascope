@@ -111,12 +111,11 @@ impl AquascopePreprocessor {
 
       let response = String::from_utf8(output.stdout)?;
       let response_json: serde_json::Value = serde_json::from_str(&response)?;
-      if let Some(err) = response_json.get("Err") {
+      if response_json.get("Err").is_some() {
         let stderr = String::from_utf8(output.stderr)?;
         bail!(
-          "Aquascope failed for program:\n{}\nwith error: {}\n{stderr}",
+          "Aquascope failed for program:\n{}\nwith error:\n{stderr}",
           block.code,
-          err.as_str().unwrap()
         )
       }
 

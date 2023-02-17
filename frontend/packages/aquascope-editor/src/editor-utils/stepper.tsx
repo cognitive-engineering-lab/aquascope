@@ -414,9 +414,8 @@ class PermissionStepLineWidget extends WidgetType {
     let padding = 2 + maxLineLen - currLine.length;
     let spaces = "―".repeat(padding);
 
-    let r = new RegExp(
-      this.annotations?.focused_paths[currLine.number] ?? "(.*)?"
-    );
+    let userRegex = this.annotations?.focused_paths[currLine.number];
+    let r = new RegExp(userRegex ? _.escapeRegExp(userRegex) : "(.*)?");
 
     let tables = this.step.state;
 

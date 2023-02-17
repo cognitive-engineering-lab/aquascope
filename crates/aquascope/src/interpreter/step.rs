@@ -238,14 +238,24 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         // by checking the init_mask in the local's allocation
         let (_, allocation) =
           self.ecx.memory.alloc_map().get(alloc_id).unwrap();
-        let initialized = allocation
-          .init_mask()
-          .is_range_initialized(AllocRange {
+
+        // Some types (like structs, due to alignment) may have uninitialized regions,
+        // so checking the entire range is too conservative (will ignore fully initialized types).
+        // This hack seems to work for basic structs... but TODO: need to figure out if this robust.
+        let range = match layout {
+          Some(TyAndLayout { layout, .. }) => match layout.largest_niche() {
+            Some(niche) => niche.offset,
+            _ => allocation.size(),
+          },
+          _ => allocation.size(),
+        };
+        let initialized_status =
+          allocation.init_mask().is_range_initialized(AllocRange {
             start: Size::ZERO,
-            size: allocation.size(),
-          })
-          .is_ok();
-        if !initialized {
+            size: range,
+          });
+        if let Err(range) = initialized_status {
+          log::debug!("Rejecting uninitialized local due to range: {range:?}",);
           return Ok(None);
         }
 
