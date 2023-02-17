@@ -1,0 +1,97 @@
+---
+source: crates/aquascope/tests/boundaries.rs
+description: main@assignop_path_resolution.test
+---
+- location: 181
+  expected:
+    read: true
+    write: false
+    drop: false
+  actual:
+    type_droppable: true
+    type_writeable: true
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: true
+      drop: true
+- location: 194
+  expected:
+    read: true
+    write: false
+    drop: true
+  actual:
+    type_droppable: false
+    type_writeable: false
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: true
+- location: 200
+  expected:
+    read: true
+    write: true
+    drop: false
+  actual:
+    type_droppable: true
+    type_writeable: true
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: true
+      drop: true
+- location: 205
+  expected:
+    read: true
+    write: false
+    drop: true
+  actual:
+    type_droppable: true
+    type_writeable: true
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    loan_write_refined: 0
+    loan_drop_refined: 0
+    permissions:
+      read: true
+      write: false
+      drop: true
+- location: 209
+  expected:
+    read: true
+    write: false
+    drop: true
+  actual:
+    type_droppable: true
+    type_writeable: false
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: true
+- location: 213
+  expected:
+    read: true
+    write: false
+    drop: true
+  actual:
+    type_droppable: false
+    type_writeable: false
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: true
+

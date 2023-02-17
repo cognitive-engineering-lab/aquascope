@@ -1,6 +1,9 @@
-#![feature(iter_intersperse)]
 #![allow(clippy::comparison_to_empty)]
 
-pub mod annotations;
-pub mod block;
-pub mod cache;
+mod annotations;
+mod block;
+mod cache;
+mod preprocessor;
+
+pub use cache::CACHE_PATH;
+pub use preprocessor::AquascopePreprocessor;

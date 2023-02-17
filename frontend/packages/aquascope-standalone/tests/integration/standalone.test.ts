@@ -1,6 +1,6 @@
 import puppeteer, { Browser, Page } from "puppeteer";
 
-const permStackSelector = "svg.permission";
+const permStackSelector = ".permission-stack";
 const permStepSelector = ".step-widget-container";
 const interpSelector = ".interpreter";
 

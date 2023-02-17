@@ -1,16 +1,5 @@
-import {
-  Line,
-  Range,
-  RangeSet,
-  StateEffect,
-  StateField,
-} from "@codemirror/state";
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  WidgetType,
-} from "@codemirror/view";
+import { Line, Range } from "@codemirror/state";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
 import _ from "lodash";
 import React, { useState } from "react";
@@ -30,67 +19,27 @@ import {
   dropChar,
   hideLoanRegion,
   hideMoveRegion,
+  makeDecorationField,
   readChar,
   showLoanRegion,
   showMoveRegion,
   writeChar,
 } from "./misc";
 
-let PermChar = ({
-  content,
-  names,
-  act,
-  x,
-  y,
-  showit,
-  hideit,
-}: {
-  content: string;
-  names: string[];
-  act: boolean;
-  x: string;
-  y: string;
-  showit: () => void;
-  hideit: () => void;
-}) => (
-  <text
-    className={classNames(...names, { missing: !act })}
-    textAnchor="end"
-    x={x}
-    y={y}
-    onMouseEnter={showit}
-    onMouseLeave={hideit}
-  >
-    {content}
-  </text>
-);
+interface PermInStep {
+  step: ValueStep<boolean>;
+  perm: "R" | "W" | "O";
+  loanKey?: LoanKey;
+  moveKey?: MoveKey;
+}
 
-let PermRow = ({
-  content,
+let PermChar = ({
+  perm,
   facts,
 }: {
-  content: {
-    diff: ValueStep<boolean>;
-    content: string;
-    lk: LoanKey | undefined;
-    mk: MoveKey | undefined;
-  }[];
+  perm: PermInStep;
   facts: AnalysisFacts;
 }) => {
-  let getClassAndContent = ([diff, content]: [ValueStep<boolean>, string]) =>
-    diff.type == "High"
-      ? { content: content, names: ["perm-diff-add"] }
-      : diff.type == "Low"
-      ? { content: content, names: ["perm-diff-sub"] }
-      : diff.type === "None" && diff.value
-      ? { content: content, names: ["perm-diff-none-high"] }
-      : diff.type === "None" && !diff.value
-      ? { content: "‒", names: ["perm-diff-none-low"] }
-      : null;
-
-  let w = (idx: number) =>
-    (idx / content.length) * 100 + 100 / content.length - 5 + "%";
-
   // FIXME: don't reverse the abbreviated content.
   let getKind = (c: string) => {
     if (c === "R") {
@@ -104,26 +53,51 @@ let PermRow = ({
     }
   };
 
+  let getInner = () => {
+    let Perm: React.FC<React.PropsWithChildren> = ({ children }) => (
+      <span className={classNames("perm", getKind(perm.perm))}>{children}</span>
+    );
+    if (perm.step.type === "None") {
+      return perm.step.value ? (
+        <div className="perm-diff-present">
+          <Perm>{perm.perm}</Perm>
+        </div>
+      ) : (
+        <div className="perm-diff-none">
+          <Perm>‒</Perm>
+        </div>
+      );
+    } else if (perm.step.type == "Low") {
+      return (
+        <div className="perm-diff-sub-container">
+          <div className="perm-diff-sub" />
+          <Perm>{perm.perm}</Perm>
+        </div>
+      );
+    } /* perm.step.type === "High" */ else {
+      return (
+        <>
+          <span className="perm-diff-add">+</span>
+          <Perm>{perm.perm}</Perm>
+        </>
+      );
+    }
+  };
+
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="permission-row">
-      {content.map(({ diff, content, lk, mk }, i: number) => (
-        <PermChar
-          key={content}
-          x={w(i)}
-          y="95%"
-          act={true}
-          showit={() => {
-            showLoanRegion(facts, lk, [getKind(content)]);
-            showMoveRegion(facts, mk, [getKind(content)]);
-          }}
-          hideit={() => {
-            hideLoanRegion(facts, lk, [getKind(content)]);
-            hideMoveRegion(facts, mk, [getKind(content)]);
-          }}
-          {...getClassAndContent([diff, content])!}
-        />
-      ))}
-    </svg>
+    <td
+      onMouseEnter={() => {
+        showLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
+        showMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
+      }}
+      onMouseLeave={() => {
+        hideLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
+        hideMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
+      }}
+      className="perm-char"
+    >
+      {getInner()}
+    </td>
   );
 };
 
@@ -252,7 +226,7 @@ let PermDiffRow = ({
         );
         break loop;
       } else {
-        console.log("unequal: ", diffs[fact].type, value.type);
+        // console.log("unequal: ", diffs[fact].type, value.type);
       }
     }
   }
@@ -261,24 +235,25 @@ let PermDiffRow = ({
     return v.type === "None" || v.type === "High" ? v.value : undefined;
   };
 
-  let perms = [
+  let moveKey = unwrap(diffs.path_moved);
+  let perms: PermInStep[] = [
     {
-      diff: diffs.permissions.read,
-      content: readChar,
-      lk: unwrap(diffs.loan_read_refined),
-      mk: unwrap(diffs.path_moved),
+      perm: readChar,
+      step: diffs.permissions.read,
+      loanKey: unwrap(diffs.loan_read_refined),
+      moveKey,
     },
     {
-      diff: diffs.permissions.write,
-      content: writeChar,
-      lk: unwrap(diffs.loan_write_refined),
-      mk: unwrap(diffs.path_moved),
+      perm: writeChar,
+      step: diffs.permissions.write,
+      loanKey: unwrap(diffs.loan_write_refined),
+      moveKey,
     },
     {
-      diff: diffs.permissions.drop,
-      content: dropChar,
-      lk: unwrap(diffs.loan_drop_refined),
-      mk: unwrap(diffs.path_moved),
+      perm: dropChar,
+      step: diffs.permissions.drop,
+      loanKey: unwrap(diffs.loan_drop_refined),
+      moveKey,
     },
   ];
 
@@ -287,10 +262,10 @@ let PermDiffRow = ({
   return (
     <tr>
       {pathCol}
-      <td>{ico}</td>
-      <td>
-        <PermRow facts={facts} content={perms} />
-      </td>
+      <td className="perm-step-event">{ico}</td>
+      {perms.map(perm => (
+        <PermChar key={perm.perm} perm={perm} facts={facts} />
+      ))}
     </tr>
   );
 };
@@ -340,7 +315,9 @@ let StepTableIndividual = ({
 
   return (
     <div
-      className="step-table-container"
+      className={classNames("step-table-container", {
+        "contains-hidden": hidden.length > 0,
+      })}
       onClick={() => setDisplayAll(!displayAll)}
     >
       <StepTable rows={focused} facts={facts} />
@@ -386,7 +363,6 @@ let StepLine = ({
 
   return (
     <div className="perm-step-widget">
-      {" "}
       <span className="step-widget-toggle" onClick={() => setDisplay(!display)}>
         {display ? arrowIn : arrowOut}
       </span>
@@ -395,7 +371,7 @@ let StepLine = ({
           "hidden-width": !display,
         })}
       >
-        {spaces}
+        <div className="step-widget-spacer">{spaces}</div>
         {together}
       </div>
     </div>
@@ -438,9 +414,8 @@ class PermissionStepLineWidget extends WidgetType {
     let padding = 2 + maxLineLen - currLine.length;
     let spaces = "―".repeat(padding);
 
-    let r = new RegExp(
-      this.annotations?.focused_paths[currLine.number] ?? "(.*)?"
-    );
+    let userRegex = this.annotations?.focused_paths[currLine.number];
+    let r = new RegExp(userRegex ? _.escapeRegExp(userRegex) : "(.*)?");
 
     let tables = this.step.state;
 
@@ -462,23 +437,7 @@ class PermissionStepLineWidget extends WidgetType {
   }
 }
 
-export let stepEffect = StateEffect.define<Range<Decoration>[]>();
-
-export let stepField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-
-  update(values, trs) {
-    for (let e of trs.effects) {
-      if (e.is(stepEffect)) {
-        return RangeSet.of(e.value, true);
-      }
-    }
-
-    return trs.docChanged ? RangeSet.of([]) : values;
-  },
-
-  provide: f => EditorView.decorations.from(f),
-});
+export let stepField = makeDecorationField();
 
 export function makeStepDecorations(
   view: EditorView,
@@ -490,6 +449,7 @@ export function makeStepDecorations(
     stateSteps.map(step =>
       Decoration.widget({
         widget: new PermissionStepLineWidget(view, step, facts, annotations),
+        side: 1,
       }).range(stepLocation(step))
     ),
     deco => deco.from

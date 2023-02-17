@@ -6,18 +6,19 @@ $transparent: rgba(0, 0, 0, 0);
   --aq-fg: black;
 
   // Colors for permission stacks
-  --aq-read-color: #4ebeef;
-  --aq-write-color: #ba18e7;
-  --aq-drop-color: #ffa500;
+  // NOTE: if you change these, please update
+  // the corresponding rgb values below!
+  --aq-read-color: #ff9500;
+  --aq-write-color: #0c7bdc;
+  --aq-drop-color: #dc0055;
 
-  // Permission stacks colors for use with CSS color mixing
-  --aq-read-rgb-color: 78, 190, 239;
-  --aq-write-rgb-color: 186, 24, 231;
-  --aq-drop-rgb-color: 255, 165, 0;
+  --aq-read-rgb-color: 255, 149, 0;
+  --aq-write-rgb-color: 12, 123, 220;
+  --aq-drop-rgb-color: 220, 0, 85;
 
   // For step table permission colors
-  --aq-perm-gain-color: #5dca36;
-  --aq-perm-loss-color: #ff4244;
+  --aq-perm-gain-color: #333;
+  --aq-perm-loss-color: #666;
 
   --aq-error: red;
   --aq-error-text: white;
@@ -33,9 +34,11 @@ $transparent: rgba(0, 0, 0, 0);
   --aq-step-table-text: black;
   --aq-step-table-border: gainsboro;
   --aq-step-table-background: whitesmoke;
+  --aq-step-table-background-alternate: transparent;
 }
 
-$glyph-width: 16px;
+$base-z-index: 10;
+$glyph-width: 14px;
 
 @mixin button {
   background-color: var(--aq-button-background);
@@ -54,6 +57,150 @@ $glyph-width: 16px;
     background-color: var(--aq-button-background-hover);
     color: var(--aq-button-text-hover);
     border-color: var(--aq-button-border-hover);
+  }
+}
+
+.perm {
+  font-family: "Verdana";
+  font-weight: bold;
+
+  &.missing {
+    color: transparent !important;
+    -webkit-text-stroke-width: 1px;
+  }
+
+  &.read {
+    color: var(--aq-read-color);
+    -webkit-text-stroke-color: var(--aq-read-color);
+  }
+
+  &.write {
+    color: var(--aq-write-color);
+    -webkit-text-stroke-color: var(--aq-write-color);
+  }
+
+  &.drop {
+    color: var(--aq-drop-color);
+    -webkit-text-stroke-color: var(--aq-drop-color);
+  }
+}
+
+/* Permission Boundaries */
+
+$perm-animation-duration: 0.5s;
+
+.permission-stack {
+  display: inline-flex;
+  flex-direction: column;
+  position: relative;
+  margin-left: 2px;
+  margin-right: 2px;
+
+  .animating {
+    // Filter courtesy of: https://codepen.io/alvarotrigo/pen/eYEqPZa
+    filter: url('data:image/svg+xml,\
+      <svg xmlns="http://www.w3.org/2000/svg">\
+        <filter id="threshold">\
+          <feColorMatrix in="SourceGraphic" type="matrix" values="\
+            1 0 0 0 0\
+            0 1 0 0 0\
+            0 0 1 0 0\
+            0 0 0 255 -140" />\
+        </filter>\
+      </svg>#threshold');
+  }
+
+  transition: margin-top $perm-animation-duration ease-in-out,
+    margin-bottom $perm-animation-duration ease-in-out,
+    bottom $perm-animation-duration ease-in-out;
+
+  cursor: default;
+
+  &.before-whitespace {
+    margin-left: -3px;
+  }
+
+  &.stack-size-1 {
+    top: 1px;
+  }
+
+  &.stack-size-2 {
+    bottom: 4px;
+    margin-top: 5px;
+  }
+
+  .perm {
+    font-size: $glyph-width;
+    text-align: right;
+    display: grid;
+    grid-template-columns: 1fr;
+
+    > div {
+      transition: filter $perm-animation-duration ease-in-out,
+        opacity $perm-animation-duration ease-in-out,
+        width $perm-animation-duration ease-in-out,
+        height $perm-animation-duration ease-in-out;
+
+      grid-row-start: 1;
+      grid-column-start: 1;
+      text-align: center;
+    }
+
+    > .small {
+      filter: blur(0px);
+      width: 10px;
+      height: 10px;
+    }
+
+    > .big {
+      opacity: 0;
+      font-weight: bold;
+      filter: blur(3px);
+
+      // same as .small to avoid rubber-band visual effect
+      width: 10px;
+      height: 10px;
+    }
+
+    &.missing > .small {
+      -webkit-text-stroke-width: 1.5px;
+    }
+
+    &.missing > .big {
+      -webkit-text-stroke-width: 1px;
+    }
+  }
+
+  &:not(.expanded):hover,
+  &.expanded {
+    &.stack-size-2 {
+      margin-top: 7px;
+      margin-bottom: -3px;
+      bottom: 6px;
+    }
+
+    .perm {
+      > .small {
+        opacity: 0;
+        filter: blur(3px);
+        width: 0;
+        height: 0;
+      }
+
+      > .big {
+        opacity: 1;
+        filter: blur(0px);
+        height: 14px;
+      }
+
+      &.write > .big {
+        width: 14px;
+      }
+
+      &:not(.write) > .big {
+        width: 12px;
+      }
+    }
   }
 }
 
@@ -78,11 +225,11 @@ $glyph-width: 16px;
     display: inline-block;
     width: 0;
     overflow: hidden;
-    transition: 1s all;
+    transition: 1s background-color;
   }
 
   .top-right {
-    z-index: 10;
+    z-index: $base-z-index;
     position: absolute;
     top: 8px;
     right: 2px;
@@ -114,6 +261,9 @@ $glyph-width: 16px;
 
   .cm-scroller {
     overflow: auto;
+    // TODO: why was this rule originally here?
+    // It causes user selections to not appear in the codemirror editor.
+    // z-index: inherit;
   }
 
   .cm-line.hidden-line {
@@ -129,7 +279,7 @@ $glyph-width: 16px;
 
   .aquascope-loan {
     text-decoration: underline 3px $transparent;
-    transition: 1s all;
+    transition: 1s text-decoration;
 
     &.show-hidden {
       &.read {
@@ -149,7 +299,7 @@ $glyph-width: 16px;
   .aquascope-live-region {
     background-color: $transparent;
     border-radius: 5px;
-    transition: 1s all;
+    transition: 1s background-color;
 
     &.show-hidden {
       &.read {
@@ -162,91 +312,6 @@ $glyph-width: 16px;
 
       &.drop {
         background-color: rgba(var(--aq-drop-rgb-color), 0.4) !important;
-      }
-    }
-  }
-
-  /* Permission Boundaries */
-
-  .permission-stack {
-    display: inline-block;
-    position: relative;
-    top: 3px;
-  }
-
-  svg.permission {
-    stroke-width: 2;
-    paint-order: stroke;
-    width: $glyph-width + 10px;
-    height: 2 * $glyph-width;
-
-    > text {
-      font-family: "Verdana";
-      font-weight: bold;
-      font-size: $glyph-width;
-
-      &.read {
-        stroke: var(--aq-read-color);
-        fill: var(--aq-read-color);
-      }
-
-      &.write {
-        stroke: var(--aq-write-color);
-        fill: var(--aq-write-color);
-      }
-
-      &.drop {
-        stroke: var(--aq-drop-color);
-        fill: var(--aq-drop-color);
-      }
-
-      &:not(.missing) {
-        stroke-width: 0;
-      }
-
-      &.missing {
-        stroke-width: 1;
-        fill: $transparent !important;
-      }
-    }
-  }
-
-  svg.permission-row {
-    stroke-width: 2;
-    paint-order: stroke;
-    width: 4 * $glyph-width + 10px;
-    height: $glyph-width + 5px;
-    font-weight: bold;
-
-    > text {
-      font-family: "Verdana";
-      font-size: $glyph-width;
-      stroke-width: 1;
-
-      // Specific to the step tables
-      &.perm-diff-add {
-        stroke: var(--aq-perm-gain-color);
-        fill: var(--aq-perm-gain-color);
-      }
-
-      &.perm-diff-sub {
-        stroke: var(--aq-perm-loss-color);
-        fill: var(--aq-perm-loss-color);
-      }
-
-      &.perm-diff-none {
-        stroke: var(--aq-fg);
-        fill: var(--aq-fg);
-      }
-
-      &perm-diff-none-high {
-        stroke: var(--aq-fg);
-        fill: var(--aq-fg);
-      }
-
-      &.perm-diff-none-low {
-        stroke: var(--aq-fg);
-        fill: var(--aq-fg);
       }
     }
   }
@@ -272,7 +337,21 @@ $glyph-width: 16px;
     display: inline-block;
     color: var(--aq-step-widget-text);
     position: relative;
-    top: 0.5em;
+    top: 0.75em;
+    margin-bottom: 0.75em;
+
+    @media (max-width: 800px) {
+      & {
+        display: block;
+        top: 0;
+        margin-bottom: -0.5em;
+        margin-left: 10px;
+
+        .step-widget-spacer {
+          max-width: 20px;
+        }
+      }
+    }
   }
 
   .step-widget-container {
@@ -300,6 +379,10 @@ $glyph-width: 16px;
     background-color: var(--aq-step-table-background);
     border: 2px solid var(--aq-step-table-border);
     border-radius: 4px;
+
+    // So the table appears above the Ferris icon
+    position: relative;
+    z-index: 100;
   }
 
   .perm-step-table,
@@ -309,11 +392,19 @@ $glyph-width: 16px;
     td {
       padding: 1px 4px;
     }
+
+    td.perm-step-event {
+      text-align: center;
+    }
   }
 
   table.perm-step-table {
     vertical-align: top;
     border-collapse: collapse;
+
+    tr:nth-child(2n) {
+      background-color: var(--aq-step-table-background-alternate);
+    }
   }
 
   .perm-step-table tr td {
@@ -321,30 +412,58 @@ $glyph-width: 16px;
     border-color: var(--aq-step-table-border);
   }
 
-  span.perm-diff-add {
+  .contains-hidden .perm-step-table tr {
+    td:first-child {
+      border-left: none;
+    }
+
+    td:last-child {
+      border-right: none;
+    }
+  }
+
+  .perm-char {
+    position: relative;
+    font: bold $glyph-width "Verdana";
+    text-align: center;
+
+    // TODO: fix the conflicts w/ other rules
+    border-left: none !important;
+    border-right: none !important;
+    padding: 1px 2px !important;
+  }
+
+  .perm-diff-add {
     color: var(--aq-perm-gain-color);
+    margin-right: -2px;
+    position: relative;
+    bottom: 1px;
+    font-size: 80%;
   }
 
-  span.perm-diff-sub {
-    color: var(--aq-perm-loss-color);
+  .perm-diff-sub-container {
+    position: relative;
+    width: min-content;
+    display: inline-block;
   }
-
-  span.perm-diff-none {
-    color: var(--aq-step-table-text);
-  }
-
-  span.perm-diff-none-high {
-    color: var(--aq-step-table-text);
-  }
-
-  span.perm-diff-none-low {
-    color: var(--aq-step-table-text);
-    // opacity: 0.4;
+  .perm-diff-sub {
+    position: absolute;
+    left: calc((100% - $glyph-width) / 2);
+    top: calc((100% - $glyph-width) / 2);
+    width: $glyph-width;
+    height: $glyph-width;
+    background: linear-gradient(
+      to top left,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0) calc(50% - 1px),
+      var(--aq-perm-loss-color) calc(50% - 0.75px),
+      var(--aq-perm-loss-color) calc(50% + 0.75px),
+      rgba(0, 0, 0, 0) calc(50% + 1px),
+      rgba(0, 0, 0, 0) 100%
+    );
   }
 
   .aquascope-action-indicator {
-    // color: var(--icons);
-    // border-color: var(--icons);
     font-size: 0.9em;
   }
 }
@@ -407,7 +526,7 @@ $glyph-width: 16px;
 
       .header-text {
         position: relative;
-        z-index: 12;
+        z-index: $base-z-index + 2;
       }
 
       .header-bg {
@@ -416,7 +535,7 @@ $glyph-width: 16px;
         left: 0;
         width: 100%;
         height: 100%;
-        z-index: 11;
+        z-index: $base-z-index + 1;
         background: var(--aq-bg);
         opacity: 0.8;
       }
@@ -442,10 +561,14 @@ $glyph-width: 16px;
     }
 
     .memory-container {
-      display: flex;
-      flex-direction: row;
-      gap: 80px;
-      padding-left: 10px;
+      position: relative;
+
+      .memory-container-flex {
+        display: flex;
+        flex-direction: row;
+        gap: 80px;
+        padding-left: 10px;
+      }
 
       .memory {
         border: 1px dashed var(--aq-step-table-border);
@@ -532,5 +655,5 @@ $glyph-width: 16px;
 }
 
 .leader-line {
-  z-index: 10;
+  z-index: $base-z-index;
 }

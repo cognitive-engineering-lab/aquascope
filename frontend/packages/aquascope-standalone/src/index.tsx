@@ -1,4 +1,4 @@
-import { vim } from "@replit/codemirror-vim";
+// import { vim } from "@replit/codemirror-vim";
 import * as Ed from "aquascope-editor";
 
 import { basicSetup } from "./setup";
@@ -26,6 +26,10 @@ window.addEventListener("load", () => {
 
   const interpretButton = document.getElementById(
     "showInterpret"
+  ) as HTMLInputElement;
+
+  const passesBorrowCheckerButton = document.getElementById(
+    "passesBorrowChecker"
   ) as HTMLInputElement;
 
   const buildErrorCard = document.getElementById(
@@ -73,10 +77,10 @@ window.addEventListener("load", () => {
         } else if (err.type === "ServerStderr") {
           stdErr.textContent = err.error;
         } else if (err.type === "BuildError") {
-          console.log("showing the build error card");
+          console.debug("showing the build error card");
           buildErrorCard.classList.add("live");
           window.setTimeout(() => {
-            console.log("removing the build error card");
+            console.debug("removing the build error card");
             buildErrorCard.classList.remove("live");
           }, 2500);
         } else if (err.type === "AnalysisError") {
@@ -105,14 +109,41 @@ window.addEventListener("load", () => {
     analysisErrorCard.classList.remove("live")
   );
 
-  showPermissionsButton.addEventListener("click", _ =>
-    globals.editor.renderPermissions({
-      stepper: showStepsChck.checked,
-      boundaries: showBoundariesChck.checked,
-    })
-  );
+  let withLoadingButton = async (
+    btn: HTMLInputElement,
+    inner: () => Promise<void>
+  ) => {
+    btn.classList.add("waiting");
+    btn.disabled = true;
 
-  interpretButton.addEventListener("click", () =>
-    globals.editor.renderOperation("interpreter")
-  );
+    try {
+      await inner();
+    } finally {
+      btn.classList.remove("waiting");
+      btn.disabled = false;
+    }
+  };
+
+  let renderPermissions = () =>
+    withLoadingButton(showPermissionsButton, () =>
+      globals.editor.renderPermissions({
+        stepper: showStepsChck.checked,
+        boundaries: showBoundariesChck.checked,
+      })
+    );
+
+  let renderInterpreter = () =>
+    withLoadingButton(interpretButton, () =>
+      globals.editor.renderOperation("interpreter", {
+        config: {
+          shouldFail: !passesBorrowCheckerButton.checked,
+        },
+      })
+    );
+
+  renderPermissions();
+  renderInterpreter();
+
+  showPermissionsButton.addEventListener("click", renderPermissions);
+  interpretButton.addEventListener("click", renderInterpreter);
 });

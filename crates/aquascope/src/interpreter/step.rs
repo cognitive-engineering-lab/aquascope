@@ -10,7 +10,7 @@ use miri::{
   InterpErrorInfo, InterpResult, LocalState, LocalValue, Machine, MiriConfig,
   MiriMachine, OpTy, Operand, UndefinedBehaviorInfo,
 };
-use rustc_abi::Size;
+use rustc_abi::{FieldsShape, Size};
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{ClearCrossCrate, Local, LocalInfo, Location, Place, RETURN_PLACE},
@@ -188,6 +188,37 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     })
   }
 
+  fn mem_is_initialized(
+    &self,
+    layout: TyAndLayout<'tcx>,
+    allocation: &miri::Allocation<miri::Provenance, miri::AllocExtra>,
+  ) -> bool {
+    // TODO: this should be recursive over the type. Only handles one-step right now.
+    let ranges = match &layout.fields {
+      FieldsShape::Primitive | FieldsShape::Array { .. } => vec![AllocRange {
+        start: Size::ZERO,
+        size: allocation.size(),
+      }],
+      FieldsShape::Arbitrary { offsets, .. } => offsets
+        .iter()
+        .enumerate()
+        .map(|(i, offset)| {
+          let field = layout.field(&self.ecx, i);
+          AllocRange {
+            start: *offset,
+            size: field.size,
+          }
+        })
+        .collect(),
+      FieldsShape::Union(_) => unimplemented!(),
+    };
+
+    let init_mask = allocation.init_mask();
+    ranges
+      .into_iter()
+      .all(|range| init_mask.is_range_initialized(range).is_ok())
+  }
+
   fn test_local(
     &self,
     frame: &Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
@@ -226,7 +257,17 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
     match op {
       // Ignore uninitialized locals
-      Operand::Immediate(Immediate::Uninit) => return Ok(None),
+      Operand::Immediate(Immediate::Uninit) => {
+        // Special case: a unit struct is considered uninitialized, but we would still like to
+        // visualize it at the toplevel, so we handle that here. Might need to make this a configurable thing?
+        let not_zst = match layout {
+          Some(layout) => !layout.is_zst(),
+          None => true,
+        };
+        if not_zst {
+          return Ok(None);
+        }
+      }
 
       // If a local is Indirect, meaning there exists a pointer to it,
       // then save its allocation in `MemoryMap::stack_slots`
@@ -235,17 +276,9 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
 
         // Have to handle the case that a local is uninitialized and indirect
-        // by checking the init_mask in the local's allocation
         let (_, allocation) =
           self.ecx.memory.alloc_map().get(alloc_id).unwrap();
-        let initialized = allocation
-          .init_mask()
-          .is_range_initialized(AllocRange {
-            start: Size::ZERO,
-            size: allocation.size(),
-          })
-          .is_ok();
-        if !initialized {
+        if !self.mem_is_initialized(layout.unwrap(), allocation) {
           return Ok(None);
         }
 

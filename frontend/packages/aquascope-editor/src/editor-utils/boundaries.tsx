@@ -1,20 +1,20 @@
-import { Range, RangeSet, StateEffect, StateField } from "@codemirror/state";
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  WidgetType,
-} from "@codemirror/view";
+import { Line, Range } from "@codemirror/state";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
 import _ from "lodash";
-import React from "react";
+import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
-import { AnalysisFacts, PermissionsBoundary } from "../types";
+import {
+  AnalysisFacts,
+  BoundariesAnnotations,
+  PermissionsBoundary,
+} from "../types";
 import {
   dropChar,
   hideLoanRegion,
   hideMoveRegion,
+  makeDecorationField,
   readChar,
   showLoanRegion,
   showMoveRegion,
@@ -81,29 +81,23 @@ let PermChar = ({
   content,
   names,
   act,
-  x,
-  y,
   showit,
   hideit,
 }: {
   content: string;
   names: string[];
   act: boolean;
-  x: string;
-  y: string;
   showit: () => void;
   hideit: () => void;
 }) => (
-  <text
+  <div
     className={classNames(...names, { missing: !act })}
-    textAnchor="middle"
-    x={x}
-    y={y}
     onMouseEnter={showit}
     onMouseLeave={hideit}
   >
-    {content}
-  </text>
+    <div className="small">•</div>
+    <div className="big">{content}</div>
+  </div>
 );
 
 let PermStack = ({
@@ -118,7 +112,7 @@ let PermStack = ({
   let allIcons = [
     {
       content: readChar,
-      names: ["permission", "read"],
+      names: ["perm", "read"],
       exp: boundary.expected.read,
       act: data.permissions.read,
       showit: () => {
@@ -132,7 +126,7 @@ let PermStack = ({
     },
     {
       content: writeChar,
-      names: ["permission", "write"],
+      names: ["perm", "write"],
       exp: boundary.expected.write,
       act: data.permissions.write,
       showit: () => {
@@ -146,7 +140,7 @@ let PermStack = ({
     },
     {
       content: dropChar,
-      names: ["permission", "drop"],
+      names: ["perm", "drop"],
       exp: boundary.expected.drop,
       act: data.permissions.drop,
       showit: () => {
@@ -161,23 +155,38 @@ let PermStack = ({
   ];
 
   let icons = allIcons.filter(i => i.exp);
-  let h = (idx: number) =>
-    (idx / icons.length) * 100 + 100 / icons.length - 5 + "%";
+
+  // Necessary so we can temporarily apply the CSS filter and remove it
+  // at the end of the animation. Sadly no way to do this in pure CSS AFAIK...
+  let [animating, setAnimating] = useState(false);
+  let [timer, setTimer] = useState<number | undefined>();
+  let triggerAnimation = () => {
+    setAnimating(true);
+    if (timer !== 0) clearTimeout(timer);
+    setTimer(setTimeout(() => setAnimating(false), 500));
+  };
 
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="permission">
-      {icons.map((info, i: number) => (
-        <PermChar key={info.content} x="50%" y={h(i)} {...info} />
+    <div
+      onMouseEnter={triggerAnimation}
+      onMouseLeave={triggerAnimation}
+      className={classNames({ animating })}
+    >
+      {icons.map(info => (
+        <PermChar key={info.content} {...info} />
       ))}
-    </svg>
+    </div>
   );
 };
 
 class BoundaryPointWidget extends WidgetType {
+  line: Line;
   numDisplayed: number;
   constructor(
+    readonly view: EditorView,
     readonly facts: AnalysisFacts,
-    readonly boundary: PermissionsBoundary
+    readonly boundary: PermissionsBoundary,
+    readonly annotations?: BoundariesAnnotations
   ) {
     super();
     let toi = (b: boolean) => (b ? 1 : 0);
@@ -186,6 +195,7 @@ class BoundaryPointWidget extends WidgetType {
       toi(this.boundary.expected.write),
       toi(this.boundary.expected.drop),
     ].reduce((a, b) => a + b, 0);
+    this.line = view.state.doc.lineAt(boundary.location);
   }
 
   eq(other: BoundaryPointWidget): boolean {
@@ -193,9 +203,17 @@ class BoundaryPointWidget extends WidgetType {
     return this.boundary.location === other.boundary.location;
   }
 
-  toDOM(_view: EditorView): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
+    let precedingText = view.state.sliceDoc(
+      this.boundary.location - 1,
+      this.boundary.location
+    );
     let container = document.createElement("div");
     container.classList.add("permission-stack");
+    container.classList.add(`stack-size-${this.numDisplayed}`);
+    if (precedingText === " ") container.classList.add("before-whitespace");
+    if (this.annotations?.focused_lines.includes(this.line.number))
+      container.classList.add("expanded");
     ReactDOM.createRoot(container).render(
       <PermStack facts={this.facts} boundary={this.boundary} />
     );
@@ -208,33 +226,18 @@ class BoundaryPointWidget extends WidgetType {
   }
 }
 
-export let boundaryEffect = StateEffect.define<Range<Decoration>[]>();
-
-export let boundaryField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-
-  update(values, trs) {
-    for (let e of trs.effects) {
-      if (e.is(boundaryEffect)) {
-        return RangeSet.of(e.value, true);
-      }
-    }
-
-    return trs.docChanged ? RangeSet.of([]) : values;
-  },
-
-  provide: f => EditorView.decorations.from(f),
-});
+export let boundariesField = makeDecorationField();
 
 export function makeBoundaryDecorations(
   view: EditorView,
   facts: AnalysisFacts,
-  boundaries: PermissionsBoundary[]
+  boundaries: PermissionsBoundary[],
+  annotations?: BoundariesAnnotations
 ): Range<Decoration>[] {
   return _.sortBy(
     boundaries.map(b =>
       Decoration.widget({
-        widget: new BoundaryPointWidget(facts, b),
+        widget: new BoundaryPointWidget(view, facts, b, annotations),
       }).range(b.location)
     ),
     deco => deco.from

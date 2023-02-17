@@ -1,10 +1,4 @@
-import { StateEffect } from "@codemirror/state";
-import {
-  Decoration,
-  EditorView,
-  ViewPlugin,
-  WidgetType,
-} from "@codemirror/view";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
 import LeaderLine from "leader-line-new";
 import _ from "lodash";
@@ -29,10 +23,11 @@ import {
   MValue,
   Range,
 } from "../types";
+import { makeDecorationField } from "./misc";
 
 const DEBUG: boolean = false;
 
-interface InterpreterConfig {
+export interface InterpreterConfig {
   horizontal?: boolean;
   concreteTypes?: boolean;
   hideCode?: boolean;
@@ -166,24 +161,32 @@ let AdtView = ({ value }: { value: MAdt }) => {
     );
   }
 
+  let cells = value.fields.map(([_k, v], i) => {
+    let path = [...pathCtx, "field", i.toString()];
+    return (
+      <td className={path.join("-")}>
+        <PathContext.Provider value={path}>
+          <ValueView value={v} />
+        </PathContext.Provider>
+      </td>
+    );
+  });
+
   return (
     <>
       {adtName}
       <table>
         <tbody>
-          {value.fields.map(([k, v], i) => {
-            let path = [...pathCtx, "field", i.toString()];
-            return (
-              <tr key={k}>
-                {!isTuple ? <td>{k}</td> : null}
-                <td className={path.join("-")}>
-                  <PathContext.Provider value={path}>
-                    <ValueView value={v} />
-                  </PathContext.Provider>
-                </td>
+          {isTuple ? (
+            <tr>{cells}</tr>
+          ) : (
+            value.fields.map(([k, _v], i) => (
+              <tr key={i}>
+                <td>{k}</td>
+                {cells[i]}
               </tr>
-            );
-          })}
+            ))
+          )}
         </tbody>
       </table>
     </>
@@ -398,11 +401,14 @@ const PALETTE = {
 };
 
 let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
-  let ref = useRef<HTMLDivElement>(null);
+  let stepContainerRef = useRef<HTMLDivElement>(null);
+  let arrowContainerRef = useRef<HTMLDivElement>(null);
   let config = useContext(ConfigContext);
   let error = useContext(ErrorContext);
   useEffect(() => {
-    let stepContainer = ref.current!;
+    let stepContainer = stepContainerRef.current!;
+    let arrowContainer = arrowContainerRef.current!;
+
     let query = (sel: string): HTMLElement => {
       let dst = stepContainer.querySelector<HTMLElement>("." + CSS.escape(sel));
       if (!dst)
@@ -419,66 +425,73 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
       "--inline-code-color"
     );
 
-    let lines = Array.from(pointers)
-      .map((src, i) => {
-        try {
-          let dstSel = src.dataset.pointTo!;
-          let dst = query(dstSel);
-          let dstRange = src.dataset.pointToRange
-            ? query(src.dataset.pointToRange)
-            : undefined;
-          let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+    let lines = Array.from(pointers).map((src, i) => {
+      try {
+        let dstSel = src.dataset.pointTo!;
+        let dst = query(dstSel);
+        let dstRange = src.dataset.pointToRange
+          ? query(src.dataset.pointToRange)
+          : undefined;
+        let endSocket = dst.dataset.connector as LeaderLine.SocketType;
 
-          let dstAnchor = dstRange
-            ? LeaderLine.areaAnchor(dst, {
-                shape: "rect",
-                width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
-                height: 2,
-                y: "100%",
-                fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
-              })
-            : dstSel.startsWith("stack")
-            ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
-            : dst;
+        let srcInHeap = src.closest(".heap") !== null;
+        let dstInStack = dstSel.startsWith("stack");
+        let startSocket: LeaderLine.SocketType =
+          srcInHeap && dstInStack ? "left" : "right";
 
-          const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
-          let isDark = MDBOOK_DARK_THEMES.some(s =>
-            document.documentElement.classList.contains(s)
-          );
-          let theme: "dark" | "light" = isDark ? "dark" : "light";
-          let palette = PALETTE[theme];
-          let color = palette[i % palette.length];
+        let dstAnchor = dstRange
+          ? LeaderLine.areaAnchor(dst, {
+              shape: "rect",
+              width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
+              height: 2,
+              y: "100%",
+              fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
+            })
+          : dstInStack && !srcInHeap
+          ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
+          : dst;
 
-          let line = new LeaderLine(src, dstAnchor, {
-            color,
-            size: 1,
-            endPlugSize: 2,
-            startSocket: "right",
-            endSocket,
-          });
-          return line;
-        } catch (e: any) {
-          console.error("Leader line failed to render", e.stack);
-          return undefined;
-        }
-      })
-      .filter(l => l) as LeaderLine[];
+        const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
+        let isDark = MDBOOK_DARK_THEMES.some(s =>
+          document.documentElement.classList.contains(s)
+        );
+        let theme: "dark" | "light" = isDark ? "dark" : "light";
+        let palette = PALETTE[theme];
+        let color = palette[i % palette.length];
 
-    let reposition = () => lines.forEach(line => line.position());
+        new LeaderLine(src, dstAnchor, {
+          color,
+          size: 1,
+          endPlugSize: 2,
+          startSocket,
+          endSocket,
+        });
 
-    let lastPos = stepContainer.getBoundingClientRect();
-    let interval = setInterval(() => {
-      let curPos = stepContainer.getBoundingClientRect();
-      if (curPos.x != lastPos.x || curPos.y != lastPos.y) reposition();
-      lastPos = curPos;
-    }, 300);
-    let timeout = setTimeout(() => reposition(), 300);
+        // Make arrows local to the diagram rather than global in the body
+        // See: https://github.com/anseki/leader-line/issues/54
+        let lineEl = document.body.querySelector(
+          ":scope > .leader-line:last-of-type"
+        );
+        if (!lineEl) throw new Error("Missing line el?");
+        arrowContainer.appendChild(lineEl);
 
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
-      lines.forEach(line => line.remove());
-    };
+        return lineEl;
+      } catch (e: any) {
+        console.error("Leader line failed to render", e.stack);
+        return undefined;
+      }
+    });
+
+    let stepBox = stepContainer.getBoundingClientRect();
+    let x = stepBox.left + window.scrollX;
+    let y = stepBox.top + window.scrollY;
+    arrowContainer.style.transform = `translate(-${x}px, -${y}px)`;
+
+    return () =>
+      lines.forEach(line => {
+        if (!line) return;
+        line.parentNode!.removeChild(line);
+      });
   }, [config.concreteTypes]);
 
   return (
@@ -496,9 +509,14 @@ let StepView = ({ step, index }: { step: MStep<Range>; index: number }) => {
           </span>
         ) : null}
       </div>
-      <div className="memory-container" ref={ref}>
-        <StackView stack={step.stack} />
-        {step.heap.locations.length > 0 ? <HeapView heap={step.heap} /> : null}
+      <div className="memory-container" ref={stepContainerRef}>
+        <div className="arrow-container" ref={arrowContainerRef} />
+        <div className="memory-container-flex">
+          <StackView stack={step.stack} />
+          {step.heap.locations.length > 0 ? (
+            <HeapView heap={step.heap} />
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -601,6 +619,8 @@ class StepMarkerWidget extends WidgetType {
   }
 }
 
+export let markerField = makeDecorationField();
+
 export function renderInterpreter(
   view: EditorView,
   container: HTMLDivElement,
@@ -609,10 +629,6 @@ export function renderInterpreter(
   config?: InterpreterConfig,
   annotations?: InterpAnnotations
 ) {
-  if (config && config.hideCode) {
-    view.destroy();
-  }
-
   let root = ReactDOM.createRoot(container);
   let marks = annotations?.state_locations || [];
   let widgetRanges;
@@ -638,11 +654,8 @@ export function renderInterpreter(
     deco => deco.from
   );
 
-  let plugin = ViewPlugin.fromClass(class {}, {
-    decorations: () => Decoration.set(decos),
-  });
   view.dispatch({
-    effects: [StateEffect.appendConfig.of(plugin)],
+    effects: [markerField.setEffect.of(decos)],
   });
 
   root.render(

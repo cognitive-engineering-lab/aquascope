@@ -3,13 +3,13 @@ import { Decoration, EditorView } from "@codemirror/view";
 import _ from "lodash";
 
 import { AnalysisOutput, AquascopeAnnotations } from "../types";
-import { boundaryEffect, makeBoundaryDecorations } from "./boundaries";
+import { boundariesField, makeBoundaryDecorations } from "./boundaries";
 import {
   ActionFacts,
   generateAnalysisDecorationFacts,
   loanFactsStateType,
 } from "./misc";
-import { makeStepDecorations, stepEffect } from "./stepper";
+import { makeStepDecorations, stepField } from "./stepper";
 
 export interface PermissionsCfg {
   stepper?: any;
@@ -34,7 +34,12 @@ export function makePermissionsDecorations(
   results.forEach(res => {
     let [facts, actionFacts] = generateAnalysisDecorationFacts(res);
 
-    let bs = makeBoundaryDecorations(view, facts, res.boundaries);
+    let bs = makeBoundaryDecorations(
+      view,
+      facts,
+      res.boundaries,
+      annotations?.boundaries
+    );
     let ss = makeStepDecorations(view, facts, res.steps, annotations?.stepper);
     boundaryDecos.push(bs);
     stepDecos.push(ss);
@@ -60,8 +65,10 @@ export function renderPermissions(
     view.dispatch({
       effects: [
         loanFactsStateType.of(decorations.facts),
-        stepEffect.of(useSteps ? decorations.stepper : []),
-        boundaryEffect.of(useBoundaries ? decorations.boundaries : []),
+        stepField.setEffect.of(useSteps ? decorations.stepper : []),
+        boundariesField.setEffect.of(
+          useBoundaries ? decorations.boundaries : []
+        ),
       ],
     });
   }

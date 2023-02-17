@@ -1,19 +1,16 @@
 //! Interpreting memory as Rust data types
 
-use std::collections::HashMap;
-
 use miri::{
   AllocKind, AllocMap, Immediate, InterpError, InterpErrorInfo, InterpResult,
   MPlaceTy, MemPlaceMeta, MemoryKind, OpTy, UndefinedBehaviorInfo, Value,
 };
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
-use rustc_hir::def_id::DefId;
 use rustc_middle::{
-  mir::{PlaceElem, ProjectionElem, VarDebugInfo, VarDebugInfoContents},
+  mir::PlaceElem,
   ty::{
     layout::{LayoutOf, TyAndLayout},
-    AdtKind, ClosureKind, Instance, SubstsRef, Ty, TyKind,
+    AdtKind, Ty, TyKind,
   },
 };
 use rustc_target::abi::Size;
@@ -472,15 +469,23 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
       TyKind::Closure(def_id, substs) => {
         let closure = substs.as_closure();
-
         let name = self.ev.fn_name(*def_id);
-        let upvar_names = self.ev.closure_upvar_names(*def_id, substs)?;
+
+        let upvar_names = match def_id.as_local() {
+          Some(def_id) => {
+            let tcx = self.ev.ecx.tcx;
+            let symbols = tcx.symbols_for_closure_captures((def_id, def_id));
+            symbols.iter().map(|s| s.to_ident_string()).collect()
+          }
+          None => vec![String::from("(tmp)"); closure.upvar_tys().count()],
+        };
 
         let env_ty = closure.tupled_upvars_ty();
         let mut env_op = op.clone();
         env_op.layout.ty = env_ty;
         let MValue::Tuple(env) = self.read(&env_op)? else { unreachable!() };
         let fields = upvar_names.into_iter().zip(env).collect();
+
         MValue::Adt {
           name,
           variant: None,
@@ -506,45 +511,5 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
       heap_alloc_kinds: Vec::new(),
     }
     .read(op)
-  }
-
-  fn closure_upvar_names(
-    &self,
-    def_id: DefId,
-    substs: SubstsRef<'tcx>,
-  ) -> InterpResult<'tcx, Vec<String>> {
-    let closure = substs.as_closure();
-    let inst = Instance::new(def_id, substs);
-    let body = self.ecx.load_mir(inst.def, None)?;
-    let mut upvar_names = body
-      .var_debug_info
-      .iter()
-      .filter_map(|VarDebugInfo { name, value, .. }| match value {
-        VarDebugInfoContents::Place(place) if place.local.as_usize() == 1 => {
-          // If it's a FnOnce closure, then the environment is moved
-          // and the places are like _1.0, _1.1, etc.
-          // Otherwise, the environment is passed by reference and the
-          // places are like (*_1).0, (*_1).1, so we need to index
-          // the appropriate projection.
-          let projection_idx = match closure.kind() {
-            ClosureKind::FnOnce => 0,
-            ClosureKind::Fn | ClosureKind::FnMut => 1,
-          };
-          match place.projection.get(projection_idx)? {
-            ProjectionElem::Field(field, _) => {
-              Some((field.as_usize(), name.to_ident_string()))
-            }
-            _ => None,
-          }
-        }
-        _ => None,
-      })
-      .collect::<HashMap<_, _>>();
-
-    Ok(
-      (0 .. closure.upvar_tys().count())
-        .map(|i| upvar_names.remove(&i).unwrap_or_else(|| "(tmp)".into()))
-        .collect(),
-    )
   }
 }

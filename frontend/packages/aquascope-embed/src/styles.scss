@@ -23,10 +23,25 @@
   --aq-button-text-hover: var(--sidebar-active);
   --aq-button-background-hover: var(--theme-hover);
 
-  --aq-step-widget-text: var(--table-header-bg);
+  --aq-step-widget-text: var(--searchresults-header-fg);
   --aq-step-table-text: var(--sidebar-fg);
   --aq-step-table-border: var(--table-header-bg);
   --aq-step-table-background: var(--sidebar-bg);
+}
+
+.rust {
+  --aq-step-table-background-alternate: var(--sidebar-non-existant);
+}
+
+.coal, .navy, .ayu, .rust  {
+  --aq-perm-gain-color: #eee;
+  --aq-perm-loss-color: #ccc;
+}
+
+.coal, .navy, .ayu {
+  --aq-error: #ff5151;
+  --aq-write-color: #399cf2;
+  --aq-step-widget-text: #aaa;
 }
 
 .aquascope {
@@ -64,6 +79,71 @@
 
     td {
       padding: 2px 4px;
+    }
+  }
+}
+
+
+.aquascope {
+  margin-top: 2em;
+}
+
+.extra-info {
+  display: flex;
+  position: absolute;
+  right: 0;
+  top: -1.8em;
+  width: max-content;
+  gap: 8px;
+}
+
+.context-provider {
+  button {
+    filter: grayscale(50%);
+    border: 0;
+    cursor: pointer;
+    border: 1px solid var(--aq-button-border);
+    background-color: var(--aq-button-background);    
+    border-radius: 4px;
+    
+    &:hover {
+      background-color: var(--aq-button-background-hover);
+      color: var(--aq-button-text-hover);
+      border-color: var(--aq-button-border-hover);
+    }
+  }
+  
+  .popup-context  {
+    background: var(--bg);
+    border: 2px solid var(--theme-popup-border);
+    padding: 0.5em;
+    text-align: left;
+    border-radius: 4px;
+    box-shadow: 1px 1px 4px var(--theme-popup-border);
+
+    z-index: 1000;
+    width: calc(min(400px, 70vw));        
+
+    h3 {
+      margin-top: 0;
+      margin-bottom: 1em;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 4.5em;
+      font-family: "Open Sans", sans-serif;
+    }
+
+    .close {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      color: var(--fg);
     }
   }
 }

@@ -3,72 +3,84 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content=
-  "width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href=
-  "https://www.w3schools.com/w3css/4/w3.css" type="text/css">
-  <link rel="stylesheet" href=
-  "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css"
-  type="text/css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" type="text/css" href="./styles.scss">
 
   <title>AquascopeDev</title>
 </head>
 
 <body>
-  <script src="./src/index.tsx" type="module">
-</script>
+  <script src="./src/index.tsx" type="module"></script>
 
-  <div class="center">
-    <div class="blurb">
-      <p>Welcome! <span class="scp"><a href=
-      "https://github.com/cognitive-engineering-lab/aquascope">Aquascope</a></span>
-      is an experimental piece of software that utilizes the static
-      program information of <span class="scp"><a href=
-      "https://www.rust-lang.org/">Rust</a></span> programs to
-      generate visualizations. This tool is under active
-      development, help us improve the tool or squash bugs by
-      <em><a href=
-      "https://github.com/cognitive-engineering-lab/aquascope/issues/new">
-      filing an issue</a></em>.</p>
+  <h1>Aquascope Playground</h1>
+
+  <p>
+    Welcome! <a href=
+    "https://github.com/cognitive-engineering-lab/aquascope">Aquascope</a></span>
+    is a tool to visualize the compile-time and run-time behavior of  <a href=
+    "https://www.rust-lang.org/">Rust</a> programs.
+    Aquascope is a research tool under active
+    development.
+  </p> 
+
+  <p>
+    You can try out Aquascope by writing a Rust program in the editor below, then 
+    clicking the "Interpret" button to see the runtime states, or clicking "Permissions" to see
+    the borrow-checking compiler state.
+  </p>
+  
+  <div class="columns">
+    <div class="tabs-container">    
+      <ul class="tabs">
+        <li class="tab active" data-tab="0">Code</li>
+
+        <li class="tab" data-tab="1">Stderr</li>
+      </ul>
+
+      <div class="aquascope static-editor tab-pane active" data-pane="0"></div>
+
+      <div class="tab-pane" data-pane="1"><pre class="aquascope-stderr"></pre></div>
     </div>
-  </div>
 
-  <div class="tabs-container">
-    <ul class="tabs">
-      <li class="tab active" data-tab="0">Code</li>
-
-      <li class="tab" data-tab="1">Stderr</li>
-    </ul>
-
-    <div class="aquascope static-editor tab-pane active" data-pane=
-    "0">
-      <div class="top-right">
-        <button class="cm-button" id=
-        "showInterpret">Interpret</button>
-
-        <div>
-          <div class="dropdown">
-            <button class="cm-button">
-              <i class="fa fa-caret-down"></i>
-            </button>
-            <div class="dropdown-content">
-              <label class="dropdown-container">Boundaries
-                <input type="checkbox" id="showBoundaries" checked>
-                <span class="checkmark">
-              </label>
-              <label class="dropdown-container">Steps
-                <input type="checkbox" id="showSteps" checked>
-                <span class="checkmark">
-              </label>
-            </div>
+    <div class="buttons">
+      <div>
+        <div class="dropdown">
+          <button class="cm-button">            
+            <i class="fa fa-caret-down"></i>
+          </button>
+          <div class="dropdown-content">
+            <label class="dropdown-container">Passes borrow checker?
+              <input type="checkbox" id="passesBorrowChecker">
+              <span class="checkmark">
+            </label>           
           </div>
-          <button class="cm-button" id="showPermissions">Permissions</button>
         </div>
+        <button class="cm-button" id="showInterpret">Interpret<span class="loader"></button>
+      </div>
+      <div>
+        <div class="dropdown">
+          <button class="cm-button">
+            <i class="fa fa-caret-down"></i>
+          </button>
+          <div class="dropdown-content">
+            <label class="dropdown-container">Boundaries
+              <input type="checkbox" id="showBoundaries" checked>
+              <span class="checkmark">
+            </label>
+            <label class="dropdown-container">Steps
+              <input type="checkbox" id="showSteps" checked>
+              <span class="checkmark">
+            </label>
+          </div>
+        </div>
+        <button class="cm-button" id="showPermissions">Permissions<span class="loader"></button>
       </div>
     </div>
-
-    <div class="tab-pane aquascope-stderr" data-pane="1"></div>
   </div>
 
   <div id="analysisErrorCard" class="analysis-error-card">

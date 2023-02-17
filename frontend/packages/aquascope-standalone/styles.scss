@@ -1,3 +1,5 @@
+@import "normalize.css/normalize.css";
+@import "font-awesome/css/font-awesome.css";
 @import "aquascope-editor/dist/lib.css";
 
 $monospace: "Source Code Pro", monospace;
@@ -5,7 +7,7 @@ $color-lightest: white;
 $color-light: #f5f5f5;
 $color-dark: #e8e8e8;
 $color-darkest: #ddd;
-$color-bg: white;
+$color-bg: rgb(250, 250, 250);
 $color-error: #cc0000;
 $color-warn: #a88905;
 
@@ -33,32 +35,30 @@ $color-warn: #a88905;
 
 html,
 body {
-  padding: 3em;
-  height: 100%;
-  font-family: "Verdana", sans-serif;
-  font-size: 18px;
+  font: 18px "Helvetica Neue", "Open Sans", Arial, sans-serif;  
   background-color: $color-bg;
 }
 
-span.scp {
-  font-variant: small-caps;
-  font-weight: bolder;
+body {
+  padding: 1em;
 }
 
-div {
-  &.center {
-    width: 100%;
-    text-align: center;
-  }
+h1 {
+  margin-top: 0;
+  font-weight: bold;
+}
 
-  &.blurb {
-    @include shaded-and-outlined;
-    width: 50%;
-    display: inline-block;
-    margin: auto;
-    padding: 5px;
-    margin-bottom: 4em;
-  }
+p {
+  max-width: 600px;
+}
+
+.blurb {
+  @include shaded-and-outlined;
+  width: 50%;
+  display: inline-block;
+  margin: auto;
+  padding: 5px;
+  margin-bottom: 4em;
 }
 
 // nav {
@@ -79,30 +79,51 @@ div {
 //   color: $color-light;
 // }
 
-.static-editor {
-  height: 100%;
-  width: 100%;
-  max-height: 700px;
-  max-width: 1200px;
-}
-
-.aquascope {
-  .top-right {
-    z-index: 5;
-    position: absolute;
-    top: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25em;
-  }
+.buttons {
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  // width: 200px;
 
   .cm-button {
     @include shaded-and-outlined;
     border-width: 3px;
     padding: 5px 10px;
     display: inline-block;
+    cursor: pointer;
+    
     &:hover {
       background-color: $color-dark;
+    }
+
+    .loader {    
+      @keyframes rotation {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+      } 
+
+      width: 16px;
+      height: 16px;
+      border: 3px solid #aaa;
+      border-bottom-color: transparent;
+      border-radius: 50%;
+      box-sizing: border-box;
+      animation: rotation 1s linear infinite;      
+      display: none;
+      position: relative;
+      margin-left: 5px;
+      top: 2px;
+    }
+
+    &.waiting {
+      .loader {
+        display: inline-block;
+      }
     }
   }
 
@@ -285,15 +306,21 @@ a:hover {
   color: black;
 }
 
+.aquascope-stderr {
+  overflow-x: auto;
+}
+
 /* XXX: tabs **************************************** */
 
-.tabs-container {
-  height: 100%;
-  width: 100%;
-  max-height: 700px;
-  max-width: 900px;
+.columns {
+  display: flex;
+  width: max-content; 
+  margin-top: 2em;
+  gap: 10px;
+}
 
-  padding-left: 25px;
+.tabs-container {  
+  width: 750px;  
 }
 
 .tabs {
@@ -311,6 +338,7 @@ a:hover {
   display: inline-block;
   border: 1px $color-lightest;
   border-radius: 2px;
+  cursor: pointer;
 }
 
 .tab.active {
@@ -319,16 +347,12 @@ a:hover {
 }
 
 .tab-pane {
-  height: 100%;
   width: 100%;
-  max-height: 700px;
-  max-width: 900px;
 
   position: relative;
   /* padding-left: 25px; */
 
-  display: none;
-  border: 1px solid $color-dark;
+  display: none;  
 }
 
 .tab-pane.active {
@@ -342,13 +366,4 @@ a:hover {
   background-color: $color-bg;
   height: 100%;
   width: 100%;
-}
-
-a {
-  text-decoration: none;
-  transition: 0.25s all ease;
-}
-
-a:hover {
-  opacity: 50%;
 }

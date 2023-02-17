@@ -6,10 +6,13 @@ import _ from "lodash";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
-import { boundaryField } from "./editor-utils/boundaries";
-import { renderInterpreter } from "./editor-utils/interpreter";
+import { boundariesField } from "./editor-utils/boundaries";
 import {
-  ActionFacts,
+  InterpreterConfig,
+  markerField,
+  renderInterpreter,
+} from "./editor-utils/interpreter";
+import {
   IconField,
   hiddenLines,
   hideLine,
@@ -28,6 +31,9 @@ import {
   AnalysisOutput,
   AquascopeAnnotations,
   BackendError,
+  InterpAnnotations,
+  MTrace,
+  Range,
 } from "./types";
 
 export * as types from "./types";
@@ -67,13 +73,15 @@ type ButtonName = "copy" | "eye";
 const BUTTON_ORDER: ButtonName[] = ["copy", "eye"];
 
 let CopyButton = ({ view }: { view: EditorView }) => (
-  <i
-    className="fa fa-copy"
+  <button
+    className="cm-button"
     onClick={() => {
       let contents = view.state.doc.toJSON().join("\n");
       navigator.clipboard.writeText(contents);
     }}
-  />
+  >
+    <i className="fa fa-copy" />
+  </button>
 );
 
 let HideButton = ({ container }: { container: HTMLDivElement }) => {
@@ -83,12 +91,25 @@ let HideButton = ({ container }: { container: HTMLDivElement }) => {
     else container.classList.remove("show-hidden");
   }, [hidden]);
   return (
-    <i
-      className={`fa ${hidden ? "fa-eye" : "fa-eye-slash"}`}
-      onClick={() => setHidden(!hidden)}
-    />
+    <button className="cm-button" onClick={() => setHidden(!hidden)}>
+      <i className={`fa ${hidden ? "fa-eye" : "fa-eye-slash"}`} />
+    </button>
   );
 };
+
+let resetMarkedRangesOnEdit = EditorView.updateListener.of(
+  (upd: ViewUpdate) => {
+    if (upd.docChanged) {
+      upd.view.dispatch({
+        effects: [
+          boundariesField.setEffect.of([]),
+          stepField.setEffect.of([]),
+          markerField.setEffect.of([]),
+        ],
+      });
+    }
+  }
+);
 
 interface CommonConfig {
   shouldFail?: boolean;
@@ -118,14 +139,6 @@ export class Editor {
     readonly shouldFailHtml: string = "This code does not compile!",
     readonly buttonList: ButtonName[] = []
   ) {
-    let resetMarkedRangesOnEdit = EditorView.updateListener.of(
-      (upd: ViewUpdate) => {
-        if (upd.docChanged) {
-          this.permissionsDecos = undefined;
-        }
-      }
-    );
-
     this.buttons = new Set(buttonList);
 
     let initialState = EditorState.create({
@@ -133,14 +146,16 @@ export class Editor {
       extensions: [
         mainKeybinding.of(setup),
         readOnly.of(EditorState.readOnly.of(noInteract)),
+        EditorView.editable.of(!noInteract),
         resetMarkedRangesOnEdit,
         setup,
         rust(),
         indentUnit.of("  "),
         hiddenLines,
         loanFactsField,
-        boundaryField,
-        stepField,
+        boundariesField.field,
+        stepField.field,
+        markerField.field,
       ],
     });
 
@@ -166,15 +181,13 @@ export class Editor {
     this.metaContainer.render(
       <div className="meta-container">
         <div className="top-right">
-          {Array.from(this.buttons).map((button, i) => (
-            <button className="cm-button" key={i}>
-              {button == "copy" ? (
-                <CopyButton view={this.view} />
-              ) : button == "eye" ? (
-                <HideButton container={this.editorContainer} />
-              ) : null}
-            </button>
-          ))}
+          {Array.from(this.buttons).map((button, i) =>
+            button == "copy" ? (
+              <CopyButton key={i} view={this.view} />
+            ) : button == "eye" ? (
+              <HideButton key={i} container={this.editorContainer} />
+            ) : null
+          )}
         </div>
         {this.shouldFail ? (
           <div dangerouslySetInnerHTML={{ __html: this.shouldFailHtml }} />
@@ -210,9 +223,11 @@ export class Editor {
     });
   }
 
-  public renderPermissions(cfg?: PermissionsCfg) {
-    if (this.permissionsDecos === undefined) {
-      this.renderOperation("permissions", {
+  public async renderPermissions(cfg?: PermissionsCfg) {
+    // TODO: the permissions Decos are no longer removed on update
+    // so we have to recompute every time.
+    if (true || this.permissionsDecos === undefined) {
+      await this.renderOperation("permissions", {
         config: cfg,
       });
     }
@@ -239,6 +254,27 @@ export class Editor {
     });
     let serverResponse: ServerResponse = await serverResponseRaw.json();
     return serverResponse;
+  }
+
+  renderInterpreter(
+    trace: MTrace<Range>,
+    config?: InterpreterConfig,
+    annotations?: InterpAnnotations
+  ) {
+    if (config && config.hideCode) {
+      this.view.destroy();
+      this.metaContainer.unmount();
+    }
+
+    let contents = this.view.state.doc.toJSON().join("\n");
+    renderInterpreter(
+      this.view,
+      this.interpreterContainer,
+      trace,
+      contents,
+      config,
+      annotations
+    );
   }
 
   async renderOperation(
@@ -271,8 +307,6 @@ export class Editor {
       }
     }
 
-    let result = (response as any).Ok;
-
     if (
       annotations &&
       annotations.hidden_lines &&
@@ -292,14 +326,7 @@ export class Editor {
 
     if (operation == "interpreter") {
       let result = (response as any).Ok;
-      renderInterpreter(
-        this.view,
-        this.interpreterContainer,
-        result,
-        this.view.state.doc.toJSON().join("\n"),
-        config as any,
-        annotations?.interp
-      );
+      this.renderInterpreter(result, config as any, annotations?.interp);
     } else if (operation == "permissions") {
       // The permissions analysis results are sent as an array of
       // body analyses. Each body could have analyzed successfuly,

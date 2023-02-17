@@ -74,7 +74,8 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
 
         let pb = PathBoundary {
           location: rcvr.span,
-          hir_id,
+          hir_id: rcvr.hir_id,
+          conflicting_node: None,
           expected: fn_sig.inputs()[0].into(),
         };
 
@@ -92,6 +93,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
         // taking a borrow provides explicit types.
         let pb = PathBoundary {
           hir_id,
+          conflicting_node: None,
           location: inner.span.shrink_to_lo(),
           expected: Permissions {
             read: true,
@@ -125,7 +127,8 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
 
         let pb = PathBoundary {
           location: lhs.span.shrink_to_lo(),
-          hir_id,
+          hir_id: lhs.hir_id,
+          conflicting_node: Some(rhs.hir_id),
           expected: Permissions {
             read: true,
             write: true,
@@ -142,6 +145,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
       {
         let pb = PathBoundary {
           hir_id,
+          conflicting_node: None,
           // We want the boundary to appear to the left of the deref.
           location: expr.span.shrink_to_lo(),
           expected: self.get_adjusted_permissions(expr),
@@ -160,6 +164,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
       )) if !span.from_expansion() => {
         let pb = PathBoundary {
           hir_id,
+          conflicting_node: None,
           location: span.shrink_to_lo(),
           expected: self.get_adjusted_permissions(expr),
         };

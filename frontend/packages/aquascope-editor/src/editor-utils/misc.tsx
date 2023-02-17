@@ -308,3 +308,23 @@ export let hideMoveRegion = (
 ) => {
   hideRegion(facts.movePoints, facts.moveRegions, key, names);
 };
+
+export interface DecorationField {
+  setEffect: StateEffect<Range<Decoration>[]>;
+  field: StateField<DecorationSet>;
+}
+
+export let makeDecorationField = () => {
+  let setEffect = StateEffect.define<Range<Decoration>[]>();
+  let field = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(widgets, tr) {
+      widgets = widgets.map(tr.changes);
+      for (let e of tr.effects)
+        if (e.is(setEffect)) widgets = RangeSet.of(e.value);
+      return widgets;
+    },
+    provide: f => EditorView.decorations.from(f),
+  });
+  return { setEffect, field };
+};

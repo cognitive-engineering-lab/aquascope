@@ -9,7 +9,9 @@
     "@codemirror/view": "^6.4.0",
     "@replit/codemirror-vim": "^6.0.3",
     "aquascope-editor": "workspace:^",
+    "font-awesome": "^4.7.0",
     "jest-puppeteer": "^6.2.0",
+    "normalize.css": "^8.0.1",
     "puppeteer": "^19.6.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
