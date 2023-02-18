@@ -8,7 +8,7 @@ Aquascope is a tool that generates interactive visualizations of Rust programs. 
 
 <img alt="Example Aquascope output" src="https://user-images.githubusercontent.com/663326/219532624-a9605540-dac9-4d9b-a5f2-8a3d1ca81f50.png" height="550" />
 
-[Click here for a live demo.](https://cognitive-engineering-lab.github.io/aquascope/)
+[Click here for a live demo.](https://cognitive-engineering-lab.github.io/aquascope/) Want to learn more about what the diagram means? [Read the new ownership chapter in our Rust Book Experiment.](https://rust-book.cs.brown.edu/ch04-01-what-is-ownership.html)
 
 :warning: **Aquascope is research software and under active development!** :warning:
 
