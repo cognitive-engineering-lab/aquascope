@@ -4,6 +4,8 @@ runs:
   steps:
     - uses: actions/checkout@v2
     - uses: davidB/rust-cargo-make@v1
+      with:
+        version: '0.36.4'
     - uses: actions-rs/install@v0.1
       with:
         crate: cargo-insta
