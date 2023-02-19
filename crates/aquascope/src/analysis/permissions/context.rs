@@ -117,6 +117,10 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     self.moveable_path_to_path(mpath)
   }
 
+  pub fn loan_to_borrow(&self, l: Loan) -> &BorrowData<'tcx> {
+    &self.borrow_set[l]
+  }
+
   // Predicates
 
   pub fn is_location_operational(&self, loc: Location) -> bool {

@@ -331,8 +331,6 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
     |&(movep, _point1), &point2| (movep, point2),
   );
 
-  let loan_to_borrow = |l: Loan| &ctxt.borrow_set[l];
-
   let is_never_write = |path: Path| {
     let place = &ctxt.path_to_place(path);
     (!place.is_indirect() && ctxt.is_declared_readonly(place)) || {
@@ -357,7 +355,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   let loan_conflicts_with: Relation<(Loan, Path)> = Relation::from_iter(
     ctxt.polonius_input_facts.loan_issued_at.iter().flat_map(
       |(_origin, loan, _point)| {
-        let borrow = loan_to_borrow(*loan);
+        let borrow = ctxt.loan_to_borrow(*loan);
         places.iter().filter_map(|place| {
           super::places_conflict::borrow_conflicts_with_place(
             tcx,

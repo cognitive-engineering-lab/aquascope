@@ -4,6 +4,11 @@ pub mod boundaries;
 pub mod find_bindings;
 pub mod ir_mapper;
 pub mod permissions;
+// TODO: REMOVE
+#[allow(clippy::all)]
+#[allow(unused_imports)]
+#[allow(dead_code)]
+mod regions;
 mod scrape_hir;
 pub mod stepper;
 
@@ -28,6 +33,7 @@ use ir_mapper::{GatherMode, IRMapper};
 use permissions::{
   Loan, Move, PermissionsCtxt, Point, RefinementRegion, Refiner,
 };
+use regions::{compute_region_info, RegionViolation};
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::BodyId;
@@ -188,6 +194,7 @@ impl From<anyhow::Error> for AquascopeError {
 pub struct AnalysisOutput {
   pub boundaries: Vec<PermissionsBoundary>,
   pub steps: Vec<PermissionsLineDisplay>,
+  pub region_violation: Option<RegionViolation>,
   pub loan_points: LoanPoints,
   pub loan_regions: LoanRegions,
   pub move_points: MovePoints,
@@ -223,6 +230,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
 
     let boundaries = compute_permission_boundaries(&analysis_ctxt)?;
     let steps = compute_permission_steps(&analysis_ctxt)?;
+    let region_violation = compute_region_info(&analysis_ctxt)?;
 
     let (loan_points, loan_regions) = analysis_ctxt.construct_loan_info();
     let (move_points, move_regions) = analysis_ctxt.construct_move_info();
@@ -230,6 +238,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     Ok(AnalysisOutput {
       boundaries,
       steps,
+      region_violation,
       loan_points,
       loan_regions,
       move_points,
