@@ -400,23 +400,24 @@ const PALETTE = {
   dark: ["#ebdbd0", "#e3cbbc", "#dcbca9", "#d6ac98", "#d19d88", "#cb8c7a"],
 };
 
-let StepView = ({
-  step,
-  index,
-  containerRef,
-}: {
-  step: MStep<Range>;
-  index: number;
-  containerRef: React.RefObject<HTMLDivElement>;
-}) => {
-  let stepContainerRef = useRef<HTMLDivElement>(null);
-  let arrowContainerRef = useRef<HTMLDivElement>(null);
+let renderArrows = (
+  containerRef: React.RefObject<HTMLDivElement>,
+  stepContainerRef: React.RefObject<HTMLDivElement>,
+  arrowContainerRef: React.RefObject<HTMLDivElement>
+) => {
   let config = useContext(ConfigContext);
-  let error = useContext(ErrorContext);
   useEffect(() => {
     let container = containerRef.current!;
     let stepContainer = stepContainerRef.current!;
     let arrowContainer = arrowContainerRef.current!;
+
+    let sources = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
+
+    // TODO: this should be configurable from the embed script, not directly
+    // inside aquascope-editor
+    let mdbookEmbed = getComputedStyle(document.body).getPropertyValue(
+      "--inline-code-color"
+    );
 
     let query = (sel: string): HTMLElement => {
       let dst = stepContainer.querySelector<HTMLElement>("." + CSS.escape(sel));
@@ -426,81 +427,148 @@ let StepView = ({
         );
       return dst;
     };
-    let pointers = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
 
-    // TODO: this should be configurable from the embed script, not directly
-    // inside aquascope-editor
-    let mdbookEmbed = getComputedStyle(document.body).getPropertyValue(
-      "--inline-code-color"
-    );
+    interface Pointer {
+      src: HTMLElement;
+      dst: HTMLElement;
+      dstSel: string;
+      dstRange?: HTMLElement;
+      endSocket: LeaderLine.SocketType;
+      dstIndex: number;
+      group: {
+        srcRegion: "stack" | "heap";
+        dstRegion: "stack" | "heap";
+      };
+    }
 
-    let lines = Array.from(pointers)
-      .map((src, i) => {
-        try {
-          let dstSel = src.dataset.pointTo!;
-          let dst = query(dstSel);
-          let dstRange = src.dataset.pointToRange
-            ? query(src.dataset.pointToRange)
-            : undefined;
-          let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+    // First, collect metadata about all the pointers we're rendering
+    // like what HTML elements are pointed, and what region of the digram
+    // they lie in.
+    let dstCounts: { [sel: string]: number } = {};
+    let pointers = Array.from(sources).map<Pointer>(src => {
+      let dstSel = src.dataset.pointTo!;
+      let dst = query(dstSel);
+      let dstRange = src.dataset.pointToRange
+        ? query(src.dataset.pointToRange)
+        : undefined;
+      let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+      let srcInHeap = src.closest(".heap") !== null;
+      let dstInHeap = dst.closest(".heap") !== null;
 
-          let srcInHeap = src.closest(".heap") !== null;
-          let dstInStack = dstSel.startsWith("stack");
-          let startSocket: LeaderLine.SocketType =
-            srcInHeap && dstInStack ? "left" : "right";
+      if (!(dstSel in dstCounts)) dstCounts[dstSel] = 0;
+      let dstIndex = dstCounts[dstSel];
+      dstCounts[dstSel] += 1;
 
-          let dstAnchor = dstRange
-            ? LeaderLine.areaAnchor(dst, {
-                shape: "rect",
-                width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
-                height: 2,
-                y: "100%",
-                fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
-              })
-            : dstInStack && !srcInHeap
-            ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
-            : dst;
+      return {
+        src,
+        dst,
+        dstRange,
+        dstSel,
+        endSocket,
+        dstIndex,
+        group: {
+          srcRegion: srcInHeap ? "heap" : "stack",
+          dstRegion: dstInHeap ? "heap" : "stack",
+        },
+      };
+    });
 
-          const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
-          let isDark = MDBOOK_DARK_THEMES.some(s =>
-            document.documentElement.classList.contains(s)
-          );
-          let theme: "dark" | "light" = isDark ? "dark" : "light";
-          let palette = PALETTE[theme];
-          let color = palette[i % palette.length];
+    // Then, group the pointers by their regions.
+    // That way we know how many pointers are e.g. pointing from stack->heap
+    // so we can stagger them correctly.
+    let groups = _.groupBy(pointers, "group");
 
-          let line = new LeaderLine(src, dstAnchor, {
-            color,
-            size: 1,
-            endPlugSize: 2,
-            startSocket,
-            endSocket,
-            startSocketGravity: 60,
-            endSocketGravity: 100,
-          });
-
-          // Make arrows local to the diagram rather than global in the body
-          // See: https://github.com/anseki/leader-line/issues/54
-          let svgSelectors = [".leader-line"];
-          if (dstRange) svgSelectors.push(".leader-line-areaAnchor");
-          let svgElements = svgSelectors.map(sel => {
-            let el = document.body.querySelector(`:scope > ${sel}`);
-            if (!el) throw new Error(`Missing LineLeader element: ${sel}`);
-            return el;
-          });
-          svgElements.forEach(el => arrowContainer.appendChild(el));
-
-          return { line, svgElements };
-        } catch (e: any) {
-          console.error("Leader line failed to render", e.stack);
-          return undefined;
-        }
-      })
-      .filter(obj => obj !== undefined) as {
+    interface RenderedPointer {
       line: LeaderLine;
       svgElements: Element[];
-    }[];
+    }
 
+    // Then we render each pointer, conditioned on its group.
+    let renderPtr = (ptr: Pointer, i: number): RenderedPointer | undefined => {
+      try {
+        let { srcRegion, dstRegion } = ptr.group;
+        let startSocket: LeaderLine.SocketType =
+          srcRegion == "heap" && dstRegion == "stack" ? "left" : "right";
+
+        let dstAnchor: LeaderLine.AnchorAttachment;
+        if (ptr.dstRange) {
+          dstAnchor = LeaderLine.areaAnchor(ptr.dst, {
+            shape: "rect",
+            width:
+              ptr.dstRange.offsetLeft +
+              ptr.dst.offsetWidth -
+              ptr.dst.offsetLeft,
+            height: 2,
+            y: "100%",
+            fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
+          });
+        } else if (srcRegion == "stack" && dstRegion == "stack") {
+          dstAnchor = LeaderLine.pointAnchor(ptr.dst, { x: "100%", y: "75%" });
+        } else {
+          let totalPtrsToDst = dstCounts[ptr.dstSel];
+          let yRange = (totalPtrsToDst - 1) * 30;
+          let minY = 50 - yRange / 2;
+          let maxY = 50 + yRange / 2;
+          let y =
+            totalPtrsToDst > 1
+              ? ((maxY - minY) * ptr.dstIndex) / (totalPtrsToDst - 1) + minY
+              : 50;
+          console.log(totalPtrsToDst, yRange, minY, maxY, y);
+          dstAnchor = LeaderLine.pointAnchor(ptr.dst, {
+            x: "0%",
+            y: `${y}%`,
+          });
+        }
+
+        const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
+        let isDark = MDBOOK_DARK_THEMES.some(s =>
+          document.documentElement.classList.contains(s)
+        );
+        let theme: "dark" | "light" = isDark ? "dark" : "light";
+        let palette = PALETTE[theme];
+        let color = palette[i % palette.length];
+
+        let startSocketGravity = undefined;
+        let endSocketGravity = undefined;
+        if (ptr.group.srcRegion == "stack" && ptr.group.dstRegion == "heap") {
+          startSocketGravity = 60;
+          endSocketGravity = 100 - i * 10;
+        }
+
+        let line = new LeaderLine(ptr.src, dstAnchor, {
+          color,
+          size: 1,
+          endPlugSize: 2,
+          startSocket,
+          endSocket: ptr.endSocket,
+          startSocketGravity,
+          endSocketGravity,
+        });
+
+        // Make arrows local to the diagram rather than global in the body
+        // See: https://github.com/anseki/leader-line/issues/54
+        let svgSelectors = [".leader-line"];
+        if (ptr.dstRange) svgSelectors.push(".leader-line-areaAnchor");
+        let svgElements = svgSelectors.map(sel => {
+          let el = document.body.querySelector(`:scope > ${sel}`);
+          if (!el) throw new Error(`Missing LineLeader element: ${sel}`);
+          return el;
+        });
+        svgElements.forEach(el => arrowContainer.appendChild(el));
+
+        return { line, svgElements };
+      } catch (e: any) {
+        console.error("Leader line failed to render", e.stack);
+        return undefined;
+      }
+    };
+
+    let lines = Object.entries(groups)
+      .flatMap(([_g, ptrs]) => ptrs.map((ptr, i) => renderPtr(ptr, i)))
+      .filter(obj => obj !== undefined) as RenderedPointer[];
+
+    // Lastly, we add a timer to reposition the arrow container
+    // if necessary.
     let curCoords = (): [number, number] => {
       let stepBox = stepContainer.getBoundingClientRect();
       let x = stepBox.left + window.scrollX + container.scrollLeft;
@@ -532,6 +600,21 @@ let StepView = ({
       clearInterval(interval);
     };
   }, [config.concreteTypes]);
+};
+
+let StepView = ({
+  step,
+  index,
+  containerRef,
+}: {
+  step: MStep<Range>;
+  index: number;
+  containerRef: React.RefObject<HTMLDivElement>;
+}) => {
+  let stepContainerRef = useRef<HTMLDivElement>(null);
+  let arrowContainerRef = useRef<HTMLDivElement>(null);
+  let error = useContext(ErrorContext);
+  renderArrows(containerRef, stepContainerRef, arrowContainerRef);
 
   return (
     <div className="step">
