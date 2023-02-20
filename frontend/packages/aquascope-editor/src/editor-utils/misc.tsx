@@ -47,6 +47,27 @@ export let permName = (c: PermLetter): string => {
   }
 };
 
+export let lerp = (min: number, max: number, alpha: number): number =>
+  (max - min) * alpha + min;
+
+export let evenlySpaceAround = ({
+  center,
+  spacing,
+  index,
+  total,
+}: {
+  center: number;
+  spacing: number;
+  index: number;
+  total: number;
+}): number => {
+  let range = total * spacing;
+  let min = center - range / 2;
+  let max = center + range / 2;
+  let alpha = index / total;
+  return lerp(min, max, alpha);
+};
+
 export let makeTag = (length: number) => {
   var result = "";
   var characters =

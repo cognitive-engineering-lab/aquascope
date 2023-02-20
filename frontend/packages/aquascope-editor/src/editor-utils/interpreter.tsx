@@ -23,7 +23,7 @@ import {
   MValue,
   Range,
 } from "../types";
-import { makeDecorationField } from "./misc";
+import { evenlySpaceAround, makeDecorationField } from "./misc";
 
 const DEBUG: boolean = false;
 
@@ -161,10 +161,10 @@ let AdtView = ({ value }: { value: MAdt }) => {
     );
   }
 
-  let cells = value.fields.map(([_k, v], i) => {
+  let cells = value.fields.map(([k, v], i) => {
     let path = [...pathCtx, "field", i.toString()];
     return (
-      <td className={path.join("-")}>
+      <td key={k} className={path.join("-")}>
         <PathContext.Provider value={path}>
           <ValueView value={v} />
         </PathContext.Provider>
@@ -428,6 +428,10 @@ let renderArrows = (
       return dst;
     };
 
+    type MemoryRegion = "stack" | "heap";
+    let getMemoryRegion = (el: HTMLElement): MemoryRegion =>
+      el.closest(".heap") !== null ? "heap" : "stack";
+
     interface Pointer {
       src: HTMLElement;
       dst: HTMLElement;
@@ -436,8 +440,8 @@ let renderArrows = (
       endSocket: LeaderLine.SocketType;
       dstIndex: number;
       group: {
-        srcRegion: "stack" | "heap";
-        dstRegion: "stack" | "heap";
+        srcRegion: MemoryRegion;
+        dstRegion: MemoryRegion;
       };
     }
 
@@ -452,25 +456,16 @@ let renderArrows = (
         ? query(src.dataset.pointToRange)
         : undefined;
       let endSocket = dst.dataset.connector as LeaderLine.SocketType;
-      let srcInHeap = src.closest(".heap") !== null;
-      let dstInHeap = dst.closest(".heap") !== null;
+      let group = {
+        srcRegion: getMemoryRegion(src),
+        dstRegion: getMemoryRegion(dst),
+      };
 
       if (!(dstSel in dstCounts)) dstCounts[dstSel] = 0;
       let dstIndex = dstCounts[dstSel];
       dstCounts[dstSel] += 1;
 
-      return {
-        src,
-        dst,
-        dstRange,
-        dstSel,
-        endSocket,
-        dstIndex,
-        group: {
-          srcRegion: srcInHeap ? "heap" : "stack",
-          dstRegion: dstInHeap ? "heap" : "stack",
-        },
-      };
+      return { src, dst, dstRange, dstSel, endSocket, dstIndex, group };
     });
 
     // Then, group the pointers by their regions.
@@ -487,11 +482,17 @@ let renderArrows = (
     let renderPtr = (ptr: Pointer, i: number): RenderedPointer | undefined => {
       try {
         let { srcRegion, dstRegion } = ptr.group;
+
+        // Heap -> stack pointers should start on the left and
+        // everything else starts on the right
         let startSocket: LeaderLine.SocketType =
           srcRegion == "heap" && dstRegion == "stack" ? "left" : "right";
 
         let dstAnchor: LeaderLine.AnchorAttachment;
         if (ptr.dstRange) {
+          // Pointers to ranges (eg string slices) need an area anchor
+          // corresponding to the range of the slice
+          // TODO: this doesn't handle abbreviations
           dstAnchor = LeaderLine.areaAnchor(ptr.dst, {
             shape: "rect",
             width:
@@ -503,19 +504,23 @@ let renderArrows = (
             fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
           });
         } else if (srcRegion == "stack" && dstRegion == "stack") {
+          // Stack -> stack pointers should point a little below the middle
+          // to avoid conflicting with outgoing pointers.
           dstAnchor = LeaderLine.pointAnchor(ptr.dst, { x: "100%", y: "75%" });
         } else {
-          let totalPtrsToDst = dstCounts[ptr.dstSel];
-          let yRange = (totalPtrsToDst - 1) * 30;
-          let minY = 50 - yRange / 2;
-          let maxY = 50 + yRange / 2;
-          let y =
-            totalPtrsToDst > 1
-              ? ((maxY - minY) * ptr.dstIndex) / (totalPtrsToDst - 1) + minY
-              : 50;
-          console.log(totalPtrsToDst, yRange, minY, maxY, y);
+          let x = dstRegion == "stack" ? 100 : 0;
+
+          // Everything else should get evenly spaced around the
+          // middle of the endpoint
+          let y = evenlySpaceAround({
+            center: 50,
+            spacing: 30,
+            index: ptr.dstIndex,
+            total: dstCounts[ptr.dstSel] - 1,
+          });
+
           dstAnchor = LeaderLine.pointAnchor(ptr.dst, {
-            x: "0%",
+            x: `${x}%`,
             y: `${y}%`,
           });
         }
