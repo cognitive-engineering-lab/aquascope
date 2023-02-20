@@ -481,13 +481,16 @@ let StepView = ({
 
           // Make arrows local to the diagram rather than global in the body
           // See: https://github.com/anseki/leader-line/issues/54
-          let lineEl = document.body.querySelector(
-            ":scope > .leader-line:last-of-type"
-          );
-          if (!lineEl) throw new Error("Missing line el?");
-          arrowContainer.appendChild(lineEl);
+          let svgSelectors = [".leader-line"];
+          if (dstRange) svgSelectors.push(".leader-line-areaAnchor");
+          let svgElements = svgSelectors.map(sel => {
+            let el = document.body.querySelector(`:scope > ${sel}`);
+            if (!el) throw new Error(`Missing LineLeader element: ${sel}`);
+            return el;
+          });
+          svgElements.forEach(el => arrowContainer.appendChild(el));
 
-          return { line, lineEl };
+          return { line, svgElements };
         } catch (e: any) {
           console.error("Leader line failed to render", e.stack);
           return undefined;
@@ -495,7 +498,7 @@ let StepView = ({
       })
       .filter(obj => obj !== undefined) as {
       line: LeaderLine;
-      lineEl: Element;
+      svgElements: Element[];
     }[];
 
     let curCoords = (): [number, number] => {
@@ -521,9 +524,10 @@ let StepView = ({
     }, 300);
 
     return () => {
-      lines.forEach(({ lineEl }) => {
-        if (!lineEl) return;
-        lineEl.parentNode!.removeChild(lineEl);
+      lines.forEach(({ svgElements }) => {
+        svgElements.forEach(el => {
+          el.parentNode!.removeChild(el);
+        });
       });
       clearInterval(interval);
     };
