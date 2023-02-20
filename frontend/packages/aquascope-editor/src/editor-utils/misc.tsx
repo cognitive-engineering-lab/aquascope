@@ -22,20 +22,11 @@ import {
 
 export const readChar = "R";
 export const writeChar = "W";
-export const dropChar = "O";
+export const ownChar = "O";
+export type PermLetter = typeof readChar | typeof writeChar | typeof ownChar;
 
 // ----------
 // Interfaces
-
-export interface HTMLIcon {
-  readonly display: boolean;
-  toDOM(): HTMLElement;
-}
-
-export interface ReactIcon {
-  readonly display: boolean;
-  render(): JSX.Element;
-}
 
 export interface IconField<C, T> {
   effectType: StateEffectType<Array<T>>;
@@ -43,49 +34,18 @@ export interface IconField<C, T> {
   fromOutput(o: C, facts: AnalysisFacts): T;
 }
 
-// ------------
-// Render utils
-
-export class RGB {
-  constructor(readonly r: number, readonly g: number, readonly b: number) {}
-  toString(): string {
-    return `rgb(${this.r},${this.g},${this.b})`;
-  }
-  withAlpha(a: number): RGBA {
-    return new RGBA(this.r, this.g, this.b, a);
-  }
-}
-
-export class RGBA {
-  constructor(
-    readonly r: number,
-    readonly g: number,
-    readonly b: number,
-    readonly a: number
-  ) {}
-  toString(): string {
-    return `rgba(${this.r},${this.g},${this.b},${this.a})`;
-  }
-  withAlpha(newA: number): RGBA {
-    return new RGBA(this.r, this.g, this.b, newA);
-  }
-}
-
-export type Color = RGB | RGBA;
-
-export const softRed: RGB = new RGB(255, 66, 68);
-export const softGreen: RGB = new RGB(93, 202, 54);
-export const softBlue: RGB = new RGB(78, 190, 239);
-export const softYellow: RGB = new RGB(238, 238, 155);
-export const softOrange: RGB = new RGB(245, 202, 123);
-export const whiteColor: RGB = new RGB(255, 255, 255);
-
-export const dropColor = softRed;
-export const readColor = softGreen;
-export const writeColor = softBlue;
-
 // ---------
 // Utilities
+
+export let permName = (c: PermLetter): string => {
+  if (c === "R") {
+    return "read";
+  } else if (c === "W") {
+    return "write";
+  } /* if (c == "O") */ else {
+    return "own";
+  }
+};
 
 export let makeTag = (length: number) => {
   var result = "";
