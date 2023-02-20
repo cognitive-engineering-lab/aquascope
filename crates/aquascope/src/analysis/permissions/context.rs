@@ -15,6 +15,7 @@ use rustc_middle::{
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
 use rustc_trait_selection::infer::InferCtxtExt;
+use smallvec::{smallvec, SmallVec};
 
 use crate::analysis::permissions::{
   AquascopeFacts, Loan, LoanKey, Move, MoveKey, Output, Path, Permissions,
@@ -78,6 +79,13 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
   pub fn location_to_point(&self, l: Location) -> Point {
     self.body_with_facts.location_table.start_index(l)
+  }
+
+  pub fn location_to_points(&self, l: Location) -> SmallVec<[Point; 2]> {
+    smallvec![
+      self.body_with_facts.location_table.start_index(l),
+      self.body_with_facts.location_table.mid_index(l)
+    ]
   }
 
   pub fn point_to_location(&self, p: Point) -> Location {

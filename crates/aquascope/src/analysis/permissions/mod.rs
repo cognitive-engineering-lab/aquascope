@@ -3,7 +3,7 @@ mod context;
 mod graphviz;
 mod output;
 #[allow(clippy::all, clippy::pedantic)]
-mod places_conflict;
+pub(crate) mod places_conflict;
 pub mod utils;
 
 use std::ops::{Deref, DerefMut};

@@ -2,9 +2,11 @@
 
 use anyhow::Result;
 use either::Either;
-use flowistry::mir::utils::{OperandExt, SpanExt};
+use flowistry::mir::utils::{
+  OperandExt, PlaceExt as FlowistryPlaceExt, SpanExt,
+};
 use polonius_engine::FactTypes;
-use rustc_borrowck::consumers::RustcFacts;
+use rustc_borrowck::{borrow_set::BorrowData, consumers::RustcFacts};
 use rustc_data_structures::fx::FxHashSet as HashSet;
 use rustc_hir::HirId;
 use rustc_middle::{
@@ -18,11 +20,13 @@ use ts_rs::TS;
 use crate::{
   analysis::{
     ir_mapper::{GatherDepth, IRMapper},
-    permissions::{Permissions, PermissionsCtxt, PermissionsData, Point},
+    permissions::{
+      places_conflict, Permissions, PermissionsCtxt, PermissionsData, Point,
+    },
     AquascopeAnalysis,
   },
   errors,
-  mir::utils::PlaceExt,
+  mir::utils::PlaceExt as AquascopePlaceExt,
   Range,
 };
 
@@ -56,6 +60,103 @@ fn make_a_cloner(s_ref: &str) -> impl Fn() -> String {
  */
 
 type Origin = <RustcFacts as FactTypes>::Origin;
+
+fn check_for_invalidation_at_exit<'tcx>(
+  ctxt: &PermissionsCtxt<'_, 'tcx>,
+  location: Location,
+  borrow: &BorrowData<'tcx>,
+) -> bool {
+  use places_conflict::AccessDepth::*;
+
+  let place = borrow.borrowed_place;
+  let tcx = ctxt.tcx;
+  let body = &ctxt.body_with_facts.body;
+
+  let root_place = Place::from_local(place.local, tcx);
+
+  // let mut root_place = PlaceRef {
+  //   local: place.local,
+  //   projection: &[],
+  // };
+
+  // let (might_be_alive, will_be_dropped) =
+  //   if self.body.local_decls[root_place.local].is_ref_to_thread_local() {
+  //     // Thread-locals might be dropped after the function exits
+  //     // We have to dereference the outer reference because
+  //     // borrows don't conflict behind shared references.
+  //     root_place.projection = TyCtxtConsts::DEREF_PROJECTION;
+  //     (true, true)
+  //   } else {
+  //     (false, self.locals_are_invalidated_at_exit)
+  //   };
+
+  // if !will_be_dropped {
+  //   debug!("place_is_invalidated_at_exit({:?}) - won't be dropped", place);
+  //   return;
+  // }
+
+  // let sd = if might_be_alive { Deep } else { Shallow(None) };
+  let sd = Shallow(None);
+
+  places_conflict::borrow_conflicts_with_place(
+    tcx,
+    body,
+    place,
+    borrow.kind,
+    root_place.as_ref(),
+    sd,
+    places_conflict::PlaceConflictBias::Overlap,
+  )
+}
+
+fn compute_trace_points_for_local_invalidation<'tcx>(
+  ctxt: &PermissionsCtxt<'_, 'tcx>,
+  location: Location,
+  borrow: &BorrowData<'tcx>,
+) -> RegionViolation {
+  let borrow_location = borrow.reserve_location;
+  log::trace!(
+    "computing trace for local invalidation ... \n  {location:?} \n  {borrow:?}\n  {borrow_location:?}"
+  );
+  let bad_origin = borrow.region;
+  let points = ctxt.location_to_points(borrow.reserve_location);
+  let Some(captured_in_origin) = points.iter().find_map(|point| {
+    ctxt
+      .polonius_output
+      .subset
+      .get(point)
+      .and_then(|os| os.get(&bad_origin).and_then(|ps| ps.first()))
+  }) else {
+    unreachable!("could not find capturing origin in borrow data@{points:?} {borrow:?}");
+  };
+
+  log::debug!("captured_in_origin: {:#?}", captured_in_origin);
+
+  let mut subset_to_anywhere = HashSet::default();
+  subset_to_anywhere.insert(captured_in_origin);
+  let mut changed = true;
+
+  while changed {
+    changed = false;
+
+    for (_point, os) in ctxt.polonius_output.subset.iter() {
+      for (o, osp) in os.iter() {
+        if subset_to_anywhere.contains(&o) {
+          for o2 in osp.iter() {
+            if !subset_to_anywhere.contains(o2) {
+              subset_to_anywhere.insert(o2);
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  log::debug!("SUB ANYWHERE:\n{:#?}", subset_to_anywhere);
+
+  panic!("STOP");
+}
 
 fn report_region_local_violation(
   ctxt: &PermissionsCtxt,
@@ -91,87 +192,17 @@ fn report_region_local_violation(
   //   placeholder(Origin1),
   //   subset(Origin0, Origin1, _Point).
 
-  // Will be incredibly expensive for even medium-sized functions.
-  let subset: Relation<(Origin, Origin, Point)> =
-    Relation::from_iter(ctxt.polonius_output.subset.iter().flat_map(
-      |(point, origins)| {
-        origins
-          .iter()
-          .flat_map(|(o1, os)| os.iter().map(|o2| (*o1, *o2, *point)))
-      },
-    ));
-
-  let placeholder = ctxt
-    .polonius_input_facts
-    .placeholder
-    .iter()
-    .map(|&(origin, _)| origin)
-    .collect::<HashSet<_>>();
-
-  log::debug!("placeholders {placeholder:#?}");
-
-  let local_subset_error: Relation<(Origin, Origin, Point)> =
-    Relation::from_iter(
-      subset
-        .iter()
-        .filter(|&(origin1, origin2, _point)| {
-          !placeholder.contains(origin1) && placeholder.contains(origin2)
-        })
-        .copied(),
-    );
-
-  // TODO: Here, we have information about local regions which must outlive
-  // placeholder regions, however, we want to know about all regions of
-  // the SCC which must outlive the placeholder region. We could also try
-  // something closer to what Rustc does, but this may be too much.
-  //
-  // Example
-  // ```text
-  // fn add_ref(v: &mut Vec<&i32>, n: i32) {
-  //     let r = &n;
-  //     v.push(r);
-  // }
-  // ```
-  //
-  // MIR
-  //
-  // ```text
-  // fn dump_me(_1: &'_#8r mut std::vec::Vec<&'_#9r i32>, _2: i32) -> () {
-  //     debug v => _1;                       // in scope 0 at src/main.rs:4:12: 4:13
-  //     debug n => _2;                       // in scope 0 at src/main.rs:4:31: 4:32
-  //     let mut _0: ();                      // return place in scope 0 at src/main.rs:4:39: 4:39
-  //     let _4: ();                          // in scope 0 at src/main.rs:6:3: 6:12
-  //     let mut _5: &'_#11r mut std::vec::Vec<&'_#12r i32>; // in scope 0 at src/main.rs:6:3: 6:12
-  //     let mut _6: &'_#13r i32;             // in scope 0 at src/main.rs:6:10: 6:11
-  //     ...
-  // }
-  // ```
-  //
-  // placeholders are:
-  // { '_#0r, '_#2r, '_#1r, '_#3r,  }
-  //
-  // The local_subset_errors:
-  // [
-  //     ('_#7r,  '_#2r,),
-  //     ('_#8r,  '_#1r,),
-  //     ('_#9r,  '_#2r,),
-  //     ('_#12r, '_#2r,),
-  //     ('_#13r, '_#2r,),
-  // ]
-  //
-  // we just need to make sure that we don't count the temps
-  // when looking at subset errors. The one we really care about
-  // in this example is (_#4, _#2) and it can be derived from ('_#7r,  '_#2r,),
-  // '_#4 <: '_#10 <: '_#6 < '_#7
-
-  let mut local_subset_error = local_subset_error
-    .iter()
-    .map(|&(f, s, _)| (f, s))
-    .collect::<Vec<_>>();
-  local_subset_error.sort();
-  local_subset_error.dedup();
-
-  log::debug!("LOCAL SUBSET ERRORS:\n{local_subset_error:#?}");
+  for (point, loans) in ctxt.polonius_output.errors.iter() {
+    let location = ctxt.point_to_location(*point);
+    for l in loans.iter() {
+      let borrow = ctxt.loan_to_borrow(*l);
+      if check_for_invalidation_at_exit(ctxt, location, borrow) {
+        return Some(compute_trace_points_for_local_invalidation(
+          ctxt, location, borrow,
+        ));
+      }
+    }
+  }
 
   None
 }
