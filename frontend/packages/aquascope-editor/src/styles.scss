@@ -10,11 +10,11 @@ $transparent: rgba(0, 0, 0, 0);
   // the corresponding rgb values below!
   --aq-read-color: #ff9500;
   --aq-write-color: #0c7bdc;
-  --aq-drop-color: #dc0055;
+  --aq-own-color: #dc0055;
 
   --aq-read-rgb-color: 255, 149, 0;
   --aq-write-rgb-color: 12, 123, 220;
-  --aq-drop-rgb-color: 220, 0, 85;
+  --aq-own-rgb-color: 220, 0, 85;
 
   // For step table permission colors
   --aq-perm-gain-color: #333;
@@ -79,9 +79,9 @@ $glyph-width: 14px;
     -webkit-text-stroke-color: var(--aq-write-color);
   }
 
-  &.drop {
-    color: var(--aq-drop-color);
-    -webkit-text-stroke-color: var(--aq-drop-color);
+  &.own {
+    color: var(--aq-own-color);
+    -webkit-text-stroke-color: var(--aq-own-color);
   }
 }
 
@@ -290,8 +290,8 @@ $perm-animation-duration: 0.5s;
         text-decoration: underline 3px var(--aq-write-color) !important;
       }
 
-      &.drop {
-        text-decoration: underline 3px var(--aq-drop-color) !important;
+      &.own {
+        text-decoration: underline 3px var(--aq-own-color) !important;
       }
     }
   }
@@ -310,8 +310,8 @@ $perm-animation-duration: 0.5s;
         background-color: rgba(var(--aq-write-rgb-color), 0.4) !important;
       }
 
-      &.drop {
-        background-color: rgba(var(--aq-drop-rgb-color), 0.4) !important;
+      &.own {
+        background-color: rgba(var(--aq-own-rgb-color), 0.4) !important;
       }
     }
   }
@@ -426,6 +426,7 @@ $perm-animation-duration: 0.5s;
     position: relative;
     font: bold $glyph-width "Verdana";
     text-align: center;
+    cursor: default;
 
     // TODO: fix the conflicts w/ other rules
     border-left: none !important;

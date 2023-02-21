@@ -146,8 +146,8 @@ let QuestionMark = () => (
         <h3>What is this diagram?</h3>
         <p>
           This diagram is a new way of visualizing Rust programs. To learn more
-          about it, read the updated{" "}
-          <a href="ch04-00-understanding-ownership.html" target="_blank">
+          about what the symbols mean, you will need to read the updated{" "}
+          <a href="ch04-01-what-is-ownership.html" target="_blank">
             Chapter 4: Understanding Ownership
           </a>
           .

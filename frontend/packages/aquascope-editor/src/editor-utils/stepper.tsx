@@ -16,10 +16,11 @@ import {
   ValueStep,
 } from "../types";
 import {
-  dropChar,
   hideLoanRegion,
   hideMoveRegion,
   makeDecorationField,
+  ownChar,
+  permName,
   readChar,
   showLoanRegion,
   showMoveRegion,
@@ -41,45 +42,46 @@ let PermChar = ({
   facts: AnalysisFacts;
 }) => {
   // FIXME: don't reverse the abbreviated content.
-  let getKind = (c: string) => {
-    if (c === "R") {
-      return "read";
-    } else if (c === "W") {
-      return "write";
-    } else if (c == "O") {
-      return "drop";
-    } else {
-      return "unknown";
-    }
-  };
 
   let getInner = () => {
+    let kind = permName(perm.perm);
     let Perm: React.FC<React.PropsWithChildren> = ({ children }) => (
-      <span className={classNames("perm", getKind(perm.perm))}>{children}</span>
+      <span className={classNames("perm", kind)}>{children}</span>
     );
     if (perm.step.type === "None") {
       return perm.step.value ? (
-        <div className="perm-diff-present">
+        <div
+          className="perm-diff-present"
+          title={`Path had ${kind} permissions before the preceding line, and that didn't change after this line.`}
+        >
           <Perm>{perm.perm}</Perm>
         </div>
       ) : (
-        <div className="perm-diff-none">
+        <div
+          className="perm-diff-none"
+          title={`Path did not have ${kind} permissions before the preceding line, and that didn't change after this line.`}
+        >
           <Perm>‒</Perm>
         </div>
       );
     } else if (perm.step.type == "Low") {
       return (
-        <div className="perm-diff-sub-container">
+        <div
+          className="perm-diff-sub-container"
+          title={`Path had ${kind} permissions before the preceding line, and lost it after this line.`}
+        >
           <div className="perm-diff-sub" />
           <Perm>{perm.perm}</Perm>
         </div>
       );
     } /* perm.step.type === "High" */ else {
       return (
-        <>
+        <div
+          title={`Path did not have ${kind} permissions before the preceding line, and gained it after this line.`}
+        >
           <span className="perm-diff-add">+</span>
           <Perm>{perm.perm}</Perm>
-        </>
+        </div>
       );
     }
   };
@@ -87,12 +89,12 @@ let PermChar = ({
   return (
     <td
       onMouseEnter={() => {
-        showLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
-        showMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
+        showLoanRegion(facts, perm.loanKey, [permName(perm.perm)]);
+        showMoveRegion(facts, perm.moveKey, [permName(perm.perm)]);
       }}
       onMouseLeave={() => {
-        hideLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
-        hideMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
+        hideLoanRegion(facts, perm.loanKey, [permName(perm.perm)]);
+        hideMoveRegion(facts, perm.moveKey, [permName(perm.perm)]);
       }}
       className="perm-char"
     >
@@ -250,7 +252,7 @@ let PermDiffRow = ({
       moveKey,
     },
     {
-      perm: dropChar,
+      perm: ownChar,
       step: diffs.permissions.drop,
       loanKey: unwrap(diffs.loan_drop_refined),
       moveKey,

@@ -11,10 +11,12 @@ import {
   PermissionsBoundary,
 } from "../types";
 import {
-  dropChar,
+  PermLetter,
   hideLoanRegion,
   hideMoveRegion,
   makeDecorationField,
+  ownChar,
+  permName,
   readChar,
   showLoanRegion,
   showMoveRegion,
@@ -77,28 +79,33 @@ import {
 //   }
 // );
 
-let PermChar = ({
-  content,
-  names,
-  act,
-  showit,
-  hideit,
-}: {
-  content: string;
+interface PermCharProps {
+  content: PermLetter;
   names: string[];
   act: boolean;
   showit: () => void;
   hideit: () => void;
-}) => (
-  <div
-    className={classNames(...names, { missing: !act })}
-    onMouseEnter={showit}
-    onMouseLeave={hideit}
-  >
-    <div className="small">•</div>
-    <div className="big">{content}</div>
-  </div>
-);
+}
+
+let PermChar = ({ content, names, act, showit, hideit }: PermCharProps) => {
+  let name = permName(content);
+  name = name.charAt(0).toUpperCase() + name.slice(1);
+  let title = `${name} permission is expected, `;
+  title += act
+    ? "and the path has the permission."
+    : "but the path does not have the permission.";
+  return (
+    <div
+      className={classNames(...names, { missing: !act })}
+      onMouseEnter={showit}
+      onMouseLeave={hideit}
+      title={title}
+    >
+      <div className="small">•</div>
+      <div className="big">{content}</div>
+    </div>
+  );
+};
 
 let PermStack = ({
   facts,
@@ -109,7 +116,7 @@ let PermStack = ({
 }) => {
   const data = boundary.actual;
 
-  let allIcons = [
+  let allIcons: (PermCharProps & { exp: boolean })[] = [
     {
       content: readChar,
       names: ["perm", "read"],
@@ -139,7 +146,7 @@ let PermStack = ({
       },
     },
     {
-      content: dropChar,
+      content: ownChar,
       names: ["perm", "drop"],
       exp: boundary.expected.drop,
       act: data.permissions.drop,
