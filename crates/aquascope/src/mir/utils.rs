@@ -1,13 +1,15 @@
 //! A smattering of utilities not yet (or that won't ever be) upstreamed to Flowistry.
 
+use rustc_data_structures::captures::Captures;
 use rustc_middle::{
   mir::{Body, Place},
-  ty::TyCtxt,
+  ty::{self, subst::GenericArgKind, Region, RegionVid, Ty, TyCtxt},
 };
+use smallvec::SmallVec;
 
-// ------------------------
-// Places
+//------------------------------------------------
 
+/// Extension trait for [`Place`]
 pub trait PlaceExt {
   fn is_source_visible(&self, tcx: TyCtxt, body: &Body) -> bool;
 }
@@ -26,5 +28,80 @@ impl PlaceExt for Place<'_> {
     // actually visible in the source scope.
     let should_collapse = tcx.should_collapse_debuginfo(source_info.span);
     is_loc && !should_collapse && !from_desugaring
+  }
+}
+
+//------------------------------------------------
+
+/// Extension trait for [`Body`]
+pub trait BodyExt<'tcx> {
+  type ArgRegionsIter<'a>: Iterator<Item = Region<'tcx>>
+  where
+    Self: 'a;
+
+  fn regions_in_args(&self) -> Self::ArgRegionsIter<'_>;
+
+  type ReturnRegionsIter: Iterator<Item = Region<'tcx>>;
+
+  fn regions_in_return(&self) -> Self::ReturnRegionsIter;
+}
+
+impl<'tcx> BodyExt<'tcx> for Body<'tcx> {
+  type ArgRegionsIter<'a> = impl Iterator<Item = Region<'tcx>> + Captures<'tcx> + 'a
+    where Self: 'a;
+
+  type ReturnRegionsIter = impl Iterator<Item = Region<'tcx>>;
+
+  fn regions_in_args(&self) -> Self::ArgRegionsIter<'_> {
+    self
+      .args_iter()
+      .flat_map(|arg_local| self.local_decls[arg_local].ty.inner_regions())
+  }
+
+  fn regions_in_return(&self) -> Self::ReturnRegionsIter {
+    self
+      .return_ty()
+      .inner_regions()
+      .collect::<SmallVec<[Region<'tcx>; 8]>>()
+      .into_iter()
+  }
+}
+
+//------------------------------------------------
+
+/// Extension trait for [`Ty`]
+pub trait TyExt<'tcx> {
+  type AllRegionsIter<'a>: Iterator<Item = Region<'tcx>>
+  where
+    Self: 'a;
+
+  fn inner_regions(&self) -> Self::AllRegionsIter<'_>;
+}
+
+impl<'tcx> TyExt<'tcx> for Ty<'tcx> {
+  type AllRegionsIter<'a> = impl Iterator<Item = Region<'tcx>> + Captures<'tcx> + 'a
+    where Self: 'a;
+
+  fn inner_regions(&self) -> Self::AllRegionsIter<'_> {
+    self.walk().filter_map(|part| match part.unpack() {
+      GenericArgKind::Lifetime(region) => Some(region),
+      _ => None,
+    })
+  }
+}
+
+//------------------------------------------------
+
+pub trait ToRegionVid {
+  fn to_region_vid(&self) -> RegionVid;
+}
+
+impl<'tcx> ToRegionVid for Region<'tcx> {
+  fn to_region_vid(&self) -> RegionVid {
+    if let ty::ReVar(vid) = self.kind() {
+      vid
+    } else {
+      unreachable!("region is not an ReVar{:?}", self)
+    }
   }
 }

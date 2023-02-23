@@ -1,72 +1,196 @@
 //! Analysis for finding lifetime violations.
 
-use anyhow::Result;
+mod abstract_outlives;
+mod local_outlives;
+
+use abstract_outlives::report_region_outlives_violation;
+use anyhow::{anyhow, Result};
+use datafrog::{Iteration, Relation, RelationLeaper, ValueFilter};
 use either::Either;
 use flowistry::mir::utils::{
   OperandExt, PlaceExt as FlowistryPlaceExt, SpanExt,
 };
+use local_outlives::report_region_local_violation;
 use polonius_engine::FactTypes;
 use rustc_borrowck::{borrow_set::BorrowData, consumers::RustcFacts};
-use rustc_data_structures::fx::FxHashSet as HashSet;
+use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::HirId;
 use rustc_middle::{
-  mir::{Body, Location, Place, Rvalue, Statement, StatementKind},
-  ty::TyCtxt,
+  mir::{Body, Local, Location, Place, Rvalue, Statement, StatementKind},
+  ty::{subst::GenericArgKind, BoundVariableKind, Region, Ty, TyCtxt},
 };
 use rustc_span::Span;
+use rustc_type_ir::RegionKind;
 use serde::Serialize;
 use ts_rs::TS;
 
 use crate::{
   analysis::{
-    ir_mapper::{GatherDepth, IRMapper},
+    ir_mapper::{
+      diagnostics::{
+        IRDiagnosticMapper, RegionLocation, RegionNameHighlight,
+        RegionNameSource,
+      },
+      GatherDepth, IRMapper,
+    },
     permissions::{
       places_conflict, Permissions, PermissionsCtxt, PermissionsData, Point,
     },
-    AquascopeAnalysis,
+    smooth_elements, AquascopeAnalysis,
   },
   errors,
-  mir::utils::PlaceExt as AquascopePlaceExt,
+  mir::utils::{
+    BodyExt as AquascopeBodyExt, PlaceExt as AquascopePlaceExt, ToRegionVid,
+    TyExt as AquascopeTyExt,
+  },
   Range,
 };
+
+type Origin = <RustcFacts as FactTypes>::Origin;
 
 // ------------------------------------------------
 // Data
 
 #[derive(Debug, Clone, Serialize, TS)]
+#[serde(tag = "type")]
 #[ts(export)]
-pub enum RegionViolation {}
+pub enum RegionViolationKind {
+  LocalOutlivesUniversal {
+    local_binding_range: Range,
+    abstract_range: Range,
+  },
+  OutlivesConstraintMissing {
+    longer: Range,
+    shorter: Range,
+  },
+}
 
-pub struct RegionOutlivesViolation {}
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct RegionViolation {
+  kind: RegionViolationKind,
+  flows: Vec<RegionFlow>,
+  flow_ranges: Vec<Range>,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+// FIXME: we don't currently generate good region names so these
+// aren't (currently) suitable for showing in any visualization.
+pub struct RegionFlow {
+  from: String,
+  to: String,
+  range: Range,
+}
 
 // ------------------------------------------------
 
-/* keeping these handy
-
-fn add_ref(v: &mut Vec<&i32>, n: i32) {
-    let r = &n;
-    v.push(r);
+#[derive(Debug)]
+struct FlowPoint {
+  from: Origin,
+  to: Origin,
+  at: Location,
 }
 
-fn return_a_string() -> &String {
-    let s = String::from("Hello world");
-    &s
+/// Is the given [`Origin`] a placeholder?
+fn is_placeholder(ctxt: &PermissionsCtxt, rv: Origin) -> bool {
+  ctxt
+    .polonius_input_facts
+    .placeholder
+    .iter()
+    .any(|&(r, _)| rv == r)
 }
 
-fn make_a_cloner(s_ref: &str) -> impl Fn() -> String {
-    move || s_ref.to_string()
+fn find_origin_in_sig<'tcx>(
+  body: &Body<'tcx>,
+  f: impl Fn(&Region<'tcx>) -> bool,
+) -> Option<Region<'tcx>> {
+  body
+    .regions_in_args()
+    .chain(body.regions_in_return())
+    .find(|concrete| f(concrete))
 }
 
- */
+/// Find the concrete lifetime appearing in the type signature for the given placeholder origin.
+fn get_concrete_origin_for_placeholder<'tcx>(
+  ctxt: &PermissionsCtxt<'_, 'tcx>,
+  placeholder: Origin,
+) -> Option<Region<'tcx>> {
+  assert!(is_placeholder(ctxt, placeholder));
+  let body = &ctxt.body_with_facts.body;
+  let subset_base = &ctxt.polonius_input_facts.subset_base;
+  let start = ctxt.location_to_point(Location::START);
 
-type Origin = <RustcFacts as FactTypes>::Origin;
+  find_origin_in_sig(body, |concrete| {
+    let vid = concrete.to_region_vid();
+    subset_base.contains(&(placeholder, vid, start))
+      && subset_base.contains(&(vid, placeholder, start))
+  })
+}
 
+fn get_location_of_concrete_placeholder(
+  body: &Body,
+  origin: Origin,
+) -> Option<RegionLocation> {
+  let contains_it = |ty: Ty| {
+    ty.inner_regions()
+      .any(|region| region.to_region_vid() == origin)
+  };
+
+  body
+    .args_iter()
+    .find_map(|local| {
+      contains_it(body.local_decls[local].ty)
+        .then_some(RegionLocation::Arg(local.as_usize()))
+    })
+    .or_else(|| {
+      let ret_ty = body.return_ty();
+      contains_it(ret_ty).then_some(RegionLocation::Return)
+    })
+}
+
+fn range_of_placeholder(
+  ctxt: &PermissionsCtxt,
+  ir_mapper: &IRDiagnosticMapper,
+  span_to_range: impl Fn(Span) -> Range,
+  placeholder: Origin,
+) -> Option<Range> {
+  let body = &ctxt.body_with_facts.body;
+  let concrete = get_concrete_origin_for_placeholder(ctxt, placeholder)?;
+
+  let span_anon_region = || -> Option<Span> {
+    let location =
+      get_location_of_concrete_placeholder(body, concrete.to_region_vid())?;
+    let span = match ir_mapper
+      .get_fn_sig_region_highlight(concrete.to_region_vid(), location)
+    {
+      RegionNameHighlight::MatchedHirTy(span)
+      | RegionNameHighlight::MatchedAdtAndSegment(span)
+      | RegionNameHighlight::CannotMatchHirTy(span, _)
+      | RegionNameHighlight::Occluded(span, _) => span,
+    };
+
+    Some(span)
+  };
+
+  let span = ir_mapper
+    .give_name_from_error_region(concrete.to_region_vid())
+    .and_then(|region_name| match region_name.source {
+      RegionNameSource::NamedFreeRegion(span) => Some(span),
+      _ => None,
+    })
+    .or_else(span_anon_region)?;
+
+  Some(span_to_range(span))
+}
+
+/// Check if the given borrow is invalidated by an exit point.
 fn check_for_invalidation_at_exit<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
-  location: Location,
+  _location: Location,
   borrow: &BorrowData<'tcx>,
 ) -> bool {
-  use places_conflict::AccessDepth::*;
+  use places_conflict::AccessDepth::Shallow;
 
   let place = borrow.borrowed_place;
   let tcx = ctxt.tcx;
@@ -109,170 +233,58 @@ fn check_for_invalidation_at_exit<'tcx>(
   )
 }
 
-fn compute_trace_points_for_local_invalidation<'tcx>(
+/// Compute all the Origins to which `from` flows.
+fn compute_flow_points<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
-  location: Location,
-  borrow: &BorrowData<'tcx>,
-) -> RegionViolation {
-  let borrow_location = borrow.reserve_location;
-  log::trace!(
-    "computing trace for local invalidation ... \n  {location:?} \n  {borrow:?}\n  {borrow_location:?}"
-  );
-  let bad_origin = borrow.region;
-  let points = ctxt.location_to_points(borrow.reserve_location);
-  let Some(captured_in_origin) = points.iter().find_map(|point| {
-    ctxt
-      .polonius_output
-      .subset
-      .get(point)
-      .and_then(|os| os.get(&bad_origin).and_then(|ps| ps.first()))
-  }) else {
-    unreachable!("could not find capturing origin in borrow data@{points:?} {borrow:?}");
-  };
-
-  log::debug!("captured_in_origin: {:#?}", captured_in_origin);
-
+  from: Origin,
+) -> Vec<FlowPoint> {
   let mut subset_to_anywhere = HashSet::default();
-  subset_to_anywhere.insert(captured_in_origin);
+  let mut subset_flows = Vec::default();
   let mut changed = true;
+
+  subset_to_anywhere.insert(from);
 
   while changed {
     changed = false;
 
-    for (_point, os) in ctxt.polonius_output.subset.iter() {
-      for (o, osp) in os.iter() {
-        if subset_to_anywhere.contains(&o) {
-          for o2 in osp.iter() {
-            if !subset_to_anywhere.contains(o2) {
-              subset_to_anywhere.insert(o2);
-              changed = true;
-            }
-          }
-        }
+    for &(o1, o2, point) in ctxt.polonius_input_facts.subset_base.iter() {
+      // FIXME: is there a need to minimize the point here?
+      if subset_to_anywhere.contains(&o1) && !subset_to_anywhere.contains(&o2) {
+        changed = true;
+        subset_to_anywhere.insert(o2);
+        subset_flows.push(FlowPoint {
+          from: o1,
+          to: o2,
+          at: ctxt.point_to_location(point),
+        });
       }
     }
   }
 
-  log::debug!("SUB ANYWHERE:\n{:#?}", subset_to_anywhere);
-
-  panic!("STOP");
+  subset_flows
 }
 
-fn report_region_local_violation(
-  ctxt: &PermissionsCtxt,
-) -> Option<RegionViolation> {
-  use datafrog::{Iteration, Relation, RelationLeaper, ValueFilter};
-  // For our small test cases these are produced from Polonius
-  // as an ERROR (not subset_error), here's a little example:
-  //
-  // fn add_ref(v: &mut Vec<&_#0 i32>, n: i32) {
-  //
-  //     let r = &_#1 n;  // concrete region: _#1
-  //     v.push(r);      // _#1 :> _#0
-  //
-  //     // StorageDead(r);
-  //     // ^^^ violation of region _#1
-  //
-  // } // loans _#0 and _#1 are live here
-  //
-  // what we really want to say is that _#0 </: _#1 framing this as a SUBSET ERROR.
-  //
-  // for abstract lifetime ϱ
-  // and concrete lifetime r
-  // This can be summarized as:
-  //
-  // r outlives ϱ at I
-  // ----------------------
-  //     borrowfail G
-  //
-  // decl local_subset_error(Origin0, Origin1).
-  //
-  // decl local_subset_error(Origin0, Origin1) :-
-  //   !placeholder(Origin0),
-  //   placeholder(Origin1),
-  //   subset(Origin0, Origin1, _Point).
-
-  for (point, loans) in ctxt.polonius_output.errors.iter() {
-    let location = ctxt.point_to_location(*point);
-    for l in loans.iter() {
-      let borrow = ctxt.loan_to_borrow(*l);
-      if check_for_invalidation_at_exit(ctxt, location, borrow) {
-        return Some(compute_trace_points_for_local_invalidation(
-          ctxt, location, borrow,
-        ));
-      }
-    }
-  }
-
-  None
-}
-
-type OutlivesViolation = (Origin, Origin);
-
-fn report_region_outlives_violation(
-  ctxt: &PermissionsCtxt,
-) -> Option<OutlivesViolation> {
-  let mut subset_errors = ctxt
-    .polonius_output
-    .subset_errors
-    .iter()
-    .flat_map(|(_location, subset_errors)| subset_errors.iter())
-    .collect::<Vec<_>>();
-
-  subset_errors.sort();
-  subset_errors.dedup();
-
-  // TODO: we want to report the first that happens in the MIR
-  // not just the first in the set.
-  subset_errors
-    .first()
-    .map(|(longer, shorter)| (*longer, *shorter))
-}
-
-// FIXME: this analysis will not handle closure propagation.
+// FIXME: there are a few things which this analysis will **not** handle.
+// Anything interacting with upvar capture because this has to do with
+// how errors are propagated
 // All errors are eagerly assumed to be final.
-fn report_region_violation(ctxt: &PermissionsCtxt) -> Option<RegionViolation> {
-  // TODO REMOVE
-  // ----------------------------------------------
-
-  log::debug!("STARTING LIFETIME ANALYSIS!!!");
-
-  log::debug!("errors ... {:#?}", ctxt.polonius_output.errors);
-  log::debug!(
-    "subset errors ... {:#?}",
-    ctxt.polonius_output.subset_errors
-  );
-  log::debug!("move errors ... {:#?}", ctxt.polonius_output.move_errors);
-
-  for (point, loans) in ctxt.polonius_output.errors.iter() {
-    let loc = ctxt.point_to_location(*point);
-    log::debug!("\nErrors at: {loc:?}");
-    for l in loans.iter() {
-      let borrow = ctxt.loan_to_borrow(*l);
-      log::debug!("  invalidated borrow: {:#?}", borrow);
+fn report_region_violation(
+  ctxt: &PermissionsCtxt,
+  ir_mapper: &IRDiagnosticMapper,
+  span_to_range: impl Fn(Span) -> Range + std::marker::Copy,
+) -> Result<Option<RegionViolation>> {
+  // We want to report an outlives constraint first because they
+  // strictly happen between abstract regions.
+  match report_region_outlives_violation(ctxt, ir_mapper, span_to_range) {
+    // If no error is reported, but no value found, this means we should
+    // keep looking for lifetime errors (but different forms).
+    Result::Ok(None) => {
+      report_region_local_violation(ctxt, ir_mapper, span_to_range)
     }
+    // Result::Err and Result::Ok(Some(..)) should be reported, in the first
+    // case something very wrong happened, and we would expect the latter.
+    v => v,
   }
-
-  for (point, error_subsets) in ctxt.polonius_output.subset_errors.iter() {
-    let loc = ctxt.point_to_location(*point);
-    log::debug!("\nSubset errors at: {loc:?}");
-    for (o1, o2) in error_subsets.iter() {
-      log::debug!("  {o1:?}: {o2:?} unproved");
-    }
-  }
-
-  // ----------------------------------------------
-
-  if let Some((longer_fr, shorter_fr)) = report_region_outlives_violation(ctxt)
-  {
-    log::debug!("CANNOT PROVE REGION REL: {longer_fr:?}: {shorter_fr:?}");
-  }
-
-  if let Some(..) = report_region_local_violation(ctxt) {
-    ();
-  }
-
-  None
 }
 
 #[allow(clippy::module_name_repetitions)]
@@ -280,5 +292,7 @@ pub fn compute_region_info<'a, 'tcx: 'a>(
   ctxt: &AquascopeAnalysis<'a, 'tcx>,
 ) -> Result<Option<RegionViolation>> {
   let permissions = &ctxt.permissions;
-  Ok(report_region_violation(permissions))
+  let span_to_range = |span| ctxt.span_to_range(span);
+  let diagnostic_mapper = &IRDiagnosticMapper::new(&ctxt.ir_mapper);
+  report_region_violation(permissions, diagnostic_mapper, span_to_range)
 }

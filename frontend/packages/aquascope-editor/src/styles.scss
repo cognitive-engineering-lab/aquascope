@@ -316,6 +316,20 @@ $perm-animation-duration: 0.5s;
     }
   }
 
+  // TODO(gavinleroy): this is just for testing, these shouldn't always be enabled
+  // nor should they be the same color as a permissions icon!
+  .aquascope-region-flow {
+    background-color: rgba(var(--aq-drop-rgb-color), 0.1);
+    border-radius: 5px;
+  }
+  .aquascope-escaping-local {
+    text-decoration: underline 3px var(--aq-read-color);
+  }
+  .aquascope-escaping-region {
+    text-decoration: underline 3px var(--aq-write-color);
+  }
+
+
   /* Permission Steps */
   .hidden-width {
     display: none !important;
