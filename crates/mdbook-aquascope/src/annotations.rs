@@ -16,11 +16,19 @@ pub struct CharPos(usize);
 #[ts(export)]
 pub struct LinePos(usize);
 
+#[derive(PartialEq, Eq, Debug, TS, Serialize, Clone)]
+#[ts(export)]
+#[serde(tag = "type", content = "value")]
+pub enum PathMatcher {
+  Literal(String),
+  Regex(String),
+}
+
 #[derive(PartialEq, Eq, Debug, TS, Serialize, Default, Clone)]
 #[ts(export)]
 pub struct StepperAnnotations {
   focused_lines: Vec<LinePos>,
-  focused_paths: HashMap<LinePos, String>,
+  focused_paths: HashMap<LinePos, Vec<PathMatcher>>,
 }
 
 #[derive(PartialEq, Eq, Debug, TS, Serialize, Default, Clone)]
@@ -117,11 +125,19 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
             if config.contains_key("focus") {
               annots.stepper.focused_lines.push(line_pos);
             }
-            if let Some(paths) = config.get("paths") {
+            let mut add_matcher = |matcher: PathMatcher| {
               annots
                 .stepper
                 .focused_paths
-                .insert(line_pos, paths.to_string());
+                .entry(line_pos)
+                .or_default()
+                .push(matcher)
+            };
+            if let Some(paths) = config.get("paths") {
+              add_matcher(PathMatcher::Literal(paths.to_string()));
+            }
+            if let Some(rpaths) = config.get("rxpaths") {
+              add_matcher(PathMatcher::Regex(rpaths.to_string()));
             }
           }
           "boundaries" => {
@@ -147,7 +163,7 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
 #[test]
 fn test_parse_annotations() {
   let input = r#"#fn main() {
-let x = 1;`(focus,paths:x)`
+let x = 1;`(focus,paths:x,rxpaths:y)`
 `[]`let y = 2;`{}`
 #}"#;
   let (cleaned, annot) = parse_annotations(input).unwrap();
@@ -165,7 +181,9 @@ let y = 2;
     },
     stepper: StepperAnnotations {
       focused_lines: vec![LinePos(2)],
-      focused_paths: maplit::hashmap! { LinePos(2) => "x".into() }
+      focused_paths: maplit::hashmap! {
+        LinePos(2) => vec![PathMatcher::Literal("x".into()), PathMatcher::Regex("y".into())]
+      }
     },
     boundaries: BoundariesAnnotations {
       focused_lines: vec![LinePos(3)]

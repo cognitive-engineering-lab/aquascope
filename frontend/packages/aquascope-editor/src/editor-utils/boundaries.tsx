@@ -147,16 +147,16 @@ let PermStack = ({
     },
     {
       content: ownChar,
-      names: ["perm", "drop"],
+      names: ["perm", "own"],
       exp: boundary.expected.drop,
       act: data.permissions.drop,
       showit: () => {
-        showLoanRegion(facts, data.loan_drop_refined, ["drop"]);
-        showMoveRegion(facts, data.path_moved, ["drop"]);
+        showLoanRegion(facts, data.loan_drop_refined, ["own"]);
+        showMoveRegion(facts, data.path_moved, ["own"]);
       },
       hideit: () => {
-        hideLoanRegion(facts, data.loan_drop_refined, ["drop"]);
-        hideMoveRegion(facts, data.path_moved, ["drop"]);
+        hideLoanRegion(facts, data.loan_drop_refined, ["own"]);
+        hideMoveRegion(facts, data.path_moved, ["own"]);
       },
     },
   ];
