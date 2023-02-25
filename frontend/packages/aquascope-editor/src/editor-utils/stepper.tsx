@@ -140,21 +140,6 @@ let PermDiffRow = ({
 
   let visualFacts: VisualFact<Facts>[] = [
     {
-      fact: "is_live",
-      states: [
-        {
-          value: { type: "High", value: 0 },
-          icon: "level-up",
-          desc: "Path is initialized here",
-        },
-        {
-          value: { type: "Low" },
-          icon: "level-down",
-          desc: "Path is no longer used here",
-        },
-      ],
-    },
-    {
       fact: "path_moved",
       states: [
         {
@@ -166,21 +151,6 @@ let PermDiffRow = ({
           value: { type: "Low" },
           icon: "recycle",
           desc: "Path is re-initialized after move here",
-        },
-      ],
-    },
-    {
-      fact: "path_uninitialized",
-      states: [
-        {
-          value: { type: "High", value: 0 },
-          icon: "sign-out",
-          desc: "Path contains uninitialized data",
-        },
-        {
-          value: { type: "Low" },
-          icon: "recycle",
-          desc: "Path data is initialized after move here",
         },
       ],
     },
@@ -211,6 +181,36 @@ let PermDiffRow = ({
           value: { type: "Low" },
           icon: "rotate-left",
           desc: "Borrow on path is no longer used here",
+        },
+      ],
+    },
+    {
+      fact: "is_live",
+      states: [
+        {
+          value: { type: "High", value: 0 },
+          icon: "level-up",
+          desc: "Path is initialized here",
+        },
+        {
+          value: { type: "Low" },
+          icon: "level-down",
+          desc: "Path is no longer used here",
+        },
+      ],
+    },
+    {
+      fact: "path_uninitialized",
+      states: [
+        {
+          value: { type: "High", value: 0 },
+          icon: "sign-out",
+          desc: "Path contains uninitialized data",
+        },
+        {
+          value: { type: "Low" },
+          icon: "recycle",
+          desc: "Path data is initialized after move here",
         },
       ],
     },
