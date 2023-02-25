@@ -1,0 +1,9 @@
+struct Foo;
+impl Foo {
+  fn mutate(&mut self) {
+    *self = *self;
+  }
+}
+fn test(x: &mut i32) {
+  *x += 1;
+}

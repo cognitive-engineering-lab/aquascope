@@ -12,6 +12,7 @@ use rustc_middle::{
 };
 use rustc_span::Span;
 use serde::Serialize;
+use smallvec::{smallvec, SmallVec};
 use ts_rs::TS;
 
 use crate::{
@@ -105,43 +106,62 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
     ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
 
   macro_rules! maybe_in_op {
-    ($op:expr, $loc:expr) => {
+    ($loc:expr, $op:expr) => {
       $op
         .to_place()
-        .and_then(|p| p.is_source_visible(tcx, body).then_some(($loc, p)))
+        .and_then(|p| p.is_source_visible(tcx, body).then_some(p))
+        .map(|p| smallvec![($loc, p)])
+        .unwrap_or(smallvec![])
     };
+    ($loc:expr, $op1:expr, $op2:expr) => {{
+      let mut v: SmallVec<[(Location, Place<'tcx>); 3]> =
+        maybe_in_op!($loc, $op1);
+      let mut o: SmallVec<[(Location, Place<'tcx>); 3]> =
+        maybe_in_op!($loc, $op2);
+      v.append(&mut o);
+      v
+    }};
   }
 
   let mir_locations = mir_locations_opt?
     .values()
-    .filter_map(|loc| {
+    .flat_map(|loc| {
       log::debug!("looking at {loc:?}");
       if let Either::Left(Statement {
-        kind: StatementKind::Assign(box (_, rvalue)),
+        kind: StatementKind::Assign(box (lhs_place, rvalue)),
         ..
       }) = body.stmt_at(loc)
       {
-        match rvalue {
-          Rvalue::Ref(_, _, place) if place.is_source_visible(tcx, body) => {
-            Some((loc, *place))
-          }
-          Rvalue::Use(op) => maybe_in_op!(op, loc),
-          Rvalue::BinaryOp(_, box (left_op, right_op)) => {
-            maybe_in_op!(left_op, loc).or_else(|| maybe_in_op!(right_op, loc))
-          }
-          Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
-            maybe_in_op!(left_op, loc).or_else(|| maybe_in_op!(right_op, loc))
-          }
-          Rvalue::CopyForDeref(place) if place.is_source_visible(tcx, body) => {
-            Some((loc, *place))
-          }
-          _ => {
-            log::warn!("couldn't find in RVALUE {rvalue:?}");
-            None
-          }
+        let mut found_so_far: SmallVec<[(Location, Place<'tcx>); 3]> =
+          match rvalue {
+            Rvalue::Ref(_, _, place) if place.is_source_visible(tcx, body) => {
+              smallvec![(loc, *place)]
+            }
+            Rvalue::Use(op) => maybe_in_op!(loc, op),
+            Rvalue::BinaryOp(_, box (left_op, right_op)) => {
+              maybe_in_op!(loc, left_op, right_op)
+            }
+            Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
+              maybe_in_op!(loc, left_op, right_op)
+            }
+            Rvalue::CopyForDeref(place)
+              if place.is_source_visible(tcx, body) =>
+            {
+              smallvec![(loc, *place)]
+            }
+            _ => {
+              log::warn!("couldn't find in RVALUE {rvalue:?}");
+              smallvec![]
+            }
+          };
+
+        if lhs_place.is_source_visible(tcx, body) {
+          found_so_far.push((loc, *lhs_place));
         }
+
+        found_so_far
       } else {
-        None
+        smallvec![]
       }
     })
     .collect::<Vec<_>>();
@@ -194,10 +214,10 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
   // For example, in a function call `foo( &x );`, the Hir Node::Path `&x` will not
   // have the MIR locations associated with it, the Hir Node::Call `foo( &x )` will,
   // so we traverse upwards in the tree until we find a location associated with it.
-  search_at_hir_id(hir_id)
+  let resolved_boundary = search_at_hir_id(hir_id)
     .or_else(|| {
       hir.parent_iter(hir_id).find_map(|(hir_id, _)| {
-        log::debug!("\tsearching upwards in: {hir_id:?}");
+        log::debug!("\tsearching upwards in: {}", hir.node_to_string(hir_id));
         search_at_hir_id(hir_id)
       })
     })
@@ -222,7 +242,16 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
         expected,
         actual,
       }
-    })
+    });
+
+  if resolved_boundary.is_none() {
+    log::warn!(
+      "Could not resolve a MIR place for expected boundary {}",
+      hir.node_to_string(path_boundary.hir_id)
+    );
+  }
+
+  resolved_boundary
 }
 
 pub(crate) fn compute_boundaries<'a>(
