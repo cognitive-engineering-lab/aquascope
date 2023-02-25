@@ -138,13 +138,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   }
 
   pub(super) fn fn_name(&self, def_id: DefId) -> String {
-    let full_name = self.ecx.tcx.def_path_debug_str(def_id);
-    // Strip crate name prefix from debug str
-    full_name
-      .split("::")
-      .skip(1)
-      .intersperse("::")
-      .collect::<String>()
+    self.ecx.tcx.def_path_str(def_id)
   }
 
   fn build_frame(
