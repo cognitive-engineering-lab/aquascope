@@ -131,29 +131,11 @@ let PermDiffRow = ({
     | "loan_read_refined";
 
   // There is a sort of hierarchy to the changing permissions:
-  // 1. path liveness is most important. If it changes, this radically
-  //    has an affect on everything.
-  // 2. A path getting moved is the second highest. Again, a moved path
-  //    cannot be borrowed so it sort of trumps any loan refinements.
-  // 3. At the bottom, loan refinement changes which can only have an
-  //    affect if the prior two didn't change anything.
-
+  // We first prioritize "moves" and "borrows" (permission refinements),
+  // these actions are visually important because they reflect concrete
+  // actions in the source-code. Liveness is implicit, and should be
+  // shown after the other actions.
   let visualFacts: VisualFact<Facts>[] = [
-    {
-      fact: "is_live",
-      states: [
-        {
-          value: { type: "High", value: 0 },
-          icon: "level-up",
-          desc: "Path is initialized here",
-        },
-        {
-          value: { type: "Low" },
-          icon: "level-down",
-          desc: "Path is no longer used here",
-        },
-      ],
-    },
     {
       fact: "path_moved",
       states: [
@@ -166,21 +148,6 @@ let PermDiffRow = ({
           value: { type: "Low" },
           icon: "recycle",
           desc: "Path is re-initialized after move here",
-        },
-      ],
-    },
-    {
-      fact: "path_uninitialized",
-      states: [
-        {
-          value: { type: "High", value: 0 },
-          icon: "sign-out",
-          desc: "Path contains uninitialized data",
-        },
-        {
-          value: { type: "Low" },
-          icon: "recycle",
-          desc: "Path data is initialized after move here",
         },
       ],
     },
@@ -211,6 +178,36 @@ let PermDiffRow = ({
           value: { type: "Low" },
           icon: "rotate-left",
           desc: "Borrow on path is no longer used here",
+        },
+      ],
+    },
+    {
+      fact: "is_live",
+      states: [
+        {
+          value: { type: "High", value: 0 },
+          icon: "level-up",
+          desc: "Path is initialized here",
+        },
+        {
+          value: { type: "Low" },
+          icon: "level-down",
+          desc: "Path is no longer used here",
+        },
+      ],
+    },
+    {
+      fact: "path_uninitialized",
+      states: [
+        {
+          value: { type: "High", value: 0 },
+          icon: "sign-out",
+          desc: "Path contains uninitialized data",
+        },
+        {
+          value: { type: "Low" },
+          icon: "recycle",
+          desc: "Path data is initialized after move here",
         },
       ],
     },
