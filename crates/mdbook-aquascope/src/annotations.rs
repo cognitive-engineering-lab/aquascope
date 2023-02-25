@@ -96,6 +96,9 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
     if let Some(suffix) = line.strip_prefix('#') {
       annots.hidden_lines.push(line_pos);
       add_fragment!(suffix);
+    } else if let Some(suffix) = line.strip_prefix("\\#") {
+      add_fragment!("#");
+      add_fragment!(suffix);
     } else {
       while let Some(cap) = re.captures(line) {
         let matched = cap.get(0).unwrap();
