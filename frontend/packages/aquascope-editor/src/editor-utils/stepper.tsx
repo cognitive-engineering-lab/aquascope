@@ -131,13 +131,10 @@ let PermDiffRow = ({
     | "loan_read_refined";
 
   // There is a sort of hierarchy to the changing permissions:
-  // 1. path liveness is most important. If it changes, this radically
-  //    has an affect on everything.
-  // 2. A path getting moved is the second highest. Again, a moved path
-  //    cannot be borrowed so it sort of trumps any loan refinements.
-  // 3. At the bottom, loan refinement changes which can only have an
-  //    affect if the prior two didn't change anything.
-
+  // We first prioritize "moves" and "borrows" (permission refinements),
+  // these actions are visually important because they reflect concrete
+  // actions in the source-code. Liveness is implicit, and should be
+  // shown after the other actions.
   let visualFacts: VisualFact<Facts>[] = [
     {
       fact: "path_moved",
