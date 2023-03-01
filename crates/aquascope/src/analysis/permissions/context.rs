@@ -17,9 +17,12 @@ use rustc_span::Span;
 use rustc_trait_selection::infer::InferCtxtExt;
 use smallvec::{smallvec, SmallVec};
 
-use crate::analysis::permissions::{
-  AquascopeFacts, Loan, LoanKey, Move, MoveKey, Output, Path, Permissions,
-  PermissionsData, PermissionsDomain, Point, Variable,
+use crate::{
+  analysis::permissions::{
+    flow::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey, Output,
+    Path, Permissions, PermissionsData, PermissionsDomain, Point, Variable,
+  },
+  mir::utils::BodyExt,
 };
 
 /// A path as defined in rustc.
@@ -43,6 +46,7 @@ pub struct PermissionsCtxt<'a, 'tcx> {
   pub(crate) param_env: ParamEnv<'tcx>,
   pub(crate) place_data: IndexVec<Path, Place<'tcx>>,
   pub(crate) rev_lookup: HashMap<Local, Vec<Path>>,
+  pub(crate) region_flows: Option<RegionFlows>,
 }
 
 impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
@@ -52,6 +56,14 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let local = place.local;
     self.rev_lookup.entry(local).or_default().push(new_path);
     new_path
+  }
+
+  pub fn region_flows(&self) -> &RegionFlows {
+    let Some(ref rf) = self.region_flows else {
+      unreachable!("attempted to get region flows before they are computed.");
+    };
+
+    rf
   }
 
   // Conversion helpers
@@ -369,13 +381,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let def_id = self.def_id;
     let tcx = self.tcx;
     let body = &self.body_with_facts.body;
-    body
-      .local_decls
-      .indices()
-      .flat_map(|local| {
-        Place::from_local(local, tcx).interior_paths(tcx, body, def_id)
-      })
-      .collect::<HashSet<_>>()
+    body.all_places(tcx, def_id).collect::<HashSet<_>>()
   }
 
   pub fn permissions_domain_at_point(

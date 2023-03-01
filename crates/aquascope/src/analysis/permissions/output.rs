@@ -15,10 +15,7 @@ use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, Mutability};
 use rustc_index::vec::IndexVec;
-use rustc_middle::{
-  mir::{Place, ProjectionElem},
-  ty::TyCtxt,
-};
+use rustc_middle::{mir::ProjectionElem, ty::TyCtxt};
 use rustc_mir_dataflow::move_paths::MoveData;
 
 use super::{
@@ -26,6 +23,7 @@ use super::{
   places_conflict::{self, AccessDepth, PlaceConflictBias},
   AquascopeFacts, Loan, Move, Path, Point,
 };
+use crate::mir::utils::BodyExt;
 
 /// Aquascope permissions facts output.
 #[derive(Debug)]
@@ -159,15 +157,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   // 1. Internal to a local declaration.
   // 2. A path considered moveable by rustc.
   let places = body
-    .local_decls
-    .indices()
-    .flat_map(|local| {
-      Place::from_local(local, tcx).interior_paths(
-        tcx,
-        body,
-        def_id.to_def_id(),
-      )
-    })
+    .all_places(tcx, def_id.to_def_id())
     .chain(ctxt.move_data.move_paths.iter().map(|v| v.place))
     .collect::<Vec<_>>();
 
@@ -512,6 +502,7 @@ pub fn compute<'a, 'tcx>(
     loan_regions: None,
     place_data: IndexVec::new(),
     rev_lookup: HashMap::default(),
+    region_flows: None,
   };
 
   derive_permission_facts(&mut ctxt);
@@ -524,9 +515,9 @@ pub fn compute<'a, 'tcx>(
     timer.elapsed()
   );
 
-  ctxt.borrow_set.location_map.iter().for_each(|(_k, bd)| {
-    log::debug!("Borrow Data {:?}", bd);
-  });
+  // FIXME: move this somewhere else, in-fact, this entire
+  // function should probably get pulled out of here.
+  super::flow::compute_flows(&mut ctxt);
 
   ctxt
 }

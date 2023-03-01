@@ -1,6 +1,8 @@
 //! A smattering of utilities not yet (or that won't ever be) upstreamed to Flowistry.
 
+use flowistry::mir::utils::PlaceExt as FlowistryPlaceExt;
 use rustc_data_structures::captures::Captures;
+use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{Body, Place},
   ty::{self, subst::GenericArgKind, Region, RegionVid, Ty, TyCtxt},
@@ -35,6 +37,16 @@ impl PlaceExt for Place<'_> {
 
 /// Extension trait for [`Body`]
 pub trait BodyExt<'tcx> {
+  type PlacesIter<'a>: Iterator<Item = Place<'tcx>>
+  where
+    Self: 'a;
+
+  fn all_places(
+    &self,
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+  ) -> Self::PlacesIter<'_>;
+
   type ArgRegionsIter<'a>: Iterator<Item = Region<'tcx>>
   where
     Self: 'a;
@@ -52,6 +64,9 @@ impl<'tcx> BodyExt<'tcx> for Body<'tcx> {
 
   type ReturnRegionsIter = impl Iterator<Item = Region<'tcx>>;
 
+  type PlacesIter<'a> = impl Iterator<Item = Place<'tcx>> + Captures<'tcx> + 'a
+    where Self: 'a;
+
   fn regions_in_args(&self) -> Self::ArgRegionsIter<'_> {
     self
       .args_iter()
@@ -65,11 +80,21 @@ impl<'tcx> BodyExt<'tcx> for Body<'tcx> {
       .collect::<SmallVec<[Region<'tcx>; 8]>>()
       .into_iter()
   }
+
+  fn all_places(
+    &self,
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+  ) -> Self::PlacesIter<'_> {
+    self.local_decls.indices().flat_map(move |local| {
+      Place::from_local(local, tcx).interior_paths(tcx, self, def_id)
+    })
+  }
 }
 
 //------------------------------------------------
 
-/// Extension trait for [`Ty`]
+/// Extension trait for [`ty::Ty`]
 pub trait TyExt<'tcx> {
   type AllRegionsIter<'a>: Iterator<Item = Region<'tcx>>
   where

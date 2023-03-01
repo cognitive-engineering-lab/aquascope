@@ -273,6 +273,16 @@ fn report_region_violation(
   ir_mapper: &IRDiagnosticMapper,
   span_to_range: impl Fn(Span) -> Range + std::marker::Copy,
 ) -> Result<Option<RegionViolation>> {
+  let region_flows = ctxt.region_flows();
+
+  for &(from, to, p) in ctxt.polonius_input_facts.subset_base.iter() {
+    let is_violation = !region_flows.is_valid_flow(from, to);
+    let loc = ctxt.point_to_location(p);
+    if is_violation {
+      log::error!("FLOW VIOLATION @ {loc:?} {from:?} -> {to:?}");
+    }
+  }
+
   // We want to report an outlives constraint first because they
   // strictly happen between abstract regions.
   match report_region_outlives_violation(ctxt, ir_mapper, span_to_range) {

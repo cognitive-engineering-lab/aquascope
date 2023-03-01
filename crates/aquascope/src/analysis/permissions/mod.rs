@@ -1,4 +1,5 @@
 mod context;
+pub(crate) mod flow;
 #[allow(clippy::all, clippy::pedantic)]
 mod graphviz;
 mod output;
@@ -52,6 +53,7 @@ impl polonius_engine::Atom for PathIndex {
 // ------------------------------------------------
 // General Information
 
+pub type Origin = <AquascopeFacts as FactTypes>::Origin;
 pub type Path = <AquascopeFacts as FactTypes>::Path;
 pub type Point = <AquascopeFacts as FactTypes>::Point;
 pub type Loan = <AquascopeFacts as FactTypes>::Loan;
