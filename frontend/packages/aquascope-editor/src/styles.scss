@@ -545,6 +545,9 @@ $perm-animation-duration: 0.5s;
     }
 
     .step-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
       margin-bottom: 5px;
 
       .step-marker {
@@ -553,8 +556,8 @@ $perm-animation-duration: 0.5s;
       }
 
       .undefined-behavior {
-        margin-left: 10px;
         color: var(--aq-error);
+        max-width: 250px;
       }
     }
 

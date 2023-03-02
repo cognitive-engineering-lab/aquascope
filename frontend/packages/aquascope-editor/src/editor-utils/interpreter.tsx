@@ -507,6 +507,8 @@ let renderArrows = (
           // Stack -> stack pointers should point a little below the middle
           // to avoid conflicting with outgoing pointers.
           dstAnchor = LeaderLine.pointAnchor(ptr.dst, { x: "100%", y: "75%" });
+        } else if (ptr.endSocket == "bottom") {
+          dstAnchor = ptr.dst;
         } else {
           let x = dstRegion == "stack" ? 100 : 0;
 
@@ -559,6 +561,7 @@ let renderArrows = (
           if (!el) throw new Error(`Missing LineLeader element: ${sel}`);
           return el;
         });
+
         svgElements.forEach(el => arrowContainer.appendChild(el));
 
         return { line, svgElements };
@@ -597,14 +600,16 @@ let renderArrows = (
     }, 300);
 
     return () => {
+      clearInterval(interval);
       lines.forEach(({ svgElements }) => {
         svgElements.forEach(el => {
           el.parentNode!.removeChild(el);
         });
       });
-      clearInterval(interval);
     };
-  }, [config.concreteTypes]);
+  });
+  // Note: this effect must be re-run every time, since children *might* change
+  // their contents and invalidate DOM references held within LineLeader
 };
 
 let StepView = ({
