@@ -3,7 +3,7 @@ source: crates/aquascope/tests/stepper.rs
 description: add_big_strings@closure_0.test
 ---
 - - 0
-  - - - "(*src)[..]"
+  - - - "(*src)[_]"
       - is_live:
           type: High
           value: true
@@ -286,7 +286,7 @@ description: add_big_strings@closure_0.test
             type: High
             value: true
 - - 3
-  - - - "(*src)[..]"
+  - - - "(*src)[_]"
       - is_live:
           type: Low
         type_droppable:
