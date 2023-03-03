@@ -5,6 +5,7 @@ use anyhow::Result;
 use either::Either;
 use flowistry::mir::utils::{OperandExt, SpanExt};
 use path_visitor::get_path_boundaries;
+use rustc_data_structures::fx::FxHashSet as HashSet;
 use rustc_hir::HirId;
 use rustc_middle::{
   mir::{Body, Location, Place, Rvalue, Statement, StatementKind},
@@ -17,7 +18,9 @@ use ts_rs::TS;
 use crate::{
   analysis::{
     ir_mapper::{GatherDepth, IRMapper},
-    permissions::{Permissions, PermissionsCtxt, PermissionsData},
+    permissions::{
+      Origin, Permissions, PermissionsCtxt, PermissionsData, Point,
+    },
     AquascopeAnalysis,
   },
   errors,
@@ -54,6 +57,8 @@ impl PermissionsBoundary {
 struct PathBoundary {
   // The HirId node where we want to look for Places.
   pub hir_id: HirId,
+  // The upper-bound context for region flow.
+  pub flow_context: HirId,
   // The HirId that could provide additional places we don't
   // want to consider. This notably happens in an AssignOp where
   // the LHS and RHS Places get found together, however, the RHS
@@ -93,6 +98,30 @@ fn select_candidate_location<'tcx>(
       candidates.iter().find(|t| !others.contains(t)).copied()
     }
   }
+}
+
+fn flow_constraints_at_hir_id<'a, 'tcx: 'a>(
+  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  ir_mapper: &'a IRMapper<'a, 'tcx>,
+  hir_id: HirId,
+) -> Option<HashSet<(Origin, Origin, Point)>> {
+  let mir_locations =
+    ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested)?;
+
+  let all_constraints = mir_locations
+    .values()
+    .flat_map(|loc| {
+      let ps = ctxt.location_to_points(loc);
+      ctxt
+        .polonius_input_facts
+        .subset_base
+        .iter()
+        .filter(move |&(_, _, p)| ps.contains(p))
+        .copied()
+    })
+    .collect::<HashSet<_>>();
+
+  Some(all_constraints)
 }
 
 fn paths_at_hir_id<'a, 'tcx: 'a>(
@@ -183,6 +212,14 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
     )?;
 
     log::debug!("Chosen place at location {place:#?} {loc:#?} other options: {path_locations:#?}");
+
+    log::debug!(
+      "FLOW INFORMATION:\nBound {} ---\n{:#?}\nAt {} ---\n{:#?}",
+      hir.node_to_string(path_boundary.flow_context),
+      flow_constraints_at_hir_id(ctxt, ir_mapper, path_boundary.flow_context),
+      hir.node_to_string(path_boundary.hir_id),
+      flow_constraints_at_hir_id(ctxt, ir_mapper, path_boundary.hir_id)
+    );
 
     let point = ctxt.location_to_point(loc);
     let path = ctxt.place_to_path(&place);

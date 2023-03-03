@@ -1,8 +1,10 @@
 use anyhow::{bail, Result};
+use fluid_let::{fluid_let, fluid_set};
 use rustc_hir::{
   def::Res,
   intravisit::{self, Visitor},
-  BodyId, Expr, ExprKind, Mutability, Path, QPath, UnOp,
+  Block, Body, BodyId, Expr, ExprKind, HirId, Mutability, Path, QPath, Stmt,
+  UnOp,
 };
 use rustc_middle::{
   hir::nested_filter::OnlyBodies,
@@ -15,6 +17,9 @@ use rustc_span::Span;
 
 use super::{PathBoundary, Permissions};
 use crate::analysis::permissions::PermissionsCtxt;
+
+// The current region flow context for outer statements and returns.
+fluid_let!(pub static FLOW_CONTEXT: HirId);
 
 struct HirExprScraper<'a, 'tcx: 'a> {
   tcx: TyCtxt<'tcx>,
@@ -54,8 +59,33 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
     self.tcx.hir()
   }
 
+  // Visiting statements / body is only used for specifying a
+  // region flow context. This would not be used for RWO
+  // path boundaries.
+  fn visit_body(&mut self, body: &'tcx Body) {
+    fluid_set!(FLOW_CONTEXT, &body.value.hir_id);
+    intravisit::walk_body(self, body);
+  }
+
+  fn visit_stmt(&mut self, stmt: &'tcx Stmt) {
+    fluid_set!(FLOW_CONTEXT, &stmt.hir_id);
+    intravisit::walk_stmt(self, stmt);
+  }
+
+  fn visit_block(&mut self, block: &'tcx Block) {
+    for stmt in block.stmts.iter() {
+      self.visit_stmt(stmt);
+    }
+
+    if let Some(expr) = block.expr {
+      fluid_set!(FLOW_CONTEXT, expr.hir_id);
+      self.visit_expr(expr);
+    }
+  }
+
   fn visit_expr(&mut self, expr: &'tcx Expr) {
     let hir_id = expr.hir_id;
+    let flow_context = FLOW_CONTEXT.copied().unwrap_or(hir_id);
 
     log::debug!(
       "visiting {}\n\n",
@@ -75,6 +105,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
         let pb = PathBoundary {
           location: rcvr.span,
           hir_id: rcvr.hir_id,
+          flow_context,
           conflicting_node: None,
           expected: fn_sig.inputs()[0].into(),
         };
@@ -93,6 +124,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
         // taking a borrow provides explicit types.
         let pb = PathBoundary {
           hir_id,
+          flow_context,
           conflicting_node: None,
           location: inner.span.shrink_to_lo(),
           expected: Permissions {
@@ -128,6 +160,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
         let pb = PathBoundary {
           location: lhs.span.shrink_to_lo(),
           hir_id: lhs.hir_id,
+          flow_context,
           conflicting_node: Some(rhs.hir_id),
           expected: Permissions {
             read: true,
@@ -145,6 +178,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
       {
         let pb = PathBoundary {
           hir_id,
+          flow_context,
           conflicting_node: None,
           // We want the boundary to appear to the left of the deref.
           location: expr.span.shrink_to_lo(),
@@ -164,6 +198,7 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
       )) if !span.from_expansion() => {
         let pb = PathBoundary {
           hir_id,
+          flow_context,
           conflicting_node: None,
           location: span.shrink_to_lo(),
           expected: self.get_adjusted_permissions(expr),
