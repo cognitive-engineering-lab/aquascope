@@ -3,7 +3,7 @@ source: crates/aquascope/tests/stepper.rs
 description: find_nth@illegal_promotion_0.test
 ---
 - - 0
-  - - - "(*elems)[..]"
+  - - - "(*elems)[_]"
       - is_live:
           type: High
           value: true
