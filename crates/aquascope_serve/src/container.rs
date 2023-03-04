@@ -27,9 +27,6 @@ use {
     tempfile::{tempdir, TempDir},
 };
 
-const DEFAULT_IMAGE: &str = "aquascope";
-const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
-
 #[derive(Debug, Snafu)]
 pub enum Error {
     #[snafu(display("Bollard operation failed {}", source))]
@@ -53,6 +50,9 @@ pub enum Error {
 }
 
 pub type Result<T, E = Error> = ::std::result::Result<T, E>;
+
+const DEFAULT_IMAGE: &str = "aquascope";
+const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
 
 const DOCKER_TIMEOUT: Duration = Duration::from_secs(30);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
