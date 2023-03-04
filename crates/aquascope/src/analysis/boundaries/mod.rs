@@ -96,6 +96,7 @@ fn select_candidate_location<'tcx>(
   }
 }
 
+#[allow(clippy::wildcard_in_or_patterns)]
 fn paths_at_hir_id<'a, 'tcx: 'a>(
   tcx: TyCtxt<'tcx>,
   body: &'a Body<'tcx>,
@@ -134,22 +135,40 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
       {
         let mut found_so_far: SmallVec<[(Location, Place<'tcx>); 3]> =
           match rvalue {
-            Rvalue::Ref(_, _, place) if place.is_source_visible(tcx, body) => {
-              smallvec![(loc, *place)]
-            }
-            Rvalue::Use(op) => maybe_in_op!(loc, op),
-            Rvalue::BinaryOp(_, box (left_op, right_op)) => {
-              maybe_in_op!(loc, left_op, right_op)
-            }
-            Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
-              maybe_in_op!(loc, left_op, right_op)
-            }
-            Rvalue::CopyForDeref(place)
+            // Nested operand cases
+            Rvalue::Use(op)
+            | Rvalue::Repeat(op, _)
+            | Rvalue::Cast(_, op, _)
+            | Rvalue::UnaryOp(_, op)
+            | Rvalue::ShallowInitBox(op, _) => maybe_in_op!(loc, op),
+
+            // Given place cases.
+            Rvalue::Ref(_, _, place)
+            | Rvalue::AddressOf(_, place)
+            | Rvalue::Len(place)
+            | Rvalue::Discriminant(place)
+            | Rvalue::CopyForDeref(place)
               if place.is_source_visible(tcx, body) =>
             {
               smallvec![(loc, *place)]
             }
-            _ => {
+
+            // Two operand cases
+            Rvalue::BinaryOp(_, box (left_op, right_op))
+            | Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
+              maybe_in_op!(loc, left_op, right_op)
+            }
+
+            // Unimplemented cases, ignore nested information for now.
+            //
+            // These are separated in the or because they aren't impelemented,
+            // but still silently ignored.
+            Rvalue::ThreadLocalRef(..)
+            | Rvalue::NullaryOp(..)
+            | Rvalue::Aggregate(..)
+
+            // Wildcard for catching the previous guarded matches.
+            | _ => {
               log::warn!("couldn't find in RVALUE {rvalue:?}");
               smallvec![]
             }
