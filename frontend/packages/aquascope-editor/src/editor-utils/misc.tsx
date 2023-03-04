@@ -23,6 +23,7 @@ import {
 export const readChar = "R";
 export const writeChar = "W";
 export const dropChar = "O";
+export const flowChar = "F";
 
 // ----------
 // Interfaces

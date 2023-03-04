@@ -11,6 +11,7 @@ $transparent: rgba(0, 0, 0, 0);
   --aq-read-color: #ff9500;
   --aq-write-color: #0c7bdc;
   --aq-drop-color: #dc0055;
+  --aq-flow-color: #0c5534;
 
   --aq-read-rgb-color: 255, 149, 0;
   --aq-write-rgb-color: 12, 123, 220;
@@ -82,6 +83,11 @@ $glyph-width: 14px;
   &.drop {
     color: var(--aq-drop-color);
     -webkit-text-stroke-color: var(--aq-drop-color);
+  }
+
+  &.flow {
+    color: var(--aq-flow-color);
+    -webkit-text-stroke-color: var(--aq-flow-color);
   }
 }
 
@@ -315,20 +321,6 @@ $perm-animation-duration: 0.5s;
       }
     }
   }
-
-  // TODO(gavinleroy): this is just for testing, these shouldn't always be enabled
-  // nor should they be the same color as a permissions icon!
-  .aquascope-region-flow {
-    background-color: rgba(var(--aq-drop-rgb-color), 0.1);
-    border-radius: 5px;
-  }
-  .aquascope-escaping-local {
-    text-decoration: underline 3px var(--aq-read-color);
-  }
-  .aquascope-escaping-region {
-    text-decoration: underline 3px var(--aq-write-color);
-  }
-
 
   /* Permission Steps */
   .hidden-width {

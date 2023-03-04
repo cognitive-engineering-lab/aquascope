@@ -43,7 +43,9 @@ use rustc_data_structures::{
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
   graph::{scc::Sccs, vec_graph::VecGraph, WithSuccessors},
 };
+use serde::Serialize;
 use smallvec::SmallVec;
+use ts_rs::TS;
 
 use super::{Origin, PermissionsCtxt};
 
@@ -56,6 +58,20 @@ rustc_index::newtype_index! {
 impl polonius_engine::Atom for SccIdx {
   fn index(self) -> usize {
     rustc_index::vec::Idx::index(self)
+  }
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub enum FlowEdgeKind {
+  LocalOutlivesUniversal,
+  MissingUniversalConstraint,
+  Ok,
+}
+
+impl FlowEdgeKind {
+  pub fn is_valid_flow(&self) -> bool {
+    matches!(self, FlowEdgeKind::Ok)
   }
 }
 
@@ -167,31 +183,46 @@ impl RegionFlows {
     self.known_flows.contains(&(from, to))
   }
 
+  /// Get the specific kind of flow edge that connects `from` and `to`.
+  ///
+  /// **ASSUMED**: there must exists an edge between these two origins in the
+  /// flow constraint graph, this means that only edges from Polonius' `subset_base`
+  /// can be passed as arguments.
   #[allow(clippy::match_same_arms)]
-  pub(crate) fn is_valid_flow(&self, from: Origin, to: Origin) -> bool {
+  pub(crate) fn flow_kind(&self, from: Origin, to: Origin) -> FlowEdgeKind {
     // They're both placeholders, so just check flow constraints:
     match (self.get_abstract_kind(from), self.get_abstract_kind(to)) {
       // Case 1: flowing from an abstract source.
       // An abstract source means that the `to`
       (AbstractRegionKind::Source(from), AbstractRegionKind::Source(to)) => {
-        self.is_known_flow(from, to)
+        if self.is_known_flow(from, to) {
+          FlowEdgeKind::Ok
+        } else {
+          FlowEdgeKind::MissingUniversalConstraint
+        }
       }
       // We consider any case where an abstract source flowing into a concrete
       // region is OK. This could cause problems down the line, but it isn't a
       // problem *yet*.
-      (AbstractRegionKind::Source(_), _) => true,
+      (AbstractRegionKind::Source(_), _) => FlowEdgeKind::Ok,
 
       // Case 2: flowing from a concrete region potentially holding abstract region values.
       (AbstractRegionKind::Flowed(froms), AbstractRegionKind::Source(to)) => {
-        froms.iter().all(|&from| self.is_known_flow(from, to))
+        if froms.iter().all(|&from| self.is_known_flow(from, to)) {
+          FlowEdgeKind::Ok
+        } else {
+          FlowEdgeKind::MissingUniversalConstraint
+        }
       }
-      (AbstractRegionKind::Flowed(_), _) => true,
+      (AbstractRegionKind::Flowed(_), _) => FlowEdgeKind::Ok,
 
       // Case 3: flowing from a strictly concrete region.
       // Local region to abstract sink is disallowed.
-      (AbstractRegionKind::None, AbstractRegionKind::Source(_)) => false,
+      (AbstractRegionKind::None, AbstractRegionKind::Source(_)) => {
+        FlowEdgeKind::LocalOutlivesUniversal
+      }
       // Local region to anything else if *fine*.
-      (AbstractRegionKind::None, _) => true,
+      (AbstractRegionKind::None, _) => FlowEdgeKind::Ok,
     }
   }
 }

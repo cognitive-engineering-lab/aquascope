@@ -19,7 +19,8 @@ use crate::{
   analysis::{
     ir_mapper::{GatherDepth, IRMapper},
     permissions::{
-      Origin, Permissions, PermissionsCtxt, PermissionsData, Point,
+      flow::FlowEdgeKind, Origin, Permissions, PermissionsCtxt,
+      PermissionsData, Point,
     },
     AquascopeAnalysis,
   },
@@ -28,6 +29,17 @@ use crate::{
   Range,
 };
 
+/// A point where a region flow is introduced, potentially resulting in a violation.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct FlowBoundary {
+  // Used for simplicity in the frontend, later the extra information
+  // in the flow kind can be shown with extra details.
+  is_violation: bool,
+  flow_context: Range,
+  kind: FlowEdgeKind,
+}
+
 /// A point where the permissions reality are checked against their expectations.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
@@ -35,6 +47,8 @@ pub struct PermissionsBoundary {
   pub location: usize,
   pub expected: Permissions,
   pub actual: PermissionsData,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub expecting_flow: Option<FlowBoundary>,
 }
 
 impl PermissionsBoundary {
@@ -227,6 +241,18 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
     Some((point, path))
   };
 
+  // TODO: find a given flow within the context:
+  //
+  // Is there a flow violation in the context.
+  // => No, then just give it the right permissions.
+  // => Yes, look at the flow constraints for the specific
+  //         HIR Node, did it introduce constraints that are
+  //         involved in the violation?
+  //         => No, then say the flow is OK.
+  //         => Yes, find get the violation kind and report.
+  let context_flows_opt =
+    flow_constraints_at_hir_id(ctxt, ir_mapper, path_boundary.flow_context);
+
   // For a given Path, the MIR location may not be immediately associated with it.
   // For example, in a function call `foo( &x );`, the Hir Node::Path `&x` will not
   // have the MIR locations associated with it, the Hir Node::Call `foo( &x )` will,
@@ -249,6 +275,36 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
         .as_local(body.span)
         .unwrap_or(path_boundary.location);
 
+      // Search for relevant flows and flow violations.
+      let expecting_flow = flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)
+        .and_then(|specific_constraints| {
+          context_flows_opt.map(|context_constraints| {
+            let kind = context_constraints
+              .iter()
+              .find_map(|&(from, to, _)| {
+                let fk = ctxt.region_flows().flow_kind(from, to);
+                // We look for flows that are
+                // 1. Invalid
+                // 2. The local constraints create a context constraint
+                //    involved in the violation.
+                (!fk.is_valid_flow()
+                  && specific_constraints.iter().any(|&(_f, t, _)| t == from))
+                .then_some(fk)
+              })
+              .unwrap_or(FlowEdgeKind::Ok);
+
+            let raw_span = hir.span(path_boundary.flow_context);
+            let span = raw_span.as_local(body.span).unwrap_or(body.span);
+            let flow_context = span_to_range(span);
+
+            FlowBoundary {
+              is_violation: !kind.is_valid_flow(),
+              flow_context,
+              kind,
+            }
+          })
+        });
+
       // FIXME(gavinleroy): the spans are chosen in the `path_visitor` such that the end
       // of the span is where we want the stack to be placed. I would like to
       // make this a bit more explicit.
@@ -258,6 +314,7 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
         location,
         expected,
         actual,
+        expecting_flow,
       }
     })
 }

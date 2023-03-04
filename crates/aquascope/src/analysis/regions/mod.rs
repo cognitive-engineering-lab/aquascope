@@ -276,7 +276,7 @@ fn report_region_violation(
   let region_flows = ctxt.region_flows();
 
   for &(from, to, p) in ctxt.polonius_input_facts.subset_base.iter() {
-    let is_violation = !region_flows.is_valid_flow(from, to);
+    let is_violation = !region_flows.flow_kind(from, to).is_valid_flow();
     let loc = ctxt.point_to_location(p);
     if is_violation {
       log::error!("FLOW VIOLATION @ {loc:?} {from:?} -> {to:?}");

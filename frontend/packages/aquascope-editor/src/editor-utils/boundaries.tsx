@@ -12,6 +12,7 @@ import {
 } from "../types";
 import {
   dropChar,
+  flowChar,
   hideLoanRegion,
   hideMoveRegion,
   makeDecorationField,
@@ -151,6 +152,14 @@ let PermStack = ({
         hideLoanRegion(facts, data.loan_drop_refined, ["drop"]);
         hideMoveRegion(facts, data.path_moved, ["drop"]);
       },
+    },
+    {
+      content: flowChar,
+      names: ["perm", "flow"],
+      exp: boundary.expecting_flow !== undefined,
+      act: !boundary.expecting_flow?.is_violation ?? false,
+      showit: () => void null,
+      hideit: () => void null,
     },
   ];
 
