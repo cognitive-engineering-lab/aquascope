@@ -1,7 +1,7 @@
 use snafu::prelude::*;
 
-use std::process::Command;
-use std::{io, os::unix::fs::PermissionsExt, path::PathBuf, str};
+use std::{io, os::unix::fs::PermissionsExt, path::PathBuf, str, time::Duration};
+use tokio::{self, process::Command, time};
 
 use crate::{ServerResponse, SingleFileRequest};
 
@@ -44,9 +44,23 @@ pub enum Error {
     UnableToCreateSourceFile { source: io::Error },
     #[snafu(display("Unable to launch the docker container: {}", source))]
     UnableToStartDocker { source: io::Error },
+
+    #[snafu(display("Command execution took longer than {} ms", timeout.as_millis()))]
+    CommandExecTimedOut {
+        source: time::error::Elapsed,
+        timeout: Duration,
+    },
 }
 
 pub type Result<T, E = Error> = ::std::result::Result<T, E>;
+
+const DOCKER_TIMEOUT: Duration = Duration::from_secs(30);
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
+// Memory limit in bytes.
+const DOCKER_MEM_LIMIT: i64 = 256_000_000;
+// Swap limit in bytes (when MEM_LIMIT == SWAP_LIMIT no swap is allowed).
+const DOCKER_SWAP_LIMIT: i64 = 256_000_000;
+const DOCKER_PID_LIMIT: i64 = 32;
 
 #[cfg(not(feature = "no-docker"))]
 pub struct Container {
@@ -78,7 +92,7 @@ impl Container {
 
     #[cfg(not(feature = "no-docker"))]
     pub async fn new() -> Result<Self> {
-        let d = Docker::connect_with_local_defaults()?;
+        let d = Docker::connect_with_local_defaults()?.with_timeout(DOCKER_TIMEOUT);
         let docker = Arc::new(d);
         docker.ping().await?;
         let image = DEFAULT_IMAGE;
@@ -96,6 +110,9 @@ impl Container {
             tty: Some(true), // to keep the container alive
             image: Some(image),
             host_config: Some(HostConfig {
+                memory: Some(DOCKER_MEM_LIMIT),
+                memory_swap: Some(DOCKER_SWAP_LIMIT),
+                pids_limit: Some(DOCKER_PID_LIMIT),
                 binds: Some(vec![format!("{}:/mnt", mount_path.display())]),
                 ..Default::default()
             }),
@@ -152,10 +169,18 @@ impl Container {
 
     #[cfg(feature = "no-docker")]
     pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
-        let output = cmd
-            .current_dir(self.cwd())
-            .output()
-            .context(UnableToExecCommandSnafu)?;
+        let timeout = COMMAND_TIMEOUT;
+        let cmd = cmd.current_dir(self.cwd());
+        let timed_out = match time::timeout(timeout, cmd.output()).await {
+            Ok(Ok(output)) => Ok(output),
+            // failure
+            Ok(e @ Err(_)) => return e.map(|_| unreachable!()).context(UnableToExecCommandSnafu),
+            // timeout
+            Err(e) => Err(e),
+        };
+
+        let output = timed_out.context(CommandExecTimedOutSnafu { timeout })?;
+
         // TODO: FIXME
         let stdout = String::from_utf8(output.stdout).unwrap();
         let stderr = String::from_utf8(output.stderr).unwrap();
@@ -170,6 +195,8 @@ impl Container {
     // Returns (Stdout, Stderr)
     #[cfg(not(feature = "no-docker"))]
     pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
+        // Convert back to std::process::Command for acess to get_XXX functions.
+        let cmd = cmd.as_std();
         let args = iter::once(cmd.get_program())
             .chain(cmd.get_args())
             .map(|s| s.to_string_lossy().to_string())
@@ -211,12 +238,9 @@ impl Container {
                 .collect::<Vec<_>>()
                 .await;
 
-            // FIXME this definitely shouldn't be so verbose...
-            let (stdout, stderr): (Vec<_>, Vec<_>) = lines.iter().partition(|e| match e {
-                LogOutput::StdOut { message: _ } => true,
-                LogOutput::StdErr { message: _ } => false,
-                _ => unreachable!(),
-            });
+            let (stdout, stderr): (Vec<_>, Vec<_>) = lines
+                .iter()
+                .partition(|e| matches!(e, LogOutput::StdOut { .. }));
 
             let stdout = stdout
                 .iter()
@@ -263,10 +287,6 @@ impl Container {
 
         let mut cmd = Command::new("cargo");
         cmd.args(["new", "--bin", pwd, "--quiet"]);
-
-        // HACK: this is not good practice
-        // #[cfg(feature = "no-docker")]
-        // cmd.current_dir(self.workspace.path());
 
         let (output_s, stderr) = self.exec_output(&mut cmd).await?;
 
@@ -460,36 +480,105 @@ impl From<bollard::errors::Error> for Error {
     }
 }
 
-#[tokio::test]
-#[cfg(not(feature = "no-docker"))]
-async fn container_test() -> Result<()> {
-    let docker = Arc::new(Docker::connect_with_local_defaults()?);
-    docker.ping().await?;
-    let container = Container::with_docker(docker, DEFAULT_IMAGE).await?;
-    let mut cmd = Command::new("echo");
-    cmd.arg("hey");
-    let (output, _) = container.exec_output(&mut cmd).await?;
-    assert_eq!(output, "hey");
-    container.cleanup().await?;
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    Ok(())
-}
+    // HACK taken from the rust-playground:
+    // https://github.com/integer32llc/rust-playground/blob/master/ui/src/sandbox.rs#L1065-L1075
+    //
+    // Limits testing to one function at a time. Ensuring that containers
+    // have their full allotment when my local machine has fewer resources
+    // than the server.
+    fn one_test_at_a_time() -> impl Drop {
+        use lazy_static::lazy_static;
+        use std::sync::Mutex;
 
-#[tokio::test]
-async fn container_test_new_project() -> Result<()> {
-    let mut container = Container::new().await?;
-    container.cargo_new().await?;
-    assert!(container.project_dir.is_some());
-    let code = "fn main() { return 0; }";
-    container.write_source_code(code).await?;
+        lazy_static! {
+            static ref DOCKER_SINGLETON: Mutex<()> = Default::default();
+        }
 
-    let main_rs = container.main_abs_path();
-    let mut cmd = Command::new("cat");
-    cmd.arg(&main_rs);
+        // We can't poison the empty tuple
+        DOCKER_SINGLETON.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
-    let (output, _) = container.exec_output(&mut cmd).await?;
-    assert_eq!(output, code);
-    container.cleanup().await?;
+    #[tokio::test]
+    #[cfg(not(feature = "no-docker"))]
+    async fn container_test() -> Result<()> {
+        let _s = one_test_at_a_time();
+        let docker = Arc::new(Docker::connect_with_local_defaults()?);
+        docker.ping().await?;
+        let container = Container::with_docker(docker, DEFAULT_IMAGE).await?;
+        let mut cmd = Command::new("echo");
+        cmd.arg("hey");
+        let (output, _) = container.exec_output(&mut cmd).await?;
+        assert_eq!(output, "hey");
+        container.cleanup().await?;
 
-    Ok(())
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn container_test_new_project() -> Result<()> {
+        let _s = one_test_at_a_time();
+        let code = "fn main() { return 0; }";
+        let mut container = Container::new().await?;
+        container.cargo_new().await.expect("cargo new");
+        assert!(container.project_dir.is_some());
+        container.write_source_code(code).await?;
+        let main_rs = container.main_abs_path();
+        let mut cmd = Command::new("cat");
+        cmd.arg(&main_rs);
+
+        let (output, _) = container.exec_output(&mut cmd).await?;
+        assert_eq!(output, code);
+        container.cleanup().await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg(not(feature = "no-docker"))]
+    async fn container_has_timeout() -> Result<()> {
+        let _s = one_test_at_a_time();
+        let code = r#"
+            fn main() {
+                let a_long_time = std::time::Duration::from_secs(120);
+                loop {
+                    std::thread::sleep(a_long_time);
+                }
+            }
+        "#
+        .to_string();
+        let container = Container::new().await?;
+        let req = SingleFileRequest { code, config: None };
+        let res = container.interpreter(&req).await?;
+
+        assert!(!res.success);
+        assert!(res.stderr.contains("status: 101"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg(not(feature = "no-docker"))]
+    async fn container_has_memory_limit() -> Result<()> {
+        let _s = one_test_at_a_time();
+        let code = r#"
+            fn main() {
+                let gigabyte = 1024 * 1024 * 1024;
+                let mut big = vec![0u8; 1 * gigabyte];
+                for i in &mut big { *i += 1; }
+            }
+        "#
+        .to_string();
+        let container = Container::new().await?;
+        let req = SingleFileRequest { code, config: None };
+        let res = container.interpreter(&req).await?;
+
+        assert!(!res.success);
+        assert!(res.stderr.contains("SIGKILL"));
+
+        Ok(())
+    }
 }
