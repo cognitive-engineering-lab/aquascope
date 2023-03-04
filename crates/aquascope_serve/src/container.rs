@@ -57,9 +57,9 @@ const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
 const DOCKER_TIMEOUT: Duration = Duration::from_secs(30);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 // Memory limit in bytes.
-const DOCKER_MEM_LIMIT: i64 = 256_000_000;
+const DOCKER_MEM_LIMIT: i64 = 512_000_000;
 // Swap limit in bytes (when MEM_LIMIT == SWAP_LIMIT no swap is allowed).
-const DOCKER_SWAP_LIMIT: i64 = 256_000_000;
+const DOCKER_SWAP_LIMIT: i64 = 512_000_000;
 const DOCKER_PID_LIMIT: i64 = 32;
 
 #[cfg(not(feature = "no-docker"))]
