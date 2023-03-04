@@ -38,16 +38,19 @@
 //!
 //! TODO
 
+use flowistry::mir::utils::PlaceExt;
 use itertools::Itertools;
+use rustc_borrowck::borrow_set::BorrowData;
 use rustc_data_structures::{
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
   graph::{scc::Sccs, vec_graph::VecGraph, WithSuccessors},
 };
+use rustc_middle::mir::Place;
 use serde::Serialize;
 use smallvec::SmallVec;
 use ts_rs::TS;
 
-use super::{Origin, PermissionsCtxt};
+use super::{places_conflict, Origin, PermissionsCtxt};
 
 rustc_index::newtype_index! {
   pub struct SccIdx {
@@ -66,6 +69,10 @@ impl polonius_engine::Atom for SccIdx {
 pub enum FlowEdgeKind {
   LocalOutlivesUniversal,
   MissingUniversalConstraint,
+  // NOTE: this case is not disjoint from `LocalOutlivesUniversal`,
+  // but is reported after the other because it happens in more rare cases
+  // and I find the former more important to bring attention to.
+  LocalInvalidatedAtExit,
   Ok,
 }
 
@@ -155,6 +162,9 @@ pub struct RegionFlows {
   /// Local regions that point to a body-owned value.
   local_sources: HashSet<SccIdx>,
 
+  /// Local regions that could dangle due to an exit invalidation.
+  dangling_local_sources: HashSet<SccIdx>,
+
   /// The set of abstract components that a given component could contain.
   contains_abstract: HashMap<SccIdx, HashSet<SccIdx>>,
 
@@ -201,35 +211,41 @@ impl RegionFlows {
           FlowEdgeKind::MissingUniversalConstraint
         }
       }
-      // We consider any case where an abstract source flowing into a concrete
-      // region is OK. This could cause problems down the line, but it isn't a
-      // problem *yet*.
+      // We consider any case where an abstract source flowing into a concrete region is OK.
       (AbstractRegionKind::Source(_), _) => FlowEdgeKind::Ok,
 
       // Case 2: flowing from a concrete region potentially holding abstract region values.
-      (AbstractRegionKind::Flowed(froms), AbstractRegionKind::Source(to)) => {
-        if froms.iter().all(|&from| self.is_known_flow(from, to)) {
-          FlowEdgeKind::Ok
-        } else {
-          FlowEdgeKind::MissingUniversalConstraint
-        }
+      (AbstractRegionKind::Flowed(froms), AbstractRegionKind::Source(to))
+        if !froms.iter().all(|&from| self.is_known_flow(from, to)) =>
+      {
+        FlowEdgeKind::MissingUniversalConstraint
       }
-      (AbstractRegionKind::Flowed(_), _) => FlowEdgeKind::Ok,
 
       // Case 3: flowing from a strictly concrete region.
       // Local region to abstract sink is disallowed.
       (AbstractRegionKind::None, AbstractRegionKind::Source(_)) => {
         FlowEdgeKind::LocalOutlivesUniversal
       }
-      // Local region to anything else if *fine*.
-      (AbstractRegionKind::None, _) => FlowEdgeKind::Ok,
+
+      // Case 4: if the region data is flowing from could contain a dangling
+      // pointer we report this as a flow violation (though, I'm not 100%
+      // confident here).
+      (_, _) => {
+        let from = self.constraint_graph.scc(from);
+        let empty_hash = HashSet::default();
+
+        let locals = self.contains_local.get(&from).unwrap_or(&empty_hash);
+        if locals.intersection(&self.dangling_local_sources).count() == 0 {
+          FlowEdgeKind::Ok
+        } else {
+          FlowEdgeKind::LocalInvalidatedAtExit
+        }
+      }
     }
   }
 }
 
 pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
-  log::debug!("DEBUGGING REGIONS");
-
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
 
@@ -259,6 +275,28 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     .iter()
     .map(|&(o1, o2, _)| (o1, o2))
     .collect::<Vec<_>>();
+
+  log::debug!("SUBSET BASE ---\n{:#?}", {
+    let mut v = constraints.clone();
+    v.sort();
+    v.dedup();
+    v
+  });
+
+  log::debug!("ERRORS ---\n{:#?}", {
+    ctxt
+      .polonius_output
+      .errors
+      .iter()
+      .map(|(point, loans)| {
+        let loc = ctxt.point_to_location(*point);
+        (loc, loans)
+      })
+      .collect::<Vec<_>>()
+  });
+  log::debug!("SUBSET ERRORS ---\n{:#?}", {
+    &ctxt.polonius_output.subset_errors
+  });
 
   let vertices = flat_nodes!(constraints).collect::<Vec<_>>();
   let placeholders = ctxt
@@ -301,8 +339,6 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     })
     .collect::<HashSet<_>>();
 
-  log::debug!("local_sources");
-
   let local_sources = ctxt
     .borrow_set
     .location_map
@@ -314,14 +350,10 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     })
     .collect::<HashSet<_>>();
 
-  log::debug!("abstract_sources");
-
   let abstract_sources = placeholders
     .iter()
     .map(|origin| scc_constraints.scc(*origin))
     .collect::<HashSet<_>>();
-
-  log::debug!("contains_abtract");
 
   let contains_abstract = abstract_sources
     .iter()
@@ -343,8 +375,6 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
       },
     );
 
-  log::debug!("contains_local");
-
   let contains_local = local_sources
     .iter()
     .map(|&source| {
@@ -365,14 +395,78 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
       },
     );
 
+  let dangling_local_sources = ctxt
+    .polonius_output
+    .errors
+    .iter()
+    .filter_map(|(_, loans)| {
+      loans.iter().find_map(|&loan| {
+        let bd = ctxt.loan_to_borrow(loan);
+        check_for_invalidation_at_exit(ctxt, bd)
+          .then_some(scc_constraints.scc(bd.region))
+      })
+    })
+    .collect::<HashSet<_>>();
+
   let region_flows = RegionFlows {
     constraint_graph: scc_constraints,
     known_flows,
     abstract_sources,
     local_sources,
+    dangling_local_sources,
     contains_abstract,
     contains_local,
   };
 
   ctxt.region_flows = Some(region_flows);
+}
+
+/// Check if the given borrow is invalidated by an exit point.
+///
+/// Exit point would refer to a `StorageDead` or `Drop`.
+fn check_for_invalidation_at_exit<'tcx>(
+  ctxt: &PermissionsCtxt<'_, 'tcx>,
+  borrow: &BorrowData<'tcx>,
+) -> bool {
+  use places_conflict::AccessDepth::Shallow;
+
+  let place = borrow.borrowed_place;
+  let tcx = ctxt.tcx;
+  let body = &ctxt.body_with_facts.body;
+
+  let root_place = Place::from_local(place.local, tcx);
+
+  // let mut root_place = PlaceRef {
+  //   local: place.local,
+  //   projection: &[],
+  // };
+
+  // let (might_be_alive, will_be_dropped) =
+  //   if self.body.local_decls[root_place.local].is_ref_to_thread_local() {
+  //     // Thread-locals might be dropped after the function exits
+  //     // We have to dereference the outer reference because
+  //     // borrows don't conflict behind shared references.
+  //     root_place.projection = TyCtxtConsts::DEREF_PROJECTION;
+  //     (true, true)
+  //   } else {
+  //     (false, self.locals_are_invalidated_at_exit)
+  //   };
+
+  // if !will_be_dropped {
+  //   debug!("place_is_invalidated_at_exit({:?}) - won't be dropped", place);
+  //   return;
+  // }
+
+  // let sd = if might_be_alive { Deep } else { Shallow(None) };
+  let sd = Shallow(None);
+
+  places_conflict::borrow_conflicts_with_place(
+    tcx,
+    body,
+    place,
+    borrow.kind,
+    root_place.as_ref(),
+    sd,
+    places_conflict::PlaceConflictBias::Overlap,
+  )
 }

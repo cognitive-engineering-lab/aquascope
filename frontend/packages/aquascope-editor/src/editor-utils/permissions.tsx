@@ -4,7 +4,6 @@ import _ from "lodash";
 
 import { AnalysisOutput, AquascopeAnnotations } from "../types";
 import { boundariesField, makeBoundaryDecorations } from "./boundaries";
-import { regionField, makeRegionDecorations } from "./regions";
 import {
   ActionFacts,
   generateAnalysisDecorationFacts,
@@ -20,7 +19,6 @@ export interface PermissionsCfg {
 export interface PermissionsDecorations {
   stepper: Range<Decoration>[];
   boundaries: Range<Decoration>[];
-  regions: Range<Decoration>[];
   facts: ActionFacts[];
 }
 
@@ -31,7 +29,6 @@ export function makePermissionsDecorations(
 ): PermissionsDecorations {
   let stepDecos: Range<Decoration>[][] = [];
   let boundaryDecos: Range<Decoration>[][] = [];
-  let regionDecos: Range<Decoration>[][] = [];
   let actionDecos: ActionFacts[][] = [];
 
   results.forEach(res => {
@@ -44,17 +41,14 @@ export function makePermissionsDecorations(
       annotations?.boundaries
     );
     let ss = makeStepDecorations(view, facts, res.steps, annotations?.stepper);
-    let rs = makeRegionDecorations(view, res.region_violation);
     boundaryDecos.push(bs);
     stepDecos.push(ss);
-    regionDecos.push(rs);
     actionDecos.push(actionFacts);
   });
 
   return {
     stepper: stepDecos.flat(),
     boundaries: _.uniqBy(boundaryDecos.flat(), d => d.from),
-    regions: regionDecos.flat(),
     facts: actionDecos.flat(),
   };
 }
@@ -75,7 +69,6 @@ export function renderPermissions(
         boundariesField.setEffect.of(
           useBoundaries ? decorations.boundaries : []
         ),
-        regionField.setEffect.of(decorations.regions),
       ],
     });
   }

@@ -7,7 +7,6 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { boundariesField } from "./editor-utils/boundaries";
-import { regionField } from "./editor-utils/regions";
 import {
   InterpreterConfig,
   markerField,
@@ -105,7 +104,6 @@ let resetMarkedRangesOnEdit = EditorView.updateListener.of(
         effects: [
           boundariesField.setEffect.of([]),
           stepField.setEffect.of([]),
-          regionField.setEffect.of([]),
           markerField.setEffect.of([]),
         ],
       });
@@ -157,7 +155,6 @@ export class Editor {
         loanFactsField,
         boundariesField.field,
         stepField.field,
-        regionField.field,
         markerField.field,
       ],
     });

@@ -1,7 +1,6 @@
 //! Main data structure for mapping HIR to MIR and vice-versa.
 pub(crate) mod body_graph;
 #[allow(dead_code)]
-pub(crate) mod diagnostics;
 pub(crate) mod mir_locations;
 pub(crate) mod post_dominators;
 // pub(crate) mod region_name;
