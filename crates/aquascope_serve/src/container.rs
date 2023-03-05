@@ -54,13 +54,17 @@ pub type Result<T, E = Error> = ::std::result::Result<T, E>;
 const DEFAULT_IMAGE: &str = "aquascope";
 const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
 
-const DOCKER_TIMEOUT: Duration = Duration::from_secs(30);
-const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 // Memory limit in bytes.
 const DOCKER_MEM_LIMIT: i64 = 512_000_000;
 // Swap limit in bytes (when MEM_LIMIT == SWAP_LIMIT no swap is allowed).
 const DOCKER_SWAP_LIMIT: i64 = 512_000_000;
 const DOCKER_PID_LIMIT: i64 = 32;
+// Default docker `--cpu-quota` is 100000 microseconds
+// `--cpus` is a better flag to use but Bollard doesn't provide this.
+const DOCKER_CPU_PERIOD: i64 = 100_000;
+// Cap a container to use 50% of one available CPU.
+const DOCKER_CPU_QUOTA: i64 = DOCKER_CPU_PERIOD / 2;
 
 #[cfg(not(feature = "no-docker"))]
 pub struct Container {
@@ -92,7 +96,7 @@ impl Container {
 
     #[cfg(not(feature = "no-docker"))]
     pub async fn new() -> Result<Self> {
-        let d = Docker::connect_with_local_defaults()?.with_timeout(DOCKER_TIMEOUT);
+        let d = Docker::connect_with_local_defaults()?.with_timeout(COMMAND_TIMEOUT);
         let docker = Arc::new(d);
         docker.ping().await?;
         let image = DEFAULT_IMAGE;
@@ -110,6 +114,8 @@ impl Container {
             tty: Some(true), // to keep the container alive
             image: Some(image),
             host_config: Some(HostConfig {
+                cpu_period: Some(DOCKER_CPU_PERIOD),
+                cpu_quota: Some(DOCKER_CPU_QUOTA),
                 memory: Some(DOCKER_MEM_LIMIT),
                 memory_swap: Some(DOCKER_SWAP_LIMIT),
                 pids_limit: Some(DOCKER_PID_LIMIT),
@@ -225,18 +231,37 @@ impl Container {
             })
             .await?;
 
-        if let StartExecResults::Attached { output, .. } = exec {
-            let lines = output
-                .filter_map(|log| async move {
-                    match log {
-                        Ok(LogOutput::StdOut { message }) => Some(LogOutput::StdOut { message }),
+        macro_rules! get_variant_as_string {
+            ($id:path, $e:expr) => {
+                if let $id { message } = $e {
+                    String::from_utf8_lossy(message.as_ref()).to_string()
+                } else {
+                    unreachable!()
+                }
+            };
+        }
 
-                        Ok(LogOutput::StdErr { message }) => Some(LogOutput::StdErr { message }),
-                        _ => None,
-                    }
-                })
-                .collect::<Vec<_>>()
-                .await;
+        if let StartExecResults::Attached { output, .. } = exec {
+            let timeout = COMMAND_TIMEOUT;
+            let lines = time::timeout(
+                timeout,
+                output
+                    .filter_map(|log| async move {
+                        match log {
+                            Ok(LogOutput::StdOut { message }) => {
+                                Some(LogOutput::StdOut { message })
+                            }
+
+                            Ok(LogOutput::StdErr { message }) => {
+                                Some(LogOutput::StdErr { message })
+                            }
+                            _ => None,
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .context(CommandExecTimedOutSnafu { timeout })?;
 
             let (stdout, stderr): (Vec<_>, Vec<_>) = lines
                 .iter()
@@ -244,24 +269,12 @@ impl Container {
 
             let stdout = stdout
                 .iter()
-                .map(|stdout| {
-                    if let LogOutput::StdOut { message } = stdout {
-                        String::from_utf8_lossy(message.as_ref()).to_string()
-                    } else {
-                        unreachable!()
-                    }
-                })
+                .map(|stdout| get_variant_as_string!(LogOutput::StdOut, stdout))
                 .collect::<Vec<_>>();
 
             let stderr = stderr
                 .iter()
-                .map(|stderr| {
-                    if let LogOutput::StdErr { message } = stderr {
-                        String::from_utf8_lossy(message.as_ref()).to_string()
-                    } else {
-                        unreachable!()
-                    }
-                })
+                .map(|stderr| get_variant_as_string!(LogOutput::StdErr, stderr))
                 .collect::<Vec<_>>();
 
             Ok((
@@ -512,8 +525,8 @@ mod test {
         let mut cmd = Command::new("echo");
         cmd.arg("hey");
         let (output, _) = container.exec_output(&mut cmd).await?;
-        assert_eq!(output, "hey");
         container.cleanup().await?;
+        assert_eq!(output, "hey");
 
         Ok(())
     }
@@ -531,8 +544,8 @@ mod test {
         cmd.arg(&main_rs);
 
         let (output, _) = container.exec_output(&mut cmd).await?;
-        assert_eq!(output, code);
         container.cleanup().await?;
+        assert_eq!(output, code);
 
         Ok(())
     }
@@ -543,10 +556,7 @@ mod test {
         let _s = one_test_at_a_time();
         let code = r#"
             fn main() {
-                let a_long_time = std::time::Duration::from_secs(120);
-                loop {
-                    std::thread::sleep(a_long_time);
-                }
+                loop {}
             }
         "#
         .to_string();
@@ -554,8 +564,10 @@ mod test {
         let req = SingleFileRequest { code, config: None };
         let res = container.interpreter(&req).await?;
 
+        container.cleanup().await?;
+
         assert!(!res.success);
-        assert!(res.stderr.contains("status: 101"));
+        assert!(res.stderr.contains("SIGKILL"));
 
         Ok(())
     }
@@ -575,6 +587,8 @@ mod test {
         let container = Container::new().await?;
         let req = SingleFileRequest { code, config: None };
         let res = container.interpreter(&req).await?;
+
+        container.cleanup().await?;
 
         assert!(!res.success);
         assert!(res.stderr.contains("SIGKILL"));
