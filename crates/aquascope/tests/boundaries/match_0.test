@@ -1,0 +1,11 @@
+fn main() {
+  let opt: Option<String> =
+    Some(String::from("Hello world"));
+
+  match opt {
+    Some(_) => println!("Some!"),
+    None => println!("None!")
+  };
+
+  drop(opt);
+}
