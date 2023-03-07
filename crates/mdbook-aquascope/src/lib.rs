@@ -3,6 +3,7 @@
 mod annotations;
 mod block;
 mod cache;
+mod permissions;
 mod preprocessor;
 
 pub use cache::CACHE_PATH;

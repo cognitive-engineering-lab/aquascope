@@ -180,13 +180,19 @@ impl AquascopePreprocessor {
     content: &str,
   ) -> Result<Vec<(std::ops::Range<usize>, String)>> {
     let to_process = AquascopeBlock::parse_all(content);
-    let replacements = to_process
+    let mut replacements = to_process
       .into_par_iter()
       .map(|(range, block)| {
         let html = self.process_code(block)?;
         Ok((range, html))
       })
       .collect::<Result<Vec<_>>>()?;
+
+    replacements.extend(
+      crate::permissions::parse_perms(content).collect::<Result<Vec<_>>>()?,
+    );
+
+    replacements.sort_by_key(|(range, _)| range.start);
 
     Ok(replacements)
   }

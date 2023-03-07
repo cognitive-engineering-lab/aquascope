@@ -43,6 +43,8 @@ let PermChar = ({
 }) => {
   // FIXME: don't reverse the abbreviated content.
 
+  // ~~~~ IMPORTANT MAINTENANCE NOTE ~~~~
+  // Any changes to this HTML must be propagated to permissions.rs in mdbook-aquascope!
   let getInner = () => {
     let kind = permName(perm.perm);
     let Perm: React.FC<React.PropsWithChildren> = ({ children }) => (
