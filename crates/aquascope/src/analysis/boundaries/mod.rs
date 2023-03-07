@@ -5,7 +5,6 @@ use anyhow::Result;
 use either::Either;
 use flowistry::mir::utils::{OperandExt, SpanExt};
 use path_visitor::get_path_boundaries;
-use rustc_data_structures::fx::FxHashSet as HashSet;
 use rustc_hir::HirId;
 use rustc_middle::{
   mir::{Body, Location, Place, Rvalue, Statement, StatementKind},
@@ -114,11 +113,14 @@ fn select_candidate_location<'tcx>(
   }
 }
 
+/// Return the constraints that occur nested within a [`HirId`].
+///
+/// Note, constraints involving regions belonging to the same SCC are removed.
 fn flow_constraints_at_hir_id<'a, 'tcx: 'a>(
   ctxt: &'a PermissionsCtxt<'a, 'tcx>,
   ir_mapper: &'a IRMapper<'a, 'tcx>,
   hir_id: HirId,
-) -> Option<HashSet<(Origin, Origin, Point)>> {
+) -> Option<Vec<(Origin, Origin, Point)>> {
   let mir_locations =
     ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested)?;
 
@@ -126,14 +128,17 @@ fn flow_constraints_at_hir_id<'a, 'tcx: 'a>(
     .values()
     .flat_map(|loc| {
       let ps = ctxt.location_to_points(loc);
+      let region_flows = ctxt.region_flows();
       ctxt
         .polonius_input_facts
         .subset_base
         .iter()
-        .filter(move |&(_, _, p)| ps.contains(p))
+        .filter(move |&(f, t, p)| {
+          region_flows.scc(*f) != region_flows.scc(*t) && ps.contains(p)
+        })
         .copied()
     })
-    .collect::<HashSet<_>>();
+    .collect::<Vec<_>>();
 
   Some(all_constraints)
 }
@@ -241,7 +246,7 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
     Some((point, path))
   };
 
-  // TODO: find a given flow within the context:
+  // Find a given flow within the context:
   //
   // Is there a flow violation in the context.
   // => No, then just give it the right permissions.
@@ -250,8 +255,27 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
   //         involved in the violation?
   //         => No, then say the flow is OK.
   //         => Yes, find get the violation kind and report.
+  let region_flows = ctxt.region_flows();
+
+  let has_abstract_on_rhs = |flows: &[(Origin, Origin, Point)]| {
+    flows
+      .iter()
+      .any(|&(_, t, _)| region_flows.is_abstract_mem(t))
+  };
+
   let context_flows_opt =
-    flow_constraints_at_hir_id(ctxt, ir_mapper, path_boundary.flow_context);
+    flow_constraints_at_hir_id(ctxt, ir_mapper, path_boundary.flow_context)
+      .and_then(|flows| {
+        // FIXME: current restriction, only look at constraints when
+        // an abstract equivalent region is on the right-hand-side.
+        //
+        // This covers the cases:
+        // - missing abstract-outlives-abstract constraint.
+        // - local outlives abstract.
+        has_abstract_on_rhs(&flows).then_some(flows)
+      });
+
+  log::debug!("flow context edges ---:\n{context_flows_opt:#?}");
 
   // For a given Path, the MIR location may not be immediately associated with it.
   // For example, in a function call `foo( &x );`, the Hir Node::Path `&x` will not
@@ -278,16 +302,21 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
       // Search for relevant flows and flow violations.
       let expecting_flow = flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)
         .and_then(|specific_constraints| {
+          log::debug!(
+            "HirId local constraints ---:\n{specific_constraints:#?}"
+          );
+
           context_flows_opt.map(|context_constraints| {
             let kind = context_constraints
               .iter()
               .find_map(|&(from, to, _)| {
-                let fk = ctxt.region_flows().flow_kind(from, to);
+                let fk = region_flows.flow_kind(from, to);
                 // We look for flows that are
                 // 1. Invalid
                 // 2. The local constraints create a context constraint
                 //    involved in the violation.
-                (!fk.is_valid_flow()
+                (region_flows.is_abstract_mem(to)
+                  && !fk.is_valid_flow()
                   && specific_constraints.iter().any(|&(_f, t, _)| t == from))
                 .then_some(fk)
               })
@@ -330,14 +359,18 @@ pub(crate) fn compute_boundaries<'a>(
     .into_iter()
     .filter_map(|pb| path_to_perm_boundary(pb, ctxt, ir_mapper, span_to_range));
 
+  // FIXME: we need a more robust way of filtering by "first error".
+  // Here (and in the stepper) we do this by diagnostic span from rustc
+  // but that can sometimes be a little earlier than we might want.
   let first_error_span_opt =
     errors::get_span_of_first_error(ctxt.def_id.expect_local())
       .and_then(|s| s.as_local(ctxt.body_with_facts.body.span));
 
   let boundaries = path_use_points
     .filter(|pb| {
-      first_error_span_opt
-        .map_or(true, |error_span| (pb.location as u32) <= error_span.hi().0)
+      first_error_span_opt.map_or(true, |error_span| {
+        pb.expecting_flow.is_some() || (pb.location as u32) <= error_span.hi().0
+      })
     })
     .collect::<Vec<_>>();
 

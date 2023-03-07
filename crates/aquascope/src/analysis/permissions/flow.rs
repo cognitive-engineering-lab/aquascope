@@ -38,19 +38,18 @@
 //!
 //! TODO
 
-use flowistry::mir::utils::PlaceExt;
 use itertools::Itertools;
 use rustc_borrowck::borrow_set::BorrowData;
-use rustc_data_structures::{
-  fx::{FxHashMap as HashMap, FxHashSet as HashSet},
-  graph::{scc::Sccs, vec_graph::VecGraph, WithSuccessors},
+use rustc_data_structures::graph::{
+  scc::Sccs, vec_graph::VecGraph, WithSuccessors,
 };
-use rustc_middle::mir::Place;
+use rustc_index::bit_set::{BitMatrix, BitSet};
 use serde::Serialize;
 use smallvec::SmallVec;
 use ts_rs::TS;
 
 use super::{places_conflict, Origin, PermissionsCtxt};
+use crate::mir::utils::{BodyExt, ToRegionVid};
 
 rustc_index::newtype_index! {
   pub struct SccIdx {
@@ -88,7 +87,7 @@ enum AbstractRegionKind {
 
   // The region can be reached from the given sinks
   // (but is itself not an SCC member).
-  Flowed(HashSet<SccIdx>),
+  Flowed(BitSet<SccIdx>),
 
   // Not an abstract region.
   None,
@@ -148,49 +147,63 @@ enum AbstractRegionKind {
 ///
 /// flow_violation(Origin0, Origin1) :-
 ///   TODO.
+
+// TODO we might be able to make some of these sparse matrices, I haven't
+// gathered too much data on the actual edges yet.
 #[allow(dead_code)]
 pub struct RegionFlows {
   /// The flow constraint graph over the `subset_base` relation.
   constraint_graph: Sccs<Origin, SccIdx>,
 
   /// Full set of known flows per the `known_placeholder_subset` relation.
-  known_flows: HashSet<(SccIdx, SccIdx)>,
+  known_flows: BitMatrix<SccIdx, SccIdx>,
 
   /// Components that contain a placeholder region.
-  abstract_sources: HashSet<SccIdx>,
+  abstract_sources: BitSet<SccIdx>,
 
   /// Local regions that point to a body-owned value.
-  local_sources: HashSet<SccIdx>,
+  local_sources: BitSet<SccIdx>,
 
   /// Local regions that could dangle due to an exit invalidation.
-  dangling_local_sources: HashSet<SccIdx>,
+  dangling_local_sources: BitSet<SccIdx>,
 
   /// The set of abstract components that a given component could contain.
-  contains_abstract: HashMap<SccIdx, HashSet<SccIdx>>,
+  contains_abstract: BitMatrix<SccIdx, SccIdx>,
 
   /// The set of local components that a given component could contain.
-  contains_local: HashMap<SccIdx, HashSet<SccIdx>>,
+  contains_local: BitMatrix<SccIdx, SccIdx>,
 }
 
 impl RegionFlows {
   fn get_abstract_kind(&self, origin: Origin) -> AbstractRegionKind {
-    let sccid = self.constraint_graph.scc(origin);
-    self
-      .abstract_sources
-      .iter()
-      .any(|&id| sccid == id)
-      .then_some(AbstractRegionKind::Source(sccid))
-      .or_else(|| {
-        self
-          .contains_abstract
-          .get(&sccid)
-          .map(|sources| AbstractRegionKind::Flowed(sources.clone()))
-      })
-      .unwrap_or_else(|| AbstractRegionKind::None)
+    let scc = self.constraint_graph.scc(origin);
+    if self.abstract_sources.contains(scc) {
+      return AbstractRegionKind::Source(scc);
+    }
+
+    if self.contains_abstract.count(scc) > 0 {
+      // XXX: do we really need to (or want to) do this?
+      let mut sources = BitSet::new_empty(self.constraint_graph.num_sccs());
+      for s in self.contains_abstract.iter(scc) {
+        sources.insert(s);
+      }
+      return AbstractRegionKind::Flowed(sources);
+    }
+
+    AbstractRegionKind::None
+  }
+
+  pub fn scc(&self, origin: Origin) -> SccIdx {
+    self.constraint_graph.scc(origin)
   }
 
   fn is_known_flow(&self, from: SccIdx, to: SccIdx) -> bool {
-    self.known_flows.contains(&(from, to))
+    self.known_flows.contains(from, to)
+  }
+
+  pub fn is_abstract_mem(&self, origin: Origin) -> bool {
+    let scc = self.constraint_graph.scc(origin);
+    self.contains_abstract.count(scc) > 0
   }
 
   /// Get the specific kind of flow edge that connects `from` and `to`.
@@ -216,7 +229,7 @@ impl RegionFlows {
 
       // Case 2: flowing from a concrete region potentially holding abstract region values.
       (AbstractRegionKind::Flowed(froms), AbstractRegionKind::Source(to))
-        if !froms.iter().all(|&from| self.is_known_flow(from, to)) =>
+        if !froms.iter().all(|from| self.is_known_flow(from, to)) =>
       {
         FlowEdgeKind::MissingUniversalConstraint
       }
@@ -232,14 +245,13 @@ impl RegionFlows {
       // confident here).
       (_, _) => {
         let from = self.constraint_graph.scc(from);
-        let empty_hash = HashSet::default();
-
-        let locals = self.contains_local.get(&from).unwrap_or(&empty_hash);
-        if locals.intersection(&self.dangling_local_sources).count() == 0 {
-          FlowEdgeKind::Ok
-        } else {
-          FlowEdgeKind::LocalInvalidatedAtExit
+        for local in self.contains_local.iter(from) {
+          if self.dangling_local_sources.contains(local) {
+            return FlowEdgeKind::LocalInvalidatedAtExit;
+          }
         }
+
+        FlowEdgeKind::Ok
       }
     }
   }
@@ -276,35 +288,27 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     .map(|&(o1, o2, _)| (o1, o2))
     .collect::<Vec<_>>();
 
-  log::debug!("SUBSET BASE ---\n{:#?}", {
-    let mut v = constraints.clone();
-    v.sort();
-    v.dedup();
-    v
-  });
-
-  log::debug!("ERRORS ---\n{:#?}", {
-    ctxt
-      .polonius_output
-      .errors
-      .iter()
-      .map(|(point, loans)| {
-        let loc = ctxt.point_to_location(*point);
-        (loc, loans)
-      })
-      .collect::<Vec<_>>()
-  });
-  log::debug!("SUBSET ERRORS ---\n{:#?}", {
-    &ctxt.polonius_output.subset_errors
-  });
-
   let vertices = flat_nodes!(constraints).collect::<Vec<_>>();
+
+  // NOTE: regions that only occur in the return type are not
+  // included in the abstract placeholders set. Example:
+  // ```rust,no-run
+  // fn mk_string() -> &'a String {
+  //   let s = String::from("s");
+  //   &s
+  // }
+  // ```
+  // The `'a`, included for clarity but would be implicit usually,
+  // does not appear in the placeholders set.
   let placeholders = ctxt
     .polonius_input_facts
     .placeholder
     .iter()
     .filter_map(|&(p, _)| vertices.contains(&p).then_some(p))
+    .chain(body.regions_in_return().map(|rg| rg.to_region_vid()))
     .collect::<Vec<_>>();
+
+  log::debug!("PLACEHOLDERS: {placeholders:#?}");
 
   let placeholder_edges = ctxt
     .polonius_input_facts
@@ -320,93 +324,101 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   let constraint_graph = VecGraph::new(node_count!(constraints), constraints);
 
   // Allowed flows between abstract regions.
-  let known_flows =
+  let known_flows_graph =
     VecGraph::new(node_count!(placeholder_edges), placeholder_edges);
 
   let scc_constraints = Sccs::<Origin, SccIdx>::new(&constraint_graph);
 
   // Compute the total flow facts (expensive).
-  let known_flows = placeholders
-    .iter()
-    .flat_map(|placeholder| {
-      log::debug!("flowing with placeholder {placeholder:?}");
-      log::debug!("placeholder scc {:?}", scc_constraints.scc(*placeholder));
-      known_flows.depth_first_search(*placeholder).map(|r2| {
-        let s1 = scc_constraints.scc(*placeholder);
-        let s2 = scc_constraints.scc(r2);
-        (s1, s2)
-      })
-    })
-    .collect::<HashSet<_>>();
+  let num_sccs = scc_constraints.num_sccs();
+  let mut known_flows = BitMatrix::new(num_sccs, num_sccs);
 
-  let local_sources = ctxt
-    .borrow_set
-    .location_map
-    .iter()
-    .filter_map(|(_, bd)| {
-      (!(bd.borrowed_place.is_indirect()
-        || bd.borrowed_place.ty(body, tcx).ty.is_ref()))
-      .then_some(scc_constraints.scc(bd.region))
-    })
-    .collect::<HashSet<_>>();
+  for &r1 in placeholders.iter() {
+    for r2 in known_flows_graph.depth_first_search(r1) {
+      let s1 = scc_constraints.scc(r1);
+      let s2 = scc_constraints.scc(r2);
+      known_flows.insert(s1, s2);
+    }
+  }
 
-  let abstract_sources = placeholders
-    .iter()
-    .map(|origin| scc_constraints.scc(*origin))
-    .collect::<HashSet<_>>();
+  let mut local_sources = BitSet::new_empty(num_sccs);
+  for (_, bd) in ctxt.borrow_set.location_map.iter() {
+    if !(bd.borrowed_place.is_indirect()
+      || bd.borrowed_place.ty(body, tcx).ty.is_ref())
+    {
+      let scc = scc_constraints.scc(bd.region);
+      local_sources.insert(scc);
+    }
+  }
 
-  let contains_abstract = abstract_sources
-    .iter()
-    .map(|&source| {
-      (
-        source,
-        scc_constraints
-          .depth_first_search(source)
-          .collect::<Vec<_>>(),
-      )
-    })
-    .fold(
-      HashMap::<SccIdx, HashSet<SccIdx>>::default(),
-      |mut acc, (from, tos)| {
-        for &to in tos.iter() {
-          acc.entry(to).or_default().insert(from);
-        }
-        acc
-      },
-    );
+  let mut abstract_sources = BitSet::new_empty(num_sccs);
+  for origin in placeholders.iter() {
+    log::debug!("ABSTRACT REGION {:?}", origin);
+    let scc = scc_constraints.scc(*origin);
+    abstract_sources.insert(scc);
+  }
 
-  let contains_local = local_sources
-    .iter()
-    .map(|&source| {
-      (
-        source,
-        scc_constraints
-          .depth_first_search(source)
-          .collect::<Vec<_>>(),
-      )
-    })
-    .fold(
-      HashMap::<SccIdx, HashSet<SccIdx>>::default(),
-      |mut acc, (from, tos)| {
-        for &to in tos.iter() {
-          acc.entry(to).or_default().insert(from);
-        }
-        acc
-      },
-    );
+  // Mapping of region to regions it could contain.
+  // row: region
+  // col: row-region points to col-region
+  let mut contains_abstract = BitMatrix::new(num_sccs, num_sccs);
+  let mut abstract_visited = abstract_sources.clone();
+  let mut changed = true;
+  // Initialize all abstract sources.
+  for a in abstract_sources.iter() {
+    contains_abstract.insert(a, a);
+  }
 
-  let dangling_local_sources = ctxt
-    .polonius_output
-    .errors
-    .iter()
-    .filter_map(|(_, loans)| {
-      loans.iter().find_map(|&loan| {
-        let bd = ctxt.loan_to_borrow(loan);
-        check_for_invalidation_at_exit(ctxt, bd)
-          .then_some(scc_constraints.scc(bd.region))
-      })
-    })
-    .collect::<HashSet<_>>();
+  while changed {
+    changed = false;
+    for r1 in contains_abstract.rows() {
+      if !abstract_visited.contains(r1) {
+        continue;
+      }
+
+      // Mark everything that this region flows to as abstract,
+      // every region that `r` could contain the flow to region
+      // could also contain.
+      for r2 in scc_constraints.depth_first_search(r1) {
+        changed |= abstract_visited.insert(r2);
+        changed |= contains_abstract.union_rows(r1, r2);
+      }
+    }
+  }
+
+  let mut contains_local = BitMatrix::new(num_sccs, num_sccs);
+  let mut local_visited = local_sources.clone();
+  let mut changed = true;
+
+  while changed {
+    changed = false;
+
+    for r1 in contains_local.rows() {
+      if !local_visited.contains(r1) {
+        continue;
+      }
+
+      // Mark everything that this region flows to as abstract,
+      // every region that `r` could contain the flow to region
+      // could also contain.
+      for r2 in scc_constraints.depth_first_search(r1) {
+        changed |= local_visited.insert(r2);
+        changed |= contains_local.union_rows(r1, r2);
+      }
+    }
+  }
+
+  let mut dangling_local_sources = BitSet::new_empty(num_sccs);
+
+  for (_, loans) in ctxt.polonius_output.errors.iter() {
+    for &loan in loans.iter() {
+      let bd = ctxt.loan_to_borrow(loan);
+      if check_for_invalidation_at_exit(ctxt, bd) {
+        let scc = scc_constraints.scc(bd.region);
+        dangling_local_sources.insert(scc);
+      }
+    }
+  }
 
   let region_flows = RegionFlows {
     constraint_graph: scc_constraints,
@@ -428,44 +440,61 @@ fn check_for_invalidation_at_exit<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
   borrow: &BorrowData<'tcx>,
 ) -> bool {
-  use places_conflict::AccessDepth::Shallow;
+  use places_conflict::AccessDepth::{Deep, Shallow};
+  use rustc_middle::{
+    mir::{PlaceElem, PlaceRef, ProjectionElem},
+    ty::TyCtxt,
+  };
 
   let place = borrow.borrowed_place;
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
 
-  let root_place = Place::from_local(place.local, tcx);
+  // let root_place = Place::from_local(place.local, tcx);
 
-  // let mut root_place = PlaceRef {
-  //   local: place.local,
-  //   projection: &[],
-  // };
+  struct TyCtxtConsts<'tcx>(TyCtxt<'tcx>);
+  impl<'tcx> TyCtxtConsts<'tcx> {
+    const DEREF_PROJECTION: &'tcx [PlaceElem<'tcx>; 1] =
+      &[ProjectionElem::Deref];
+  }
 
-  // let (might_be_alive, will_be_dropped) =
-  //   if self.body.local_decls[root_place.local].is_ref_to_thread_local() {
-  //     // Thread-locals might be dropped after the function exits
-  //     // We have to dereference the outer reference because
-  //     // borrows don't conflict behind shared references.
-  //     root_place.projection = TyCtxtConsts::DEREF_PROJECTION;
-  //     (true, true)
-  //   } else {
-  //     (false, self.locals_are_invalidated_at_exit)
-  //   };
+  let mut root_place = PlaceRef {
+    local: place.local,
+    projection: &[],
+  };
 
-  // if !will_be_dropped {
-  //   debug!("place_is_invalidated_at_exit({:?}) - won't be dropped", place);
-  //   return;
-  // }
+  let (might_be_alive, will_be_dropped) =
+    if body.local_decls[root_place.local].is_ref_to_thread_local() {
+      // Thread-locals might be dropped after the function exits
+      // We have to dereference the outer reference because
+      // borrows don't conflict behind shared references.
+      root_place.projection = TyCtxtConsts::DEREF_PROJECTION;
+      (true, true)
+    } else {
+      (
+        // TODO: FIXME: HACK: this isn't always true, but for
+        // our context of only evaluating function bodies it
+        // may be ok for many situations (not closures though).
+        false, true, // self.locals_are_invalidated_at_exit
+      )
+    };
 
-  // let sd = if might_be_alive { Deep } else { Shallow(None) };
-  let sd = Shallow(None);
+  if !will_be_dropped {
+    log::debug!(
+      "place_is_invalidated_at_exit({:?}) - won't be dropped",
+      place
+    );
+    return false;
+  }
+
+  let sd = if might_be_alive { Deep } else { Shallow(None) };
 
   places_conflict::borrow_conflicts_with_place(
     tcx,
     body,
     place,
     borrow.kind,
-    root_place.as_ref(),
+    root_place,
     sd,
     places_conflict::PlaceConflictBias::Overlap,
   )
