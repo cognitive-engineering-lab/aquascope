@@ -204,6 +204,35 @@ $perm-animation-duration: 0.5s;
   }
 }
 
+.perm-diff-sub-container {
+  position: relative;
+  width: min-content;
+  display: inline-block;
+}
+.perm-diff-sub {
+  position: absolute;
+  left: calc((100% - $glyph-width) / 2);
+  top: calc((100% - $glyph-width) / 2);
+  width: $glyph-width;
+  height: $glyph-width;
+  background: linear-gradient(
+    to top left,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0) calc(50% - 1px),
+    var(--aq-perm-loss-color) calc(50% - 0.75px),
+    var(--aq-perm-loss-color) calc(50% + 0.75px),
+    rgba(0, 0, 0, 0) calc(50% + 1px),
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+.perm-diff-add {
+  color: var(--aq-perm-gain-color);
+  margin-right: -2px;
+  position: relative;
+  bottom: 1px;
+  font-size: 80%;
+}
+
 .aquascope {
   position: relative;
   height: 100%;
@@ -434,35 +463,8 @@ $perm-animation-duration: 0.5s;
     padding: 1px 2px !important;
   }
 
-  .perm-diff-add {
-    color: var(--aq-perm-gain-color);
-    margin-right: -2px;
-    position: relative;
-    bottom: 1px;
-    font-size: 80%;
-  }
 
-  .perm-diff-sub-container {
-    position: relative;
-    width: min-content;
-    display: inline-block;
-  }
-  .perm-diff-sub {
-    position: absolute;
-    left: calc((100% - $glyph-width) / 2);
-    top: calc((100% - $glyph-width) / 2);
-    width: $glyph-width;
-    height: $glyph-width;
-    background: linear-gradient(
-      to top left,
-      rgba(0, 0, 0, 0) 0%,
-      rgba(0, 0, 0, 0) calc(50% - 1px),
-      var(--aq-perm-loss-color) calc(50% - 0.75px),
-      var(--aq-perm-loss-color) calc(50% + 0.75px),
-      rgba(0, 0, 0, 0) calc(50% + 1px),
-      rgba(0, 0, 0, 0) 100%
-    );
-  }
+  
 
   .aquascope-action-indicator {
     font-size: 0.9em;
