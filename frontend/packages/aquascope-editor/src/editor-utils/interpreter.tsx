@@ -95,33 +95,32 @@ type MAdt = MValueAdt["value"];
 type MValuePointer = MValue & { type: "Pointer" };
 type MPointer = MValuePointer["value"];
 
+let read_field = (v: MAdt, k: string): MAdt => {
+  let field = v.fields.find(([k2]) => k == k2);
+  if (!field) {
+    let v_pretty = JSON.stringify(v, undefined, 2);
+    throw new Error(`Could not find field "${k}" in struct: ${v_pretty}`);
+  }
+  return (field[1] as MValueAdt).value;
+};
+
+let read_unique = (unique: MAdt): MAdt => {
+  let non_null = read_field(unique, "pointer");
+  return non_null;
+};
+
+let read_vec = (vec: MAdt): MAdt => {
+  let raw_vec = read_field(vec, "buf");
+  let unique = read_field(raw_vec, "ptr");
+  return read_unique(unique);
+};
+
 let AdtView = ({ value }: { value: MAdt }) => {
   let pathCtx = useContext(PathContext);
   let config = useContext(ConfigContext);
 
   if (value.alloc_kind !== null && !config.concreteTypes) {
     let alloc_type = value.alloc_kind.type;
-
-    let read_field = (v: MAdt, k: string): MAdt => {
-      let field = v.fields.find(([k2]) => k == k2);
-      if (!field) {
-        let v_pretty = JSON.stringify(v, undefined, 2);
-        throw new Error(`Could not find field "${k}" in struct: ${v_pretty}`);
-      }
-      return (field[1] as MValueAdt).value;
-    };
-
-    let read_unique = (unique: MAdt): MAdt => {
-      let non_null = read_field(unique, "pointer");
-      return non_null;
-    };
-
-    let read_vec = (vec: MAdt): MAdt => {
-      let raw_vec = read_field(vec, "buf");
-      let unique = read_field(raw_vec, "ptr");
-      return read_unique(unique);
-    };
-
     let non_null: MAdt;
     if (alloc_type == "String") {
       let vec = read_field(value, "vec");
@@ -136,7 +135,12 @@ let AdtView = ({ value }: { value: MAdt }) => {
     }
 
     let ptr = non_null.fields[0][1];
+    return <ValueView value={ptr} />;
+  }
 
+  if (value.name == "Iter" && !config.concreteTypes) {
+    let non_null = read_field(value, "ptr");
+    let ptr = non_null.fields[0][1];
     return <ValueView value={ptr} />;
   }
 
