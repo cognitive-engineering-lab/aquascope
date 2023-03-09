@@ -301,10 +301,15 @@ fn get_flow_permission<'tcx>(
             //    involved in the violation.
             (region_flows.is_abstract_mem(to)
               && !fk.is_valid_flow()
-              && specific_constraints.iter().any(|&(_f, t, _)| t == from))
+              && specific_constraints
+                .iter()
+                .any(|&(_f, t, _)| t == from || t == to))
             .then_some(fk)
           })
-          .unwrap_or(FlowEdgeKind::Ok);
+          .unwrap_or_else(|| {
+            log::debug!("no edge violation found");
+            FlowEdgeKind::Ok
+          });
 
         let raw_span = hir.span(flow_context);
         let span = raw_span.as_local(body.span).unwrap_or(body.span);
@@ -384,7 +389,7 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
         span_to_range,
       );
 
-      log::debug!("Permissions data: {actual:#?}");
+      log::debug!("Permissions data:\n{actual:#?}\n{expecting_flow:#?}");
 
       let span = path_boundary
         .location

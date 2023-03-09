@@ -67,8 +67,9 @@ use std::time::Instant;
 use fluid_let::fluid_let;
 use itertools::Itertools;
 use rustc_borrowck::borrow_set::BorrowData;
-use rustc_data_structures::graph::{
-  scc::Sccs, vec_graph::VecGraph, WithSuccessors,
+use rustc_data_structures::{
+  fx::FxHashMap,
+  graph::{scc::Sccs, vec_graph::VecGraph, WithSuccessors},
 };
 use rustc_index::bit_set::{BitMatrix, BitSet, SparseBitMatrix};
 use serde::Serialize;
@@ -205,6 +206,7 @@ impl RegionFlows {
 
     // The easy case of a potentially concrete region flows to a potentially abstract region.
     if from_contains_concrete && to_contains_abstract {
+      log::debug!("early return local outlives universal");
       return FlowEdgeKind::LocalOutlivesUniversal;
     }
 
@@ -379,10 +381,6 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   while changed {
     changed = false;
     for r1 in contains_abstract.rows() {
-      if !abstract_visited.contains(r1) {
-        continue;
-      }
-
       // Mark everything that this region flows to as abstract,
       // every region that `r` could contain the flow to region
       // could also contain.
@@ -397,15 +395,15 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   let mut contains_local = BitMatrix::new(num_sccs, num_sccs);
   let mut local_visited = local_sources.clone();
   let mut changed = true;
+  // Initialize with local sources
+  for l in local_sources.iter() {
+    contains_local.insert(l, l);
+  }
 
   while changed {
     changed = false;
 
     for r1 in contains_local.rows() {
-      if !local_visited.contains(r1) {
-        continue;
-      }
-
       // Mark everything that this region flows to as abstract,
       // every region that `r` could contain the flow to region
       // could also contain.
@@ -428,6 +426,20 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
       }
     }
   }
+
+  log::debug!("=== contains_abstract ===\n{:#?}", {
+    contains_abstract
+      .rows()
+      .map(|r| (r, contains_abstract.iter(r).collect::<Vec<_>>()))
+      .collect::<FxHashMap<_, _>>()
+  });
+
+  log::debug!("=== contains_local ===\n{:#?}", {
+    contains_local
+      .rows()
+      .map(|r| (r, contains_local.iter(r).collect::<Vec<_>>()))
+      .collect::<FxHashMap<_, _>>()
+  });
 
   let region_flows = RegionFlows {
     constraint_graph: scc_constraints,
