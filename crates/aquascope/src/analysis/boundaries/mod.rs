@@ -246,6 +246,7 @@ fn get_flow_permission<'tcx>(
   span_to_range: impl Fn(Span) -> Range,
 ) -> Option<FlowBoundary> {
   if !ENABLE_FLOW_PERMISSIONS.copied().unwrap_or(false) {
+    log::warn!("Flow permissions are disabled!");
     return None;
   }
 
@@ -253,6 +254,14 @@ fn get_flow_permission<'tcx>(
   let body = &ctxt.body_with_facts.body;
 
   let region_flows = ctxt.region_flows();
+
+  log::debug!(
+    "FLOW INFORMATION:\nBound {} ---\n{:#?}\nAt {} ---\n{:#?}",
+    hir.node_to_string(flow_context),
+    flow_constraints_at_hir_id(ctxt, ir_mapper, flow_context),
+    hir.node_to_string(hir_id),
+    flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)
+  );
 
   // Do any given constraints have an abstract Origin on the RHS?
   let has_abstract_on_rhs = |flows: &[(Origin, Origin, Point)]| {
@@ -345,14 +354,6 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
     )?;
 
     log::debug!("Chosen place at location {place:#?} {loc:#?} other options: {path_locations:#?}");
-
-    log::debug!(
-      "FLOW INFORMATION:\nBound {} ---\n{:#?}\nAt {} ---\n{:#?}",
-      hir.node_to_string(path_boundary.flow_context),
-      flow_constraints_at_hir_id(ctxt, ir_mapper, path_boundary.flow_context),
-      hir.node_to_string(path_boundary.hir_id),
-      flow_constraints_at_hir_id(ctxt, ir_mapper, path_boundary.hir_id)
-    );
 
     let point = ctxt.location_to_point(loc);
     let path = ctxt.place_to_path(&place);

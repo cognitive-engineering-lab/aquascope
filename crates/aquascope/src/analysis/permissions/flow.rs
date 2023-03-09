@@ -178,6 +178,11 @@ impl RegionFlows {
     self.contains_abstract.count(scc) > 0
   }
 
+  pub fn is_local_mem(&self, origin: Origin) -> bool {
+    let scc = self.constraint_graph.scc(origin);
+    self.contains_local.count(scc) > 0
+  }
+
   /// Get the specific kind of flow edge that connects `from` and `to`.
   ///
   /// **ASSUMED**: there must exists an edge between these two origins in the
@@ -185,9 +190,27 @@ impl RegionFlows {
   /// can be passed as arguments.
   #[allow(clippy::match_same_arms)]
   pub(crate) fn flow_kind(&self, from: Origin, to: Origin) -> FlowEdgeKind {
+    let from_contains_concrete = self.is_local_mem(from);
+    let from_contains_abstract = self.is_abstract_mem(from);
+    let to_contains_concrete = self.is_local_mem(to);
+    let to_contains_abstract = self.is_abstract_mem(to);
+
+    log::debug!(
+      "Analyzing flow {from:?} -> {to:?} {:?} -> {:?}",
+      self.scc(from),
+      self.scc(to)
+    );
+    log::debug!("{from:?} is_local? {from_contains_concrete} is_abstract? {from_contains_abstract}", );
+    log::debug!("{to:?} is_local? {to_contains_concrete} is_abstract? {to_contains_abstract}", );
+
+    // The easy case of a potentially concrete region flows to a potentially abstract region.
+    if from_contains_concrete && to_contains_abstract {
+      return FlowEdgeKind::LocalOutlivesUniversal;
+    }
+
     // They're both placeholders, so just check flow constraints:
     match (self.get_abstract_kind(from), self.get_abstract_kind(to)) {
-      // Case 1: flowing from an abstract source.
+      // Flowing from an abstract source.
       // An abstract source means that the `to`
       (AbstractRegionKind::Source(from), AbstractRegionKind::Source(to)) => {
         if self.is_known_flow(from, to) {
@@ -199,22 +222,22 @@ impl RegionFlows {
       // We consider any case where an abstract source flowing into a concrete region is OK.
       (AbstractRegionKind::Source(_), _) => FlowEdgeKind::Ok,
 
-      // Case 2: flowing from a concrete region potentially holding abstract region values.
+      // Flowing from a concrete region.
+      // Local region to abstract sink is disallowed.
+      (_, AbstractRegionKind::Source(_)) if from_contains_concrete => {
+        FlowEdgeKind::LocalOutlivesUniversal
+      }
+
+      // Flowing from a concrete region potentially holding abstract region values.
       (AbstractRegionKind::Flowed(froms), AbstractRegionKind::Source(to))
         if !froms.iter().all(|from| self.is_known_flow(from, to)) =>
       {
         FlowEdgeKind::MissingUniversalConstraint
       }
 
-      // Case 3: flowing from a strictly concrete region.
-      // Local region to abstract sink is disallowed.
-      (AbstractRegionKind::None, AbstractRegionKind::Source(_)) => {
-        FlowEdgeKind::LocalOutlivesUniversal
-      }
-
-      // Case 4: if the region data is flowing from could contain a dangling
-      // pointer we report this as a flow violation (though, I'm not 100%
-      // confident here).
+      // If the region data is flowing from could contain a dangling
+      // pointer we report this as a flow violation
+      // XXX:(though, I'm not 100% confident here).
       (_, _) => {
         let from = self.constraint_graph.scc(from);
         for local in self.contains_local.iter(from) {
@@ -291,6 +314,8 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     .chain(placeholders.iter().map(|&o| (o, o)))
     .collect::<Vec<_>>();
 
+  log::debug!("Constraints---\n{:#?}", constraints);
+
   // Graph of constraints that need to be satisfied. This shows
   // us how data flows from one region into another.
   let constraint_graph = VecGraph::new(node_count!(constraints), constraints);
@@ -330,6 +355,16 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     abstract_sources.insert(scc);
   }
 
+  log::debug!(
+    "Abstract sources---\n{:#?}",
+    abstract_sources.iter().collect::<Vec<_>>()
+  );
+
+  log::debug!(
+    "Local sources---\n{:#?}",
+    local_sources.iter().collect::<Vec<_>>()
+  );
+
   // Mapping of region to regions it could contain.
   // row: region
   // col: row-region points to col-region
@@ -352,6 +387,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
       // every region that `r` could contain the flow to region
       // could also contain.
       for r2 in scc_constraints.depth_first_search(r1) {
+        log::debug!("abstract flow {r1:?} -> {r2:?}");
         changed |= abstract_visited.insert(r2);
         changed |= contains_abstract.union_rows(r1, r2);
       }
@@ -374,6 +410,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
       // every region that `r` could contain the flow to region
       // could also contain.
       for r2 in scc_constraints.depth_first_search(r1) {
+        log::debug!("local flow {r1:?} -> {r2:?}");
         changed |= local_visited.insert(r2);
         changed |= contains_local.union_rows(r1, r2);
       }
