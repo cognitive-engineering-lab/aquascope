@@ -50,6 +50,7 @@ export { Abbreviated } from "./bindings/Abbreviated";
 export { CharPos } from "./bindings/CharPos";
 export { LinePos } from "./bindings/LinePos";
 export { StepperAnnotations } from "./bindings/StepperAnnotations";
+export { PathMatcher } from "./bindings/PathMatcher";
 export { InterpAnnotations } from "./bindings/InterpAnnotations";
 export { BoundariesAnnotations } from "./bindings/BoundariesAnnotations";
 export { AquascopeAnnotations } from "./bindings/AquascopeAnnotations";

@@ -23,7 +23,7 @@ import {
   MValue,
   Range,
 } from "../types";
-import { makeDecorationField } from "./misc";
+import { evenlySpaceAround, makeDecorationField } from "./misc";
 
 const DEBUG: boolean = false;
 
@@ -95,33 +95,32 @@ type MAdt = MValueAdt["value"];
 type MValuePointer = MValue & { type: "Pointer" };
 type MPointer = MValuePointer["value"];
 
+let read_field = (v: MAdt, k: string): MAdt => {
+  let field = v.fields.find(([k2]) => k == k2);
+  if (!field) {
+    let v_pretty = JSON.stringify(v, undefined, 2);
+    throw new Error(`Could not find field "${k}" in struct: ${v_pretty}`);
+  }
+  return (field[1] as MValueAdt).value;
+};
+
+let read_unique = (unique: MAdt): MAdt => {
+  let non_null = read_field(unique, "pointer");
+  return non_null;
+};
+
+let read_vec = (vec: MAdt): MAdt => {
+  let raw_vec = read_field(vec, "buf");
+  let unique = read_field(raw_vec, "ptr");
+  return read_unique(unique);
+};
+
 let AdtView = ({ value }: { value: MAdt }) => {
   let pathCtx = useContext(PathContext);
   let config = useContext(ConfigContext);
 
   if (value.alloc_kind !== null && !config.concreteTypes) {
     let alloc_type = value.alloc_kind.type;
-
-    let read_field = (v: MAdt, k: string): MAdt => {
-      let field = v.fields.find(([k2]) => k == k2);
-      if (!field) {
-        let v_pretty = JSON.stringify(v, undefined, 2);
-        throw new Error(`Could not find field "${k}" in struct: ${v_pretty}`);
-      }
-      return (field[1] as MValueAdt).value;
-    };
-
-    let read_unique = (unique: MAdt): MAdt => {
-      let non_null = read_field(unique, "pointer");
-      return non_null;
-    };
-
-    let read_vec = (vec: MAdt): MAdt => {
-      let raw_vec = read_field(vec, "buf");
-      let unique = read_field(raw_vec, "ptr");
-      return read_unique(unique);
-    };
-
     let non_null: MAdt;
     if (alloc_type == "String") {
       let vec = read_field(value, "vec");
@@ -136,7 +135,12 @@ let AdtView = ({ value }: { value: MAdt }) => {
     }
 
     let ptr = non_null.fields[0][1];
+    return <ValueView value={ptr} />;
+  }
 
+  if (value.name == "Iter" && !config.concreteTypes) {
+    let non_null = read_field(value, "ptr");
+    let ptr = non_null.fields[0][1];
     return <ValueView value={ptr} />;
   }
 
@@ -161,10 +165,10 @@ let AdtView = ({ value }: { value: MAdt }) => {
     );
   }
 
-  let cells = value.fields.map(([_k, v], i) => {
+  let cells = value.fields.map(([k, v], i) => {
     let path = [...pathCtx, "field", i.toString()];
     return (
-      <td className={path.join("-")}>
+      <td key={k} className={path.join("-")}>
         <PathContext.Provider value={path}>
           <ValueView value={v} />
         </PathContext.Provider>
@@ -400,23 +404,24 @@ const PALETTE = {
   dark: ["#ebdbd0", "#e3cbbc", "#dcbca9", "#d6ac98", "#d19d88", "#cb8c7a"],
 };
 
-let StepView = ({
-  step,
-  index,
-  containerRef,
-}: {
-  step: MStep<Range>;
-  index: number;
-  containerRef: React.RefObject<HTMLDivElement>;
-}) => {
-  let stepContainerRef = useRef<HTMLDivElement>(null);
-  let arrowContainerRef = useRef<HTMLDivElement>(null);
+let renderArrows = (
+  containerRef: React.RefObject<HTMLDivElement>,
+  stepContainerRef: React.RefObject<HTMLDivElement>,
+  arrowContainerRef: React.RefObject<HTMLDivElement>
+) => {
   let config = useContext(ConfigContext);
-  let error = useContext(ErrorContext);
   useEffect(() => {
     let container = containerRef.current!;
     let stepContainer = stepContainerRef.current!;
     let arrowContainer = arrowContainerRef.current!;
+
+    let sources = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
+
+    // TODO: this should be configurable from the embed script, not directly
+    // inside aquascope-editor
+    let mdbookEmbed = getComputedStyle(document.body).getPropertyValue(
+      "--inline-code-color"
+    );
 
     let query = (sel: string): HTMLElement => {
       let dst = stepContainer.querySelector<HTMLElement>("." + CSS.escape(sel));
@@ -426,78 +431,156 @@ let StepView = ({
         );
       return dst;
     };
-    let pointers = stepContainer.querySelectorAll<HTMLSpanElement>(".pointer");
 
-    // TODO: this should be configurable from the embed script, not directly
-    // inside aquascope-editor
-    let mdbookEmbed = getComputedStyle(document.body).getPropertyValue(
-      "--inline-code-color"
-    );
+    type MemoryRegion = "stack" | "heap";
+    let getMemoryRegion = (el: HTMLElement): MemoryRegion =>
+      el.closest(".heap") !== null ? "heap" : "stack";
 
-    let lines = Array.from(pointers)
-      .map((src, i) => {
-        try {
-          let dstSel = src.dataset.pointTo!;
-          let dst = query(dstSel);
-          let dstRange = src.dataset.pointToRange
-            ? query(src.dataset.pointToRange)
-            : undefined;
-          let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+    interface Pointer {
+      src: HTMLElement;
+      dst: HTMLElement;
+      dstSel: string;
+      dstRange?: HTMLElement;
+      endSocket: LeaderLine.SocketType;
+      dstIndex: number;
+      group: {
+        srcRegion: MemoryRegion;
+        dstRegion: MemoryRegion;
+      };
+    }
 
-          let srcInHeap = src.closest(".heap") !== null;
-          let dstInStack = dstSel.startsWith("stack");
-          let startSocket: LeaderLine.SocketType =
-            srcInHeap && dstInStack ? "left" : "right";
+    // First, collect metadata about all the pointers we're rendering
+    // like what HTML elements are pointed, and what region of the digram
+    // they lie in.
+    let dstCounts: { [sel: string]: number } = {};
+    let pointers = Array.from(sources).map<Pointer>(src => {
+      let dstSel = src.dataset.pointTo!;
+      let dst = query(dstSel);
+      let dstRange = src.dataset.pointToRange
+        ? query(src.dataset.pointToRange)
+        : undefined;
+      let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+      let group = {
+        srcRegion: getMemoryRegion(src),
+        dstRegion: getMemoryRegion(dst),
+      };
 
-          let dstAnchor = dstRange
-            ? LeaderLine.areaAnchor(dst, {
-                shape: "rect",
-                width: dstRange.offsetLeft + dst.offsetWidth - dst.offsetLeft,
-                height: 2,
-                y: "100%",
-                fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
-              })
-            : dstInStack && !srcInHeap
-            ? LeaderLine.pointAnchor(dst, { x: "100%", y: "75%" })
-            : dst;
+      if (!(dstSel in dstCounts)) dstCounts[dstSel] = 0;
+      let dstIndex = dstCounts[dstSel];
+      dstCounts[dstSel] += 1;
 
-          const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
-          let isDark = MDBOOK_DARK_THEMES.some(s =>
-            document.documentElement.classList.contains(s)
-          );
-          let theme: "dark" | "light" = isDark ? "dark" : "light";
-          let palette = PALETTE[theme];
-          let color = palette[i % palette.length];
+      return { src, dst, dstRange, dstSel, endSocket, dstIndex, group };
+    });
 
-          let line = new LeaderLine(src, dstAnchor, {
-            color,
-            size: 1,
-            endPlugSize: 2,
-            startSocket,
-            endSocket,
-            startSocketGravity: 60,
-            endSocketGravity: 100,
+    // Then, group the pointers by their regions.
+    // That way we know how many pointers are e.g. pointing from stack->heap
+    // so we can stagger them correctly.
+    let groups = _.groupBy(pointers, "group");
+
+    interface RenderedPointer {
+      line: LeaderLine;
+      svgElements: Element[];
+    }
+
+    // Then we render each pointer, conditioned on its group.
+    let renderPtr = (ptr: Pointer, i: number): RenderedPointer | undefined => {
+      try {
+        let { srcRegion, dstRegion } = ptr.group;
+
+        // Heap -> stack pointers should start on the left and
+        // everything else starts on the right
+        let startSocket: LeaderLine.SocketType =
+          srcRegion == "heap" && dstRegion == "stack" ? "left" : "right";
+
+        let dstAnchor: LeaderLine.AnchorAttachment;
+        if (ptr.dstRange) {
+          // Pointers to ranges (eg string slices) need an area anchor
+          // corresponding to the range of the slice
+          // TODO: this doesn't handle abbreviations
+          dstAnchor = LeaderLine.areaAnchor(ptr.dst, {
+            shape: "rect",
+            width:
+              ptr.dstRange.offsetLeft +
+              ptr.dst.offsetWidth -
+              ptr.dst.offsetLeft,
+            height: 2,
+            y: "100%",
+            fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
+          });
+        } else if (srcRegion == "stack" && dstRegion == "stack") {
+          // Stack -> stack pointers should point a little below the middle
+          // to avoid conflicting with outgoing pointers.
+          dstAnchor = LeaderLine.pointAnchor(ptr.dst, { x: "100%", y: "75%" });
+        } else if (ptr.endSocket == "bottom") {
+          dstAnchor = ptr.dst;
+        } else {
+          let x = dstRegion == "stack" ? 100 : 0;
+
+          // Everything else should get evenly spaced around the
+          // middle of the endpoint
+          let y = evenlySpaceAround({
+            center: 50,
+            spacing: 30,
+            index: ptr.dstIndex,
+            total: dstCounts[ptr.dstSel] - 1,
           });
 
-          // Make arrows local to the diagram rather than global in the body
-          // See: https://github.com/anseki/leader-line/issues/54
-          let lineEl = document.body.querySelector(
-            ":scope > .leader-line:last-of-type"
-          );
-          if (!lineEl) throw new Error("Missing line el?");
-          arrowContainer.appendChild(lineEl);
-
-          return { line, lineEl };
-        } catch (e: any) {
-          console.error("Leader line failed to render", e.stack);
-          return undefined;
+          dstAnchor = LeaderLine.pointAnchor(ptr.dst, {
+            x: `${x}%`,
+            y: `${y}%`,
+          });
         }
-      })
-      .filter(obj => obj !== undefined) as {
-      line: LeaderLine;
-      lineEl: Element;
-    }[];
 
+        const MDBOOK_DARK_THEMES = ["navy", "coal", "ayu"];
+        let isDark = MDBOOK_DARK_THEMES.some(s =>
+          document.documentElement.classList.contains(s)
+        );
+        let theme: "dark" | "light" = isDark ? "dark" : "light";
+        let palette = PALETTE[theme];
+        let color = palette[i % palette.length];
+
+        let startSocketGravity = undefined;
+        let endSocketGravity = undefined;
+        if (ptr.group.srcRegion == "stack" && ptr.group.dstRegion == "heap") {
+          startSocketGravity = 60;
+          endSocketGravity = 100 - i * 10;
+        }
+
+        let line = new LeaderLine(ptr.src, dstAnchor, {
+          color,
+          size: 1,
+          endPlugSize: 2,
+          startSocket,
+          endSocket: ptr.endSocket,
+          startSocketGravity,
+          endSocketGravity,
+        });
+
+        // Make arrows local to the diagram rather than global in the body
+        // See: https://github.com/anseki/leader-line/issues/54
+        let svgSelectors = [".leader-line"];
+        if (ptr.dstRange) svgSelectors.push(".leader-line-areaAnchor");
+        let svgElements = svgSelectors.map(sel => {
+          let el = document.body.querySelector(`:scope > ${sel}`);
+          if (!el) throw new Error(`Missing LineLeader element: ${sel}`);
+          return el;
+        });
+
+        svgElements.forEach(el => arrowContainer.appendChild(el));
+
+        return { line, svgElements };
+      } catch (e: any) {
+        console.error("Leader line failed to render", e.stack);
+        return undefined;
+      }
+    };
+
+    let lines = Object.entries(groups)
+      .flatMap(([_g, ptrs]) => ptrs.map((ptr, i) => renderPtr(ptr, i)))
+      .filter(obj => obj !== undefined) as RenderedPointer[];
+
+    // Lastly, we add a timer to reposition the arrow container
+    // if necessary.
     let curCoords = (): [number, number] => {
       let stepBox = stepContainer.getBoundingClientRect();
       let x = stepBox.left + window.scrollX + container.scrollLeft;
@@ -521,13 +604,31 @@ let StepView = ({
     }, 300);
 
     return () => {
-      lines.forEach(({ lineEl }) => {
-        if (!lineEl) return;
-        lineEl.parentNode!.removeChild(lineEl);
-      });
       clearInterval(interval);
+      lines.forEach(({ svgElements }) => {
+        svgElements.forEach(el => {
+          el.parentNode!.removeChild(el);
+        });
+      });
     };
-  }, [config.concreteTypes]);
+  });
+  // Note: this effect must be re-run every time, since children *might* change
+  // their contents and invalidate DOM references held within LineLeader
+};
+
+let StepView = ({
+  step,
+  index,
+  containerRef,
+}: {
+  step: MStep<Range>;
+  index: number;
+  containerRef: React.RefObject<HTMLDivElement>;
+}) => {
+  let stepContainerRef = useRef<HTMLDivElement>(null);
+  let arrowContainerRef = useRef<HTMLDivElement>(null);
+  let error = useContext(ErrorContext);
+  renderArrows(containerRef, stepContainerRef, arrowContainerRef);
 
   return (
     <div className="step">

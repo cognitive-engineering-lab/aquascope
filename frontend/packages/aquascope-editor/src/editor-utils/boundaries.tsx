@@ -11,11 +11,13 @@ import {
   PermissionsBoundary,
 } from "../types";
 import {
-  dropChar,
+  PermLetter,
   flowChar,
   hideLoanRegion,
   hideMoveRegion,
   makeDecorationField,
+  ownChar,
+  permName,
   readChar,
   showLoanRegion,
   showMoveRegion,
@@ -78,28 +80,33 @@ import {
 //   }
 // );
 
-let PermChar = ({
-  content,
-  names,
-  act,
-  showit,
-  hideit,
-}: {
-  content: string;
+interface PermCharProps {
+  content: PermLetter;
   names: string[];
   act: boolean;
   showit: () => void;
   hideit: () => void;
-}) => (
-  <div
-    className={classNames(...names, { missing: !act })}
-    onMouseEnter={showit}
-    onMouseLeave={hideit}
-  >
-    <div className="small">•</div>
-    <div className="big">{content}</div>
-  </div>
-);
+}
+
+let PermChar = ({ content, names, act, showit, hideit }: PermCharProps) => {
+  let name = permName(content);
+  name = name.charAt(0).toUpperCase() + name.slice(1);
+  let title = `${name} permission is expected, `;
+  title += act
+    ? "and the path has the permission."
+    : "but the path does not have the permission.";
+  return (
+    <div
+      className={classNames(...names, { missing: !act })}
+      onMouseEnter={showit}
+      onMouseLeave={hideit}
+      title={title}
+    >
+      <div className="small">•</div>
+      <div className="big">{content}</div>
+    </div>
+  );
+};
 
 let PermStack = ({
   facts,
@@ -110,7 +117,7 @@ let PermStack = ({
 }) => {
   const data = boundary.actual;
 
-  let allIcons = [
+  let allIcons: (PermCharProps & { exp: boolean })[] = [
     {
       content: readChar,
       names: ["perm", "read"],
@@ -140,17 +147,17 @@ let PermStack = ({
       },
     },
     {
-      content: dropChar,
-      names: ["perm", "drop"],
+      content: ownChar,
+      names: ["perm", "own"],
       exp: boundary.expected.drop,
       act: data.permissions.drop,
       showit: () => {
-        showLoanRegion(facts, data.loan_drop_refined, ["drop"]);
-        showMoveRegion(facts, data.path_moved, ["drop"]);
+        showLoanRegion(facts, data.loan_drop_refined, ["own"]);
+        showMoveRegion(facts, data.path_moved, ["own"]);
       },
       hideit: () => {
-        hideLoanRegion(facts, data.loan_drop_refined, ["drop"]);
-        hideMoveRegion(facts, data.path_moved, ["drop"]);
+        hideLoanRegion(facts, data.loan_drop_refined, ["own"]);
+        hideMoveRegion(facts, data.path_moved, ["own"]);
       },
     },
     {

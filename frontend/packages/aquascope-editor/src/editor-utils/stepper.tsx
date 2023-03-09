@@ -16,10 +16,11 @@ import {
   ValueStep,
 } from "../types";
 import {
-  dropChar,
   hideLoanRegion,
   hideMoveRegion,
   makeDecorationField,
+  ownChar,
+  permName,
   readChar,
   showLoanRegion,
   showMoveRegion,
@@ -41,45 +42,48 @@ let PermChar = ({
   facts: AnalysisFacts;
 }) => {
   // FIXME: don't reverse the abbreviated content.
-  let getKind = (c: string) => {
-    if (c === "R") {
-      return "read";
-    } else if (c === "W") {
-      return "write";
-    } else if (c == "O") {
-      return "drop";
-    } else {
-      return "unknown";
-    }
-  };
 
+  // ~~~~ IMPORTANT MAINTENANCE NOTE ~~~~
+  // Any changes to this HTML must be propagated to permissions.rs in mdbook-aquascope!
   let getInner = () => {
+    let kind = permName(perm.perm);
     let Perm: React.FC<React.PropsWithChildren> = ({ children }) => (
-      <span className={classNames("perm", getKind(perm.perm))}>{children}</span>
+      <span className={classNames("perm", kind)}>{children}</span>
     );
     if (perm.step.type === "None") {
       return perm.step.value ? (
-        <div className="perm-diff-present">
+        <div
+          className="perm-diff-present"
+          title={`Path had ${kind} permissions before the preceding line, and that didn't change after this line.`}
+        >
           <Perm>{perm.perm}</Perm>
         </div>
       ) : (
-        <div className="perm-diff-none">
+        <div
+          className="perm-diff-none"
+          title={`Path did not have ${kind} permissions before the preceding line, and that didn't change after this line.`}
+        >
           <Perm>‒</Perm>
         </div>
       );
     } else if (perm.step.type == "Low") {
       return (
-        <div className="perm-diff-sub-container">
+        <div
+          className="perm-diff-sub-container"
+          title={`Path had ${kind} permissions before the preceding line, and lost it after this line.`}
+        >
           <div className="perm-diff-sub" />
           <Perm>{perm.perm}</Perm>
         </div>
       );
     } /* perm.step.type === "High" */ else {
       return (
-        <>
+        <div
+          title={`Path did not have ${kind} permissions before the preceding line, and gained it after this line.`}
+        >
           <span className="perm-diff-add">+</span>
           <Perm>{perm.perm}</Perm>
-        </>
+        </div>
       );
     }
   };
@@ -87,12 +91,12 @@ let PermChar = ({
   return (
     <td
       onMouseEnter={() => {
-        showLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
-        showMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
+        showLoanRegion(facts, perm.loanKey, [permName(perm.perm)]);
+        showMoveRegion(facts, perm.moveKey, [permName(perm.perm)]);
       }}
       onMouseLeave={() => {
-        hideLoanRegion(facts, perm.loanKey, [getKind(perm.perm)]);
-        hideMoveRegion(facts, perm.moveKey, [getKind(perm.perm)]);
+        hideLoanRegion(facts, perm.loanKey, [permName(perm.perm)]);
+        hideMoveRegion(facts, perm.moveKey, [permName(perm.perm)]);
       }}
       className="perm-char"
     >
@@ -129,29 +133,11 @@ let PermDiffRow = ({
     | "loan_read_refined";
 
   // There is a sort of hierarchy to the changing permissions:
-  // 1. path liveness is most important. If it changes, this radically
-  //    has an affect on everything.
-  // 2. A path getting moved is the second highest. Again, a moved path
-  //    cannot be borrowed so it sort of trumps any loan refinements.
-  // 3. At the bottom, loan refinement changes which can only have an
-  //    affect if the prior two didn't change anything.
-
+  // We first prioritize "moves" and "borrows" (permission refinements),
+  // these actions are visually important because they reflect concrete
+  // actions in the source-code. Liveness is implicit, and should be
+  // shown after the other actions.
   let visualFacts: VisualFact<Facts>[] = [
-    {
-      fact: "is_live",
-      states: [
-        {
-          value: { type: "High", value: 0 },
-          icon: "level-up",
-          desc: "Path is initialized here",
-        },
-        {
-          value: { type: "Low" },
-          icon: "level-down",
-          desc: "Path is no longer used here",
-        },
-      ],
-    },
     {
       fact: "path_moved",
       states: [
@@ -164,21 +150,6 @@ let PermDiffRow = ({
           value: { type: "Low" },
           icon: "recycle",
           desc: "Path is re-initialized after move here",
-        },
-      ],
-    },
-    {
-      fact: "path_uninitialized",
-      states: [
-        {
-          value: { type: "High", value: 0 },
-          icon: "sign-out",
-          desc: "Path contains uninitialized data",
-        },
-        {
-          value: { type: "Low" },
-          icon: "recycle",
-          desc: "Path data is initialized after move here",
         },
       ],
     },
@@ -209,6 +180,36 @@ let PermDiffRow = ({
           value: { type: "Low" },
           icon: "rotate-left",
           desc: "Borrow on path is no longer used here",
+        },
+      ],
+    },
+    {
+      fact: "is_live",
+      states: [
+        {
+          value: { type: "High", value: 0 },
+          icon: "level-up",
+          desc: "Path is initialized here",
+        },
+        {
+          value: { type: "Low" },
+          icon: "level-down",
+          desc: "Path is no longer used here",
+        },
+      ],
+    },
+    {
+      fact: "path_uninitialized",
+      states: [
+        {
+          value: { type: "High", value: 0 },
+          icon: "sign-out",
+          desc: "Path contains uninitialized data",
+        },
+        {
+          value: { type: "Low" },
+          icon: "recycle",
+          desc: "Path data is initialized after move here",
         },
       ],
     },
@@ -250,7 +251,7 @@ let PermDiffRow = ({
       moveKey,
     },
     {
-      perm: dropChar,
+      perm: ownChar,
       step: diffs.permissions.drop,
       loanKey: unwrap(diffs.loan_drop_refined),
       moveKey,
@@ -414,8 +415,16 @@ class PermissionStepLineWidget extends WidgetType {
     let padding = 2 + maxLineLen - currLine.length;
     let spaces = "―".repeat(padding);
 
-    let userRegex = this.annotations?.focused_paths[currLine.number];
-    let r = new RegExp(userRegex ? _.escapeRegExp(userRegex) : "(.*)?");
+    let matchers = this.annotations?.focused_paths[currLine.number];
+    let rx = matchers
+      ?.map(matcher =>
+        matcher.type == "Literal"
+          ? _.escapeRegExp(matcher.value)
+          : matcher.value
+      )
+      .map(s => `(${s})`)
+      .join("|");
+    let r = new RegExp(rx ?? "(.*)?");
 
     let tables = this.step.state;
 

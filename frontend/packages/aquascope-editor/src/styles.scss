@@ -10,12 +10,12 @@ $transparent: rgba(0, 0, 0, 0);
   // the corresponding rgb values below!
   --aq-read-color: #ff9500;
   --aq-write-color: #0c7bdc;
-  --aq-drop-color: #dc0055;
+  --aq-own-color: #dc0055;
   --aq-flow-color: #5ed100;
 
   --aq-read-rgb-color: 255, 149, 0;
   --aq-write-rgb-color: 12, 123, 220;
-  --aq-drop-rgb-color: 220, 0, 85;
+  --aq-own-rgb-color: 220, 0, 85;
 
   // For step table permission colors
   --aq-perm-gain-color: #333;
@@ -80,9 +80,9 @@ $glyph-width: 14px;
     -webkit-text-stroke-color: var(--aq-write-color);
   }
 
-  &.drop {
-    color: var(--aq-drop-color);
-    -webkit-text-stroke-color: var(--aq-drop-color);
+  &.own {
+    color: var(--aq-own-color);
+    -webkit-text-stroke-color: var(--aq-own-color);
   }
 
   &.flow {
@@ -210,6 +210,35 @@ $perm-animation-duration: 0.5s;
   }
 }
 
+.perm-diff-sub-container {
+  position: relative;
+  width: min-content;
+  display: inline-block;
+}
+.perm-diff-sub {
+  position: absolute;
+  left: calc((100% - $glyph-width) / 2);
+  top: calc((100% - $glyph-width) / 2);
+  width: $glyph-width;
+  height: $glyph-width;
+  background: linear-gradient(
+    to top left,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0) calc(50% - 1px),
+    var(--aq-perm-loss-color) calc(50% - 0.75px),
+    var(--aq-perm-loss-color) calc(50% + 0.75px),
+    rgba(0, 0, 0, 0) calc(50% + 1px),
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+.perm-diff-add {
+  color: var(--aq-perm-gain-color);
+  margin-right: -2px;
+  position: relative;
+  bottom: 1px;
+  font-size: 80%;
+}
+
 .aquascope {
   position: relative;
   height: 100%;
@@ -296,8 +325,8 @@ $perm-animation-duration: 0.5s;
         text-decoration: underline 3px var(--aq-write-color) !important;
       }
 
-      &.drop {
-        text-decoration: underline 3px var(--aq-drop-color) !important;
+      &.own {
+        text-decoration: underline 3px var(--aq-own-color) !important;
       }
     }
   }
@@ -316,8 +345,8 @@ $perm-animation-duration: 0.5s;
         background-color: rgba(var(--aq-write-rgb-color), 0.4) !important;
       }
 
-      &.drop {
-        background-color: rgba(var(--aq-drop-rgb-color), 0.4) !important;
+      &.own {
+        background-color: rgba(var(--aq-own-rgb-color), 0.4) !important;
       }
     }
   }
@@ -432,41 +461,12 @@ $perm-animation-duration: 0.5s;
     position: relative;
     font: bold $glyph-width "Verdana";
     text-align: center;
+    cursor: default;
 
     // TODO: fix the conflicts w/ other rules
     border-left: none !important;
     border-right: none !important;
     padding: 1px 2px !important;
-  }
-
-  .perm-diff-add {
-    color: var(--aq-perm-gain-color);
-    margin-right: -2px;
-    position: relative;
-    bottom: 1px;
-    font-size: 80%;
-  }
-
-  .perm-diff-sub-container {
-    position: relative;
-    width: min-content;
-    display: inline-block;
-  }
-  .perm-diff-sub {
-    position: absolute;
-    left: calc((100% - $glyph-width) / 2);
-    top: calc((100% - $glyph-width) / 2);
-    width: $glyph-width;
-    height: $glyph-width;
-    background: linear-gradient(
-      to top left,
-      rgba(0, 0, 0, 0) 0%,
-      rgba(0, 0, 0, 0) calc(50% - 1px),
-      var(--aq-perm-loss-color) calc(50% - 0.75px),
-      var(--aq-perm-loss-color) calc(50% + 0.75px),
-      rgba(0, 0, 0, 0) calc(50% + 1px),
-      rgba(0, 0, 0, 0) 100%
-    );
   }
 
   .aquascope-action-indicator {
@@ -550,6 +550,9 @@ $perm-animation-duration: 0.5s;
     }
 
     .step-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
       margin-bottom: 5px;
 
       .step-marker {
@@ -558,8 +561,8 @@ $perm-animation-duration: 0.5s;
       }
 
       .undefined-behavior {
-        margin-left: 10px;
         color: var(--aq-error);
+        max-width: 250px;
       }
     }
 

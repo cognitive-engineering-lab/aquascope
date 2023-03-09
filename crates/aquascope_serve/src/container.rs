@@ -1,7 +1,7 @@
 use snafu::prelude::*;
 
-use std::process::Command;
-use std::{io, os::unix::fs::PermissionsExt, path::PathBuf, str};
+use std::{io, os::unix::fs::PermissionsExt, path::PathBuf, str, time::Duration};
+use tokio::{self, process::Command, time};
 
 use crate::{ServerResponse, SingleFileRequest};
 
@@ -27,9 +27,6 @@ use {
     tempfile::{tempdir, TempDir},
 };
 
-const DEFAULT_IMAGE: &str = "aquascope";
-const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
-
 #[derive(Debug, Snafu)]
 pub enum Error {
     #[snafu(display("Bollard operation failed {}", source))]
@@ -44,9 +41,30 @@ pub enum Error {
     UnableToCreateSourceFile { source: io::Error },
     #[snafu(display("Unable to launch the docker container: {}", source))]
     UnableToStartDocker { source: io::Error },
+
+    #[snafu(display("Command execution took longer than {} ms", timeout.as_millis()))]
+    CommandExecTimedOut {
+        source: time::error::Elapsed,
+        timeout: Duration,
+    },
 }
 
 pub type Result<T, E = Error> = ::std::result::Result<T, E>;
+
+const DEFAULT_IMAGE: &str = "aquascope";
+const DEFAULT_PROJECT_PATH: &str = "aquascope_tmp_proj";
+
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
+// Memory limit in bytes.
+const DOCKER_MEM_LIMIT: i64 = 512_000_000;
+// Swap limit in bytes (when MEM_LIMIT == SWAP_LIMIT no swap is allowed).
+const DOCKER_SWAP_LIMIT: i64 = 512_000_000;
+const DOCKER_PID_LIMIT: i64 = 32;
+// Default docker `--cpu-quota` is 100000 microseconds
+// `--cpus` is a better flag to use but Bollard doesn't provide this.
+const DOCKER_CPU_PERIOD: i64 = 100_000;
+// Cap a container to use 50% of one available CPU.
+const DOCKER_CPU_QUOTA: i64 = DOCKER_CPU_PERIOD / 2;
 
 #[cfg(not(feature = "no-docker"))]
 pub struct Container {
@@ -78,7 +96,7 @@ impl Container {
 
     #[cfg(not(feature = "no-docker"))]
     pub async fn new() -> Result<Self> {
-        let d = Docker::connect_with_local_defaults()?;
+        let d = Docker::connect_with_local_defaults()?.with_timeout(COMMAND_TIMEOUT);
         let docker = Arc::new(d);
         docker.ping().await?;
         let image = DEFAULT_IMAGE;
@@ -96,6 +114,11 @@ impl Container {
             tty: Some(true), // to keep the container alive
             image: Some(image),
             host_config: Some(HostConfig {
+                cpu_period: Some(DOCKER_CPU_PERIOD),
+                cpu_quota: Some(DOCKER_CPU_QUOTA),
+                memory: Some(DOCKER_MEM_LIMIT),
+                memory_swap: Some(DOCKER_SWAP_LIMIT),
+                pids_limit: Some(DOCKER_PID_LIMIT),
                 binds: Some(vec![format!("{}:/mnt", mount_path.display())]),
                 ..Default::default()
             }),
@@ -152,10 +175,18 @@ impl Container {
 
     #[cfg(feature = "no-docker")]
     pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
-        let output = cmd
-            .current_dir(self.cwd())
-            .output()
-            .context(UnableToExecCommandSnafu)?;
+        let timeout = COMMAND_TIMEOUT;
+        let cmd = cmd.current_dir(self.cwd());
+        let timed_out = match time::timeout(timeout, cmd.output()).await {
+            Ok(Ok(output)) => Ok(output),
+            // failure
+            Ok(e @ Err(_)) => return e.map(|_| unreachable!()).context(UnableToExecCommandSnafu),
+            // timeout
+            Err(e) => Err(e),
+        };
+
+        let output = timed_out.context(CommandExecTimedOutSnafu { timeout })?;
+
         // TODO: FIXME
         let stdout = String::from_utf8(output.stdout).unwrap();
         let stderr = String::from_utf8(output.stderr).unwrap();
@@ -170,6 +201,8 @@ impl Container {
     // Returns (Stdout, Stderr)
     #[cfg(not(feature = "no-docker"))]
     pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
+        // Convert back to std::process::Command for acess to get_XXX functions.
+        let cmd = cmd.as_std();
         let args = iter::once(cmd.get_program())
             .chain(cmd.get_args())
             .map(|s| s.to_string_lossy().to_string())
@@ -198,46 +231,50 @@ impl Container {
             })
             .await?;
 
+        macro_rules! get_variant_as_string {
+            ($id:path, $e:expr) => {
+                if let $id { message } = $e {
+                    String::from_utf8_lossy(message.as_ref()).to_string()
+                } else {
+                    unreachable!()
+                }
+            };
+        }
+
         if let StartExecResults::Attached { output, .. } = exec {
-            let lines = output
-                .filter_map(|log| async move {
-                    match log {
-                        Ok(LogOutput::StdOut { message }) => Some(LogOutput::StdOut { message }),
+            let timeout = COMMAND_TIMEOUT;
+            let lines = time::timeout(
+                timeout,
+                output
+                    .filter_map(|log| async move {
+                        match log {
+                            Ok(LogOutput::StdOut { message }) => {
+                                Some(LogOutput::StdOut { message })
+                            }
 
-                        Ok(LogOutput::StdErr { message }) => Some(LogOutput::StdErr { message }),
-                        _ => None,
-                    }
-                })
-                .collect::<Vec<_>>()
-                .await;
+                            Ok(LogOutput::StdErr { message }) => {
+                                Some(LogOutput::StdErr { message })
+                            }
+                            _ => None,
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .context(CommandExecTimedOutSnafu { timeout })?;
 
-            // FIXME this definitely shouldn't be so verbose...
-            let (stdout, stderr): (Vec<_>, Vec<_>) = lines.iter().partition(|e| match e {
-                LogOutput::StdOut { message: _ } => true,
-                LogOutput::StdErr { message: _ } => false,
-                _ => unreachable!(),
-            });
+            let (stdout, stderr): (Vec<_>, Vec<_>) = lines
+                .iter()
+                .partition(|e| matches!(e, LogOutput::StdOut { .. }));
 
             let stdout = stdout
                 .iter()
-                .map(|stdout| {
-                    if let LogOutput::StdOut { message } = stdout {
-                        String::from_utf8_lossy(message.as_ref()).to_string()
-                    } else {
-                        unreachable!()
-                    }
-                })
+                .map(|stdout| get_variant_as_string!(LogOutput::StdOut, stdout))
                 .collect::<Vec<_>>();
 
             let stderr = stderr
                 .iter()
-                .map(|stderr| {
-                    if let LogOutput::StdErr { message } = stderr {
-                        String::from_utf8_lossy(message.as_ref()).to_string()
-                    } else {
-                        unreachable!()
-                    }
-                })
+                .map(|stderr| get_variant_as_string!(LogOutput::StdErr, stderr))
                 .collect::<Vec<_>>();
 
             Ok((
@@ -263,10 +300,6 @@ impl Container {
 
         let mut cmd = Command::new("cargo");
         cmd.args(["new", "--bin", pwd, "--quiet"]);
-
-        // HACK: this is not good practice
-        // #[cfg(feature = "no-docker")]
-        // cmd.current_dir(self.workspace.path());
 
         let (output_s, stderr) = self.exec_output(&mut cmd).await?;
 
@@ -460,36 +493,106 @@ impl From<bollard::errors::Error> for Error {
     }
 }
 
-#[tokio::test]
-#[cfg(not(feature = "no-docker"))]
-async fn container_test() -> Result<()> {
-    let docker = Arc::new(Docker::connect_with_local_defaults()?);
-    docker.ping().await?;
-    let container = Container::with_docker(docker, DEFAULT_IMAGE).await?;
-    let mut cmd = Command::new("echo");
-    cmd.arg("hey");
-    let (output, _) = container.exec_output(&mut cmd).await?;
-    assert_eq!(output, "hey");
-    container.cleanup().await?;
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    Ok(())
-}
+    // HACK taken from the rust-playground:
+    // https://github.com/integer32llc/rust-playground/blob/master/ui/src/sandbox.rs#L1065-L1075
+    //
+    // Limits testing to one function at a time. Ensuring that containers
+    // have their full allotment when my local machine has fewer resources
+    // than the server.
+    fn one_test_at_a_time() -> impl Drop {
+        use lazy_static::lazy_static;
+        use std::sync::Mutex;
 
-#[tokio::test]
-async fn container_test_new_project() -> Result<()> {
-    let mut container = Container::new().await?;
-    container.cargo_new().await?;
-    assert!(container.project_dir.is_some());
-    let code = "fn main() { return 0; }";
-    container.write_source_code(code).await?;
+        lazy_static! {
+            static ref DOCKER_SINGLETON: Mutex<()> = Default::default();
+        }
 
-    let main_rs = container.main_abs_path();
-    let mut cmd = Command::new("cat");
-    cmd.arg(&main_rs);
+        // We can't poison the empty tuple
+        DOCKER_SINGLETON.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
-    let (output, _) = container.exec_output(&mut cmd).await?;
-    assert_eq!(output, code);
-    container.cleanup().await?;
+    #[tokio::test]
+    #[cfg(not(feature = "no-docker"))]
+    async fn container_test() -> Result<()> {
+        let _s = one_test_at_a_time();
+        let docker = Arc::new(Docker::connect_with_local_defaults()?);
+        docker.ping().await?;
+        let container = Container::with_docker(docker, DEFAULT_IMAGE).await?;
+        let mut cmd = Command::new("echo");
+        cmd.arg("hey");
+        let (output, _) = container.exec_output(&mut cmd).await?;
+        container.cleanup().await?;
+        assert_eq!(output, "hey");
 
-    Ok(())
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn container_test_new_project() -> Result<()> {
+        let _s = one_test_at_a_time();
+        let code = "fn main() { return 0; }";
+        let mut container = Container::new().await?;
+        container.cargo_new().await.expect("cargo new");
+        assert!(container.project_dir.is_some());
+        container.write_source_code(code).await?;
+        let main_rs = container.main_abs_path();
+        let mut cmd = Command::new("cat");
+        cmd.arg(&main_rs);
+
+        let (output, _) = container.exec_output(&mut cmd).await?;
+        container.cleanup().await?;
+        assert_eq!(output, code);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg(not(feature = "no-docker"))]
+    async fn container_has_timeout() -> Result<()> {
+        let _s = one_test_at_a_time();
+        let code = r#"
+            fn main() {
+                loop {}
+            }
+        "#
+        .to_string();
+        let container = Container::new().await?;
+        let req = SingleFileRequest { code, config: None };
+        let res = container.interpreter(&req).await?;
+
+        container.cleanup().await?;
+
+        assert!(!res.success);
+        assert!(res.stderr.contains("SIGKILL"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg(not(feature = "no-docker"))]
+    async fn container_has_memory_limit() -> Result<()> {
+        let _s = one_test_at_a_time();
+        let code = r#"
+            fn main() {
+                let gigabyte = 1024 * 1024 * 1024;
+                let mut big = vec![0u8; 1 * gigabyte];
+                for i in &mut big { *i += 1; }
+            }
+        "#
+        .to_string();
+        let container = Container::new().await?;
+        let req = SingleFileRequest { code, config: None };
+        let res = container.interpreter(&req).await?;
+
+        container.cleanup().await?;
+
+        assert!(!res.success);
+        assert!(res.stderr.contains("SIGKILL"));
+
+        Ok(())
+    }
 }

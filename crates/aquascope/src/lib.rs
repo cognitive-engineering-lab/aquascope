@@ -9,7 +9,6 @@
   unboxed_closures,
   once_cell,
   exact_size_is_empty,
-  iter_intersperse,
   is_some_and,
   hash_drain_filter,
   drain_filter,

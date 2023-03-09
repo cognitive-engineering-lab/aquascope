@@ -26,5 +26,8 @@ bollard = "0.13"
 tar = "0.4"
 tempfile = "3.3.0"
 
+[dev-dependencies]
+lazy_static = "1"
+
 [features]
 no-docker = []

@@ -137,7 +137,34 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
         self.data.push(pb);
       }
 
-      // NOTE: it feels natural to say that the LHS of an assignment
+      // If the left-hand-side of the assignment is a deref, then we would
+      // expect both read and write permissions from the path. We can say that
+      // here because in Rust you cannot have a reference to uninitialized memory,
+      // however, if the LHS is a moveable path (no deref) then it *could* be uninitialized.
+      ExprKind::Assign(
+        lhs @ Expr {
+          kind: ExprKind::Unary(UnOp::Deref, _),
+          ..
+        },
+        rhs,
+        _,
+      ) => {
+        let pb = PathBoundary {
+          location: lhs.span.shrink_to_lo(),
+          hir_id: lhs.hir_id,
+          flow_context,
+          conflicting_node: Some(rhs.hir_id),
+          expected: Permissions {
+            read: true,
+            write: true,
+            drop: false,
+          },
+        };
+        self.data.push(pb);
+        self.visit_expr(rhs);
+      }
+
+      // It feels natural to say that the LHS of an assignment
       // should expect W permissions. However, this isn't always the case.
       // It's true that the path should be declared as *Mutable*, but
       // this doesn't mean that there's write permissions. Example:
@@ -149,7 +176,8 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
       //
       // `s` would not have write permissions because it is not yet initialized.
       // For now, the LHS is simply ignored from the boundaries analysis.
-      ExprKind::Assign(_, rhs, _) => {
+      ExprKind::Assign(lhs, rhs, _) => {
+        log::debug!("ASSIGN: ignoring LHS {lhs:#?}");
         self.visit_expr(rhs);
       }
 
