@@ -29,10 +29,6 @@ export { PermissionsStepTable } from "./bindings/PermissionsStepTable";
 export { PermissionsDataDiff } from "./bindings/PermissionsDataDiff";
 export { PermissionsDiff } from "./bindings/PermissionsDiff";
 
-export { RegionFlow } from "./bindings/RegionFlow";
-export { RegionViolation } from "./bindings/RegionViolation";
-export { RegionViolationKind } from "./bindings/RegionViolationKind";
-
 export { MMemorySegment } from "./bindings/MMemorySegment";
 export { MPathSegment } from "./bindings/MPathSegment";
 export { MPath } from "./bindings/MPath";
