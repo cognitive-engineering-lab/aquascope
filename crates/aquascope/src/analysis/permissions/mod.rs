@@ -10,6 +10,7 @@ pub mod utils;
 use std::ops::{Deref, DerefMut};
 
 pub use context::PermissionsCtxt;
+pub use flow::ENABLE_FLOW_PERMISSIONS;
 pub use output::{compute, Output};
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::RustcFacts;

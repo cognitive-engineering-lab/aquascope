@@ -1,55 +1,84 @@
 //! Region flow analysis for lifetime errors.
 //!
-//! Answer queries of the form, can region 1 flow into region 2?
+//! Answers queries of the form, is the flow from region 1  to region 2 valid?
+//!
+//! ## High-level idea
 //!
 //! 1. A region R is abstract (φ) if there exists a flow from an abstract source to R.
 //!
 //! 2. A region R is concrete (ω) if there exists a flow from a local borrow to R.
 //!    (in other words, if R conflicts with a body-owned `Place`).
 //!
-//! XXX: a region could be both abstract and concrete.
+//! NOTE: a region can be both abstract and concrete.
 //!
-//! ① A "missing constraint" error occurs IFF:
+//! The following rules will work on a graph `G`, and a borrow-check error is
+//! represented by *borrowfail G*.
 //!
+//! ### Missing universal constraint
+//!
+//! A "missing constraint" error occurs IFF:
+//!
+//! ```text
 //! φ_1 -> φ_2     φ_1 ⊈ φ_2
 //! ----------------------------
 //!       borrowfail G
+//! ```
 //!
 //! An example of this:
 //!
-//! ```text
+//! ```rust,ignore
 //! fn ident<'a, 'b, T>(a: &'a T, b: &'b T) -> &'a T {
 //!   b
 //! }
 //! ```
-//! 'b -> 'a but 'b ⊈ 'a
 //!
-//! You'll notice that a "flows into" relationship requires
-//! a `subset` origin relationship.
+//! Notice that a "flows into" relationship requires a `subset` origin relationship.
 //!
+//! ### Local outlives universal
 //!
-//! ② A "local outlives" error occurs IFF:
+//! A "local outlives" error occurs IFF:
 //!
+//! ```text
 //!     ω -> φ
 //! ---------------
 //!  borrowfail G
+//! ```
 //!
-//! ③  A "hidden type" error occurs IFF:
+//! ### Other region related errors
 //!
-//! TODO
+//! Notably, there are other ways in which a region error could occur:
+//! - A "hidden type" error occurs if a struct captures a lifetime that does not
+//!   appear in the resulting types member constraints (arising from `impl Trait`).
+//! - The simplest case, two concrete values involved in a region error.
+//!   See examples at: <https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html>.
+//!
+//! These types of region errors are not covered by this analysis and may be coming in the future.
+//!
+//! ## Implementation details
+//!
+//! The simplified algorithm here represents a subset of the rustc "Region Inference"
+//! algorithm, details about it can be found at <https://rustc-dev-guide.rust-lang.org/borrow_check/region_inference.html>.
+//!
+//! Briefly summarized here, the set of constraints provided by Polonius' `subset_base` facts
+//! are turned into a flow graph, where a constraint such as `'a: 'b` get's turned into an
+//! edge `'a -> 'b`. This graph forms the basis of flow analysis as outlined previously.
+use std::time::Instant;
 
+use fluid_let::fluid_let;
 use itertools::Itertools;
 use rustc_borrowck::borrow_set::BorrowData;
 use rustc_data_structures::graph::{
   scc::Sccs, vec_graph::VecGraph, WithSuccessors,
 };
-use rustc_index::bit_set::{BitMatrix, BitSet};
+use rustc_index::bit_set::{BitMatrix, BitSet, SparseBitMatrix};
 use serde::Serialize;
 use smallvec::SmallVec;
 use ts_rs::TS;
 
 use super::{places_conflict, Origin, PermissionsCtxt};
 use crate::mir::utils::{BodyExt, ToRegionVid};
+
+fluid_let!(pub static ENABLE_FLOW_PERMISSIONS: bool);
 
 rustc_index::newtype_index! {
   pub struct SccIdx {
@@ -93,70 +122,13 @@ enum AbstractRegionKind {
   None,
 }
 
-/// Given facts from polonius:
-///
-/// decl placeholder(Origin).
-/// decl borrowed_local_place(Origin).
-/// decl subset(Origin0, Origin1).
-/// decl known_flow(Origin0, Origin1).
-///
-/// ---
-///
-/// decl is_local_source(Origin).
-///
-/// is_local_source(Origin) :-
-///   borrowed_local_place(Origin).
-///
-/// ---
-///
-/// decl is_abstract_source(Origin).
-///
-/// is_abstract_source(Origin) :-
-///   placeholder(Origin).
-///
-/// is_abstract_source(Origin) :-
-///   subset(Origin0, Origin),
-///   subset(Origin, Origin0),
-///   is_abstract_source(Origin0).
-///
-/// ---
-///
-/// decl abstract_region(Origin).
-///
-/// abstract_region(Origin) :-
-///   is_abstract_source(Origin).
-///
-/// abstract_region(Origin) :-
-///   subset(Origin0, Origin),
-///   abstract_region(Origin0).
-///
-/// ---
-///
-/// decl local_region(Origin).
-///
-/// local_region(Origin) :-
-///   is_local_source(Origin).
-///
-/// local_region(Origin) :-
-///   subset(Origin0, Origin),
-///   local_region(Origin0).
-///
-/// ---
-///
-/// decl flow_violation(Origin0, Origin1).
-///
-/// flow_violation(Origin0, Origin1) :-
-///   TODO.
-
-// TODO we might be able to make some of these sparse matrices, I haven't
-// gathered too much data on the actual edges yet.
 #[allow(dead_code)]
 pub struct RegionFlows {
   /// The flow constraint graph over the `subset_base` relation.
   constraint_graph: Sccs<Origin, SccIdx>,
 
   /// Full set of known flows per the `known_placeholder_subset` relation.
-  known_flows: BitMatrix<SccIdx, SccIdx>,
+  known_flows: SparseBitMatrix<SccIdx, SccIdx>,
 
   /// Components that contain a placeholder region.
   abstract_sources: BitSet<SccIdx>,
@@ -258,6 +230,7 @@ impl RegionFlows {
 }
 
 pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
+  let timer = Instant::now();
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
 
@@ -290,16 +263,15 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
 
   let vertices = flat_nodes!(constraints).collect::<Vec<_>>();
 
-  // NOTE: regions that only occur in the return type are not
+  // Regions that only occur in the return type are not
   // included in the abstract placeholders set. Example:
-  // ```rust,no-run
+  // ```rust,ignore
   // fn mk_string() -> &'a String {
   //   let s = String::from("s");
   //   &s
   // }
   // ```
-  // The `'a`, included for clarity but would be implicit usually,
-  // does not appear in the placeholders set.
+  // The `'a`, does not appear in the placeholders set.
   let placeholders = ctxt
     .polonius_input_facts
     .placeholder
@@ -331,7 +303,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
 
   // Compute the total flow facts (expensive).
   let num_sccs = scc_constraints.num_sccs();
-  let mut known_flows = BitMatrix::new(num_sccs, num_sccs);
+  let mut known_flows = SparseBitMatrix::new(num_sccs);
 
   for &r1 in placeholders.iter() {
     for r2 in known_flows_graph.depth_first_search(r1) {
@@ -431,6 +403,18 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   };
 
   ctxt.region_flows = Some(region_flows);
+
+  log::info!(
+    "region flow analysis for {:?} took: {:?}",
+    {
+      let owner = tcx.hir().body_owner(ctxt.body_id);
+      match tcx.hir().opt_name(owner) {
+        Some(name) => name.to_ident_string(),
+        None => "<anonymous>".to_owned(),
+      }
+    },
+    timer.elapsed()
+  );
 }
 
 /// Check if the given borrow is invalidated by an exit point.
@@ -471,12 +455,7 @@ fn check_for_invalidation_at_exit<'tcx>(
       root_place.projection = TyCtxtConsts::DEREF_PROJECTION;
       (true, true)
     } else {
-      (
-        // TODO: FIXME: HACK: this isn't always true, but for
-        // our context of only evaluating function bodies it
-        // may be ok for many situations (not closures though).
-        false, true, // self.locals_are_invalidated_at_exit
-      )
+      (false, ctxt.locals_are_invalidated_at_exit)
     };
 
   if !will_be_dropped {

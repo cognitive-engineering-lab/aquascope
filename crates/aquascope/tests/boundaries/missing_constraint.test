@@ -1,0 +1,4 @@
+////! show-flows
+fn missing_constraint<'a, 'b>(a: &'a i32, b: &'b i32) -> &'a i32 {
+  b
+}

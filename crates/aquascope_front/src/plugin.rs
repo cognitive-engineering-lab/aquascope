@@ -7,6 +7,7 @@ use std::{
 use aquascope::{
   analysis::{
     self,
+    permissions::ENABLE_FLOW_PERMISSIONS,
     stepper::{PermIncludeMode, INCLUDE_MODE},
     AquascopeError, AquascopeResult,
   },
@@ -42,6 +43,9 @@ enum AquascopeCommand {
   Permissions {
     #[clap(long)]
     steps_include_mode: Option<PermIncludeMode>,
+
+    #[clap(long)]
+    show_flows: Option<bool>,
 
     #[clap(last = true)]
     flags: Vec<String>,
@@ -122,10 +126,16 @@ impl RustcPlugin for AquascopePlugin {
     use AquascopeCommand::*;
     match plugin_args.command {
       Permissions {
-        steps_include_mode, ..
+        steps_include_mode,
+        show_flows,
+        ..
       } => {
         let mode = steps_include_mode.unwrap_or(PermIncludeMode::Changes);
         fluid_set!(INCLUDE_MODE, mode);
+
+        let enable_flows = show_flows.unwrap_or(false);
+        fluid_set!(ENABLE_FLOW_PERMISSIONS, enable_flows);
+
         postprocess(run(permissions_analyze_body, &compiler_args))
       }
       Interpreter { .. } => {

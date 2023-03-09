@@ -10,6 +10,7 @@ use flowistry::{
   source_map::{self, Spanner, ToSpan},
   test_utils::{DUMMY_CHAR_RANGE, DUMMY_FILE, DUMMY_FILE_NAME},
 };
+use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
 use rustc_hir::{BodyId, ItemKind};
@@ -24,7 +25,7 @@ use crate::{
     self,
     boundaries::PermissionsBoundary,
     ir_mapper::{GatherMode, IRMapper},
-    permissions::Permissions,
+    permissions::{Permissions, ENABLE_FLOW_PERMISSIONS},
     stepper::PermissionsDataDiff,
   },
   errors,
@@ -69,6 +70,13 @@ impl From<&str> for Permissions {
 // to a place string and corresponding permissions.
 type PermMap =
   HashMap<(source_map::BytePos, source_map::BytePos), (String, Permissions)>;
+
+static CFG_HASH: &str = "////!";
+
+#[derive(Debug, Default)]
+pub(crate) struct TestFileConfig {
+  show_flows: Option<bool>,
+}
 
 fn split_test_source(
   source: impl AsRef<str>,
@@ -170,20 +178,34 @@ fn parse_test_source(
   Ok((clean, map))
 }
 
-pub fn load_test_from_file(path: &Path) -> Result<String> {
+pub(crate) fn load_test_from_file(
+  path: &Path,
+) -> Result<(String, TestFileConfig)> {
   log::info!(
     "Loading test from {}",
     path.file_name().unwrap().to_string_lossy()
   );
   let c = fs::read(path)
     .with_context(|| format!("failed to load test from {path:?}"))?;
-  String::from_utf8(c)
-    .with_context(|| format!("UTF8 parse error in file: {path:?}"))
+  let source = String::from_utf8(c)
+    .with_context(|| format!("UTF8 parse error in file: {path:?}"))?;
+
+  let mut cfg = TestFileConfig::default();
+
+  // TODO: Add a more expressive way to add test annotations.
+  //       We can share some functionality with the mdbook-aquascope parser.
+  for line in source.lines() {
+    if line.starts_with(CFG_HASH) && line.contains("show-flows") {
+      cfg.show_flows = Some(true);
+    }
+  }
+
+  Ok((source, cfg))
 }
 
 pub fn test_refinements_in_file(path: &Path) {
   let inner = || -> Result<()> {
-    let input = load_test_from_file(path)?;
+    let (input, _) = load_test_from_file(path)?;
     let (clean_input, _) = parse_test_source(&input, ("`[", "]`"))?;
 
     compile_normal(clean_input, |tcx| {
@@ -280,9 +302,10 @@ pub fn test_boundaries_in_file(
   use analysis::boundaries::compute_boundaries;
 
   let inner = || -> Result<()> {
-    let source = load_test_from_file(path)?;
+    let (source, cfg) = load_test_from_file(path)?;
     compile_normal(source, move |tcx| {
       for_each_body(tcx, |body_id, body_with_facts| {
+        fluid_set!(ENABLE_FLOW_PERMISSIONS, cfg.show_flows.unwrap_or(false));
         let ctxt =
           &analysis::compute_permissions(tcx, body_id, body_with_facts);
         let ir_mapper = IRMapper::new(
@@ -326,7 +349,7 @@ pub fn test_steps_in_file(
 ) {
   use analysis::stepper::{find_steps, PermIncludeMode};
   let inner = || -> Result<()> {
-    let source = load_test_from_file(path)?;
+    let (source, _) = load_test_from_file(path)?;
     compile_normal(source, move |tcx| {
       for_each_body(tcx, |body_id, body_with_facts| {
         let ctxt =
@@ -399,7 +422,7 @@ pub fn test_interpreter_in_file(
   run_insta: impl Fn(String, MTrace<crate::Range>) + Sync,
 ) {
   let main = || -> Result<()> {
-    let input = load_test_from_file(path)?;
+    let (input, _) = load_test_from_file(path)?;
     let args = format!(
       "--crate-type bin --sysroot {}",
       aquascope_workspace_utils::miri_sysroot()?.display()

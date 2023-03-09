@@ -1,0 +1,5 @@
+////! show-flows
+fn add_ref(v: &mut Vec<&i32>, n: i32) {
+  let r = &n;
+  v.push(r);
+}

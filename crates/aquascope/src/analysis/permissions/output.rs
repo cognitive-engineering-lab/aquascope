@@ -20,6 +20,7 @@ use rustc_mir_dataflow::move_paths::MoveData;
 
 use super::{
   context::PermissionsCtxt,
+  flow::{self, ENABLE_FLOW_PERMISSIONS},
   places_conflict::{self, AccessDepth, PlaceConflictBias},
   AquascopeFacts, Loan, Move, Path, Point,
 };
@@ -488,6 +489,11 @@ pub fn compute<'a, 'tcx>(
   let def_id = def_id.to_def_id();
   let param_env = tcx.param_env_reveal_all_normalized(def_id);
 
+  // This should always be true for the current analysis of aquascope
+  let locals_are_invalidated_at_exit = def_id.as_local().map_or(false, |did| {
+    tcx.hir().body_owner_kind(did).is_fn_or_closure()
+  });
+
   let mut ctxt = PermissionsCtxt {
     tcx,
     permissions_output: Output::default(),
@@ -498,6 +504,7 @@ pub fn compute<'a, 'tcx>(
     body_with_facts,
     borrow_set,
     move_data,
+    locals_are_invalidated_at_exit,
     param_env,
     loan_regions: None,
     place_data: IndexVec::new(),
@@ -515,9 +522,9 @@ pub fn compute<'a, 'tcx>(
     timer.elapsed()
   );
 
-  // FIXME: move this somewhere else, in-fact, this entire
-  // function should probably get pulled out of here.
-  super::flow::compute_flows(&mut ctxt);
+  if ENABLE_FLOW_PERMISSIONS.copied().unwrap_or(false) {
+    flow::compute_flows(&mut ctxt);
+  }
 
   ctxt
 }

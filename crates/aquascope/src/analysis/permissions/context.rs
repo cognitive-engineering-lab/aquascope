@@ -43,6 +43,7 @@ pub struct PermissionsCtxt<'a, 'tcx> {
   pub borrow_set: BorrowSet<'tcx>,
   pub move_data: MoveData<'tcx>,
   pub loan_regions: Option<HashMap<Loan, (Point, Point)>>,
+  pub locals_are_invalidated_at_exit: bool,
   pub(crate) param_env: ParamEnv<'tcx>,
   pub(crate) place_data: IndexVec<Path, Place<'tcx>>,
   pub(crate) rev_lookup: HashMap<Local, Vec<Path>>,
