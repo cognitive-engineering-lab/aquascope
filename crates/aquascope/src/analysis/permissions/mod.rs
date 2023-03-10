@@ -1,5 +1,6 @@
 mod context;
-pub(crate) mod flow;
+// pub(crate) mod flow;
+pub(crate) mod flow_datalog;
 #[allow(clippy::all, clippy::pedantic)]
 mod graphviz;
 mod output;
@@ -10,7 +11,7 @@ pub mod utils;
 use std::ops::{Deref, DerefMut};
 
 pub use context::PermissionsCtxt;
-pub use flow::ENABLE_FLOW_PERMISSIONS;
+use fluid_let::fluid_let;
 pub use output::{compute, Output};
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::RustcFacts;
@@ -26,6 +27,8 @@ use crate::{
   analysis::{LoanKey, MoveKey},
   Range,
 };
+
+fluid_let!(pub static ENABLE_FLOW_PERMISSIONS: bool);
 
 /// Permission facts in Aquascope, similar to [`RustcFacts`].
 #[derive(Copy, Clone, Debug)]

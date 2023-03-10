@@ -19,8 +19,9 @@ use smallvec::{smallvec, SmallVec};
 
 use crate::{
   analysis::permissions::{
-    flow::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey, Output,
-    Path, Permissions, PermissionsData, PermissionsDomain, Point, Variable,
+    flow_datalog::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey,
+    Origin, Output, Path, Permissions, PermissionsData, PermissionsDomain,
+    Point, Variable,
   },
   mir::utils::BodyExt,
 };
@@ -127,8 +128,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       .unwrap_or(span)
   }
 
-  // XXX: experimental predicates for Moves
-
   pub fn move_to_moveable_path(&self, mv: Move) -> MoveablePath {
     self.move_data.moves[mv].path
   }
@@ -143,6 +142,14 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   // Predicates
+
+  pub fn is_universal_subset(&self, (from, to): (Origin, Origin)) -> bool {
+    self
+      .polonius_input_facts
+      .placeholder
+      .iter()
+      .any(|&(p, _)| p == from || p == to)
+  }
 
   pub fn is_location_operational(&self, loc: Location) -> bool {
     use either::Either::{Left, Right};

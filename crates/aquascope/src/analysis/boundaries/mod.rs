@@ -19,8 +19,8 @@ use crate::{
   analysis::{
     ir_mapper::{GatherDepth, IRMapper},
     permissions::{
-      flow::{FlowEdgeKind, ENABLE_FLOW_PERMISSIONS},
-      Origin, Permissions, PermissionsCtxt, PermissionsData, Point,
+      flow_datalog::FlowEdgeKind, Origin, Permissions, PermissionsCtxt,
+      PermissionsData, Point, ENABLE_FLOW_PERMISSIONS,
     },
     AquascopeAnalysis,
   },
@@ -129,19 +129,109 @@ fn flow_constraints_at_hir_id<'a, 'tcx: 'a>(
     .values()
     .flat_map(|loc| {
       let ps = ctxt.location_to_points(loc);
-      let region_flows = ctxt.region_flows();
       ctxt
         .polonius_input_facts
         .subset_base
         .iter()
         .filter(move |&(f, t, p)| {
-          region_flows.scc(*f) != region_flows.scc(*t) && ps.contains(p)
+          !ctxt.is_universal_subset((*f, *t)) && ps.contains(p)
         })
         .copied()
     })
     .collect::<Vec<_>>();
 
   Some(all_constraints)
+}
+
+/// If flow permissions are enabled, find expected flow permissions (if any) for the
+/// given `hir_id` within the larger `flow_context`.
+fn get_flow_permission<'tcx>(
+  ctxt: &PermissionsCtxt<'_, 'tcx>,
+  ir_mapper: &IRMapper<'_, 'tcx>,
+  flow_context: HirId,
+  hir_id: HirId,
+  span_to_range: impl Fn(Span) -> Range,
+) -> Option<FlowBoundary> {
+  if !ENABLE_FLOW_PERMISSIONS.copied().unwrap_or(false) {
+    log::warn!("Flow permissions are disabled!");
+    return None;
+  }
+
+  let hir = ctxt.tcx.hir();
+  let body = &ctxt.body_with_facts.body;
+
+  let region_flows = ctxt.region_flows();
+
+  log::debug!(
+    "FLOW INFORMATION:\nBound {} ---\n{:#?}\nAt {} ---\n{:#?}",
+    hir.node_to_string(flow_context),
+    flow_constraints_at_hir_id(ctxt, ir_mapper, flow_context),
+    hir.node_to_string(hir_id),
+    flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)
+  );
+
+  // Do any given constraints have an abstract Origin on the RHS?
+  let has_abstract_on_rhs = |flows: &[(Origin, Origin, Point)]| {
+    flows
+      .iter()
+      .any(|&(_, t, _)| region_flows.is_abstract_mem(t))
+  };
+
+  let context_constraints =
+    flow_constraints_at_hir_id(ctxt, ir_mapper, flow_context)?;
+
+  // FIXME: current restriction, only look at constraints when
+  // an abstract equivalent region is on the right-hand-side.
+  //
+  // This covers the cases:
+  // - missing abstract-outlives-abstract constraint.
+  // - local outlives abstract.
+  if !has_abstract_on_rhs(&context_constraints) {
+    return None;
+  }
+
+  log::debug!("flow context edges ---:\n{context_constraints:#?}");
+
+  // Search for relevant flows and flow violations.
+  let specific_constraints =
+    flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)?;
+  log::debug!("HirId local constraints ---:\n{specific_constraints:#?}");
+
+  let kind = context_constraints
+    .iter()
+    .find_map(|&(from, to, _)| {
+      let fk = region_flows.flow_kind(from, to);
+
+      // We want to look specifically for flows that:
+      // - flow to an abstract region (XXX: a current design constraint to be lifter)
+      // - are invalid
+      // - the local constraints create a context constraint involved in the violation.
+      if region_flows.is_abstract_mem(to)
+        && !fk.is_valid_flow()
+        && specific_constraints
+          .iter()
+          .any(|&(_f, t, _)| t == from || t == to)
+      {
+        log::debug!("found flow violation: {fk:?} @ {from:?} -> {to:?}");
+        Some(fk)
+      } else {
+        None
+      }
+    })
+    .unwrap_or_else(|| {
+      log::debug!("No flow edge violation found");
+      FlowEdgeKind::Ok
+    });
+
+  let raw_span = hir.span(flow_context);
+  let span = raw_span.as_local(body.span).unwrap_or(body.span);
+  let flow_context = span_to_range(span);
+
+  Some(FlowBoundary {
+    is_violation: !kind.is_valid_flow(),
+    flow_context,
+    kind,
+  })
 }
 
 #[allow(clippy::wildcard_in_or_patterns)]
@@ -234,95 +324,6 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
     .collect::<Vec<_>>();
 
   Some(mir_locations)
-}
-
-/// If flow permissions are enabled, find expected flow permissions (if any) for the
-/// given `hir_id` within the larger `flow_context`.
-fn get_flow_permission<'tcx>(
-  ctxt: &PermissionsCtxt<'_, 'tcx>,
-  ir_mapper: &IRMapper<'_, 'tcx>,
-  flow_context: HirId,
-  hir_id: HirId,
-  span_to_range: impl Fn(Span) -> Range,
-) -> Option<FlowBoundary> {
-  if !ENABLE_FLOW_PERMISSIONS.copied().unwrap_or(false) {
-    log::warn!("Flow permissions are disabled!");
-    return None;
-  }
-
-  let hir = ctxt.tcx.hir();
-  let body = &ctxt.body_with_facts.body;
-
-  let region_flows = ctxt.region_flows();
-
-  log::debug!(
-    "FLOW INFORMATION:\nBound {} ---\n{:#?}\nAt {} ---\n{:#?}",
-    hir.node_to_string(flow_context),
-    flow_constraints_at_hir_id(ctxt, ir_mapper, flow_context),
-    hir.node_to_string(hir_id),
-    flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)
-  );
-
-  // Do any given constraints have an abstract Origin on the RHS?
-  let has_abstract_on_rhs = |flows: &[(Origin, Origin, Point)]| {
-    flows
-      .iter()
-      .any(|&(_, t, _)| region_flows.is_abstract_mem(t))
-  };
-
-  let context_flows_opt =
-    flow_constraints_at_hir_id(ctxt, ir_mapper, flow_context).and_then(
-      |flows| {
-        // FIXME: current restriction, only look at constraints when
-        // an abstract equivalent region is on the right-hand-side.
-        //
-        // This covers the cases:
-        // - missing abstract-outlives-abstract constraint.
-        // - local outlives abstract.
-        has_abstract_on_rhs(&flows).then_some(flows)
-      },
-    );
-
-  log::debug!("flow context edges ---:\n{context_flows_opt:#?}");
-
-  // Search for relevant flows and flow violations.
-  flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id).and_then(
-    |specific_constraints| {
-      log::debug!("HirId local constraints ---:\n{specific_constraints:#?}");
-
-      context_flows_opt.map(|context_constraints| {
-        let kind = context_constraints
-          .iter()
-          .find_map(|&(from, to, _)| {
-            let fk = region_flows.flow_kind(from, to);
-            // We look for flows that are
-            // 1. Invalid
-            // 2. The local constraints create a context constraint
-            //    involved in the violation.
-            (region_flows.is_abstract_mem(to)
-              && !fk.is_valid_flow()
-              && specific_constraints
-                .iter()
-                .any(|&(_f, t, _)| t == from || t == to))
-            .then_some(fk)
-          })
-          .unwrap_or_else(|| {
-            log::debug!("no edge violation found");
-            FlowEdgeKind::Ok
-          });
-
-        let raw_span = hir.span(flow_context);
-        let span = raw_span.as_local(body.span).unwrap_or(body.span);
-        let flow_context = span_to_range(span);
-
-        FlowBoundary {
-          is_violation: !kind.is_valid_flow(),
-          flow_context,
-          kind,
-        }
-      })
-    },
-  )
 }
 
 fn path_to_perm_boundary<'a, 'tcx: 'a>(

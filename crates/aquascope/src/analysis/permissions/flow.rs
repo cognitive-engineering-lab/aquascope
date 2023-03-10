@@ -64,7 +64,6 @@
 //! edge `'a -> 'b`. This graph forms the basis of flow analysis as outlined previously.
 use std::time::Instant;
 
-use fluid_let::fluid_let;
 use itertools::Itertools;
 use rustc_borrowck::borrow_set::BorrowData;
 use rustc_data_structures::{
@@ -78,8 +77,6 @@ use ts_rs::TS;
 
 use super::{places_conflict, Origin, PermissionsCtxt};
 use crate::mir::utils::{BodyExt, ToRegionVid};
-
-fluid_let!(pub static ENABLE_FLOW_PERMISSIONS: bool);
 
 rustc_index::newtype_index! {
   pub struct SccIdx {

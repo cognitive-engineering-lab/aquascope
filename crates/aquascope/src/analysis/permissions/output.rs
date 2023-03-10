@@ -20,9 +20,9 @@ use rustc_mir_dataflow::move_paths::MoveData;
 
 use super::{
   context::PermissionsCtxt,
-  flow::{self, ENABLE_FLOW_PERMISSIONS},
+  flow_datalog as flow,
   places_conflict::{self, AccessDepth, PlaceConflictBias},
-  AquascopeFacts, Loan, Move, Path, Point,
+  AquascopeFacts, Loan, Move, Path, Point, ENABLE_FLOW_PERMISSIONS,
 };
 use crate::mir::utils::BodyExt;
 

@@ -122,6 +122,8 @@ pub trait ToRegionVid {
 }
 
 impl<'tcx> ToRegionVid for Region<'tcx> {
+  // XXX: when our pinned toolchain is upgraded we can
+  // use `Region::as_var` instead to make this simpler.
   fn to_region_vid(&self) -> RegionVid {
     if let ty::ReVar(vid) = self.kind() {
       vid
