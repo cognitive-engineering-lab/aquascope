@@ -27,16 +27,20 @@
   <p>
     Welcome! <a href=
     "https://github.com/cognitive-engineering-lab/aquascope">Aquascope</a></span>
-    is a tool to visualize the compile-time and run-time behavior of  <a href=
+    is a tool to visualize the compile-time and run-time behavior of <a href=
     "https://www.rust-lang.org/">Rust</a> programs.
-    Aquascope is a research tool under active
-    development.
-  </p> 
+  </p>
 
   <p>
-    You can try out Aquascope by writing a Rust program in the editor below, then 
+    You can try out Aquascope by writing a Rust program in the editor below, then
     clicking the "Interpret" button to see the runtime states, or clicking "Permissions" to see
     the borrow-checking compiler state.
+  </p>
+
+  <p>
+    Aquascope is a research tool under active development, so it doesn't work for some Rust programs.
+    If you want to see Aquascope diagrams in action, check out the new chapter on ownership in the
+    <a href="https://rust-book.cs.brown.edu/ch04-01-what-is-ownership.html">Rust Book Experiment</a>.
   </p>
   
   <div class="columns">
@@ -59,7 +63,7 @@
             <i class="fa fa-caret-down"></i>
           </button>
           <div class="dropdown-content">
-            <label class="dropdown-container">Passes borrow checker?
+            <label class="dropdown-container">Must pass borrow checker?
               <input type="checkbox" id="passesBorrowChecker">
               <span class="checkmark">
             </label>           
