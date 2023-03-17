@@ -1,6 +1,6 @@
 mod context;
-// pub(crate) mod flow;
-pub(crate) mod flow_datalog;
+pub(crate) mod flow;
+// pub(crate) mod flow_datalog;
 #[allow(clippy::all, clippy::pedantic)]
 mod graphviz;
 mod output;
@@ -29,6 +29,7 @@ use crate::{
 };
 
 fluid_let!(pub static ENABLE_FLOW_PERMISSIONS: bool);
+pub const ENABLE_FLOW_DEFAULT: bool = false;
 
 /// Permission facts in Aquascope, similar to [`RustcFacts`].
 #[derive(Copy, Clone, Debug)]

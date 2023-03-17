@@ -19,8 +19,8 @@ use crate::{
   analysis::{
     ir_mapper::{GatherDepth, IRMapper},
     permissions::{
-      flow_datalog::FlowEdgeKind, Origin, Permissions, PermissionsCtxt,
-      PermissionsData, Point, ENABLE_FLOW_PERMISSIONS,
+      flow::FlowEdgeKind, Origin, Permissions, PermissionsCtxt,
+      PermissionsData, Point, ENABLE_FLOW_DEFAULT, ENABLE_FLOW_PERMISSIONS,
     },
     AquascopeAnalysis,
   },
@@ -152,7 +152,10 @@ fn get_flow_permission<'tcx>(
   hir_id: HirId,
   span_to_range: impl Fn(Span) -> Range,
 ) -> Option<FlowBoundary> {
-  if !ENABLE_FLOW_PERMISSIONS.copied().unwrap_or(false) {
+  if !ENABLE_FLOW_PERMISSIONS
+    .copied()
+    .unwrap_or(ENABLE_FLOW_DEFAULT)
+  {
     log::warn!("Flow permissions are disabled!");
     return None;
   }
@@ -174,7 +177,7 @@ fn get_flow_permission<'tcx>(
   let has_abstract_on_rhs = |flows: &[(Origin, Origin, Point)]| {
     flows
       .iter()
-      .any(|&(_, t, _)| region_flows.is_abstract_mem(t))
+      .any(|&(_, t, _)| region_flows.has_abstract_member(t))
   };
 
   let context_constraints =
@@ -206,7 +209,7 @@ fn get_flow_permission<'tcx>(
       // - flow to an abstract region (XXX: a current design constraint to be lifter)
       // - are invalid
       // - the local constraints create a context constraint involved in the violation.
-      if region_flows.is_abstract_mem(to)
+      if region_flows.has_abstract_member(to)
         && !fk.is_valid_flow()
         && specific_constraints
           .iter()

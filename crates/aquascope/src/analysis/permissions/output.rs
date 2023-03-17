@@ -20,9 +20,10 @@ use rustc_mir_dataflow::move_paths::MoveData;
 
 use super::{
   context::PermissionsCtxt,
-  flow_datalog as flow,
+  flow,
   places_conflict::{self, AccessDepth, PlaceConflictBias},
-  AquascopeFacts, Loan, Move, Path, Point, ENABLE_FLOW_PERMISSIONS,
+  AquascopeFacts, Loan, Move, Path, Point, ENABLE_FLOW_DEFAULT,
+  ENABLE_FLOW_PERMISSIONS,
 };
 use crate::mir::utils::BodyExt;
 
@@ -522,7 +523,10 @@ pub fn compute<'a, 'tcx>(
     timer.elapsed()
   );
 
-  if ENABLE_FLOW_PERMISSIONS.copied().unwrap_or(false) {
+  if ENABLE_FLOW_PERMISSIONS
+    .copied()
+    .unwrap_or(ENABLE_FLOW_DEFAULT)
+  {
     flow::compute_flows(&mut ctxt);
   }
 

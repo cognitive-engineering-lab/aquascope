@@ -19,9 +19,9 @@ use smallvec::{smallvec, SmallVec};
 
 use crate::{
   analysis::permissions::{
-    flow_datalog::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey,
-    Origin, Output, Path, Permissions, PermissionsData, PermissionsDomain,
-    Point, Variable,
+    flow::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin,
+    Output, Path, Permissions, PermissionsData, PermissionsDomain, Point,
+    Variable,
   },
   mir::utils::BodyExt,
 };

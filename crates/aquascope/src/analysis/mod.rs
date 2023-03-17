@@ -279,11 +279,6 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
     body_id: BodyId,
   ) -> AquascopeResult<AnalysisOutput> {
-    fluid_let::fluid_set!(
-      crate::analysis::permissions::ENABLE_FLOW_PERMISSIONS,
-      true
-    );
-
     let def_id = tcx.hir().body_owner_def_id(body_id);
     let bwf = get_body_with_borrowck_facts(tcx, def_id);
     let permissions = compute_permissions(tcx, body_id, bwf);
