@@ -325,8 +325,11 @@ export class Editor {
     this.renderMeta();
 
     if (operation == "interpreter") {
-      let result = (response as any).Ok;
-      this.renderInterpreter(result, config as any, annotations?.interp);
+      if ("Ok" in response!) {
+        this.renderInterpreter(response.Ok, config as any, annotations?.interp);
+      } else {
+        this.reportStdErr(response!.Err);
+      }      
     } else if (operation == "permissions") {
       // The permissions analysis results are sent as an array of
       // body analyses. Each body could have analyzed successfuly,

@@ -53,6 +53,8 @@ jobs:
           version: latest
           use-tool-cache: true
       - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Quick Setup
+        uses: ./.github/workflows/quick-setup
       - uses: actions-rs/cargo@v1
         with:
           command: ws

@@ -52,20 +52,16 @@ window.addEventListener("load", () => {
   const stdErr = document.querySelector<HTMLElement>(".aquascope-stderr")!;
 
   // Insert support for multiple tabs
-
-  tabs.forEach(self => {
-    self.addEventListener("click", function () {
-      var data = this.getAttribute("data-tab");
-      document
-        .querySelectorAll(".tab-pane.active")[0]
-        .classList.remove("active");
-      document
-        .querySelectorAll(`.tab-pane[data-pane="${data}"]`)[0]
-        .classList.add("active");
-      document.querySelectorAll(".tab.active")[0].classList.remove("active");
-      this.classList.add("active");
-    });
-  });
+  let changeTab = (el: HTMLElement) => {
+    var data = el.getAttribute("data-tab");
+    document.querySelectorAll(".tab-pane.active")[0].classList.remove("active");
+    document
+      .querySelectorAll(`.tab-pane[data-pane="${data}"]`)[0]
+      .classList.add("active");
+    document.querySelectorAll(".tab.active")[0].classList.remove("active");
+    el.classList.add("active");
+  };
+  tabs.forEach(tab => tab.addEventListener("click", () => changeTab(tab)));
 
   globals = {
     editor: new Ed.Editor(
@@ -75,15 +71,17 @@ window.addEventListener("load", () => {
         if (err.type === "FileNotFound") {
           alert("A backend problem occurred!");
         } else if (err.type === "ServerStderr") {
-          stdErr.textContent = err.error;
+          stdErr.textContent = err.error;          
         } else if (err.type === "BuildError") {
-          console.debug("showing the build error card");
+        changeTab(tabs[1]);
+        console.debug("showing the build error card");
           buildErrorCard.classList.add("live");
           window.setTimeout(() => {
             console.debug("removing the build error card");
             buildErrorCard.classList.remove("live");
-          }, 2500);
+          }, 5000);
         } else if (err.type === "AnalysisError") {
+          changeTab(tabs[1]);
           analysisErrorCard.classList.add("live");
           analysisErrorMsg.innerText = err.msg;
         } else {

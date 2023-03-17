@@ -149,12 +149,11 @@ impl RustcPlugin for AquascopePlugin {
           plugin_args.should_fail,
         );
         let _ = run_with_callbacks(&compiler_args, &mut callbacks);
-        postprocess(
-          callbacks
-            .result
-            .unwrap()
-            .map_err(|e| AquascopeError::AnalysisError { msg: e.to_string() }),
-        )
+        postprocess(callbacks.result.unwrap().map_err(|_| {
+          AquascopeError::BuildError {
+            range: Range::default(),
+          }
+        }))
       }
       _ => unreachable!(),
     }
