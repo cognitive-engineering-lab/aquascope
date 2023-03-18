@@ -145,12 +145,10 @@ fn flow_constraints_at_hir_id<'a, 'tcx: 'a>(
 
 /// If flow permissions are enabled, find expected flow permissions (if any) for the
 /// given `hir_id` within the larger `flow_context`.
-fn get_flow_permission<'tcx>(
-  ctxt: &PermissionsCtxt<'_, 'tcx>,
-  ir_mapper: &IRMapper<'_, 'tcx>,
+fn get_flow_permission(
+  analysis: &AquascopeAnalysis,
   flow_context: HirId,
   hir_id: HirId,
-  span_to_range: impl Fn(Span) -> Range,
 ) -> Option<FlowBoundary> {
   if !ENABLE_FLOW_PERMISSIONS
     .copied()
@@ -160,6 +158,8 @@ fn get_flow_permission<'tcx>(
     return None;
   }
 
+  let ir_mapper = &analysis.ir_mapper;
+  let ctxt = &analysis.permissions;
   let hir = ctxt.tcx.hir();
   let body = &ctxt.body_with_facts.body;
 
@@ -228,7 +228,7 @@ fn get_flow_permission<'tcx>(
 
   let raw_span = hir.span(flow_context);
   let span = raw_span.as_local(body.span).unwrap_or(body.span);
-  let flow_context = span_to_range(span);
+  let flow_context = analysis.span_to_range(span);
 
   Some(FlowBoundary {
     is_violation: !kind.is_valid_flow(),
@@ -331,10 +331,10 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
 
 fn path_to_perm_boundary<'a, 'tcx: 'a>(
   path_boundary: PathBoundary,
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
-  ir_mapper: &'a IRMapper<'a, 'tcx>,
-  span_to_range: impl Fn(Span) -> Range + std::marker::Copy,
+  analysis: &'a AquascopeAnalysis<'a, 'tcx>,
 ) -> Option<PermissionsBoundary> {
+  let ctxt = &analysis.permissions;
+  let ir_mapper = &analysis.ir_mapper;
   let body = &ctxt.body_with_facts.body;
   let tcx = ctxt.tcx;
   let hir = tcx.hir();
@@ -385,13 +385,8 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
       let actual = ctxt.permissions_data_at_point(path, point);
       let expected = path_boundary.expected;
 
-      let expecting_flow = get_flow_permission(
-        ctxt,
-        ir_mapper,
-        path_boundary.flow_context,
-        hir_id,
-        span_to_range,
-      );
+      let expecting_flow =
+        get_flow_permission(analysis, path_boundary.flow_context, hir_id);
 
       log::debug!("Permissions data:\n{actual:#?}\n{expecting_flow:#?}");
 
@@ -403,7 +398,7 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
       // FIXME(gavinleroy): the spans are chosen in the `path_visitor` such that the end
       // of the span is where we want the stack to be placed. I would like to
       // make this a bit more explicit.
-      let location = span_to_range(span).char_end;
+      let location = analysis.span_to_range(span).char_end;
 
       PermissionsBoundary {
         location,
@@ -423,19 +418,19 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
   resolved_boundary
 }
 
-pub(crate) fn compute_boundaries<'a>(
-  ctxt: &PermissionsCtxt<'_, 'a>,
-  ir_mapper: &IRMapper<'_, 'a>,
-  span_to_range: impl Fn(Span) -> Range + std::marker::Copy,
+#[allow(clippy::module_name_repetitions)]
+pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
+  analysis: &AquascopeAnalysis<'a, 'tcx>,
 ) -> Result<Vec<PermissionsBoundary>> {
+  let ctxt = &analysis.permissions;
   let tcx = ctxt.tcx;
 
   let path_use_points = get_path_boundaries(tcx, ctxt.body_id, ctxt)?
     .into_iter()
-    .filter_map(|pb| path_to_perm_boundary(pb, ctxt, ir_mapper, span_to_range));
+    .filter_map(|pb| path_to_perm_boundary(pb, analysis));
 
   // FIXME: we need a more robust way of filtering by "first error".
-  // Here (and in the stepper) we do this by diagnostic span from rustc
+  // here (and in the stepper) we do this by diagnostic span from rustc
   // but that can sometimes be a little earlier than we might want.
   let first_error_span_opt =
     errors::get_span_of_first_error(ctxt.def_id.expect_local())
@@ -450,13 +445,4 @@ pub(crate) fn compute_boundaries<'a>(
     .collect::<Vec<_>>();
 
   Ok(boundaries)
-}
-
-#[allow(clippy::module_name_repetitions)]
-pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
-  ctxt: &AquascopeAnalysis<'a, 'tcx>,
-) -> Result<Vec<PermissionsBoundary>> {
-  compute_boundaries(&ctxt.permissions, &ctxt.ir_mapper, |span| {
-    ctxt.span_to_range(span)
-  })
 }

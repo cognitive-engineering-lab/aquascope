@@ -275,27 +275,32 @@ pub struct AnalysisOutput {
 }
 
 impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
-  pub fn run(
-    tcx: TyCtxt<'tcx>,
-    body_id: BodyId,
-  ) -> AquascopeResult<AnalysisOutput> {
+  pub fn new(tcx: TyCtxt<'tcx>, body_id: BodyId) -> Self {
     let def_id = tcx.hir().body_owner_def_id(body_id);
     let bwf = get_body_with_borrowck_facts(tcx, def_id);
     let permissions = compute_permissions(tcx, body_id, bwf);
     let body = &permissions.body_with_facts.body;
 
+    let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
+    AquascopeAnalysis {
+      permissions,
+      ir_mapper,
+    }
+  }
+
+  pub fn run(
+    tcx: TyCtxt<'tcx>,
+    body_id: BodyId,
+  ) -> AquascopeResult<AnalysisOutput> {
+    let analysis_ctxt = Self::new(tcx, body_id);
+    let body = &analysis_ctxt.permissions.body_with_facts.body;
+
     if body.tainted_by_errors.is_some() {
       let span = body.span;
-      let source_map = permissions.tcx.sess.source_map();
+      let source_map = tcx.sess.source_map();
       let range = CharRange::from_span(span, source_map).unwrap().into();
       return Err(AquascopeError::BuildError { range });
     }
-
-    let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
-    let analysis_ctxt = AquascopeAnalysis {
-      permissions,
-      ir_mapper,
-    };
 
     crate::analysis::permissions::utils::dump_mir_debug(
       &analysis_ctxt.permissions,

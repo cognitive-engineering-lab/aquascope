@@ -8,7 +8,7 @@ use flowistry::{
     utils::{BodyExt, OperandExt},
   },
   source_map::{self, Spanner, ToSpan},
-  test_utils::{DUMMY_CHAR_RANGE, DUMMY_FILE, DUMMY_FILE_NAME},
+  test_utils::{DUMMY_FILE, DUMMY_FILE_NAME},
 };
 use fluid_let::fluid_set;
 use itertools::Itertools;
@@ -23,10 +23,12 @@ use rustc_span::source_map::FileLoader;
 use crate::{
   analysis::{
     self,
-    boundaries::PermissionsBoundary,
-    ir_mapper::{GatherMode, IRMapper},
+    boundaries::{compute_permission_boundaries, PermissionsBoundary},
     permissions::{Permissions, ENABLE_FLOW_PERMISSIONS},
-    stepper::PermissionsDataDiff,
+    stepper::{
+      self, compute_permission_steps, PermIncludeMode, PermissionsDataDiff,
+    },
+    AquascopeAnalysis,
   },
   errors,
   interpreter::{self, MTrace},
@@ -295,40 +297,34 @@ pub fn test_refinements_in_file(path: &Path) {
   inner().unwrap()
 }
 
+fn analysis_snapshot_tag(ctxt: &AquascopeAnalysis) -> String {
+  let owner = ctxt
+    .permissions
+    .tcx
+    .hir()
+    .body_owner(ctxt.permissions.body_id);
+  ctxt
+    .permissions
+    .tcx
+    .hir()
+    .opt_name(owner)
+    .map_or_else(|| String::from("<anon body>"), |n| String::from(n.as_str()))
+}
+
 pub fn test_boundaries_in_file(
   path: &Path,
   assert_snap: impl Fn(String, Vec<PermissionsBoundary>) + Send + Sync + Copy,
 ) {
-  use analysis::boundaries::compute_boundaries;
-
   let inner = || -> Result<()> {
     let (source, cfg) = load_test_from_file(path)?;
     compile_normal(source, move |tcx| {
-      for_each_body(tcx, |body_id, body_with_facts| {
+      for_each_body(tcx, |body_id, _body_with_facts| {
         fluid_set!(ENABLE_FLOW_PERMISSIONS, cfg.show_flows.unwrap_or(false));
-        let ctxt =
-          &analysis::compute_permissions(tcx, body_id, body_with_facts);
-        let ir_mapper = IRMapper::new(
-          tcx,
-          &ctxt.body_with_facts.body,
-          GatherMode::IgnoreCleanup,
-        );
+        let ctxt = AquascopeAnalysis::new(tcx, body_id);
         // Required to give the snapshot a more specific internal name.
-        let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-        let tag = ctxt.tcx.hir().opt_name(owner).map_or_else(
-          || String::from("<anon body>"),
-          |n| String::from(n.as_str()),
-        );
-        let source_map = tcx.sess.source_map();
-        let boundaries = compute_boundaries(ctxt, &ir_mapper, |span| {
-          DUMMY_CHAR_RANGE.with(|dummy_char_range| {
-            source_map::CharRange::from_span(span, source_map)
-              .ok()
-              .unwrap_or(*dummy_char_range)
-              .into()
-          })
-        })
-        .expect("Permission boundaries failed in test");
+        let tag = analysis_snapshot_tag(&ctxt);
+        let boundaries = compute_permission_boundaries(&ctxt)
+          .expect("Permission boundaries failed in test");
 
         assert_snap(tag, boundaries);
       })
@@ -347,40 +343,17 @@ pub fn test_steps_in_file(
     + Sync
     + Copy,
 ) {
-  use analysis::stepper::{find_steps, PermIncludeMode};
+  use stepper::INCLUDE_MODE;
+
   let inner = || -> Result<()> {
     let (source, _) = load_test_from_file(path)?;
     compile_normal(source, move |tcx| {
-      for_each_body(tcx, |body_id, body_with_facts| {
-        let ctxt =
-          &analysis::compute_permissions(tcx, body_id, body_with_facts);
-        let ir_mapper = IRMapper::new(
-          tcx,
-          &ctxt.body_with_facts.body,
-          GatherMode::IgnoreCleanup,
-        );
-        // Required to give the snapshot a more specific internal name.
-        let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-        let tag = ctxt.tcx.hir().opt_name(owner).map_or_else(
-          || String::from("<anon body>"),
-          |n| String::from(n.as_str()),
-        );
-
-        let source_map = tcx.sess.source_map();
-        let body_steps = find_steps::compute_permission_steps(
-          ctxt,
-          &ir_mapper,
-          PermIncludeMode::Changes,
-          |span| {
-            DUMMY_CHAR_RANGE.with(|dummy_char_range| {
-              source_map::CharRange::from_span(span, source_map)
-                .ok()
-                .unwrap_or(*dummy_char_range)
-                .into()
-            })
-          },
-        )
-        .unwrap();
+      for_each_body(tcx, |body_id, _body_with_facts| {
+        let ctxt = AquascopeAnalysis::new(tcx, body_id);
+        let tag = analysis_snapshot_tag(&ctxt);
+        fluid_set!(INCLUDE_MODE, PermIncludeMode::Changes);
+        let body_steps = compute_permission_steps(&ctxt)
+          .expect("Permission steps failed in test");
 
         // NOTE: we normalize the permission steps to be
         // - usize: the line number of the corresponding statement.
@@ -394,7 +367,8 @@ pub fn test_steps_in_file(
               end: source_map::CharPos(pss.location.char_end),
               filename: FilenameIndex::from_usize(pss.location.filename),
             };
-            let span = char_range.to_span(ctxt.tcx).unwrap();
+            let span = char_range.to_span(ctxt.permissions.tcx).unwrap();
+            let source_map = tcx.sess.source_map();
             let line_num = source_map.lookup_line(span.hi()).unwrap().line;
             // FIXME: we shouldn't flatten the tables together, this was only a
             // quick fix for the tests.

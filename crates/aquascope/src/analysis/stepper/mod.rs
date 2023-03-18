@@ -1,9 +1,10 @@
-pub(crate) mod find_steps;
+mod find_steps;
 mod segment_tree;
 
 use std::collections::hash_map::Entry;
 
 use anyhow::Result;
+pub use find_steps::compute_permission_steps;
 use fluid_let::fluid_let;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_middle::mir::Place;
@@ -263,21 +264,4 @@ impl<'tcx> Difference for &PermissionsDomain<'tcx> {
         acc
       })
   }
-}
-
-pub fn compute_permission_steps<'a, 'tcx>(
-  ctxt: &AquascopeAnalysis<'a, 'tcx>,
-) -> Result<Vec<PermissionsLineDisplay>>
-where
-  'tcx: 'a,
-{
-  let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
-  let permissions_ctxt = &ctxt.permissions;
-  let span_to_range = |span| ctxt.span_to_range(span);
-  find_steps::compute_permission_steps(
-    permissions_ctxt,
-    &ctxt.ir_mapper,
-    mode,
-    span_to_range,
-  )
 }

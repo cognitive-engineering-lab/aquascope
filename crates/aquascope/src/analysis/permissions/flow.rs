@@ -4,12 +4,18 @@
 //!
 //! ## High-level idea
 //!
-//! 1. A region R is abstract (φ) if there exists a flow from an abstract source to R.
+//! We define an *abstract origin* (ϱ) to be the origin parameters of a body. This is
+//! the same definition as given by Oxide.
 //!
-//! 2. A region R is concrete (ω) if there exists a flow from a local borrow to R.
-//!    (in other words, if R conflicts with a body-owned `Place`).
+//! We define a *local source* S as the direct values within a body.
 //!
-//! NOTE: a region can be both abstract and concrete.
+//! We define a taint-environment Θ ::= `r` ↦ {ϱ_1, ϱ_2, ..., S_1, S_2, ...} mapping regions `r` to the sources
+//! that taint them (both local and abstract).
+//!
+//! 1. A region `r` is abstract-tainted if there exists a flow from an abstract origin ϱ to `r`.
+//!
+//! 2. A region `r` is local-tainted if there exists a flow from the borrow of a local source S to `r`.
+//!    (in other words, if `r` conflicts with a body-owned `Place`).
 //!
 //! The presented rules work on a graph `G` and a borrow-check error is represented by *borrowfail G*.
 //!
@@ -18,7 +24,9 @@
 //! A "missing constraint" error occurs IFF:
 //!
 //! ```text
-//! φ_1 -> φ_2     φ_1 ⊈ φ_2
+//! Θ ⊢ r_1 : { ϱ_1 }
+//! Θ ⊢ r_2 : { ϱ_2 }
+//! r_1 -> r_2     ϱ_1 ⊈ ϱ_2
 //! ----------------------------
 //!       borrowfail G
 //! ```
@@ -38,7 +46,9 @@
 //! A "local outlives" error occurs IFF:
 //!
 //! ```text
-//!     ω -> φ
+//! Θ ⊢ r_1 : { S }
+//! Θ ⊢ r_2 : { ϱ }
+//! r_1 -> r_2
 //! ---------------
 //!  borrowfail G
 //! ```
@@ -68,15 +78,13 @@ use std::time::Instant;
 use itertools::Itertools;
 use rustc_borrowck::borrow_set::BorrowData;
 use rustc_data_structures::{
-  fx::{FxHashMap as HashMap, FxHashSet as HashSet},
+  fx::FxHashSet as HashSet,
   graph::{
     scc::Sccs, vec_graph::VecGraph, DirectedGraph, WithNumNodes, WithSuccessors,
   },
+  transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
 };
-use rustc_index::{
-  bit_set::{BitMatrix, HybridBitSet},
-  vec::Idx,
-};
+use rustc_index::{bit_set::HybridBitSet, vec::Idx};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -127,16 +135,16 @@ pub struct RegionFlows {
   constraint_graph: Sccs<Origin, SccIdx>,
 
   /// Full set of known flows per the `known_placeholder_subset` relation.
-  known_flows: BitMatrix<SccIdx, SccIdx>,
+  specified_flows: TransitiveRelation<SccIdx>,
 
   /// Local regions that could dangle due to an exit invalidation.
   dangling_local_sources: HybridBitSet<SccIdx>,
 
   /// The set of abstract components that a given component could contain.
-  contains_abstract: BitMatrix<SccIdx, SccIdx>,
+  contains_abstract: TransitiveRelation<SccIdx>,
 
   /// The set of local components that a given component could contain.
-  contains_local: BitMatrix<SccIdx, SccIdx>,
+  contains_local: TransitiveRelation<SccIdx>,
 }
 
 impl RegionFlows {
@@ -145,11 +153,17 @@ impl RegionFlows {
   }
 
   pub fn has_abstract_member(&self, origin: Origin) -> bool {
-    self.contains_abstract.count(self.scc(origin)) > 0
+    !self
+      .contains_abstract
+      .reachable_from(self.scc(origin))
+      .is_empty()
   }
 
   pub fn has_local_member(&self, origin: Origin) -> bool {
-    self.contains_local.count(self.scc(origin)) > 0
+    !self
+      .contains_local
+      .reachable_from(self.scc(origin))
+      .is_empty()
   }
 
   /// Get the specific kind of flow edge that connects `from` and `to`.
@@ -163,11 +177,11 @@ impl RegionFlows {
       return FlowEdgeKind::Ok;
     }
 
-    let from_contains_abstract = self.contains_abstract.count(scc_from) > 0;
-    let from_contains_local = self.contains_local.count(scc_from) > 0;
+    let from_contains_abstract = self.has_abstract_member(from);
+    let from_contains_local = self.has_local_member(from);
 
-    let to_contains_abstract = self.contains_abstract.count(scc_to) > 0;
-    let to_contains_local = self.contains_local.count(scc_to) > 0;
+    let to_contains_abstract = self.has_abstract_member(to);
+    let to_contains_local = self.has_local_member(to);
 
     log::debug!(
       "Analyzing flow {from:?} -> {to:?} {:?} -> {:?}",
@@ -185,21 +199,28 @@ impl RegionFlows {
     }
 
     // If both regions contain abstract, we check that all regions in `from`
-    // are known to outlive those in `to`. Otherwise, there would be a missing
-    // constraint.
-    if !self.contains_abstract.iter(scc_from).all(|from| {
-      self
-        .contains_abstract
-        .iter(scc_to)
-        .all(|to| self.known_flows.contains(from, to))
-    }) {
+    // are known to outlive those in `to`. Otherwise, there is a
+    // missing constraint that needs to be specified.
+    if !self
+      .contains_abstract
+      .reachable_from(scc_from)
+      .into_iter()
+      .all(|from| {
+        self
+          .contains_abstract
+          .reachable_from(scc_to)
+          .into_iter()
+          .all(|to| self.specified_flows.contains(from, to))
+      })
+    {
       return FlowEdgeKind::MissingUniversalConstraint;
     }
 
     // If `from` is flowing a dangling pointer we would always consider this an error.
     if self
       .contains_local
-      .iter(scc_from)
+      .reachable_from(scc_from)
+      .into_iter()
       .any(|local| self.dangling_local_sources.contains(local))
     {
       return FlowEdgeKind::LocalInvalidatedAtExit;
@@ -227,34 +248,26 @@ fn count_nodes<T: Idx>(tups: &[(T, T)]) -> usize {
 }
 
 /// Compute the transitive flows from a set of given `sources` in `graph`.
+///
+/// The return closure answers queries of the form "for (v, s) did `s` flow to v?"
 fn flow_from_sources<T>(
-  mat: &mut BitMatrix<T, T>,
   sources: impl Iterator<Item = T>,
   graph: impl DirectedGraph<Node = T> + WithSuccessors + WithNumNodes,
-) where
+) -> TransitiveRelation<T>
+where
   T: Idx,
 {
-  // Initialize all abstract sources.
-  for a in sources {
-    mat.insert(a, a);
-  }
+  let mut tcb = TransitiveRelationBuilder::default();
 
-  let mut changed = true;
-
-  while changed {
-    changed = false;
-    for r1 in mat.rows() {
-      for r2 in graph.depth_first_search(r1) {
-        log::debug!(
-          "flowing {r1:?} -> {r2:?} ({} -> {})",
-          r1.index(),
-          r2.index()
-        );
-
-        changed |= mat.union_rows(r1, r2);
-      }
+  // Compute the transitive closure, then assert that they're the same.
+  for s in sources {
+    for t in graph.depth_first_search(s) {
+      // `t` can point to `s`
+      tcb.add(t, s);
     }
   }
+
+  tcb.freeze()
 }
 
 /// Check if the given borrow is invalidated by an exit point.
@@ -380,16 +393,14 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
 
   log::debug!("placeholder_edges: {placeholder_edges:#?}");
 
-  // Allowed flows between abstract regions.
-  let known_flows_graph = VecGraph::new(num_sccs, placeholder_edges);
+  // Allowed flows between abstract regions specified in the type signature.
+  //
+  // e.g. `fn foo<'a, 'b: 'a>(...) ...` would cause a `'b: 'a` specified flow in this graph.
+  let specified_flows_graph = VecGraph::new(num_sccs, placeholder_edges);
 
   // Compute the flow facts between abstract regions.
-  let mut known_flows = BitMatrix::new(num_sccs, num_sccs);
-  flow_from_sources(
-    &mut known_flows,
-    placeholders.iter().copied(),
-    &known_flows_graph,
-  );
+  let specified_flows =
+    flow_from_sources(placeholders.iter().copied(), &specified_flows_graph);
 
   // Compute local sources:
   // If `Place::is_indirect` returns false, the caller knows
@@ -410,19 +421,11 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   // Mapping of region to regions it could contain.
   // row: region
   // col: row-region points to col-region
-  let mut contains_abstract = BitMatrix::new(num_sccs, num_sccs);
-  flow_from_sources(
-    &mut contains_abstract,
-    placeholders.iter().copied(),
-    &scc_constraints,
-  );
+  let contains_abstract =
+    flow_from_sources(placeholders.iter().copied(), &scc_constraints);
 
-  let mut contains_local = BitMatrix::new(num_sccs, num_sccs);
-  flow_from_sources(
-    &mut contains_local,
-    local_sources.iter(),
-    &scc_constraints,
-  );
+  let contains_local =
+    flow_from_sources(local_sources.iter(), &scc_constraints);
 
   let mut dangling_local_sources = HybridBitSet::new_empty(num_sccs);
 
@@ -436,23 +439,13 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     }
   }
 
-  log::debug!("=== contains_abstract ===\n{:#?}", {
-    contains_abstract
-      .rows()
-      .map(|r| (r, contains_abstract.iter(r).collect::<Vec<_>>()))
-      .collect::<HashMap<_, _>>()
-  });
+  log::debug!("=== contains_abstract ===\n{contains_abstract:#?}");
 
-  log::debug!("=== contains_local ===\n{:#?}", {
-    contains_local
-      .rows()
-      .map(|r| (r, contains_local.iter(r).collect::<Vec<_>>()))
-      .collect::<HashMap<_, _>>()
-  });
+  log::debug!("=== contains_local ===\n{contains_local:#?}");
 
   let region_flows = RegionFlows {
     constraint_graph: scc_constraints,
-    known_flows,
+    specified_flows,
     dangling_local_sources,
     contains_abstract,
     contains_local,
