@@ -7,6 +7,7 @@ use std::{
 use aquascope::{
   analysis::{
     self,
+    permissions::ENABLE_FLOW_PERMISSIONS,
     stepper::{PermIncludeMode, INCLUDE_MODE},
     AquascopeError, AquascopeResult,
   },
@@ -42,6 +43,9 @@ enum AquascopeCommand {
   Permissions {
     #[clap(long)]
     steps_include_mode: Option<PermIncludeMode>,
+
+    #[clap(long)]
+    show_flows: bool,
 
     #[clap(last = true)]
     flags: Vec<String>,
@@ -122,11 +126,23 @@ impl RustcPlugin for AquascopePlugin {
     use AquascopeCommand::*;
     match plugin_args.command {
       Permissions {
-        steps_include_mode, ..
+        steps_include_mode,
+        show_flows,
+        ..
       } => {
-        let mode = steps_include_mode.unwrap_or(PermIncludeMode::Changes);
-        fluid_set!(INCLUDE_MODE, mode);
-        postprocess(run(permissions_analyze_body, &compiler_args))
+        let steps_include_mode =
+          steps_include_mode.unwrap_or(PermIncludeMode::Changes);
+        let mut callbacks = AquascopeCallbacks {
+          analysis: Some(permissions_analyze_body),
+          output: Vec::default(),
+          should_fail: plugin_args.should_fail,
+          steps_include_mode,
+          show_flows,
+          rustc_start: Instant::now(),
+        };
+        log::info!("Starting rustc analysis...");
+        let _ = run_with_callbacks(&compiler_args, &mut callbacks);
+        postprocess(callbacks.output)
       }
       Interpreter { .. } => {
         let mut callbacks = aquascope::interpreter::InterpretCallbacks::new(
@@ -178,25 +194,6 @@ pub fn run_with_callbacks(
   })
 }
 
-fn run<A: AquascopeAnalysis>(
-  analysis: A,
-  args: &[String],
-) -> Vec<AquascopeResult<A::Output>> {
-  let mut callbacks = AquascopeCallbacks {
-    analysis: Some(analysis),
-    output: Vec::default(),
-    rustc_start: Instant::now(),
-  };
-
-  log::info!("Starting rustc analysis...");
-
-  if let Err(e) = run_with_callbacks(args, &mut callbacks) {
-    log::warn!("I'm choosing to ignore this build error {:?}", e);
-  }
-
-  callbacks.output
-}
-
 pub trait AquascopeAnalysis: Sized + Send + Sync {
   type Output: Serialize + Send + Sync;
   fn analyze(
@@ -223,9 +220,13 @@ where
   }
 }
 
+#[allow(dead_code)]
 struct AquascopeCallbacks<A: AquascopeAnalysis> {
   analysis: Option<A>,
   output: Vec<AquascopeResult<A::Output>>,
+  should_fail: bool,
+  steps_include_mode: PermIncludeMode,
+  show_flows: bool,
   rustc_start: Instant,
 }
 
@@ -243,6 +244,9 @@ impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
     // Setting up error tracking happens here. Within rustc callbacks
     // seem to be set up *after* `config` is called.
     initialize_error_tracking();
+
+    fluid_set!(INCLUDE_MODE, self.steps_include_mode);
+    fluid_set!(ENABLE_FLOW_PERMISSIONS, self.show_flows);
 
     let _start = Instant::now();
 

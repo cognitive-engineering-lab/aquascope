@@ -93,6 +93,11 @@ impl AquascopePreprocessor {
 
       cmd.arg(operation);
 
+      let show_flows = block.config.iter().any(|(k, _)| k == "showFlows");
+      if show_flows {
+        cmd.arg("--show-flows");
+      }
+
       let mut child =
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
       if child.wait_timeout(Duration::from_secs(10))?.is_none() {

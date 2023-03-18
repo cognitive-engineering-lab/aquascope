@@ -22,8 +22,13 @@ import {
 
 export const readChar = "R";
 export const writeChar = "W";
+export const flowChar = "F";
 export const ownChar = "O";
-export type PermLetter = typeof readChar | typeof writeChar | typeof ownChar;
+export type PermLetter =
+  | typeof readChar
+  | typeof writeChar
+  | typeof ownChar
+  | typeof flowChar;
 
 // ----------
 // Interfaces
@@ -42,8 +47,10 @@ export let permName = (c: PermLetter): string => {
     return "read";
   } else if (c === "W") {
     return "write";
-  } /* if (c == "O") */ else {
+  } if (c == "O") {
     return "own";
+  } else {
+    return "flow";
   }
 };
 

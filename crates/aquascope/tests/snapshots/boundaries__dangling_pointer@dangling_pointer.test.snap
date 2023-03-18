@@ -1,0 +1,27 @@
+---
+source: crates/aquascope/tests/boundaries.rs
+description: dangling_pointer@dangling_pointer.test
+---
+- location: 94
+  expected:
+    read: true
+    write: false
+    drop: false
+  actual:
+    type_droppable: true
+    type_writeable: false
+    type_copyable: false
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: true
+  expecting_flow:
+    is_violation: true
+    flow_context:
+      char_start: 93
+      char_end: 95
+      filename: 0
+    kind: LocalOutlivesUniversal
+

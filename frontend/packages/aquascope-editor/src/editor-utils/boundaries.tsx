@@ -12,6 +12,7 @@ import {
 } from "../types";
 import {
   PermLetter,
+  flowChar,
   hideLoanRegion,
   hideMoveRegion,
   makeDecorationField,
@@ -158,6 +159,14 @@ let PermStack = ({
         hideLoanRegion(facts, data.loan_drop_refined, ["own"]);
         hideMoveRegion(facts, data.path_moved, ["own"]);
       },
+    },
+    {
+      content: flowChar,
+      names: ["perm", "flow"],
+      exp: boundary.expecting_flow !== undefined,
+      act: !boundary.expecting_flow?.is_violation ?? false,
+      showit: () => void null,
+      hideit: () => void null,
     },
   ];
 

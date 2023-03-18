@@ -42,7 +42,7 @@ use AccessDepth::{Deep, Shallow};
 /// are disjoint (and therefore, do not overlap).
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(crate) enum PlaceConflictBias {
+pub enum PlaceConflictBias {
   Overlap,
   NoOverlap,
 }
@@ -51,7 +51,7 @@ pub(crate) enum PlaceConflictBias {
 /// This is used to check for places conflicting outside of the borrow checking code (such as in
 /// dataflow).
 #[allow(dead_code)]
-pub(crate) fn places_conflict<'tcx>(
+pub fn places_conflict<'tcx>(
   tcx: TyCtxt<'tcx>,
   body: &Body<'tcx>,
   borrow_place: Place<'tcx>,
@@ -75,7 +75,7 @@ pub(crate) fn places_conflict<'tcx>(
 /// access depth. The `bias` parameter is used to determine how the unknowable (comparing runtime
 /// array indices, for example) should be interpreted - this depends on what the caller wants in
 /// order to make the conservative choice and preserve soundness.
-pub(super) fn borrow_conflicts_with_place<'tcx>(
+pub fn borrow_conflicts_with_place<'tcx>(
   tcx: TyCtxt<'tcx>,
   body: &Body<'tcx>,
   borrow_place: Place<'tcx>,

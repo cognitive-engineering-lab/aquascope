@@ -15,10 +15,15 @@ use rustc_middle::{
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
 use rustc_trait_selection::infer::InferCtxtExt;
+use smallvec::{smallvec, SmallVec};
 
-use crate::analysis::permissions::{
-  AquascopeFacts, Loan, LoanKey, Move, MoveKey, Output, Path, Permissions,
-  PermissionsData, PermissionsDomain, Point, Variable,
+use crate::{
+  analysis::permissions::{
+    flow::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin,
+    Output, Path, Permissions, PermissionsData, PermissionsDomain, Point,
+    Variable,
+  },
+  mir::utils::BodyExt,
 };
 
 /// A path as defined in rustc.
@@ -39,9 +44,11 @@ pub struct PermissionsCtxt<'a, 'tcx> {
   pub borrow_set: BorrowSet<'tcx>,
   pub move_data: MoveData<'tcx>,
   pub loan_regions: Option<HashMap<Loan, (Point, Point)>>,
+  pub locals_are_invalidated_at_exit: bool,
   pub(crate) param_env: ParamEnv<'tcx>,
   pub(crate) place_data: IndexVec<Path, Place<'tcx>>,
   pub(crate) rev_lookup: HashMap<Local, Vec<Path>>,
+  pub(crate) region_flows: Option<RegionFlows>,
 }
 
 impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
@@ -51,6 +58,14 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let local = place.local;
     self.rev_lookup.entry(local).or_default().push(new_path);
     new_path
+  }
+
+  pub fn region_flows(&self) -> &RegionFlows {
+    let Some(ref rf) = self.region_flows else {
+      unreachable!("attempted to get region flows before they are computed.");
+    };
+
+    rf
   }
 
   // Conversion helpers
@@ -80,6 +95,13 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     self.body_with_facts.location_table.start_index(l)
   }
 
+  pub fn location_to_points(&self, l: Location) -> SmallVec<[Point; 2]> {
+    smallvec![
+      self.body_with_facts.location_table.start_index(l),
+      self.body_with_facts.location_table.mid_index(l)
+    ]
+  }
+
   pub fn point_to_location(&self, p: Point) -> Location {
     match self.body_with_facts.location_table.to_location(p) {
       RichLocation::Start(l) | RichLocation::Mid(l) => l,
@@ -106,8 +128,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       .unwrap_or(span)
   }
 
-  // XXX: experimental predicates for Moves
-
   pub fn move_to_moveable_path(&self, mv: Move) -> MoveablePath {
     self.move_data.moves[mv].path
   }
@@ -117,7 +137,19 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     self.moveable_path_to_path(mpath)
   }
 
+  pub fn loan_to_borrow(&self, l: Loan) -> &BorrowData<'tcx> {
+    &self.borrow_set[l]
+  }
+
   // Predicates
+
+  pub fn is_universal_subset(&self, (from, to): (Origin, Origin)) -> bool {
+    self
+      .polonius_input_facts
+      .placeholder
+      .iter()
+      .any(|&(p, _)| p == from || p == to)
+  }
 
   pub fn is_location_operational(&self, loc: Location) -> bool {
     use either::Either::{Left, Right};
@@ -357,13 +389,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let def_id = self.def_id;
     let tcx = self.tcx;
     let body = &self.body_with_facts.body;
-    body
-      .local_decls
-      .indices()
-      .flat_map(|local| {
-        Place::from_local(local, tcx).interior_paths(tcx, body, def_id)
-      })
-      .collect::<HashSet<_>>()
+    body.all_places(tcx, def_id).collect::<HashSet<_>>()
   }
 
   pub fn permissions_domain_at_point(

@@ -32,7 +32,7 @@ use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::Span;
+use rustc_span::{BytePos, Span};
 use serde::Serialize;
 pub use stepper::compute_permission_steps;
 use stepper::PermissionsLineDisplay;
@@ -143,6 +143,85 @@ impl DerefMut for LoanRegions {
   }
 }
 
+pub trait Bounded {
+  type Bound: Ord + Eq;
+  fn lo(&self) -> Self::Bound;
+  fn hi(&self) -> Self::Bound;
+  fn to(&self, other: Self) -> Self;
+  fn overlaps(&self, other: Self) -> bool;
+}
+
+impl Bounded for Span {
+  type Bound = BytePos;
+  fn lo(&self) -> Self::Bound {
+    Span::lo(*self)
+  }
+
+  fn hi(&self) -> Self::Bound {
+    Span::hi(*self)
+  }
+
+  fn overlaps(&self, other: Self) -> bool {
+    Span::overlaps(*self, other)
+  }
+
+  fn to(&self, other: Self) -> Self {
+    Span::to(*self, other)
+  }
+}
+
+impl Bounded for Range {
+  type Bound = usize;
+  fn lo(&self) -> Self::Bound {
+    self.char_start
+  }
+
+  fn hi(&self) -> Self::Bound {
+    self.char_end
+  }
+
+  fn overlaps(&self, other: Self) -> bool {
+    !(self.char_end < other.char_start || other.char_end < self.char_start)
+  }
+
+  fn to(&self, other: Self) -> Self {
+    Range {
+      char_start: std::cmp::min(self.char_start, other.char_start),
+      char_end: std::cmp::max(self.char_end, other.char_end),
+      ..*self
+    }
+  }
+}
+
+pub fn smooth_elements<T>(mut elements: Vec<T>) -> Vec<T>
+where
+  T: Bounded + std::marker::Copy,
+{
+  if elements.is_empty() {
+    return elements;
+  }
+
+  // First, sort the elements by starting value.
+  elements.sort_by_key(|a| a.lo());
+
+  let mut smoothed_elements = Vec::default();
+  let mut acc = *elements.first().unwrap();
+
+  for elem in &elements[1 ..] {
+    if acc.overlaps(*elem) || acc.hi() == elem.lo() {
+      acc = acc.to(*elem);
+    } else {
+      smoothed_elements.push(acc);
+      acc = *elem;
+    }
+  }
+
+  // don't forget the last accumulator
+  smoothed_elements.push(acc);
+
+  smoothed_elements
+}
+
 pub fn compute_permissions<'a, 'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
@@ -186,6 +265,7 @@ impl From<anyhow::Error> for AquascopeError {
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
 pub struct AnalysisOutput {
+  pub body_range: Range,
   pub boundaries: Vec<PermissionsBoundary>,
   pub steps: Vec<PermissionsLineDisplay>,
   pub loan_points: LoanPoints,
@@ -195,27 +275,32 @@ pub struct AnalysisOutput {
 }
 
 impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
-  pub fn run(
-    tcx: TyCtxt<'tcx>,
-    body_id: BodyId,
-  ) -> AquascopeResult<AnalysisOutput> {
+  pub fn new(tcx: TyCtxt<'tcx>, body_id: BodyId) -> Self {
     let def_id = tcx.hir().body_owner_def_id(body_id);
     let bwf = get_body_with_borrowck_facts(tcx, def_id);
     let permissions = compute_permissions(tcx, body_id, bwf);
     let body = &permissions.body_with_facts.body;
 
+    let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
+    AquascopeAnalysis {
+      permissions,
+      ir_mapper,
+    }
+  }
+
+  pub fn run(
+    tcx: TyCtxt<'tcx>,
+    body_id: BodyId,
+  ) -> AquascopeResult<AnalysisOutput> {
+    let analysis_ctxt = Self::new(tcx, body_id);
+    let body = &analysis_ctxt.permissions.body_with_facts.body;
+
     if body.tainted_by_errors.is_some() {
       let span = body.span;
-      let source_map = permissions.tcx.sess.source_map();
+      let source_map = tcx.sess.source_map();
       let range = CharRange::from_span(span, source_map).unwrap().into();
       return Err(AquascopeError::BuildError { range });
     }
-
-    let ir_mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
-    let analysis_ctxt = AquascopeAnalysis {
-      permissions,
-      ir_mapper,
-    };
 
     crate::analysis::permissions::utils::dump_mir_debug(
       &analysis_ctxt.permissions,
@@ -227,7 +312,10 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     let (loan_points, loan_regions) = analysis_ctxt.construct_loan_info();
     let (move_points, move_regions) = analysis_ctxt.construct_move_info();
 
+    let body_range = analysis_ctxt.span_to_range(body.span);
+
     Ok(AnalysisOutput {
+      body_range,
       boundaries,
       steps,
       loan_points,
@@ -377,7 +465,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
           .into_iter()
           .filter_map(|span| (lo <= span.lo()).then_some(span))
           .collect::<Vec<_>>();
-        let smoothed = Self::smooth_spans(points);
+        let smoothed = smooth_elements(points);
         let refined_ranges = smoothed
           .into_iter()
           .map(|span| self.span_to_range(span))
@@ -453,7 +541,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
       })
       .collect::<Vec<_>>();
 
-    Self::smooth_spans(spans)
+    smooth_elements(spans)
   }
 
   fn points_to_spans(
@@ -480,31 +568,5 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     });
 
     spans
-  }
-
-  fn smooth_spans(mut spans: Vec<Span>) -> Vec<Span> {
-    if spans.is_empty() {
-      return spans;
-    }
-
-    // First, sort the spans by starting value.
-    spans.sort_by_key(|a| a.lo());
-
-    let mut smoothed_spans = Vec::default();
-    let mut acc = *spans.first().unwrap();
-
-    for span in &spans[1 ..] {
-      if acc.overlaps(*span) || acc.hi() == span.lo() {
-        acc = acc.to(*span);
-      } else {
-        smoothed_spans.push(acc);
-        acc = *span;
-      }
-    }
-
-    // don't forget the last accumulator
-    smoothed_spans.push(acc);
-
-    smoothed_spans
   }
 }

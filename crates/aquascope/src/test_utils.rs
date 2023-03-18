@@ -8,8 +8,9 @@ use flowistry::{
     utils::{BodyExt, OperandExt},
   },
   source_map::{self, Spanner, ToSpan},
-  test_utils::{DUMMY_CHAR_RANGE, DUMMY_FILE, DUMMY_FILE_NAME},
+  test_utils::{DUMMY_FILE, DUMMY_FILE_NAME},
 };
+use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
 use rustc_hir::{BodyId, ItemKind};
@@ -22,10 +23,12 @@ use rustc_span::source_map::FileLoader;
 use crate::{
   analysis::{
     self,
-    boundaries::PermissionsBoundary,
-    ir_mapper::{GatherMode, IRMapper},
-    permissions::Permissions,
-    stepper::PermissionsDataDiff,
+    boundaries::{compute_permission_boundaries, PermissionsBoundary},
+    permissions::{Permissions, ENABLE_FLOW_PERMISSIONS},
+    stepper::{
+      self, compute_permission_steps, PermIncludeMode, PermissionsDataDiff,
+    },
+    AquascopeAnalysis,
   },
   errors,
   interpreter::{self, MTrace},
@@ -69,6 +72,13 @@ impl From<&str> for Permissions {
 // to a place string and corresponding permissions.
 type PermMap =
   HashMap<(source_map::BytePos, source_map::BytePos), (String, Permissions)>;
+
+static CFG_HASH: &str = "////!";
+
+#[derive(Debug, Default)]
+pub(crate) struct TestFileConfig {
+  show_flows: Option<bool>,
+}
 
 fn split_test_source(
   source: impl AsRef<str>,
@@ -170,20 +180,34 @@ fn parse_test_source(
   Ok((clean, map))
 }
 
-pub fn load_test_from_file(path: &Path) -> Result<String> {
+pub(crate) fn load_test_from_file(
+  path: &Path,
+) -> Result<(String, TestFileConfig)> {
   log::info!(
     "Loading test from {}",
     path.file_name().unwrap().to_string_lossy()
   );
   let c = fs::read(path)
     .with_context(|| format!("failed to load test from {path:?}"))?;
-  String::from_utf8(c)
-    .with_context(|| format!("UTF8 parse error in file: {path:?}"))
+  let source = String::from_utf8(c)
+    .with_context(|| format!("UTF8 parse error in file: {path:?}"))?;
+
+  let mut cfg = TestFileConfig::default();
+
+  // TODO: Add a more expressive way to add test annotations.
+  //       We can share some functionality with the mdbook-aquascope parser.
+  for line in source.lines() {
+    if line.starts_with(CFG_HASH) && line.contains("show-flows") {
+      cfg.show_flows = Some(true);
+    }
+  }
+
+  Ok((source, cfg))
 }
 
 pub fn test_refinements_in_file(path: &Path) {
   let inner = || -> Result<()> {
-    let input = load_test_from_file(path)?;
+    let (input, _) = load_test_from_file(path)?;
     let (clean_input, _) = parse_test_source(&input, ("`[", "]`"))?;
 
     compile_normal(clean_input, |tcx| {
@@ -273,39 +297,34 @@ pub fn test_refinements_in_file(path: &Path) {
   inner().unwrap()
 }
 
+fn analysis_snapshot_tag(ctxt: &AquascopeAnalysis) -> String {
+  let owner = ctxt
+    .permissions
+    .tcx
+    .hir()
+    .body_owner(ctxt.permissions.body_id);
+  ctxt
+    .permissions
+    .tcx
+    .hir()
+    .opt_name(owner)
+    .map_or_else(|| String::from("<anon body>"), |n| String::from(n.as_str()))
+}
+
 pub fn test_boundaries_in_file(
   path: &Path,
   assert_snap: impl Fn(String, Vec<PermissionsBoundary>) + Send + Sync + Copy,
 ) {
-  use analysis::boundaries::compute_boundaries;
-
   let inner = || -> Result<()> {
-    let source = load_test_from_file(path)?;
+    let (source, cfg) = load_test_from_file(path)?;
     compile_normal(source, move |tcx| {
-      for_each_body(tcx, |body_id, body_with_facts| {
-        let ctxt =
-          &analysis::compute_permissions(tcx, body_id, body_with_facts);
-        let ir_mapper = IRMapper::new(
-          tcx,
-          &ctxt.body_with_facts.body,
-          GatherMode::IgnoreCleanup,
-        );
+      for_each_body(tcx, |body_id, _body_with_facts| {
+        fluid_set!(ENABLE_FLOW_PERMISSIONS, cfg.show_flows.unwrap_or(false));
+        let ctxt = AquascopeAnalysis::new(tcx, body_id);
         // Required to give the snapshot a more specific internal name.
-        let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-        let tag = ctxt.tcx.hir().opt_name(owner).map_or_else(
-          || String::from("<anon body>"),
-          |n| String::from(n.as_str()),
-        );
-        let source_map = tcx.sess.source_map();
-        let boundaries = compute_boundaries(ctxt, &ir_mapper, |span| {
-          DUMMY_CHAR_RANGE.with(|dummy_char_range| {
-            source_map::CharRange::from_span(span, source_map)
-              .ok()
-              .unwrap_or(*dummy_char_range)
-              .into()
-          })
-        })
-        .expect("Permission boundaries failed in test");
+        let tag = analysis_snapshot_tag(&ctxt);
+        let boundaries = compute_permission_boundaries(&ctxt)
+          .expect("Permission boundaries failed in test");
 
         assert_snap(tag, boundaries);
       })
@@ -324,40 +343,17 @@ pub fn test_steps_in_file(
     + Sync
     + Copy,
 ) {
-  use analysis::stepper::{find_steps, PermIncludeMode};
-  let inner = || -> Result<()> {
-    let source = load_test_from_file(path)?;
-    compile_normal(source, move |tcx| {
-      for_each_body(tcx, |body_id, body_with_facts| {
-        let ctxt =
-          &analysis::compute_permissions(tcx, body_id, body_with_facts);
-        let ir_mapper = IRMapper::new(
-          tcx,
-          &ctxt.body_with_facts.body,
-          GatherMode::IgnoreCleanup,
-        );
-        // Required to give the snapshot a more specific internal name.
-        let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-        let tag = ctxt.tcx.hir().opt_name(owner).map_or_else(
-          || String::from("<anon body>"),
-          |n| String::from(n.as_str()),
-        );
+  use stepper::INCLUDE_MODE;
 
-        let source_map = tcx.sess.source_map();
-        let body_steps = find_steps::compute_permission_steps(
-          ctxt,
-          &ir_mapper,
-          PermIncludeMode::Changes,
-          |span| {
-            DUMMY_CHAR_RANGE.with(|dummy_char_range| {
-              source_map::CharRange::from_span(span, source_map)
-                .ok()
-                .unwrap_or(*dummy_char_range)
-                .into()
-            })
-          },
-        )
-        .unwrap();
+  let inner = || -> Result<()> {
+    let (source, _) = load_test_from_file(path)?;
+    compile_normal(source, move |tcx| {
+      for_each_body(tcx, |body_id, _body_with_facts| {
+        let ctxt = AquascopeAnalysis::new(tcx, body_id);
+        let tag = analysis_snapshot_tag(&ctxt);
+        fluid_set!(INCLUDE_MODE, PermIncludeMode::Changes);
+        let body_steps = compute_permission_steps(&ctxt)
+          .expect("Permission steps failed in test");
 
         // NOTE: we normalize the permission steps to be
         // - usize: the line number of the corresponding statement.
@@ -371,7 +367,8 @@ pub fn test_steps_in_file(
               end: source_map::CharPos(pss.location.char_end),
               filename: FilenameIndex::from_usize(pss.location.filename),
             };
-            let span = char_range.to_span(ctxt.tcx).unwrap();
+            let span = char_range.to_span(ctxt.permissions.tcx).unwrap();
+            let source_map = tcx.sess.source_map();
             let line_num = source_map.lookup_line(span.hi()).unwrap().line;
             // FIXME: we shouldn't flatten the tables together, this was only a
             // quick fix for the tests.
@@ -399,7 +396,7 @@ pub fn test_interpreter_in_file(
   run_insta: impl Fn(String, MTrace<crate::Range>) + Sync,
 ) {
   let main = || -> Result<()> {
-    let input = load_test_from_file(path)?;
+    let (input, _) = load_test_from_file(path)?;
     let args = format!(
       "--crate-type bin --sysroot {}",
       aquascope_workspace_utils::miri_sysroot()?.display()

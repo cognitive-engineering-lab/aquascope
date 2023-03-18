@@ -15,17 +15,17 @@ use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, Mutability};
 use rustc_index::vec::IndexVec;
-use rustc_middle::{
-  mir::{Place, ProjectionElem},
-  ty::TyCtxt,
-};
+use rustc_middle::{mir::ProjectionElem, ty::TyCtxt};
 use rustc_mir_dataflow::move_paths::MoveData;
 
 use super::{
   context::PermissionsCtxt,
+  flow,
   places_conflict::{self, AccessDepth, PlaceConflictBias},
-  AquascopeFacts, Loan, Move, Path, Point,
+  AquascopeFacts, Loan, Move, Path, Point, ENABLE_FLOW_DEFAULT,
+  ENABLE_FLOW_PERMISSIONS,
 };
+use crate::mir::utils::BodyExt;
 
 /// Aquascope permissions facts output.
 #[derive(Debug)]
@@ -159,15 +159,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   // 1. Internal to a local declaration.
   // 2. A path considered moveable by rustc.
   let places = body
-    .local_decls
-    .indices()
-    .flat_map(|local| {
-      Place::from_local(local, tcx).interior_paths(
-        tcx,
-        body,
-        def_id.to_def_id(),
-      )
-    })
+    .all_places(tcx, def_id.to_def_id())
     .chain(ctxt.move_data.move_paths.iter().map(|v| v.place))
     .collect::<Vec<_>>();
 
@@ -331,8 +323,6 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
     |&(movep, _point1), &point2| (movep, point2),
   );
 
-  let loan_to_borrow = |l: Loan| &ctxt.borrow_set[l];
-
   let is_never_write = |path: Path| {
     let place = &ctxt.path_to_place(path);
     (!place.is_indirect() && ctxt.is_declared_readonly(place)) || {
@@ -357,7 +347,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   let loan_conflicts_with: Relation<(Loan, Path)> = Relation::from_iter(
     ctxt.polonius_input_facts.loan_issued_at.iter().flat_map(
       |(_origin, loan, _point)| {
-        let borrow = loan_to_borrow(*loan);
+        let borrow = ctxt.loan_to_borrow(*loan);
         places.iter().filter_map(|place| {
           super::places_conflict::borrow_conflicts_with_place(
             tcx,
@@ -500,6 +490,11 @@ pub fn compute<'a, 'tcx>(
   let def_id = def_id.to_def_id();
   let param_env = tcx.param_env_reveal_all_normalized(def_id);
 
+  // This should always be true for the current analysis of aquascope
+  let locals_are_invalidated_at_exit = def_id.as_local().map_or(false, |did| {
+    tcx.hir().body_owner_kind(did).is_fn_or_closure()
+  });
+
   let mut ctxt = PermissionsCtxt {
     tcx,
     permissions_output: Output::default(),
@@ -510,10 +505,12 @@ pub fn compute<'a, 'tcx>(
     body_with_facts,
     borrow_set,
     move_data,
+    locals_are_invalidated_at_exit,
     param_env,
     loan_regions: None,
     place_data: IndexVec::new(),
     rev_lookup: HashMap::default(),
+    region_flows: None,
   };
 
   derive_permission_facts(&mut ctxt);
@@ -526,9 +523,12 @@ pub fn compute<'a, 'tcx>(
     timer.elapsed()
   );
 
-  ctxt.borrow_set.location_map.iter().for_each(|(_k, bd)| {
-    log::debug!("Borrow Data {:?}", bd);
-  });
+  if ENABLE_FLOW_PERMISSIONS
+    .copied()
+    .unwrap_or(ENABLE_FLOW_DEFAULT)
+  {
+    flow::compute_flows(&mut ctxt);
+  }
 
   ctxt
 }

@@ -18,13 +18,27 @@ use ts_rs::TS;
 use crate::{
   analysis::{
     ir_mapper::{GatherDepth, IRMapper},
-    permissions::{Permissions, PermissionsCtxt, PermissionsData},
+    permissions::{
+      flow::FlowEdgeKind, Origin, Permissions, PermissionsCtxt,
+      PermissionsData, Point, ENABLE_FLOW_DEFAULT, ENABLE_FLOW_PERMISSIONS,
+    },
     AquascopeAnalysis,
   },
   errors,
   mir::utils::PlaceExt,
   Range,
 };
+
+/// A point where a region flow is introduced, potentially resulting in a violation.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct FlowBoundary {
+  // Used for simplicity in the frontend, later the extra information
+  // in the flow kind can be shown with extra details.
+  is_violation: bool,
+  flow_context: Range,
+  kind: FlowEdgeKind,
+}
 
 /// A point where the permissions reality are checked against their expectations.
 #[derive(Debug, Clone, Serialize, TS)]
@@ -33,6 +47,8 @@ pub struct PermissionsBoundary {
   pub location: usize,
   pub expected: Permissions,
   pub actual: PermissionsData,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub expecting_flow: Option<FlowBoundary>,
 }
 
 impl PermissionsBoundary {
@@ -55,6 +71,8 @@ impl PermissionsBoundary {
 struct PathBoundary {
   // The HirId node where we want to look for Places.
   pub hir_id: HirId,
+  // The upper-bound context for region flow.
+  pub flow_context: HirId,
   // The HirId that could provide additional places we don't
   // want to consider. This notably happens in an AssignOp where
   // the LHS and RHS Places get found together, however, the RHS
@@ -94,6 +112,135 @@ fn select_candidate_location<'tcx>(
       candidates.iter().find(|t| !others.contains(t)).copied()
     }
   }
+}
+
+/// Return the constraints that occur nested within a [`HirId`].
+///
+/// Note, constraints involving regions belonging to the same SCC are removed.
+fn flow_constraints_at_hir_id<'a, 'tcx: 'a>(
+  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  ir_mapper: &'a IRMapper<'a, 'tcx>,
+  hir_id: HirId,
+) -> Option<Vec<(Origin, Origin, Point)>> {
+  let mir_locations =
+    ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested)?;
+
+  let all_constraints = mir_locations
+    .values()
+    .flat_map(|loc| {
+      let ps = ctxt.location_to_points(loc);
+      ctxt
+        .polonius_input_facts
+        .subset_base
+        .iter()
+        .filter(move |&(f, t, p)| {
+          !ctxt.is_universal_subset((*f, *t)) && ps.contains(p)
+        })
+        .copied()
+    })
+    .collect::<Vec<_>>();
+
+  Some(all_constraints)
+}
+
+/// If flow permissions are enabled, find expected flow permissions (if any) for the
+/// given `hir_id` within the larger `flow_context`.
+fn get_flow_permission(
+  analysis: &AquascopeAnalysis,
+  flow_context: HirId,
+  hir_id: HirId,
+) -> Option<FlowBoundary> {
+  if !ENABLE_FLOW_PERMISSIONS
+    .copied()
+    .unwrap_or(ENABLE_FLOW_DEFAULT)
+  {
+    log::warn!("Flow permissions are disabled!");
+    return None;
+  }
+
+  let ir_mapper = &analysis.ir_mapper;
+  let ctxt = &analysis.permissions;
+  let hir = ctxt.tcx.hir();
+  let body = &ctxt.body_with_facts.body;
+
+  let region_flows = ctxt.region_flows();
+
+  log::debug!(
+    "FLOW INFORMATION:\nBound {} ---\n{:#?}\nAt {} ---\n{:#?}",
+    hir.node_to_string(flow_context),
+    flow_constraints_at_hir_id(ctxt, ir_mapper, flow_context),
+    hir.node_to_string(hir_id),
+    flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)
+  );
+
+  // Do any given constraints have an abstract Origin on the RHS?
+  let has_abstract_on_rhs = |flows: &[(Origin, Origin, Point)]| {
+    flows
+      .iter()
+      .any(|&(_, t, _)| region_flows.has_abstract_member(t))
+  };
+
+  let context_constraints =
+    flow_constraints_at_hir_id(ctxt, ir_mapper, flow_context)?;
+
+  // FIXME: current restriction, only look at constraints when
+  // an abstract equivalent region is on the right-hand-side.
+  //
+  // This covers the cases:
+  // - missing abstract-outlives-abstract constraint.
+  // - local outlives abstract.
+  if !has_abstract_on_rhs(&context_constraints) {
+    return None;
+  }
+
+  log::debug!("flow context edges ---:\n{context_constraints:#?}");
+
+  // Search for relevant flows and flow violations.
+  let specific_constraints =
+    flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)?;
+  log::debug!("HirId local constraints ---:\n{specific_constraints:#?}");
+
+  let mut flow_violations =
+    context_constraints.iter().filter_map(|&(from, to, _)| {
+      let fk = region_flows.flow_kind(from, to);
+
+      // We want to look specifically for flows that:
+      // - flow to an abstract region (XXX: a current design constraint to be lifter)
+      // - are invalid
+      // - the local constraints create a context constraint involved in the violation.
+      if region_flows.has_abstract_member(to)
+        && !fk.is_valid_flow()
+        && specific_constraints
+          .iter()
+          .any(|&(_f, t, _)| t == from || t == to)
+      {
+        log::debug!("found flow violation: {fk:?} @ {from:?} -> {to:?}");
+        Some(fk)
+      } else {
+        None
+      }
+    });
+
+  // In theory there could be multiple violations that occur in the context. Multiple could also
+  // be triggered by the same local constraints, however, we currently are not providing any
+  // visualization for the violation provenance. Therefore we can just take the first one.
+  //
+  // A brief discussion at:
+  // https://github.com/cognitive-engineering-lab/aquascope/pull/51#discussion_r1141095658
+  let kind = flow_violations.next().unwrap_or_else(|| {
+    log::debug!("No flow edge violation found");
+    FlowEdgeKind::Ok
+  });
+
+  let raw_span = hir.span(flow_context);
+  let span = raw_span.as_local(body.span).unwrap_or(body.span);
+  let flow_context = analysis.span_to_range(span);
+
+  Some(FlowBoundary {
+    is_violation: !kind.is_valid_flow(),
+    flow_context,
+    kind,
+  })
 }
 
 #[allow(clippy::wildcard_in_or_patterns)]
@@ -190,10 +337,10 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
 
 fn path_to_perm_boundary<'a, 'tcx: 'a>(
   path_boundary: PathBoundary,
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
-  ir_mapper: &'a IRMapper<'a, 'tcx>,
-  span_to_range: impl Fn(Span) -> Range,
+  analysis: &'a AquascopeAnalysis<'a, 'tcx>,
 ) -> Option<PermissionsBoundary> {
+  let ctxt = &analysis.permissions;
+  let ir_mapper = &analysis.ir_mapper;
   let body = &ctxt.body_with_facts.body;
   let tcx = ctxt.tcx;
   let hir = tcx.hir();
@@ -244,7 +391,10 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
       let actual = ctxt.permissions_data_at_point(path, point);
       let expected = path_boundary.expected;
 
-      log::debug!("Permissions data: {actual:#?}");
+      let expecting_flow =
+        get_flow_permission(analysis, path_boundary.flow_context, hir_id);
+
+      log::debug!("Permissions data:\n{actual:#?}\n{expecting_flow:#?}");
 
       let span = path_boundary
         .location
@@ -254,12 +404,13 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
       // FIXME(gavinleroy): the spans are chosen in the `path_visitor` such that the end
       // of the span is where we want the stack to be placed. I would like to
       // make this a bit more explicit.
-      let location = span_to_range(span).char_end;
+      let location = analysis.span_to_range(span).char_end;
 
       PermissionsBoundary {
         location,
         expected,
         actual,
+        expecting_flow,
       }
     });
 
@@ -273,36 +424,31 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
   resolved_boundary
 }
 
-pub(crate) fn compute_boundaries<'a>(
-  ctxt: &PermissionsCtxt<'_, 'a>,
-  ir_mapper: &IRMapper<'_, 'a>,
-  span_to_range: impl Fn(Span) -> Range + std::marker::Copy,
+#[allow(clippy::module_name_repetitions)]
+pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
+  analysis: &AquascopeAnalysis<'a, 'tcx>,
 ) -> Result<Vec<PermissionsBoundary>> {
+  let ctxt = &analysis.permissions;
   let tcx = ctxt.tcx;
 
   let path_use_points = get_path_boundaries(tcx, ctxt.body_id, ctxt)?
     .into_iter()
-    .filter_map(|pb| path_to_perm_boundary(pb, ctxt, ir_mapper, span_to_range));
+    .filter_map(|pb| path_to_perm_boundary(pb, analysis));
 
+  // FIXME: we need a more robust way of filtering by "first error".
+  // here (and in the stepper) we do this by diagnostic span from rustc
+  // but that can sometimes be a little earlier than we might want.
   let first_error_span_opt =
     errors::get_span_of_first_error(ctxt.def_id.expect_local())
       .and_then(|s| s.as_local(ctxt.body_with_facts.body.span));
 
   let boundaries = path_use_points
     .filter(|pb| {
-      first_error_span_opt
-        .map_or(true, |error_span| (pb.location as u32) <= error_span.hi().0)
+      first_error_span_opt.map_or(true, |error_span| {
+        pb.expecting_flow.is_some() || (pb.location as u32) <= error_span.hi().0
+      })
     })
     .collect::<Vec<_>>();
 
   Ok(boundaries)
-}
-
-#[allow(clippy::module_name_repetitions)]
-pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
-  ctxt: &AquascopeAnalysis<'a, 'tcx>,
-) -> Result<Vec<PermissionsBoundary>> {
-  compute_boundaries(&ctxt.permissions, &ctxt.ir_mapper, |span| {
-    ctxt.span_to_range(span)
-  })
 }

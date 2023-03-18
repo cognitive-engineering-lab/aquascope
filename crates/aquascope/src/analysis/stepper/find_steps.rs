@@ -212,14 +212,14 @@ use crate::{
 };
 
 pub fn compute_permission_steps<'a, 'tcx>(
-  ctxt: &PermissionsCtxt<'a, 'tcx>,
-  ir_mapper: &IRMapper<'a, 'tcx>,
-  mode: PermIncludeMode,
-  span_to_range: impl Fn(Span) -> Range,
+  analysis: &AquascopeAnalysis<'a, 'tcx>,
 ) -> Result<Vec<PermissionsLineDisplay>>
 where
   'tcx: 'a,
 {
+  let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
+  let ctxt = &analysis.permissions;
+  let ir_mapper = &analysis.ir_mapper;
   let body = &ctxt.body_with_facts.body;
   let _basic_blocks = body.basic_blocks.indices();
   let mut hir_visitor = HirStepPoints::make(ctxt, ir_mapper)?;
@@ -239,10 +239,9 @@ where
   }
 
   Ok(prettify_permission_steps(
-    ctxt,
+    analysis,
     hir_visitor.finalize_diffs(),
     mode,
-    span_to_range,
   ))
 }
 
@@ -251,14 +250,14 @@ where
 // - Remove all tables which are empty
 // - Convert Spans to Ranges
 fn prettify_permission_steps<'tcx>(
-  ctxt: &PermissionsCtxt<'_, 'tcx>,
+  analysis: &AquascopeAnalysis<'_, 'tcx>,
   perm_steps: HashMap<
     Span,
     (MirSegment, HashMap<Place<'tcx>, PermissionsDataDiff>),
   >,
   mode: PermIncludeMode,
-  span_to_range: impl Fn(Span) -> Range,
 ) -> Vec<PermissionsLineDisplay> {
+  let ctxt = &analysis.permissions;
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
 
@@ -307,7 +306,7 @@ fn prettify_permission_steps<'tcx>(
           || first_error_span_opt
             .is_some_and(|err_span| err_span.hi() < span.lo()))
         {
-          let range = span_to_range(span);
+          let range = analysis.span_to_range(span);
           acc.entry(range).or_default().push((segment, entries));
         }
 
@@ -340,8 +339,8 @@ fn prettify_permission_steps<'tcx>(
       let (from, to) = entries.first().map_or_else(
         || (Range::default(), Range::default()),
         |(MirSegment { from, to }, _)| {
-          let from = span_to_range(ctxt.location_to_span(*from));
-          let to = span_to_range(ctxt.location_to_span(*to));
+          let from = analysis.span_to_range(ctxt.location_to_span(*from));
+          let to = analysis.span_to_range(ctxt.location_to_span(*to));
           (from, to)
         },
       );

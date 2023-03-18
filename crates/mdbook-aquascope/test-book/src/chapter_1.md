@@ -29,7 +29,6 @@ let x = *n;`[]`
 #}
 ```
 
-
 ```aquascope,permissions,stepper
 #fn main() {
 let mut x = 1;
@@ -71,5 +70,12 @@ fn main() {
 }
 fn plus_one(x: &i32) -> i32 {
     `[]`*x + 1
+}
+```
+
+```aquascope,permissions,boundaries,showFlows
+fn add_ref(v: &mut Vec<&i32>, n: i32) {
+  let r = &n;
+  v.push(r);
 }
 ```

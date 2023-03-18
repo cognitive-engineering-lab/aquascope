@@ -1,14 +1,17 @@
 mod context;
+pub(crate) mod flow;
+// pub(crate) mod flow_datalog;
 #[allow(clippy::all, clippy::pedantic)]
 mod graphviz;
 mod output;
 #[allow(clippy::all, clippy::pedantic)]
-mod places_conflict;
+pub(crate) mod places_conflict;
 pub mod utils;
 
 use std::ops::{Deref, DerefMut};
 
 pub use context::PermissionsCtxt;
+use fluid_let::fluid_let;
 pub use output::{compute, Output};
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::RustcFacts;
@@ -24,6 +27,9 @@ use crate::{
   analysis::{LoanKey, MoveKey},
   Range,
 };
+
+fluid_let!(pub static ENABLE_FLOW_PERMISSIONS: bool);
+pub const ENABLE_FLOW_DEFAULT: bool = false;
 
 /// Permission facts in Aquascope, similar to [`RustcFacts`].
 #[derive(Copy, Clone, Debug)]
@@ -52,6 +58,7 @@ impl polonius_engine::Atom for PathIndex {
 // ------------------------------------------------
 // General Information
 
+pub type Origin = <AquascopeFacts as FactTypes>::Origin;
 pub type Path = <AquascopeFacts as FactTypes>::Path;
 pub type Point = <AquascopeFacts as FactTypes>::Point;
 pub type Loan = <AquascopeFacts as FactTypes>::Loan;
