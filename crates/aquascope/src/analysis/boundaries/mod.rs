@@ -200,9 +200,8 @@ fn get_flow_permission(
     flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)?;
   log::debug!("HirId local constraints ---:\n{specific_constraints:#?}");
 
-  let kind = context_constraints
-    .iter()
-    .find_map(|&(from, to, _)| {
+  let mut flow_violations =
+    context_constraints.iter().filter_map(|&(from, to, _)| {
       let fk = region_flows.flow_kind(from, to);
 
       // We want to look specifically for flows that:
@@ -220,11 +219,18 @@ fn get_flow_permission(
       } else {
         None
       }
-    })
-    .unwrap_or_else(|| {
-      log::debug!("No flow edge violation found");
-      FlowEdgeKind::Ok
     });
+
+  // In theory there could be multiple violations that occur in the context. Multiple could also
+  // be triggered by the same local constraints, however, we currently are not providing any
+  // visualization for the violation provenance. Therefore we can just take the first one.
+  //
+  // A brief discussion at:
+  // https://github.com/cognitive-engineering-lab/aquascope/pull/51#discussion_r1141095658
+  let kind = flow_violations.next().unwrap_or_else(|| {
+    log::debug!("No flow edge violation found");
+    FlowEdgeKind::Ok
+  });
 
   let raw_span = hir.span(flow_context);
   let span = raw_span.as_local(body.span).unwrap_or(body.span);
