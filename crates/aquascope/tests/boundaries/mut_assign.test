@@ -1,0 +1,3 @@
+fn foo(s: &mut String) {
+  *s = String::new();
+}
