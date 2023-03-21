@@ -396,7 +396,7 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
   let mir_locations = mir_locations_opt?
     .values()
     .flat_map(|loc| {
-      log::debug!("looking at {loc:?} {:#?}", body.stmt_at(loc));
+      log::debug!("looking at {loc:?}");
       match body.stmt_at(loc) {
         Either::Left(stmt) => look_in_statement(stmt, loc),
         Either::Right(term) => look_in_terminator(term, loc),
