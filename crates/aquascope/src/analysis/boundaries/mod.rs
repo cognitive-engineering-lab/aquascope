@@ -7,7 +7,10 @@ use flowistry::mir::utils::{OperandExt, SpanExt};
 use path_visitor::get_path_boundaries;
 use rustc_hir::HirId;
 use rustc_middle::{
-  mir::{Body, Location, Place, Rvalue, Statement, StatementKind},
+  mir::{
+    Body, Location, Place, Rvalue, Statement, StatementKind, Terminator,
+    TerminatorKind,
+  },
   ty::TyCtxt,
 };
 use rustc_span::Span;
@@ -259,6 +262,8 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
   ir_mapper: &'a IRMapper<'a, 'tcx>,
   hir_id: HirId,
 ) -> Option<Vec<(Location, Place<'tcx>)>> {
+  type TempBuff<'tcx> = SmallVec<[(Location, Place<'tcx>); 3]>;
+
   let mir_locations_opt =
     ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
 
@@ -271,72 +276,130 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
         .unwrap_or(smallvec![])
     };
     ($loc:expr, $op1:expr, $op2:expr) => {{
-      let mut v: SmallVec<[(Location, Place<'tcx>); 3]> =
-        maybe_in_op!($loc, $op1);
-      let mut o: SmallVec<[(Location, Place<'tcx>); 3]> =
-        maybe_in_op!($loc, $op2);
+      let mut v: TempBuff = maybe_in_op!($loc, $op1);
+      let mut o: TempBuff = maybe_in_op!($loc, $op2);
       v.append(&mut o);
       v
     }};
   }
 
-  let mir_locations = mir_locations_opt?
-    .values()
-    .flat_map(|loc| {
-      log::debug!("looking at {loc:?}");
-      if let Either::Left(Statement {
-        kind: StatementKind::Assign(box (lhs_place, rvalue)),
-        ..
-      }) = body.stmt_at(loc)
+  let look_in_rvalue = |rvalue: &Rvalue<'tcx>, loc: Location| -> TempBuff {
+    match rvalue {
+      // Nested operand cases
+      Rvalue::Use(op)
+        | Rvalue::Repeat(op, _)
+        | Rvalue::Cast(_, op, _)
+        | Rvalue::UnaryOp(_, op)
+        | Rvalue::ShallowInitBox(op, _) => maybe_in_op!(loc, op),
+
+      // Given place cases.
+      Rvalue::Ref(_, _, place)
+        | Rvalue::AddressOf(_, place)
+        | Rvalue::Len(place)
+        | Rvalue::Discriminant(place)
+        | Rvalue::CopyForDeref(place)
+        if place.is_source_visible(tcx, body) =>
       {
-        let mut found_so_far: SmallVec<[(Location, Place<'tcx>); 3]> =
-          match rvalue {
-            // Nested operand cases
-            Rvalue::Use(op)
-            | Rvalue::Repeat(op, _)
-            | Rvalue::Cast(_, op, _)
-            | Rvalue::UnaryOp(_, op)
-            | Rvalue::ShallowInitBox(op, _) => maybe_in_op!(loc, op),
+        smallvec![(loc, *place)]
+      }
 
-            // Given place cases.
-            Rvalue::Ref(_, _, place)
-            | Rvalue::AddressOf(_, place)
-            | Rvalue::Len(place)
-            | Rvalue::Discriminant(place)
-            | Rvalue::CopyForDeref(place)
-              if place.is_source_visible(tcx, body) =>
-            {
-              smallvec![(loc, *place)]
-            }
+      // Two operand cases
+      Rvalue::BinaryOp(_, box (left_op, right_op))
+        | Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
+          maybe_in_op!(loc, left_op, right_op)
+        }
 
-            // Two operand cases
-            Rvalue::BinaryOp(_, box (left_op, right_op))
-            | Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
-              maybe_in_op!(loc, left_op, right_op)
-            }
+      // Unimplemented cases, ignore nested information for now.
+      //
+      // These are separated in the or because they aren't impelemented,
+      // but still silently ignored.
+      Rvalue::ThreadLocalRef(..)
+        | Rvalue::NullaryOp(..)
+        | Rvalue::Aggregate(..)
 
-            // Unimplemented cases, ignore nested information for now.
-            //
-            // These are separated in the or because they aren't impelemented,
-            // but still silently ignored.
-            Rvalue::ThreadLocalRef(..)
-            | Rvalue::NullaryOp(..)
-            | Rvalue::Aggregate(..)
+      // Wildcard for catching the previous guarded matches.
+        | _ => {
+          log::warn!("couldn't find in RVALUE {rvalue:?}");
+          smallvec![]
+        }
+    }
+  };
 
-            // Wildcard for catching the previous guarded matches.
-            | _ => {
-              log::warn!("couldn't find in RVALUE {rvalue:?}");
-              smallvec![]
-            }
-          };
-
+  let look_in_statement = |stmt: &Statement<'tcx>, loc: Location| -> TempBuff {
+    match &stmt.kind {
+      StatementKind::Assign(box (lhs_place, ref rvalue)) => {
+        let mut found_so_far: TempBuff = look_in_rvalue(rvalue, loc);
         if lhs_place.is_source_visible(tcx, body) {
           found_so_far.push((loc, *lhs_place));
         }
-
         found_so_far
-      } else {
-        smallvec![]
+      }
+      StatementKind::SetDiscriminant { place, .. }
+        if place.is_source_visible(tcx, body) =>
+      {
+        smallvec![(loc, **place)]
+      }
+
+      // These variants are compiler generated, but it would be
+      // insufficient to find a source-visible place only in
+      // compiler generated statements.
+      //
+      // They are also unimplemented so if something is missing
+      // suspect something in here.
+      StatementKind::SetDiscriminant { .. }
+      | StatementKind::FakeRead(..)
+      | StatementKind::Deinit(..)
+      | StatementKind::StorageLive(..)
+      | StatementKind::StorageDead(..)
+      | StatementKind::Retag(..)
+      | StatementKind::AscribeUserType(..)
+      | StatementKind::Coverage(..)
+      | StatementKind::Intrinsic(..)
+      | StatementKind::Nop => smallvec![],
+    }
+  };
+
+  let look_in_terminator =
+    |term: &Terminator<'tcx>, loc: Location| -> TempBuff {
+      match &term.kind {
+        TerminatorKind::DropAndReplace { place, value, .. } => {
+          let mut found_so_far = maybe_in_op!(loc, value);
+          if place.is_source_visible(tcx, body) {
+            found_so_far.push((loc, *place));
+          }
+          found_so_far
+        }
+
+        // None of these cases *should* contain source-visible
+        // places / operators. Usually a terminator is called
+        // with compiler temporaries, so why bother looking.
+        //
+        // I(gavinleroy) could be wrong so if something is
+        // missing suspect something in here.
+        TerminatorKind::Goto { .. }
+        | TerminatorKind::SwitchInt { .. }
+        | TerminatorKind::Resume
+        | TerminatorKind::Abort
+        | TerminatorKind::Return
+        | TerminatorKind::Unreachable
+        | TerminatorKind::Drop { .. }
+        | TerminatorKind::Call { .. }
+        | TerminatorKind::Assert { .. }
+        | TerminatorKind::Yield { .. }
+        | TerminatorKind::GeneratorDrop
+        | TerminatorKind::FalseEdge { .. }
+        | TerminatorKind::FalseUnwind { .. }
+        | TerminatorKind::InlineAsm { .. } => smallvec![],
+      }
+    };
+
+  let mir_locations = mir_locations_opt?
+    .values()
+    .flat_map(|loc| {
+      log::debug!("looking at {loc:?} {:#?}", body.stmt_at(loc));
+      match body.stmt_at(loc) {
+        Either::Left(stmt) => look_in_statement(stmt, loc),
+        Either::Right(term) => look_in_terminator(term, loc),
       }
     })
     .collect::<Vec<_>>();
