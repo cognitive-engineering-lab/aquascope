@@ -129,7 +129,14 @@ impl FlowEdgeKind {
     matches!(self, FlowEdgeKind::Ok)
   }
 }
+
 #[allow(dead_code)]
+// NOTE: all `TransitiveRelation`s are using a points to relationship. This means, that
+// if you want to know if the constraint `'a: 'b` ('a outlives 'b) was specified by the
+// user you, would use `specified_flows.contains('b, 'a)` phrasing this as
+// "`'b` can point to `'a`, but not the other way around".
+// This feels a little more natural when using `contains_abstract.contains('b, 'a)`
+// which in english specifies that "`'b` could contain data from the abstract region `'a`".
 pub struct RegionFlows {
   /// The flow constraint graph over the `subset_base` relation.
   constraint_graph: Sccs<Origin, SccIdx>,
@@ -139,6 +146,9 @@ pub struct RegionFlows {
 
   /// Local regions that could dangle due to an exit invalidation.
   dangling_local_sources: HybridBitSet<SccIdx>,
+
+  /// Regions that are equivalent to placeholders.
+  abstract_sources: HybridBitSet<SccIdx>,
 
   /// The set of abstract components that a given component could contain.
   contains_abstract: TransitiveRelation<SccIdx>,
@@ -152,6 +162,12 @@ impl RegionFlows {
     self.constraint_graph.scc(origin)
   }
 
+  /// Returns whether `origin` belongs to an abstract SCC.
+  pub fn is_abstract_member(&self, origin: Origin) -> bool {
+    self.abstract_sources.contains(self.scc(origin))
+  }
+
+  /// Returns whether `origin` is abstract-tainted.
   pub fn has_abstract_member(&self, origin: Origin) -> bool {
     !self
       .contains_abstract
@@ -192,9 +208,17 @@ impl RegionFlows {
     log::debug!("{from:?} is_local? {from_contains_local} is_abstract? {from_contains_abstract}", );
     log::debug!("{to:?} is_local? {to_contains_local} is_abstract? {to_contains_abstract}", );
 
-    // A local value can never flow into a concrete region.
-    if from_contains_local && to_contains_abstract {
-      log::debug!("early return local outlives universal");
+    // A local value can never flow into an abstract region.
+    if from_contains_local && self.is_abstract_member(to) {
+      log::info!("early return LocalOutlivesUniversal: {from:?}->{to:?} ({scc_from:?} -> {scc_to:?})");
+      log::info!(
+        "FROM abstracts {:#?}",
+        self.contains_abstract.reachable_from(scc_from)
+      );
+      log::info!(
+        "TO abstracts {:#?}",
+        self.contains_abstract.reachable_from(scc_to)
+      );
       return FlowEdgeKind::LocalOutlivesUniversal;
     }
 
@@ -210,7 +234,8 @@ impl RegionFlows {
           .contains_abstract
           .reachable_from(scc_to)
           .into_iter()
-          .all(|to| self.specified_flows.contains(from, to))
+          // was `'from: 'to` user-specified?
+          .all(|to| self.specified_flows.contains(to, from))
       })
     {
       return FlowEdgeKind::MissingUniversalConstraint;
@@ -348,8 +373,6 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
 
   let vertices = flatten_tuples(&constraints).collect::<HashSet<_>>();
 
-  log::debug!("Constraints---\n{:#?}", constraints);
-
   // Graph of constraints that need to be satisfied. This shows
   // us how data flows from one region into another.
   let constraint_graph = VecGraph::new(count_nodes(&constraints), constraints);
@@ -377,7 +400,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     .map(|p| scc_constraints.scc(p))
     .collect::<Vec<_>>();
 
-  log::debug!("placeholders: {placeholders:#?}");
+  log::debug!("Abstract sources(placeholders):\n{placeholders:#?}");
 
   // We filter the placeholders because the `known_placeholder_subset` contains a
   // top and bottom of the abstract lattice, but we only care about those
@@ -414,7 +437,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   }
 
   log::debug!(
-    "Local sources---\n{:#?}",
+    "Local sources:\n{:#?}",
     local_sources.iter().collect::<Vec<_>>()
   );
 
@@ -439,14 +462,20 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     }
   }
 
-  log::debug!("=== contains_abstract ===\n{contains_abstract:#?}");
+  let mut abstract_sources = HybridBitSet::new_empty(num_sccs);
+  for scc in placeholders.iter() {
+    abstract_sources.insert(*scc);
+  }
 
-  log::debug!("=== contains_local ===\n{contains_local:#?}");
+  log::debug!("Contains abstract:\n{contains_abstract:#?}");
+
+  log::debug!("Contains local:\n{contains_local:#?}");
 
   let region_flows = RegionFlows {
     constraint_graph: scc_constraints,
     specified_flows,
     dangling_local_sources,
+    abstract_sources,
     contains_abstract,
     contains_local,
   };

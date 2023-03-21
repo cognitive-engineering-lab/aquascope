@@ -1,0 +1,49 @@
+---
+source: crates/aquascope/tests/boundaries.rs
+description: get_first_specified@type-driven-flows.test
+---
+- location: 487
+  expected:
+    read: true
+    write: false
+    drop: false
+  actual:
+    type_droppable: false
+    type_writeable: false
+    type_copyable: false
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: false
+  expecting_flow:
+    is_violation: false
+    flow_context:
+      char_start: 474
+      char_end: 492
+      filename: 0
+    kind: Ok
+- location: 495
+  expected:
+    read: true
+    write: false
+    drop: false
+  actual:
+    type_droppable: false
+    type_writeable: false
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: true
+  expecting_flow:
+    is_violation: false
+    flow_context:
+      char_start: 495
+      char_end: 500
+      filename: 0
+    kind: Ok
+

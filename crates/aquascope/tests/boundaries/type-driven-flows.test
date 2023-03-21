@@ -1,0 +1,30 @@
+////! show-flows
+
+/*
+  This file consists of tests demonstrating how flow
+  expectations can change given different type signatures
+  and usages. The results here may change in the future
+  if we choose to place flow permissions on a wider range
+  of HIR nodes.
+*/
+
+fn print_first(v: &Vec<i32>) {
+  let n_ref = &v[0];
+  println!("{}", n_ref);
+}
+
+fn get_first(v: &Vec<i32>) -> &i32 {
+  let n_ref = &v[0];
+  n_ref
+}
+
+fn get_first_specified<'a>(v: &'a Vec<i32>) -> &'a i32 {
+  let n_ref = &v[0];
+  n_ref
+}
+
+fn get_first_constrained<'a, 'b>(v: &'a Vec<i32>) -> &'b i32
+where 'a: 'b {
+  let n_ref = &v[0];
+  n_ref
+}
