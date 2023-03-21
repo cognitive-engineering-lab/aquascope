@@ -135,6 +135,11 @@ $perm-animation-duration: 0.5s;
     margin-top: 5px;
   }
 
+  &.stack-size-3 {
+    bottom: 8px;
+    margin-top: 6px;
+  }
+
   .perm {
     font-size: $glyph-width;
     text-align: right;
@@ -183,6 +188,11 @@ $perm-animation-duration: 0.5s;
       margin-top: 7px;
       margin-bottom: -3px;
       bottom: 6px;
+    }
+
+    &.stack-size-3 {
+      margin-top: 7px;
+      bottom: 10px;
     }
 
     .perm {

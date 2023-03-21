@@ -3,7 +3,7 @@
 use anyhow::{bail, Result};
 use regex::Regex;
 
-const VALID_PERMISSIONS: &[&str] = &["read", "write", "own"];
+const VALID_PERMISSIONS: &[&str] = &["read", "write", "own", "flow"];
 
 pub type Replacement = (std::ops::Range<usize>, String);
 

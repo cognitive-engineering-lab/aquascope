@@ -210,6 +210,7 @@ class BoundaryPointWidget extends WidgetType {
       toi(this.boundary.expected.read),
       toi(this.boundary.expected.write),
       toi(this.boundary.expected.drop),
+      toi(this.boundary.expecting_flow !== undefined),
     ].reduce((a, b) => a + b, 0);
     this.line = view.state.doc.lineAt(boundary.location);
   }
