@@ -165,19 +165,15 @@ fn get_flow_permission(
 
   let region_flows = ctxt.region_flows();
 
-  log::debug!(
-    "FLOW INFORMATION:\nBound {} ---\n{:#?}\nAt {} ---\n{:#?}",
-    hir.node_to_string(flow_context),
-    flow_constraints_at_hir_id(ctxt, ir_mapper, flow_context),
-    hir.node_to_string(hir_id),
-    flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)
-  );
-
   // Do any given constraints have an abstract Origin on the RHS?
+  //
+  // NOTE: here `is_abstract_member` is used to only look for regions
+  // which are themselves part of an abstract SCC, not just containing
+  // an abstract region.
   let has_abstract_on_rhs = |flows: &[(Origin, Origin, Point)]| {
     flows
       .iter()
-      .any(|&(_, t, _)| region_flows.has_abstract_member(t))
+      .any(|&(_, t, _)| region_flows.is_abstract_member(t))
   };
 
   let context_constraints =
@@ -193,12 +189,25 @@ fn get_flow_permission(
     return None;
   }
 
-  log::debug!("flow context edges ---:\n{context_constraints:#?}");
-
   // Search for relevant flows and flow violations.
   let specific_constraints =
     flow_constraints_at_hir_id(ctxt, ir_mapper, hir_id)?;
-  log::debug!("HirId local constraints ---:\n{specific_constraints:#?}");
+
+  {
+    let format_with_scc = |v: &[(Origin, Origin, Point)]| {
+      v.iter()
+        .map(|&(f, t, _)| ((f, region_flows.scc(f)), (t, region_flows.scc(t))))
+        .collect::<Vec<_>>()
+    };
+    log::debug!(
+      "flow context constraints:\n{:#?}",
+      format_with_scc(&context_constraints)
+    );
+    log::debug!(
+      "flow (HirId)local constraints:\n{:#?}",
+      format_with_scc(&specific_constraints)
+    );
+  }
 
   let mut flow_violations =
     context_constraints.iter().filter_map(|&(from, to, _)| {
@@ -208,7 +217,7 @@ fn get_flow_permission(
       // - flow to an abstract region (XXX: a current design constraint to be lifter)
       // - are invalid
       // - the local constraints create a context constraint involved in the violation.
-      if region_flows.has_abstract_member(to)
+      if region_flows.is_abstract_member(to)
         && !fk.is_valid_flow()
         && specific_constraints
           .iter()
