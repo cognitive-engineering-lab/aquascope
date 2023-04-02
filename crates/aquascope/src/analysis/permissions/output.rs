@@ -15,7 +15,10 @@ use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, Mutability};
 use rustc_index::vec::IndexVec;
-use rustc_middle::{mir::ProjectionElem, ty::TyCtxt};
+use rustc_middle::{
+  mir::{Place, ProjectionElem},
+  ty::TyCtxt,
+};
 use rustc_mir_dataflow::move_paths::MoveData;
 
 use super::{
@@ -334,11 +337,20 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
         })
         .any(|prefix| {
           let ty = prefix.ty(&body.local_decls, tcx).ty;
-          match ty.ref_mutability() {
-            Some(mutability) => mutability == Mutability::Not,
-            // TODO: raw pointers, assume that they are always mutable
-            None => false,
+          log::debug!(
+            "checking to see if prefix {:?}: {:?} is mutable",
+            prefix,
+            ty
+          );
+
+          if let Some(mutability) = ty.ref_mutability() {
+            return mutability == Mutability::Not;
           }
+
+          // If the type is not a ref, it could be an array or box. In these
+          // cases we defer back to the mutability of the binding.
+          let local_place = Place::from_local(prefix.local, tcx);
+          ctxt.is_declared_readonly(&local_place)
         })
     }
   };

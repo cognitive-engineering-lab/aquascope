@@ -1,0 +1,9 @@
+fn declared_ro() {
+  let bx = Box::new(0);
+  *bx += 1;
+}
+
+fn declared_mut() {
+  let mut bx = Box::new(0);
+  *bx += 1;
+}
