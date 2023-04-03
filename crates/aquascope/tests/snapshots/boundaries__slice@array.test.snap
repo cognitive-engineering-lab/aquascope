@@ -1,0 +1,20 @@
+---
+source: crates/aquascope/tests/boundaries.rs
+description: slice@array.test
+---
+- location: 135
+  expected:
+    read: true
+    write: true
+    drop: false
+  actual:
+    type_droppable: false
+    type_writeable: false
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: true
+

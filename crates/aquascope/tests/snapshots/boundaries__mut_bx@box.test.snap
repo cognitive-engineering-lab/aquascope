@@ -1,0 +1,20 @@
+---
+source: crates/aquascope/tests/boundaries.rs
+description: mut_bx@box.test
+---
+- location: 93
+  expected:
+    read: true
+    write: true
+    drop: false
+  actual:
+    type_droppable: false
+    type_writeable: true
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: true
+      drop: true
+
