@@ -15,7 +15,10 @@ use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, Mutability};
 use rustc_index::vec::IndexVec;
-use rustc_middle::{mir::ProjectionElem, ty::TyCtxt};
+use rustc_middle::{
+  mir::{Place, ProjectionElem},
+  ty::TyCtxt,
+};
 use rustc_mir_dataflow::move_paths::MoveData;
 
 use super::{
@@ -129,6 +132,27 @@ where
   ///   move_conflicts_with(Move, Path).
   pub(crate) move_refined: HashMap<T::Point, HashMap<T::Path, Move>>,
 
+  /// The liveness of a [`Move`] on [`Point`] entry.
+  ///
+  /// ```text
+  /// .decl move_live_at(Move, Point)
+  ///
+  /// move_live_at(Move, Point) :-
+  ///   move_out(Move, Point).
+  ///
+  /// move_live_at(Move, Point1) :-
+  ///   move_live_at(Move, Point0),
+  ///   cfg_edge(Point0, Point1),
+  ///   move_conflicts_with(Move, Path0),
+  ///   !conflicted_assign_at_base(Path0, Point).
+  ///
+  /// .decl conflicted_assign_at_base(Path0, Point)
+  ///
+  /// conflicted_assign_at_base(Path0, Point) :-
+  ///   path_assigned_at_base(Path1, Point),
+  ///   places_conflict(Path0, Path1),
+  /// ```
+  ///
   pub(crate) move_live_at: HashMap<T::Point, Vec<Move>>,
 }
 
@@ -147,8 +171,8 @@ impl Default for Output<AquascopeFacts> {
 }
 
 /// Populate the [`Output`] facts in the current [`PermissionsCtxt`].
-// TODO(gavinleroy) lots of data is kept around below for clarity,
-// but this could definitely be optimized.
+// TODO(gavinleroy) lots of data is kept around below for clarity, but
+// this could definitely be optimized (for performance and memory consumption).
 #[allow(clippy::similar_names)]
 pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
@@ -246,7 +270,6 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
   // Paths that are partially moved can not have R/O permissions,
   // thus, if a child path is uninitialized (moved or non-initialized),
   // then the parent must also be uninitialized.
-
   let mut iteration = Iteration::new();
 
   let path_maybe_uninitialized_on_entry =
@@ -271,22 +294,34 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
     |&_point1, &path, &point2| (path, point2),
   ));
 
-  // FIXME: a lot of these do repeat work. You could rely on datafrog more.
   while iteration.changed() {
-    // TODO: write datalog rule
+    // move_live_at(Move, Point1) :-
+    //   move_live_at(Move, Point0),
+    //   cfg_edge(Point0, Point1),
+    //   move_conflicts_with(Move, Path0),
+    //   !conflicted_assign_at_base(Path0, Point).
     move_live_at.from_leapjoin(
       &move_live_at,
       (
         cfg_edge.extend_with(|&(_path, point1)| point1),
         ValueFilter::from(|&(movep, _point1), &point2| {
           let mpath = ctxt.move_to_moveable_path(movep);
+          let mp = ctxt.moveable_path_to_path(mpath);
+          let place2 = ctxt.path_to_place(mp);
+
+          // TODO: we can pull this out into its own rule. I'm
+          //       hesitant to pre-compute everything over the
+          //       entire domain because I'm not sure it's worth
+          //       the memory footprint.
+          //
+          // conflicted_assign_at_base(Path0, Point) :-
+          //   path_assigned_at_base(Path1, Point),
+          //   places_conflict(Path0, Path1),
           !ctxt.polonius_input_facts.path_assigned_at_base.iter().any(
             |&(assigned_to, p)| {
               p == point2 && {
-                let pp = ctxt.moveable_path_to_path(assigned_to);
-                let place1 = ctxt.path_to_place(pp);
-                let pp = ctxt.moveable_path_to_path(mpath);
-                let place2 = ctxt.path_to_place(pp);
+                let mp_assigned_to = ctxt.moveable_path_to_path(assigned_to);
+                let place1 = ctxt.path_to_place(mp_assigned_to);
                 places_conflict::places_conflict(
                   tcx,
                   body,
@@ -316,7 +351,9 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
     path_maybe_uninitialized_on_entry.complete();
   let move_live_at = move_live_at.complete();
 
-  // We need to shift the move liveness by one in the MIR.
+  // NOTE: We need to shift the move liveness by one in the MIR. Move
+  //       liveness is defined as a move being live *on point entry*,
+  //       but it was computed on point exit.
   let move_live_at: Relation<(Move, Point)> = Relation::from_leapjoin(
     &move_live_at,
     cfg_edge.extend_with(|&(_movep, point1)| point1),
@@ -333,12 +370,19 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
           matches!(elem, ProjectionElem::Deref).then_some(prefix)
         })
         .any(|prefix| {
+          // For a given path `*x` we could be looking at the prefix of
+          // `x`. This could be a reference, in which case we simply check
+          // the mutability of the type.
           let ty = prefix.ty(&body.local_decls, tcx).ty;
-          match ty.ref_mutability() {
-            Some(mutability) => mutability == Mutability::Not,
-            // TODO: raw pointers, assume that they are always mutable
-            None => false,
+          if let Some(mutability) = ty.ref_mutability() {
+            return mutability == Mutability::Not;
           }
+
+          // In the above example of `*x`, example `x` could also be a
+          // `Box`, or for a different base path an array. These cases
+          // would require us to check the mutability binding of the local.
+          let local_place = Place::from_local(prefix.local, tcx);
+          ctxt.is_declared_readonly(&local_place)
         })
     }
   };

@@ -1,0 +1,19 @@
+fn arr() {
+  let a = [0; 10];
+  a[0] += 1;
+}
+
+fn mut_arr() {
+  let mut a = [0; 10];
+  a[0] += 1;
+}
+
+fn slice() {
+  let a = &[0; 10];
+  a[0] += 1;
+}
+
+fn mut_slice() {
+  let a = &mut [0; 10];
+  a[0] += 1;
+}

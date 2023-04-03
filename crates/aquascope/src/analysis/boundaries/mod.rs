@@ -339,6 +339,14 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
       {
         smallvec![(loc, **place)]
       }
+      StatementKind::FakeRead(box (_, place))
+        if place.is_source_visible(tcx, body) =>
+      {
+        smallvec![(loc, *place)]
+      }
+
+      StatementKind::SetDiscriminant { .. }
+      | StatementKind::FakeRead(..)
 
       // These variants are compiler generated, but it would be
       // insufficient to find a source-visible place only in
@@ -346,8 +354,6 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
       //
       // They are also unimplemented so if something is missing
       // suspect something in here.
-      StatementKind::SetDiscriminant { .. }
-      | StatementKind::FakeRead(..)
       | StatementKind::Deinit(..)
       | StatementKind::StorageLive(..)
       | StatementKind::StorageDead(..)

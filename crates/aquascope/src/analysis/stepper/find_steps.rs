@@ -335,6 +335,22 @@ fn prettify_permission_steps<'tcx>(
         v.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection))
       }
 
+      // let state = entries
+      //   .into_iter()
+      //   .map(|(MirSegment { from, to }, diffs)| {
+      //     let state = diffs
+      //       .into_iter()
+      //       .map(|(place, diff)| {
+      //         let s = place_to_string!(place);
+      //         (s, diff)
+      //       })
+      //       .collect::<Vec<_>>();
+      //     let from = analysis.span_to_range(ctxt.location_to_span(from));
+      //     let to = analysis.span_to_range(ctxt.location_to_span(to));
+      //     PermissionsStepTable { from, to, state }
+      //   })
+      //   .collect::<Vec<_>>();
+
       // Conforming to the above HACK this just takes any (from, to) pair.
       let (from, to) = entries.first().map_or_else(
         || (Range::default(), Range::default()),
@@ -344,25 +360,6 @@ fn prettify_permission_steps<'tcx>(
           (from, to)
         },
       );
-
-      // let mut state = entries
-      //   .into_iter()
-      //   .map(|(MirSegment { from, to }, diffs)| {
-
-      //     let state = diffs
-      //       .into_iter()
-      //       .map(|(place, diff)| {
-      //         let s = place_to_string!(place);
-      //         (s, diff)
-      //       })
-      //       .collect::<Vec<_>>();
-
-      //     from = span_to_range(ctxt.location_to_span(from));
-      //     to = span_to_range(ctxt.location_to_span(to));
-
-      //     PermissionsStepTable { from, to, state }
-      //   })
-      //   .collect::<Vec<_>>();
 
       let mut master_table: Vec<(Place<'tcx>, PermissionsDataDiff)> =
         Vec::default();
@@ -397,10 +394,15 @@ fn prettify_permission_steps<'tcx>(
           if let Some(idx) = i_opt {
             let (_, old_diff) = &master_table[idx];
             if is_symmetric_diff(&diff, old_diff) {
+              log::debug!(
+                "REMOVING place {place:?} with diff {diff:?} into the MT."
+              );
               master_table.remove(idx);
               continue;
             }
           }
+
+          log::debug!("ADDING place {place:?} with diff {diff:?} into the MT.");
           master_table.push((place, diff));
         }
       }
@@ -867,13 +869,16 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
               for subtree in joins.iter() {
                 let mut temp = HashMap::default();
                 diff_subtree(ctxt, subtree, &mut temp, attached_at);
+
                 // HACK: remove any differences that were attached to this span.
                 temp.remove(span);
+
                 // HACK: manually remove any attached places which got added.
                 for (_, (_, diffs)) in temp.iter_mut() {
                   diffs
                     .drain_filter(|place, _| attached_here.contains_key(place));
                 }
+
                 joined_diff.extend(temp);
               }
 
