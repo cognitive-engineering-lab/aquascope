@@ -16,7 +16,7 @@ description: missing_constraint@missing_constraint.test
     permissions:
       read: true
       write: false
-      drop: true
+      drop: false
   expecting_flow:
     is_violation: true
     flow_context:

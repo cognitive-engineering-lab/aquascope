@@ -16,5 +16,5 @@ description: test@deref_assign_0.test
     permissions:
       read: true
       write: true
-      drop: true
+      drop: false
 

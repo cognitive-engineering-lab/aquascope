@@ -1,45 +1,8 @@
 ---
 source: crates/aquascope/tests/boundaries.rs
-description: add_ref@add_ref.test
+description: main@read_on_copy_0.test
 ---
-- location: 68
-  expected:
-    read: true
-    write: false
-    drop: false
-  actual:
-    type_droppable: true
-    type_writeable: false
-    type_copyable: true
-    is_live: true
-    path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: true
-- location: 74
-  expected:
-    read: true
-    write: true
-    drop: false
-  actual:
-    type_droppable: false
-    type_writeable: true
-    type_copyable: false
-    is_live: true
-    path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
-  expecting_flow:
-    is_violation: false
-    flow_context:
-      char_start: 73
-      char_end: 83
-      filename: 0
-    kind: Ok
-- location: 80
+- location: 105
   expected:
     read: true
     write: false
@@ -54,11 +17,49 @@ description: add_ref@add_ref.test
       read: true
       write: false
       drop: false
-  expecting_flow:
-    is_violation: true
-    flow_context:
-      char_start: 73
-      char_end: 83
-      filename: 0
-    kind: LocalOutlivesUniversal
+- location: 120
+  expected:
+    read: true
+    write: false
+    drop: false
+  actual:
+    type_droppable: false
+    type_writeable: false
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: false
+- location: 135
+  expected:
+    read: true
+    write: false
+    drop: false
+  actual:
+    type_droppable: false
+    type_writeable: false
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: false
+- location: 150
+  expected:
+    read: true
+    write: false
+    drop: false
+  actual:
+    type_droppable: false
+    type_writeable: false
+    type_copyable: true
+    is_live: true
+    path_uninitialized: false
+    permissions:
+      read: true
+      write: false
+      drop: false
 
