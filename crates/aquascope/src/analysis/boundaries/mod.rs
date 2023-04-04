@@ -8,10 +8,10 @@ use path_visitor::get_path_boundaries;
 use rustc_hir::HirId;
 use rustc_middle::{
   mir::{
-    Body, Location, Place, Rvalue, Statement, StatementKind, Terminator,
-    TerminatorKind,
+    Body, Location, Mutability, Place, Rvalue, Statement, StatementKind,
+    Terminator, TerminatorKind,
   },
-  ty::TyCtxt,
+  ty::{adjustment::AutoBorrowMutability, ParamEnv, Ty, TyCtxt},
 };
 use rustc_span::Span;
 use serde::Serialize;
@@ -28,7 +28,7 @@ use crate::{
     AquascopeAnalysis,
   },
   errors,
-  mir::utils::PlaceExt,
+  mir::utils::{PlaceExt, TyExt},
   Range,
 };
 
@@ -71,6 +71,72 @@ impl PermissionsBoundary {
 // ----------------------------------
 // Permission boundaries on path uses
 
+#[derive(Copy, Clone, Debug)]
+struct ExpectedPermissions(Permissions);
+
+impl ExpectedPermissions {
+  pub fn from_receiver_ty<'tcx>(
+    ty: Ty<'tcx>,
+    tcx: TyCtxt<'tcx>,
+    param_env: ParamEnv<'tcx>,
+  ) -> Self {
+    let ty_copyable = ty.is_copyable(tcx, param_env);
+    let read = true;
+    let (write, drop) = match ty.ref_mutability() {
+      None => (false, !ty_copyable),
+      Some(Mutability::Not) => (false, false),
+      Some(Mutability::Mut) => (true, false),
+    };
+    ExpectedPermissions(Permissions { read, write, drop })
+  }
+
+  pub fn from_assignment() -> Self {
+    Self(Permissions {
+      read: true,
+      write: true,
+      drop: false,
+    })
+  }
+
+  pub fn from_borrow(mutability: Mutability) -> Self {
+    Self(Permissions {
+      read: true,
+      write: matches!(mutability, Mutability::Mut),
+      drop: false,
+    })
+  }
+
+  pub fn from_reborrow(mutability: AutoBorrowMutability) -> Self {
+    Self(Permissions {
+      read: true,
+      write: matches!(mutability, AutoBorrowMutability::Mut { .. }),
+      drop: false,
+    })
+  }
+
+  pub fn from_move() -> Self {
+    Self(Permissions {
+      read: true,
+      write: false,
+      drop: true,
+    })
+  }
+
+  pub fn from_copy() -> Self {
+    Self(Permissions {
+      read: true,
+      write: false,
+      drop: false,
+    })
+  }
+}
+
+impl From<ExpectedPermissions> for Permissions {
+  fn from(ex: ExpectedPermissions) -> Permissions {
+    ex.0
+  }
+}
+
 struct PathBoundary {
   // The HirId node where we want to look for Places.
   pub hir_id: HirId,
@@ -82,7 +148,7 @@ struct PathBoundary {
   // places can be more precisely identified.
   pub conflicting_node: Option<HirId>,
   pub location: Span,
-  pub expected: Permissions,
+  pub expected: ExpectedPermissions,
 }
 
 impl std::fmt::Debug for PathBoundary {
@@ -486,7 +552,7 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
 
       PermissionsBoundary {
         location,
-        expected,
+        expected: expected.into(),
         actual,
         expecting_flow,
       }
@@ -507,9 +573,8 @@ pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
   analysis: &AquascopeAnalysis<'a, 'tcx>,
 ) -> Result<Vec<PermissionsBoundary>> {
   let ctxt = &analysis.permissions;
-  let tcx = ctxt.tcx;
 
-  let path_use_points = get_path_boundaries(tcx, ctxt.body_id, ctxt)?
+  let path_use_points = get_path_boundaries(ctxt)?
     .into_iter()
     .filter_map(|pb| path_to_perm_boundary(pb, analysis));
 

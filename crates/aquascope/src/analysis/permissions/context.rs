@@ -7,14 +7,12 @@ use rustc_borrowck::{
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{def_id::DefId, BodyId, Mutability};
 use rustc_index::vec::IndexVec;
-use rustc_infer::infer::TyCtxtInferExt;
 use rustc_middle::{
   mir::{BorrowKind, Local, Location, Place},
   ty::{self, ParamEnv, Ty, TyCtxt},
 };
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
-use rustc_trait_selection::infer::InferCtxtExt;
 use smallvec::{smallvec, SmallVec};
 
 use crate::{
@@ -23,7 +21,7 @@ use crate::{
     Output, Path, Permissions, PermissionsData, PermissionsDomain, Point,
     Variable,
   },
-  mir::utils::BodyExt,
+  mir::utils::{BodyExt, TyExt},
 };
 
 /// A path as defined in rustc.
@@ -201,12 +199,10 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   pub fn is_path_copyable(&self, path: Path) -> bool {
-    use rustc_hir::lang_items::LangItem;
     let body = &self.body_with_facts.body;
     let place = self.path_to_place(path);
     let ty = place.ty(&body.local_decls, self.tcx).ty;
-    let copy_def_id = self.tcx.require_lang_item(LangItem::Copy, None);
-    self.implements_trait(ty, copy_def_id)
+    ty.is_copyable(self.tcx, self.param_env)
   }
 
   pub fn is_path_write_enabled(&self, path: Path) -> bool {
@@ -246,20 +242,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
   // Permission utilities
 
-  fn implements_trait(&self, ty: Ty<'tcx>, trait_def_id: DefId) -> bool {
-    use rustc_infer::traits::EvaluationResult;
-
-    let infcx = self.tcx.infer_ctxt().build();
-    let ty = self.tcx.erase_regions(ty);
-    let result =
-      infcx.type_implements_trait(trait_def_id, [ty], self.param_env);
-    matches!(
-      result,
-      EvaluationResult::EvaluatedToOk
-        | EvaluationResult::EvaluatedToOkModuloRegions
-    )
-  }
-
   pub fn max_permissions(&self, path: Path) -> Permissions {
     let write = self.is_path_write_enabled(path);
     let drop = self.is_path_drop_enabled(path);
@@ -272,15 +254,11 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   pub fn permissions_for_const_ty(&self, ty: Ty<'tcx>) -> PermissionsData {
-    use rustc_hir::lang_items::LangItem;
-    let copy_def_id = self.tcx.require_lang_item(LangItem::Copy, None);
-    let type_copyable = self.implements_trait(ty, copy_def_id);
-
     PermissionsData {
       is_live: true,
       type_droppable: true,
       type_writeable: true,
-      type_copyable,
+      type_copyable: ty.is_copyable(self.tcx, self.param_env),
       path_moved: None,
       path_uninitialized: false,
       loan_read_refined: None,
@@ -355,18 +333,12 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       // - there doesn't exist a write-refining loan at this point.
       let write = type_writeable && read && loan_write_refined.is_none();
 
-      // A path is droppable if it is doppable or copyable.
-      //
-      // * A path can be copied (implies drop) IFF:
-      //   - the declared type is copyable.
-      //   - the value can be read.
-      //
+      // A path is droppable if it is doppable.
       // * A path can be dropped (without copy) IFF:
       //   - the path's declared type is droppable.
       //   - it isn't moved.
       //   - no drop-refining loan exists at this point.
-      let drop = (type_copyable && read)
-        || (type_droppable && !mem_uninit && loan_drop_refined.is_none());
+      let drop = type_droppable && read && loan_drop_refined.is_none();
 
       Permissions { read, write, drop }
     };

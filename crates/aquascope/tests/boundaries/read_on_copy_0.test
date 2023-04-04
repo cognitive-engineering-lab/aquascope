@@ -1,0 +1,14 @@
+#[derive(Copy, Clone)]
+struct S(i32);
+
+impl S {
+  fn consume(self) {}
+}
+
+fn main() {
+  let s = &S(0);
+  s.consume();
+  s.consume();
+  s.consume();
+  s.consume();
+}

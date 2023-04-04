@@ -32,8 +32,8 @@ description: add_ref@if_2.test
             type: None
             value: false
           drop:
-            type: High
-            value: true
+            type: None
+            value: false
     - - "*v"
       - is_live:
           type: High
@@ -407,7 +407,8 @@ description: add_ref@if_2.test
             type: None
             value: false
           drop:
-            type: Low
+            type: None
+            value: false
     - - n
       - is_live:
           type: Low

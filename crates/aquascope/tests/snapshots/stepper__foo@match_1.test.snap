@@ -64,8 +64,8 @@ description: foo@match_1.test
             type: High
             value: true
           drop:
-            type: High
-            value: true
+            type: None
+            value: false
     - - a
       - is_live:
           type: High
@@ -274,7 +274,8 @@ description: foo@match_1.test
           write:
             type: Low
           drop:
-            type: Low
+            type: None
+            value: false
     - - a
       - is_live:
           type: Low

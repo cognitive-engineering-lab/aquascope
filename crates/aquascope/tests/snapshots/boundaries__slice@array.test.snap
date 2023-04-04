@@ -16,5 +16,5 @@ description: slice@array.test
     permissions:
       read: true
       write: false
-      drop: true
+      drop: false
 

@@ -95,8 +95,8 @@ description: main@linear_0.test
             type: High
             value: true
           drop:
-            type: High
-            value: true
+            type: None
+            value: false
     - - x
       - is_live:
           type: Low
@@ -212,7 +212,8 @@ description: main@linear_0.test
           write:
             type: Low
           drop:
-            type: Low
+            type: None
+            value: false
     - - z
       - is_live:
           type: Low

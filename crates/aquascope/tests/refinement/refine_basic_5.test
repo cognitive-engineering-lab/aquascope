@@ -7,15 +7,15 @@ fn main() {
 
   let _a = &`[z ---]`;
   let _a = &`[x R-D]`;
-  let _a = &`[*x RWD]`;
+  let _a = &`[*x RW-]`;
 
   let y: &i32 = &*x;
 
   let _a = &`[z ---]`;
   let _a = &`[x R--]`;
-  let _a = &`[*x R-D]`;
+  let _a = &`[*x R--]`;
   let _a = &`[y R-D]`;
-  let _a = &`[*y R-D]`;
+  let _a = &`[*y R--]`;
 
   *x += 1; // ERROR: *x doesn't have 'W' permissions
 
@@ -27,9 +27,9 @@ fn main() {
 
   let _a = &`[z ---]`;
   let _a = &`[x R-D]`;
-  let _a = &`[*x RWD]`;
+  let _a = &`[*x RW-]`;
   let _a = &`[y R-D]`;
-  let _a = &`[*y R-D]`;
+  let _a = &`[*y R--]`;
 
   println!("{} = {}", x, *y);
 }

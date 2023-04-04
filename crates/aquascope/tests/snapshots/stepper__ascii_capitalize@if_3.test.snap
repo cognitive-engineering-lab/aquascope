@@ -95,8 +95,8 @@ description: ascii_capitalize@if_3.test
             type: None
             value: false
           drop:
-            type: High
-            value: true
+            type: None
+            value: false
     - - "*v"
       - is_live:
           type: None
@@ -220,7 +220,8 @@ description: ascii_capitalize@if_3.test
             type: None
             value: false
           drop:
-            type: Low
+            type: None
+            value: false
     - - "*v"
       - is_live:
           type: None
@@ -454,7 +455,8 @@ description: ascii_capitalize@if_3.test
             type: None
             value: false
           drop:
-            type: Low
+            type: None
+            value: false
     - - "*v"
       - is_live:
           type: None

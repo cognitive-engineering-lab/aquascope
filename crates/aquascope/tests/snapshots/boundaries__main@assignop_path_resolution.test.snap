@@ -21,7 +21,7 @@ description: main@assignop_path_resolution.test
   expected:
     read: true
     write: false
-    drop: true
+    drop: false
   actual:
     type_droppable: false
     type_writeable: false
@@ -31,7 +31,7 @@ description: main@assignop_path_resolution.test
     permissions:
       read: true
       write: false
-      drop: true
+      drop: false
 - location: 200
   expected:
     read: true
@@ -51,7 +51,7 @@ description: main@assignop_path_resolution.test
   expected:
     read: true
     write: false
-    drop: true
+    drop: false
   actual:
     type_droppable: true
     type_writeable: true
@@ -63,12 +63,12 @@ description: main@assignop_path_resolution.test
     permissions:
       read: true
       write: false
-      drop: true
+      drop: false
 - location: 209
   expected:
     read: true
     write: false
-    drop: true
+    drop: false
   actual:
     type_droppable: true
     type_writeable: false
@@ -83,7 +83,7 @@ description: main@assignop_path_resolution.test
   expected:
     read: true
     write: false
-    drop: true
+    drop: false
   actual:
     type_droppable: false
     type_writeable: false
@@ -93,5 +93,5 @@ description: main@assignop_path_resolution.test
     permissions:
       read: true
       write: false
-      drop: true
+      drop: false
 
