@@ -11,7 +11,7 @@ use rustc_middle::{
     Body, Location, Mutability, Place, Rvalue, Statement, StatementKind,
     Terminator, TerminatorKind,
   },
-  ty::{adjustment::AutoBorrowMutability, ParamEnv, Ty, TyCtxt},
+  ty::{adjustment::AutoBorrowMutability, TyCtxt},
 };
 use rustc_span::Span;
 use serde::Serialize;
@@ -28,7 +28,7 @@ use crate::{
     AquascopeAnalysis,
   },
   errors,
-  mir::utils::{PlaceExt, TyExt},
+  mir::utils::PlaceExt,
   Range,
 };
 
@@ -75,21 +75,6 @@ impl PermissionsBoundary {
 struct ExpectedPermissions(Permissions);
 
 impl ExpectedPermissions {
-  pub fn from_receiver_ty<'tcx>(
-    ty: Ty<'tcx>,
-    tcx: TyCtxt<'tcx>,
-    param_env: ParamEnv<'tcx>,
-  ) -> Self {
-    let ty_copyable = ty.is_copyable(tcx, param_env);
-    let read = true;
-    let (write, drop) = match ty.ref_mutability() {
-      None => (false, !ty_copyable),
-      Some(Mutability::Not) => (false, false),
-      Some(Mutability::Mut) => (true, false),
-    };
-    ExpectedPermissions(Permissions { read, write, drop })
-  }
-
   pub fn from_assignment() -> Self {
     Self(Permissions {
       read: true,
@@ -137,17 +122,25 @@ impl From<ExpectedPermissions> for Permissions {
   }
 }
 
+/// Internal structure for marking nodes as having "expected permissions".
 struct PathBoundary {
-  // The HirId node where we want to look for Places.
+  /// The [`HirId`] node where we start the search for matching places.
   pub hir_id: HirId,
-  // The upper-bound context for region flow.
+
+  /// External context for associated flow constraints.
   pub flow_context: HirId,
-  // The HirId that could provide additional places we don't
-  // want to consider. This notably happens in an AssignOp where
-  // the LHS and RHS Places get found together, however, the RHS
-  // places can be more precisely identified.
+
+  /// A [`HirId`] node that may obstruct the search for place permissions.
+  /// The place where this is used is in assignments `*x += y` where
+  /// both `*x` and `y` will appear as potential place candidates. We know
+  /// at the marking phase that it isn't anything from the `Rvalue` so we
+  /// flag it as ignored.
   pub conflicting_node: Option<HirId>,
+
+  /// Exact source span where boundaries should be placed.
   pub location: Span,
+
+  /// The permissions required for the [`Place`] usage.
   pub expected: ExpectedPermissions,
 }
 
