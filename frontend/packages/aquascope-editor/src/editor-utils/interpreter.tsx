@@ -115,28 +115,33 @@ let read_vec = (vec: MAdt): MAdt => {
   return read_unique(unique);
 };
 
+let specialPtr = (value: MAdt): MValue | undefined => {
+  if (value.alloc_kind === null) return;
+
+  let alloc_type = value.alloc_kind.type;
+  let non_null: MAdt;
+  if (alloc_type == "String") {
+    let vec = read_field(value, "vec");
+    non_null = read_vec(vec);
+  } else if (alloc_type == "Vec") {
+    non_null = read_vec(value);
+  } else if (alloc_type == "Box") {
+    let unique = read_field(value, "0");
+    non_null = read_unique(unique);
+  } else {
+    throw new Error(`Unimplemented alloc type: ${alloc_type}`);
+  }
+
+  let ptr = non_null.fields[0][1];
+  return ptr;
+};
+
 let AdtView = ({ value }: { value: MAdt }) => {
   let pathCtx = useContext(PathContext);
   let config = useContext(ConfigContext);
 
-  if (value.alloc_kind !== null && !config.concreteTypes) {
-    let alloc_type = value.alloc_kind.type;
-    let non_null: MAdt;
-    if (alloc_type == "String") {
-      let vec = read_field(value, "vec");
-      non_null = read_vec(vec);
-    } else if (alloc_type == "Vec") {
-      non_null = read_vec(value);
-    } else if (alloc_type == "Box") {
-      let unique = read_field(value, "0");
-      non_null = read_unique(unique);
-    } else {
-      throw new Error(`Unimplemented alloc type: ${alloc_type}`);
-    }
-
-    let ptr = non_null.fields[0][1];
-    return <ValueView value={ptr} />;
-  }
+  let ptr = specialPtr(value);
+  if (ptr && !config.concreteTypes) return <ValueView value={ptr} />;
 
   if (value.name == "Iter" && !config.concreteTypes) {
     let non_null = read_field(value, "ptr");
@@ -144,23 +149,34 @@ let AdtView = ({ value }: { value: MAdt }) => {
     return <ValueView value={ptr} />;
   }
 
-  let adtName = (
-    <>
-      {value.name}
-      {value.variant ? <>::{value.variant}</> : null}
-    </>
-  );
+  let adtName = value.variant ?? value.name;
 
   let isTuple = value.fields.length > 0 && value.fields[0][0] == "0";
 
   if (isTuple && value.fields.length == 1) {
     let path = [...pathCtx, "field", "0"];
+    let field = value.fields[0][1];
+    let inner = (
+      <PathContext.Provider value={path}>
+        <ValueView value={field} />
+      </PathContext.Provider>
+    );
+    let smallInside =
+      field.type == "Adt" &&
+      !config.concreteTypes &&
+      specialPtr(field.value) !== undefined;
     return (
       <span className={path.join("-")}>
-        <PathContext.Provider value={path}>
-          {adtName} /&nbsp;
-          <ValueView value={value.fields[0][1]} />
-        </PathContext.Provider>
+        {smallInside ? (
+          <>
+            {adtName}({inner})
+          </>
+        ) : (
+          <>
+            {" "}
+            {adtName} /&nbsp;{inner}
+          </>
+        )}
       </span>
     );
   }
