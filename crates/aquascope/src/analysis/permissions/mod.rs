@@ -16,10 +16,7 @@ pub use output::{compute, Output};
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::RustcFacts;
 use rustc_data_structures::fx::FxHashMap;
-use rustc_middle::{
-  mir::{Mutability, Place},
-  ty::Ty,
-};
+use rustc_middle::mir::Place;
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -149,7 +146,7 @@ pub struct PermissionsDomain<'tcx>(FxHashMap<Place<'tcx>, PermissionsData>);
 impl Permissions {
   // No "Top" value exists for permissions as this is on a per-place basis.
   // That is, the top value depends on a places type declaration.
-  pub fn bottom() -> Permissions {
+  pub fn bottom() -> Self {
     Permissions {
       read: false,
       write: false,
@@ -174,22 +171,6 @@ impl std::fmt::Debug for Permissions {
       }
       Ok(())
     }
-  }
-}
-
-// XXX: this is only valid when the Ty is an *expected* type.
-// This is because expected types do not rely on the mutability of
-// the binding, e.g. `let mut x = ...` and all of the expected information
-// is really just in the type.
-impl<'tcx> From<Ty<'tcx>> for Permissions {
-  fn from(ty: Ty<'tcx>) -> Self {
-    let read = true;
-    let (write, drop) = match ty.ref_mutability() {
-      None => (false, true),
-      Some(Mutability::Not) => (false, false),
-      Some(Mutability::Mut) => (true, false),
-    };
-    Self { read, write, drop }
   }
 }
 

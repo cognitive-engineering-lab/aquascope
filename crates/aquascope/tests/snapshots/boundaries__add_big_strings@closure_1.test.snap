@@ -36,7 +36,7 @@ description: add_big_strings@closure_1.test
   expected:
     read: true
     write: false
-    drop: true
+    drop: false
   actual:
     type_droppable: true
     type_writeable: false

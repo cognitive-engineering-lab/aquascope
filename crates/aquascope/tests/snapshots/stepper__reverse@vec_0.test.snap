@@ -158,8 +158,8 @@ description: reverse@vec_0.test
             type: High
             value: true
           drop:
-            type: High
-            value: true
+            type: None
+            value: false
     - - "*v"
       - is_live:
           type: None

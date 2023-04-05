@@ -31,7 +31,7 @@ description: get_first_constrained@type-driven-flows.test
     permissions:
       read: true
       write: false
-      drop: true
+      drop: false
   expecting_flow:
     is_violation: false
     flow_context:

@@ -38,7 +38,7 @@ description: get_first@type-driven-flows.test
     permissions:
       read: true
       write: false
-      drop: true
+      drop: false
   expecting_flow:
     is_violation: false
     flow_context:

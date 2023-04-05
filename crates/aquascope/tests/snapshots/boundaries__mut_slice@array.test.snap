@@ -16,5 +16,5 @@ description: mut_slice@array.test
     permissions:
       read: true
       write: true
-      drop: true
+      drop: false
 

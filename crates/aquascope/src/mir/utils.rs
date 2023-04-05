@@ -3,10 +3,12 @@
 use flowistry::mir::utils::PlaceExt as FlowistryPlaceExt;
 use rustc_data_structures::captures::Captures;
 use rustc_hir::def_id::DefId;
+use rustc_infer::infer::TyCtxtInferExt;
 use rustc_middle::{
   mir::{Body, Place},
-  ty::{self, subst::GenericArgKind, Region, RegionVid, Ty, TyCtxt},
+  ty::{self, subst::GenericArgKind, ParamEnv, Region, RegionVid, Ty, TyCtxt},
 };
+use rustc_trait_selection::infer::InferCtxtExt;
 use smallvec::SmallVec;
 
 //------------------------------------------------
@@ -101,6 +103,15 @@ pub trait TyExt<'tcx> {
     Self: 'a;
 
   fn inner_regions(&self) -> Self::AllRegionsIter<'_>;
+
+  fn does_implement_trait(
+    &self,
+    tcx: TyCtxt<'tcx>,
+    param_env: ParamEnv<'tcx>,
+    trait_def_id: DefId,
+  ) -> bool;
+
+  fn is_copyable(&self, tcx: TyCtxt<'tcx>, param_env: ParamEnv<'tcx>) -> bool;
 }
 
 impl<'tcx> TyExt<'tcx> for Ty<'tcx> {
@@ -112,6 +123,29 @@ impl<'tcx> TyExt<'tcx> for Ty<'tcx> {
       GenericArgKind::Lifetime(region) => Some(region),
       _ => None,
     })
+  }
+
+  fn does_implement_trait(
+    &self,
+    tcx: TyCtxt<'tcx>,
+    param_env: ParamEnv<'tcx>,
+    trait_def_id: DefId,
+  ) -> bool {
+    use rustc_infer::traits::EvaluationResult;
+
+    let infcx = tcx.infer_ctxt().build();
+    let ty = tcx.erase_regions(*self);
+    let result = infcx.type_implements_trait(trait_def_id, [ty], param_env);
+    matches!(
+      result,
+      EvaluationResult::EvaluatedToOk
+        | EvaluationResult::EvaluatedToOkModuloRegions
+    )
+  }
+
+  fn is_copyable(&self, tcx: TyCtxt<'tcx>, param_env: ParamEnv<'tcx>) -> bool {
+    let ty = tcx.erase_regions(*self);
+    ty.is_copy_modulo_regions(tcx, param_env)
   }
 }
 

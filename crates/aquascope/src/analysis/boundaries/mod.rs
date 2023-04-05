@@ -8,10 +8,10 @@ use path_visitor::get_path_boundaries;
 use rustc_hir::HirId;
 use rustc_middle::{
   mir::{
-    Body, Location, Place, Rvalue, Statement, StatementKind, Terminator,
-    TerminatorKind,
+    Body, Location, Mutability, Place, Rvalue, Statement, StatementKind,
+    Terminator, TerminatorKind,
   },
-  ty::TyCtxt,
+  ty::{adjustment::AutoBorrowMutability, TyCtxt},
 };
 use rustc_span::Span;
 use serde::Serialize;
@@ -71,18 +71,77 @@ impl PermissionsBoundary {
 // ----------------------------------
 // Permission boundaries on path uses
 
+#[derive(Copy, Clone, Debug)]
+struct ExpectedPermissions(Permissions);
+
+impl ExpectedPermissions {
+  pub fn from_assignment() -> Self {
+    Self(Permissions {
+      read: true,
+      write: true,
+      drop: false,
+    })
+  }
+
+  pub fn from_borrow(mutability: Mutability) -> Self {
+    Self(Permissions {
+      read: true,
+      write: matches!(mutability, Mutability::Mut),
+      drop: false,
+    })
+  }
+
+  pub fn from_reborrow(mutability: AutoBorrowMutability) -> Self {
+    Self(Permissions {
+      read: true,
+      write: matches!(mutability, AutoBorrowMutability::Mut { .. }),
+      drop: false,
+    })
+  }
+
+  pub fn from_move() -> Self {
+    Self(Permissions {
+      read: true,
+      write: false,
+      drop: true,
+    })
+  }
+
+  pub fn from_copy() -> Self {
+    Self(Permissions {
+      read: true,
+      write: false,
+      drop: false,
+    })
+  }
+}
+
+impl From<ExpectedPermissions> for Permissions {
+  fn from(ex: ExpectedPermissions) -> Permissions {
+    ex.0
+  }
+}
+
+/// Internal structure for marking nodes as having "expected permissions".
 struct PathBoundary {
-  // The HirId node where we want to look for Places.
+  /// The [`HirId`] node where we start the search for matching places.
   pub hir_id: HirId,
-  // The upper-bound context for region flow.
+
+  /// External context for associated flow constraints.
   pub flow_context: HirId,
-  // The HirId that could provide additional places we don't
-  // want to consider. This notably happens in an AssignOp where
-  // the LHS and RHS Places get found together, however, the RHS
-  // places can be more precisely identified.
+
+  /// A [`HirId`] node that may obstruct the search for place permissions.
+  /// The place where this is used is in assignments `*x += y` where
+  /// both `*x` and `y` will appear as potential place candidates. We know
+  /// at the marking phase that it isn't anything from the `Rvalue` so we
+  /// flag it as ignored.
   pub conflicting_node: Option<HirId>,
+
+  /// Exact source span where boundaries should be placed.
   pub location: Span,
-  pub expected: Permissions,
+
+  /// The permissions required for the [`Place`] usage.
+  pub expected: ExpectedPermissions,
 }
 
 impl std::fmt::Debug for PathBoundary {
@@ -486,7 +545,7 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
 
       PermissionsBoundary {
         location,
-        expected,
+        expected: expected.into(),
         actual,
         expecting_flow,
       }
@@ -507,9 +566,8 @@ pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
   analysis: &AquascopeAnalysis<'a, 'tcx>,
 ) -> Result<Vec<PermissionsBoundary>> {
   let ctxt = &analysis.permissions;
-  let tcx = ctxt.tcx;
 
-  let path_use_points = get_path_boundaries(tcx, ctxt.body_id, ctxt)?
+  let path_use_points = get_path_boundaries(ctxt)?
     .into_iter()
     .filter_map(|pb| path_to_perm_boundary(pb, analysis));
 
