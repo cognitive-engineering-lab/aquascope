@@ -174,10 +174,6 @@ impl std::fmt::Debug for Permissions {
   }
 }
 
-// impl<'tcx> From<Ty<'tcx>> for Permissions {
-//   fn from(ty: Ty<'tcx>) -> Self
-// }
-
 impl<'tcx> From<FxHashMap<Place<'tcx>, PermissionsData>>
   for PermissionsDomain<'tcx>
 {

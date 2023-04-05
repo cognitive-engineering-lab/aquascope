@@ -2,7 +2,7 @@
 
 use flowistry::mir::utils::PlaceExt as FlowistryPlaceExt;
 use rustc_data_structures::captures::Captures;
-use rustc_hir::{def_id::DefId, lang_items::LangItem};
+use rustc_hir::def_id::DefId;
 use rustc_infer::infer::TyCtxtInferExt;
 use rustc_middle::{
   mir::{Body, Place},
@@ -144,9 +144,8 @@ impl<'tcx> TyExt<'tcx> for Ty<'tcx> {
   }
 
   fn is_copyable(&self, tcx: TyCtxt<'tcx>, param_env: ParamEnv<'tcx>) -> bool {
-    log::debug!("Checking if {self:?} implements Copy");
-    let copy_def_id = tcx.require_lang_item(LangItem::Copy, None);
-    self.does_implement_trait(tcx, param_env, copy_def_id)
+    let ty = tcx.erase_regions(*self);
+    ty.is_copy_modulo_regions(tcx, param_env)
   }
 }
 

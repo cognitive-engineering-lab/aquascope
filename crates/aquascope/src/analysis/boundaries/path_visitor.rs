@@ -101,29 +101,14 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
     );
 
     match expr.kind {
-      // HACK: For method calls, it's most accurate to get the expected
-      // permissions from the method signature declared type.
-      // ```text
-      // let def_id = self.typeck_res.type_dependent_def_id(hir_id).unwrap();
-      // let fn_sig = self.tcx.fn_sig(def_id).skip_binder();
-      // rcvr_ty = fn_sig.inputs()[0];
-      // ```
-      // The above reasoning was previously used, but causes problems if we
-      // need to check if the type implements `Copy`. Because the signature
-      // contains bound ty variables Ty::is_copyable panics.
-      //
-      // I would like to go back to looking at the FnSig.
+      // Method calls are a form of type-deref coercion which can
+      // rely on the adjusted permissions rather than needing to
+      // inspect the function signature.
       ExprKind::MethodCall(_, rcvr, args, fn_span)
         if !fn_span.from_expansion()
           && rcvr.is_place_expr(|e| !matches!(e.kind, ExprKind::Lit(_))) =>
       {
-        let rcvr_ty = self.typeck_res.expr_ty_adjusted(rcvr);
-        let expected = ExpectedPermissions::from_receiver_ty(
-          rcvr_ty,
-          self.tcx,
-          self.param_env,
-        );
-
+        let expected = self.get_adjusted_permissions(rcvr);
         let pb = PathBoundary {
           location: rcvr.span,
           hir_id: rcvr.hir_id,
