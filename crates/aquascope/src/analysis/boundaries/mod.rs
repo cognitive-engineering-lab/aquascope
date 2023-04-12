@@ -1,4 +1,7 @@
-//! Analysis for finding expected vs actual permission on path usage.
+//! Analysis for the “Needs-at” relations.
+//!
+//! In other words, finding expected vs existing permission for a path usage.
+
 pub(crate) mod path_visitor;
 
 use anyhow::Result;

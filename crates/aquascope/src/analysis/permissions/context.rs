@@ -272,10 +272,42 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     }
   }
 
+  /// Compute the [`PermissionsData`] for the [`Path`] at [`Point`].
+  ///
+  /// The [`PermissionsData`] holds destructured permissions info about
+  /// a [`Place`]. This info remains desugared to help with visual marks
+  /// but the set of existing [`Permissions`] is computed. Permissions
+  /// are given by the following rules:
+  ///
+  /// ```text
+  /// decl read(Path, Point)
+  /// decl write(Path, Point)
+  /// decl drop(Path, Point)
+  /// decl memory_uninitialized(Path, Point)
+  ///
+  /// memory_uninitialized(Path, Point) :-
+  ///   path_moved(Path, Point).
+  /// memory_uninitialized(Path, Point) :-
+  ///   path_uninitialized(Path, Point).
+  ///
+  /// read(Path, Point) :-
+  ///   !memory_uninitialized(Point),
+  ///   !loan_read_refined(Path, Point).
+  ///
+  /// write(Path, Point) :-
+  ///   path_ty_allows_write(Path),
+  ///   read(Path, Point),
+  ///   !loan_write_refined(Path, Point).
+  ///
+  ///
+  /// drop(Path, Point) :-
+  ///   path_ty_allows_drop(Path),
+  ///   read(Path, Point),
+  ///   !loan_drop_refined(Path, Point).
+  /// ```
+  ///
+  /// Queries not defined in the
   #[allow(clippy::if_not_else)]
-  // TODO: we can extend the PermissionsData type to incldue the move
-  // regions, this way, we can show the move region for a given path
-  // when it is missing. (exactly how we do the loans)
   pub fn permissions_data_at_point(
     &self,
     path: Path,
@@ -318,26 +350,29 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
     let mem_uninit = path_moved.is_some() || path_uninitialized;
 
+    // An English description of the previous Datalog rules:
+    //
+    // A path is readable IFF:
+    // - it is not moved.
+    // - there doesn't exist a read-refining loan at this point.
+    //
+    // A path is writeable IFF:
+    // - the path's declared type allows for mutability.
+    // - the path is readable (you can't write if you can't read)
+    //   this implies that the path isn't moved.
+    // - there doesn't exist a write-refining loan at this point.
+    //
+    // A path is droppable(without copy) IFF:
+    // - the path's declared type is droppable.
+    // - it isn't moved.
+    // - no drop-refining loan exists at this point.
     let permissions = if !is_live {
       Permissions::bottom()
     } else {
-      // A path is readable IFF:
-      // - it is not moved.
-      // - there doesn't exist a read-refining loan at this point.
       let read = !mem_uninit && loan_read_refined.is_none();
 
-      // A path is writeable IFF:
-      // - the path's declared type allows for mutability.
-      // - the path is readable (you can't write if you can't read)
-      //   this implies that the path isn't moved.
-      // - there doesn't exist a write-refining loan at this point.
       let write = type_writeable && read && loan_write_refined.is_none();
 
-      // A path is droppable if it is doppable.
-      // * A path can be dropped (without copy) IFF:
-      //   - the path's declared type is droppable.
-      //   - it isn't moved.
-      //   - no drop-refining loan exists at this point.
       let drop = type_droppable && read && loan_drop_refined.is_none();
 
       Permissions { read, write, drop }

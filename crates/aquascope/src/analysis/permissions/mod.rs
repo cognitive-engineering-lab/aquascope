@@ -1,3 +1,5 @@
+//! Aquascope permissions analysis.
+
 mod context;
 pub(crate) mod flow;
 // pub(crate) mod flow_datalog;
@@ -65,7 +67,7 @@ pub type Move = rustc_mir_dataflow::move_paths::MoveOutIndex;
 // ------------------------------------------------
 // Permission Boundaries
 
-/// Read, Write, and Own permissions.
+/// Read, Write, and Own permissions for a single [`Place`].
 ///
 /// NOTE: previously, the term *drop* was used instead of *own*
 /// and this terminology remains within the source and internal documentation.
