@@ -1,3 +1,5 @@
+//! Analysis for the “Missing-at” relations.
+
 mod find_steps;
 mod segment_tree;
 

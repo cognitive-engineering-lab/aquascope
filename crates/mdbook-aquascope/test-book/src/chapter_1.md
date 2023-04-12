@@ -79,3 +79,15 @@ fn add_ref(v: &mut Vec<&i32>, n: i32) {
   v.push(r);
 }
 ```
+
+```aquascope,permissions,boundaries,stepper
+fn ascii_capitalize(v: &mut Vec<char>) {
+    let c = &v[0]; `(focus)`
+    if c.is_ascii_lowercase() { `{boundaries}`
+        let c_up = c.to_ascii_uppercase();
+        v[0] = c_up;
+    } else { `(focus)`
+        println!("... {v:?}");
+    }
+}
+```

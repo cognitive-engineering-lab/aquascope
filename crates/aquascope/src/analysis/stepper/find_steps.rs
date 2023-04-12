@@ -2,31 +2,36 @@
 //!
 //! # Overview
 //!
-//! A *permissions step* is the difference in permissions between two MIR `Point`s.
-//! Specifically, a step represents the changes needing to happen to reach a subsequent
-//! state in the permissions static analysis.
+//! Defined on the MIR, a *permissions step* is the difference in permissions between
+//! two adjacent MIR [`Point`]s. The difference represents the gains and losses that
+//! occur between adjacent permissions states. Permission steps on the MIR are useless
+//! to the average user, thus we cluster subsequences of MIR instructions and take the
+//! difference between the first and last point to create a larger step.
 //!
-//! At a high-level, the strategy is to partition the MIR into pieces (referred to as segments),
-//! such that each piece represents a single permission step. This means, that (theoretically)
-//! after the graph has been partitioned the differences are taken in isolation.
-//! It isn't quite this straightforward so additional details are provided below.
+//! At a high-level, the strategy is to partition the MIR into subsequences (referred to as segments),
+//! such that each segment represents a single permission step. I.E. each segment is a cluster
+//! of instructions representing one source-level permissions step.
+//! After clustering, the steps are easily computed in isolation to create the final permissions
+//! steps. As we'll see later, the “isolation” is broken down a little to prevent some specific
+//! visual effects.
 //!
 //! # Splitting Strategy
 //!
-//! The main goal of the permission stepper is to provide steps that map to logical "steps" in
+//! The main goal of the permission stepper is to provide steps that map to logical “steps” in
 //! the source code. First, the steps will be determined using HIR language constructs, which are
 //! subsequently lowered to fit the more granular MIR language constructs.
-//! Starting with the HIR, a so-called "logical step" is roughly defined to be a [`Stmt`](rustc_hir::Stmt).
+//! Starting with the HIR, a so-called “logical step” is roughly defined to be a [`Stmt`](rustc_hir::Stmt).
 //! Typically statements fall on their own line and they mark the beginning and end
-//! of some potentially permissions-altering operation. This makes up the first loose rule for
+//! of some potentially permissions-altering operation. This makes up the first loose for
 //! finding permissions steps.
 //!
-//! Statements however, do not cover how permissions change in a control-flow sensitive setting.
+//! Statements however, do not cover how permissions change in a control-flow sensitive construct.
 //! For example, the statements at the beginning of the then and else branch might execute with
-//! different permissions, this sudden change of permissions needs to be communicated to the user.
-//! This leads to another rule, namely, a branch in control flow can also be a permissions-altering
-//! "operation". The full rules for tracking permissions steps at each respective level of granularity
-//! are outlined below.
+//! different permissions, this sudden change of permissions needs to be communicated to the user,
+//! rather than happening on instructions of the CFG these permissions are changed on the *edges*.
+//! This forms the second rule of creating a step, namely, a branch in control flow is also a
+//! permissions-altering “operation”. The full rules for tracking permissions steps at each
+//! respective level of granularity are outlined below.
 //!
 //! ## Source to HIR
 //!
@@ -71,14 +76,18 @@
 //! The core operation performed on the [`SegmentTree`] is taking a *slice*. There are two kinds of
 //! slices:
 //!
-//! 1. linear slices, those that **do not** span several branches of control-flow.
-//! 2. control-flow slices, those that **do** span several branches of control-flow.
+//! 1. linear slices, those that **do not** contain permissions-altering CFG edges.
+//! 2. control-flow slices, those that **only** contain permissions-altering CFG edges.
 //!
 //! These two slices exist to maintain the invariants of the [`MirSegment`] and [`SegmentTree`].
-//! Fundamentally, these slices work on different *shapes* of the underlying graph. A *linear slice*
-//! would slice a portion of the graph which forms a line.
+//! Fundamentally, these slices work on different *shapes* of the underlying graph.
+//!
+//! #### Linear Slices
+//!
+//! A *linear slice* slices a portion of the graph which forms a continuous subsequence.
 //!
 //! Example:
+//!
 //! ```text
 //! before slice:
 //!
@@ -99,12 +108,15 @@
 //! ⬤ [l2] ----> ⬤ [l3]
 //!
 //! ```
+//!
 //! In the above example there exists a linear sequence of control-flow from `l1 ⟶ l2 ⟶ l3`.
 //! Depicted, is a *linear slice* of this segment at location `l2`. Linear slices *always*
 //! split a single segment, into two new segments which maintain the [`MirSegment`] invariant.
 //! These slices are used after [`Stmt`s](rustc_hir::Stmt) and the end of a [`Block` expression](rustc_hir::Block).
 //!
-//! A *control-flow* slice, then does not slice a linear sequence of locations but multiple that
+//! #### Control-flow slices
+//!
+//! A *control-flow* slice, then does not slice a continous subsequence but multiple that
 //! /span across/ branches of control flow.
 //!
 //! Example:
@@ -164,7 +176,8 @@
 //!
 //! NOTE: one small semantic difference between the resulting segments. The segments
 //! which form the so-called "split set" (segments 1 and 2 in the above example) *cannot*
-//! be further split. They are treated as **atomic**.
+//! be further split. They are treated as **atomic**. This is intuitive if you image that
+//! they only contains edges in the CFG (there would be nothing left to spliti).
 //!
 //! # Finalizing Differences
 //!
@@ -180,6 +193,17 @@
 //! To ensure initialized places don't gain permissions before the end of the let statement,
 //! these places are marked as /attached/ to a specific MIR location, and they are filtered
 //! from any nested segment step results.
+//!
+//! # Known Shortcomings
+//!
+//! There are a few major known limitations, they can be resolved we just need the time:
+//!
+//! - Function bodies that contain infinite loops `loop {}` cannot be analyzed.
+//!   More general, if there does not contain an exit point to the function the
+//!   current algorithm will report this limitation to the user.
+//!
+//! - The control-flow slicing is too strict, if there exists an `if` without
+//!   and `else`, or if there are multiple returns, the algorithm also fails.
 
 use anyhow::{bail, Result};
 use flowistry::mir::utils::{PlaceExt as FlowistryPlaceExt, SpanExt};
