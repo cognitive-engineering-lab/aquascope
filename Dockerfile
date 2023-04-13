@@ -1,8 +1,8 @@
 FROM rustlang/rust:nightly
 ENV CARGO_UNSTABLE_SPARSE_REGISTRY=true
 
-RUN rustup default nightly-2022-12-07 && \
-    rustup component add --toolchain nightly-2022-12-07 rust-src rustc-dev llvm-tools-preview
+RUN rustup default nightly-2023-04-12 && \
+    rustup component add --toolchain nightly-2023-04-12 rust-src rustc-dev llvm-tools-preview
 
 WORKDIR /aquascope
 

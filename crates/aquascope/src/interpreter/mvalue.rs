@@ -427,11 +427,11 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
           TyKind::Char => MValue::Char(scalar.to_char()? as usize),
           TyKind::Uint(uty) => MValue::Uint(match uty.bit_width() {
             Some(width) => scalar.to_uint(Size::from_bits(width))? as u64,
-            None => scalar.to_machine_usize(&self.ev.ecx)?,
+            None => scalar.to_target_usize(&self.ev.ecx)?,
           }),
           TyKind::Int(ity) => MValue::Int(match ity.bit_width() {
             Some(width) => scalar.to_int(Size::from_bits(width))? as i64,
-            None => scalar.to_machine_isize(&self.ev.ecx)?,
+            None => scalar.to_target_isize(&self.ev.ecx)?,
           }),
           TyKind::Float(fty) => MValue::Float(match fty {
             FloatTy::F32 => {
@@ -474,8 +474,11 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         let upvar_names = match def_id.as_local() {
           Some(def_id) => {
             let tcx = self.ev.ecx.tcx;
-            let symbols = tcx.symbols_for_closure_captures((def_id, def_id));
-            symbols.iter().map(|s| s.to_ident_string()).collect()
+            let captures = tcx.closure_captures(def_id);
+            captures
+              .iter()
+              .map(|capture| capture.var_ident.to_string())
+              .collect()
           }
           None => vec![String::from("(tmp)"); closure.upvar_tys().count()],
         };

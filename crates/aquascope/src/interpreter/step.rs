@@ -234,7 +234,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       // deciding when a temp should be included.
       if !matches!(
         decl.local_info,
-        Some(box LocalInfo::User(ClearCrossCrate::Set(_)))
+        ClearCrossCrate::Set(box LocalInfo::User(_))
       ) {
         return Ok(None);
       }

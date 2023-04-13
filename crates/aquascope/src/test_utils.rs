@@ -13,6 +13,7 @@ use flowistry::{
 use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
+use rustc_errors::TerminalUrl;
 use rustc_hir::{BodyId, ItemKind};
 use rustc_middle::{
   mir::{Rvalue, StatementKind},
@@ -39,8 +40,13 @@ impl FileLoader for StringLoader {
   fn file_exists(&self, _: &Path) -> bool {
     true
   }
+
   fn read_file(&self, _: &Path) -> io::Result<String> {
     Ok(self.0.clone())
+  }
+
+  fn read_binary_file(&self, path: &Path) -> io::Result<Vec<u8>> {
+    fs::read(path)
   }
 }
 
@@ -526,7 +532,7 @@ where
 
     use rustc_error_messages::fallback_fluent_bundle;
     use rustc_errors::{
-      emitter::EmitterWriter, Handler, DEFAULT_LOCALE_RESOURCES,
+      emitter::EmitterWriter, Handler, DEFAULT_LOCALE_RESOURCE,
     };
     config.parse_sess_created = Some(Box::new(|sess| {
       // Create a new emitter writer which consumes *silently* all
@@ -536,7 +542,7 @@ where
       // I decided to not use the SilentEmitter, because it still emitted
       // something, so it wasn't completely silent.
       let fallback_bundle =
-        fallback_fluent_bundle(DEFAULT_LOCALE_RESOURCES, false);
+        fallback_fluent_bundle(vec![DEFAULT_LOCALE_RESOURCE], false);
       let emitter = EmitterWriter::new(
         Box::new(sink()),
         None,
@@ -548,6 +554,7 @@ where
         None,
         false,
         false,
+        TerminalUrl::No,
       );
       let handler = Handler::with_emitter(false, None, Box::new(emitter));
       sess.span_diagnostic = handler;
@@ -567,7 +574,7 @@ where
     queries: &'tcx rustc_interface::Queries<'tcx>,
   ) -> rustc_driver::Compilation {
     errors::initialize_error_tracking();
-    queries.global_ctxt().unwrap().take().enter(|tcx| {
+    queries.global_ctxt().unwrap().enter(|tcx| {
       let callback = self.callback.take().unwrap();
       callback(tcx);
     });

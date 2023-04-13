@@ -31,4 +31,4 @@ clap = {version = "3.1", default-features = false, features = ["std", "derive"]}
 
 [dependencies.rustc-plugin]
 git = "https://github.com/cognitive-engineering-lab/rustc-plugin"
-tag = "nightly-2022-12-07-v0.0.1"
+tag = "nightly-2023-04-12-v0.1.0"

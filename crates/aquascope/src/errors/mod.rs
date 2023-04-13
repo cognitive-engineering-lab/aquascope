@@ -15,7 +15,7 @@ struct DiagnosticInfo {
   is_error: bool,
 }
 
-fn track_diagnostic(d: &Diagnostic) {
+fn track_diagnostic(d: &mut Diagnostic, _f: &mut dyn FnMut(&mut Diagnostic)) {
   BODY_DIAGNOSTICS.with(|diagnostics| {
     let mut diagnostics = diagnostics.borrow_mut();
     let d = DiagnosticInfo {
@@ -32,7 +32,7 @@ fn track_diagnostic(d: &Diagnostic) {
 /// This should be called before analysing a new crate.
 pub fn initialize_error_tracking() {
   log::debug!("Track diagnostics updated");
-  TRACK_DIAGNOSTICS.swap(&(track_diagnostic as fn(&_)));
+  TRACK_DIAGNOSTICS.swap(&(track_diagnostic as _));
 }
 
 /// Initialize the error tracking for a given routine. It's recommended
