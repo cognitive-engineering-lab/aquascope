@@ -1,4 +1,5 @@
 use std::{
+  borrow::Cow,
   env,
   process::{exit, Command},
   time::Instant,
@@ -64,11 +65,11 @@ pub struct AquascopePlugin;
 impl RustcPlugin for AquascopePlugin {
   type Args = AquascopePluginArgs;
 
-  fn version() -> &'static str {
-    "0.0.0"
+  fn version(&self) -> Cow<'static, str> {
+    env!("CARGO_PKG_VERSION").into()
   }
 
-  fn bin_name() -> String {
+  fn driver_name(&self) -> Cow<'static, str> {
     "aquascope-driver".into()
   }
 
