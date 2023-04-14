@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fs, io, panic, path::Path, process::Command};
+use std::{
+  collections::HashMap, fs, io, panic, path::Path, process::Command,
+  sync::atomic::Ordering,
+};
 
 use anyhow::{bail, Context, Result};
 use flowistry::{
@@ -13,7 +16,7 @@ use flowistry::{
 use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
-use rustc_errors::TerminalUrl;
+use rustc_errors::Handler;
 use rustc_hir::{BodyId, ItemKind};
 use rustc_middle::{
   mir::{Rvalue, StatementKind},
@@ -31,7 +34,7 @@ use crate::{
     },
     AquascopeAnalysis,
   },
-  errors,
+  errors::{self, silent_emitter::SilentEmitter},
   interpreter::{self, MTrace},
 };
 
@@ -528,35 +531,11 @@ where
   Cb: FnOnce(TyCtxt<'_>),
 {
   fn config(&mut self, config: &mut rustc_interface::Config) {
-    use std::{io::sink, sync::atomic::Ordering};
-
-    use rustc_error_messages::fallback_fluent_bundle;
-    use rustc_errors::{
-      emitter::EmitterWriter, Handler, DEFAULT_LOCALE_RESOURCE,
-    };
     config.parse_sess_created = Some(Box::new(|sess| {
       // Create a new emitter writer which consumes *silently* all
       // errors. There most certainly is a *better* way to do this,
       // if you, the reader, know what that is, please open an issue :)
-      //
-      // I decided to not use the SilentEmitter, because it still emitted
-      // something, so it wasn't completely silent.
-      let fallback_bundle =
-        fallback_fluent_bundle(vec![DEFAULT_LOCALE_RESOURCE], false);
-      let emitter = EmitterWriter::new(
-        Box::new(sink()),
-        None,
-        None,
-        fallback_bundle,
-        false,
-        false,
-        false,
-        None,
-        false,
-        false,
-        TerminalUrl::No,
-      );
-      let handler = Handler::with_emitter(false, None, Box::new(emitter));
+      let handler = Handler::with_emitter(false, None, Box::new(SilentEmitter));
       sess.span_diagnostic = handler;
     }));
 
