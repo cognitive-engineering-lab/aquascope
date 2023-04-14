@@ -1,3 +1,5 @@
+pub(crate) mod silent_emitter;
+
 use std::cell::RefCell;
 
 use rustc_errors::{Diagnostic, TRACK_DIAGNOSTICS};
@@ -15,7 +17,7 @@ struct DiagnosticInfo {
   is_error: bool,
 }
 
-fn track_diagnostic(d: &mut Diagnostic, _f: &mut dyn FnMut(&mut Diagnostic)) {
+fn track_diagnostic(d: &mut Diagnostic, f: &mut dyn FnMut(&mut Diagnostic)) {
   BODY_DIAGNOSTICS.with(|diagnostics| {
     let mut diagnostics = diagnostics.borrow_mut();
     let d = DiagnosticInfo {
@@ -23,7 +25,12 @@ fn track_diagnostic(d: &mut Diagnostic, _f: &mut dyn FnMut(&mut Diagnostic)) {
       is_error: d.is_error(),
     };
     diagnostics.push(d);
-  })
+  });
+
+  // We need to actually report the diagnostic with the
+  // provided function. Otherwise, a `DelayedBugPanic`
+  // will cause an ICE.
+  (*f)(d);
 }
 
 // ------------------------------------------------
