@@ -1,5 +1,5 @@
 use std::{
-  collections::HashMap, fs, io, panic, path::Path, process::Command,
+  collections::HashMap, env, fs, io, panic, path::Path, process::Command,
   sync::atomic::Ordering,
 };
 
@@ -428,6 +428,7 @@ pub fn run_in_dir(
     let test_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
       .join("tests")
       .join(dir.as_ref());
+    let only = env::var("ONLY").ok();
     let tests = fs::read_dir(test_dir)?;
     let mut failed = false;
     let mut passed = 0;
@@ -435,6 +436,13 @@ pub fn run_in_dir(
     for test in tests {
       let path = test?.path();
       let test_name = path.file_name().unwrap().to_str().unwrap();
+
+      if let Some(only) = &only {
+        if !test_name.starts_with(only) {
+          continue;
+        }
+      }
+
       let res = panic::catch_unwind(|| test_fn(&path));
 
       if let Err(e) = res {

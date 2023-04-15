@@ -127,7 +127,7 @@ impl rustc_driver::Callbacks for InterpretCallbacks {
     }
   }
 
-  fn after_parsing<'tcx>(
+  fn after_expansion<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
     queries: &'tcx rustc_interface::Queries<'tcx>,

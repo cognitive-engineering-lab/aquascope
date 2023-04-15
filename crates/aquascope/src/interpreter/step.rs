@@ -13,7 +13,7 @@ use miri::{
 use rustc_abi::{FieldsShape, Size};
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
-  mir::{ClearCrossCrate, Local, LocalInfo, Location, Place, RETURN_PLACE},
+  mir::{Local, Location, Place, VarDebugInfoContents, RETURN_PLACE},
   ty::{layout::TyAndLayout, InstanceDef, TyCtxt},
 };
 use rustc_session::CtfeBacktrace;
@@ -224,6 +224,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     let name = if local == RETURN_PLACE {
       // Don't include unit return types in locals
       if decl.ty.is_unit() {
+        log::trace!("Ignoring local {local:?} because it's a unit type");
         return Ok(None);
       }
 
@@ -232,10 +233,25 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       // TODO: this excludes compiler-generated temporaries which we sometimes need to
       // visualize in the case of f(&Some(x)). Need to figure out a good strategy for
       // deciding when a temp should be included.
-      if !matches!(
-        decl.local_info,
-        ClearCrossCrate::Set(box LocalInfo::User(_))
-      ) {
+      let has_debug_info = frame
+        .body
+        .var_debug_info
+        .iter()
+        .filter_map(|info| match info.value {
+          VarDebugInfoContents::Place(p) => {
+            if p.projection.is_empty() {
+              Some(p.local)
+            } else {
+              None
+            }
+          }
+          _ => None,
+        })
+        .any(|debug| local == debug);
+      if !has_debug_info {
+        log::trace!(
+          "Ignoring local {local:?} because it's not a source-level variable"
+        );
         return Ok(None);
       }
 
@@ -247,7 +263,10 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     let layout = state.layout.get();
 
     // Ignore dead locals
-    let LocalValue::Live(op) = state.value else { return Ok(None) };
+    let LocalValue::Live(op) = state.value else {
+      log::trace!("Ignoring local {local:?} because it's not live");
+      return Ok(None)
+    };
 
     match op {
       // Ignore uninitialized locals
@@ -259,6 +278,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
           None => true,
         };
         if not_zst {
+          log::trace!("Ignoring local {local:?} because it's uninitialized and not zero-sized");
           return Ok(None);
         }
       }
@@ -273,6 +293,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         let (_, allocation) =
           self.ecx.memory.alloc_map().get(alloc_id).unwrap();
         if !self.mem_is_initialized(layout.unwrap(), allocation) {
+          log::trace!("Ignoring local {local:?} because it's a pointer to uninitialized memory");
           return Ok(None);
         }
 

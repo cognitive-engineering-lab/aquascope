@@ -129,8 +129,7 @@ description: foo@interior_move_1.test
             value: true
     - - t
       - is_live:
-          type: None
-          value: true
+          type: Low
         type_droppable:
           type: None
           value: true
@@ -139,7 +138,7 @@ description: foo@interior_move_1.test
           value: true
         path_moved:
           type: High
-          value: 6
+          value: 4
         path_uninitialized:
           type: High
           value: true
@@ -158,8 +157,7 @@ description: foo@interior_move_1.test
             type: Low
     - - t.0
       - is_live:
-          type: None
-          value: true
+          type: Low
         type_droppable:
           type: None
           value: true
@@ -168,10 +166,37 @@ description: foo@interior_move_1.test
           value: true
         path_moved:
           type: High
-          value: 6
+          value: 4
         path_uninitialized:
           type: High
           value: true
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: Low
+          write:
+            type: Low
+          drop:
+            type: Low
+    - - t.1
+      - is_live:
+          type: Low
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
         loan_read_refined:
           type: None
         loan_write_refined:
@@ -197,7 +222,7 @@ description: foo@interior_move_1.test
           value: false
         path_moved:
           type: High
-          value: 7
+          value: 5
         path_uninitialized:
           type: High
           value: true
@@ -218,7 +243,7 @@ description: foo@interior_move_1.test
 - - 7
   - - - t
       - is_live:
-          type: None
+          type: High
           value: true
         type_droppable:
           type: None
@@ -248,7 +273,7 @@ description: foo@interior_move_1.test
             value: true
     - - t.0
       - is_live:
-          type: None
+          type: High
           value: true
         type_droppable:
           type: None
@@ -260,6 +285,37 @@ description: foo@interior_move_1.test
           type: Low
         path_uninitialized:
           type: Low
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+            value: true
+          write:
+            type: High
+            value: true
+          drop:
+            type: High
+            value: true
+    - - t.1
+      - is_live:
+          type: High
+          value: true
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
         loan_read_refined:
           type: None
         loan_write_refined:
@@ -288,7 +344,7 @@ description: foo@interior_move_1.test
           value: true
         path_moved:
           type: High
-          value: 20
+          value: 15
         path_uninitialized:
           type: High
           value: true
@@ -316,7 +372,7 @@ description: foo@interior_move_1.test
           value: true
         path_moved:
           type: High
-          value: 20
+          value: 15
         path_uninitialized:
           type: High
           value: true
@@ -344,7 +400,7 @@ description: foo@interior_move_1.test
           value: true
         path_moved:
           type: High
-          value: 20
+          value: 15
         path_uninitialized:
           type: None
           value: false

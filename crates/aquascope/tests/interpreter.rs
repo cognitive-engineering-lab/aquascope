@@ -1,6 +1,5 @@
 use aquascope::test_utils;
 
-#[test]
 #[test_log::test]
 fn interpreter() {
   test_utils::run_in_dir("interpreter", |path| {

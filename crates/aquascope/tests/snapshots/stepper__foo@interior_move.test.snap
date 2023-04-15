@@ -139,7 +139,7 @@ description: foo@interior_move.test
           value: true
         path_moved:
           type: High
-          value: 6
+          value: 4
         path_uninitialized:
           type: High
           value: true
@@ -168,7 +168,7 @@ description: foo@interior_move.test
           value: true
         path_moved:
           type: High
-          value: 6
+          value: 4
         path_uninitialized:
           type: High
           value: true
@@ -197,7 +197,7 @@ description: foo@interior_move.test
           value: false
         path_moved:
           type: High
-          value: 7
+          value: 5
         path_uninitialized:
           type: High
           value: true
@@ -288,7 +288,7 @@ description: foo@interior_move.test
           value: true
         path_moved:
           type: High
-          value: 14
+          value: 12
         path_uninitialized:
           type: High
           value: true
@@ -316,7 +316,7 @@ description: foo@interior_move.test
           value: true
         path_moved:
           type: High
-          value: 14
+          value: 12
         path_uninitialized:
           type: High
           value: true
@@ -344,7 +344,7 @@ description: foo@interior_move.test
           value: true
         path_moved:
           type: High
-          value: 14
+          value: 12
         path_uninitialized:
           type: None
           value: false
