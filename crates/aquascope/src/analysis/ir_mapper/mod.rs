@@ -197,7 +197,7 @@ where
     let entry_block = basic_blocks.iter().find(|&&&b1| {
       basic_blocks.iter().all(|&&b2| {
         self.dominators.is_reachable(b2)
-          && (b1 == b2 || self.dominators.is_dominated_by(b2, b1))
+          && (b1 == b2 || self.dominators.dominates(b1, b2))
       })
     });
 

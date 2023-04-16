@@ -1,6 +1,5 @@
 use aquascope::test_utils;
 
-#[test]
 #[test_log::test]
 fn stepper() {
   test_utils::run_in_dir("steps", |path| {

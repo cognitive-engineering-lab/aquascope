@@ -52,7 +52,7 @@ pub struct AquascopeAnnotations {
   boundaries: BoundariesAnnotations,
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl Hash for AquascopeAnnotations {
   fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
     // HashMaps aren't hashable, and we can ignore annotations when hashing

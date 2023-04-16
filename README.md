@@ -18,9 +18,9 @@ We provide an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor that em
 
 ```sh
 cargo install mdbook-aquascope
-rustup toolchain install nightly-2022-12-07 -c rust-src rustc-dev llvm-tools-preview miri
-cargo +nightly-2022-12-07 install --git https://github.com/cognitive-engineering-lab/aquascope aquascope_front
-cargo +nightly-2022-12-07 miri setup
+rustup toolchain install nightly-2023-04-12 -c rust-src rustc-dev llvm-tools-preview miri
+cargo +nightly-2023-04-12 install --git https://github.com/cognitive-engineering-lab/aquascope aquascope_front
+cargo +nightly-2023-04-12 miri setup
 ```
 
 Note that `cargo-aquascope` is installed via `aquascope_front` and must be installed via git and with a specific nightly toolchain. The `miri setup` command is a necessary prerequisite to running the Aquascope interpreter.

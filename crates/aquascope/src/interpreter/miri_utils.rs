@@ -4,10 +4,10 @@ use miri::{
 };
 use rustc_abi::FieldsShape;
 use rustc_middle::{
-  mir::{Field, Local, PlaceElem},
+  mir::{Local, PlaceElem},
   ty::{layout::TyAndLayout, AdtKind, FieldDef, TyKind},
 };
-use rustc_target::abi::Size;
+use rustc_target::abi::{FieldIdx, Size};
 
 pub trait OpTyExt<'mir, 'tcx, M: Machine<'mir, 'tcx>>: Sized {
   fn field_by_name(
@@ -72,7 +72,7 @@ impl<'tcx> AddressLocator<'_, '_, 'tcx> {
                 if offset + field.size.bytes() > self.target {
                   self
                     .segments
-                    .push(PlaceElem::Field(Field::from_usize(i), field.ty));
+                    .push(PlaceElem::Field(FieldIdx::from_usize(i), field.ty));
                   self.locate(field, offset);
                   break;
                 }
@@ -107,7 +107,7 @@ impl<'tcx> AddressLocator<'_, '_, 'tcx> {
           if offset + field.size.bytes() > self.target {
             self
               .segments
-              .push(PlaceElem::Field(Field::from_usize(i), field.ty));
+              .push(PlaceElem::Field(FieldIdx::from_usize(i), field.ty));
             self.locate(field, offset);
             break;
           }

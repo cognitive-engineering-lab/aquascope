@@ -7,9 +7,7 @@
   trait_alias,
   let_chains,
   unboxed_closures,
-  once_cell,
   exact_size_is_empty,
-  is_some_and,
   hash_drain_filter,
   drain_filter,
   type_changing_struct_update

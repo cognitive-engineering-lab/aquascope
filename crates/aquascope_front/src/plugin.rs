@@ -1,4 +1,5 @@
 use std::{
+  borrow::Cow,
   env,
   process::{exit, Command},
   time::Instant,
@@ -23,7 +24,7 @@ use fluid_let::fluid_set;
 use rustc_hir::BodyId;
 use rustc_interface::interface::Result as RustcResult;
 use rustc_middle::ty::TyCtxt;
-use rustc_plugin::{RustcPlugin, RustcPluginArgs, Utf8Path};
+use rustc_plugin::{CrateFilter, RustcPlugin, RustcPluginArgs, Utf8Path};
 use serde::{self, Deserialize, Serialize};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -46,15 +47,9 @@ enum AquascopeCommand {
 
     #[clap(long)]
     show_flows: bool,
-
-    #[clap(last = true)]
-    flags: Vec<String>,
   },
 
-  Interpreter {
-    #[clap(last = true)]
-    flags: Vec<String>,
-  },
+  Interpreter,
 
   Preload,
   RustcVersion,
@@ -64,11 +59,11 @@ pub struct AquascopePlugin;
 impl RustcPlugin for AquascopePlugin {
   type Args = AquascopePluginArgs;
 
-  fn version() -> &'static str {
-    "0.0.0"
+  fn version(&self) -> Cow<'static, str> {
+    env!("CARGO_PKG_VERSION").into()
   }
 
-  fn bin_name() -> String {
+  fn driver_name(&self) -> Cow<'static, str> {
     "aquascope-driver".into()
   }
 
@@ -105,15 +100,8 @@ impl RustcPlugin for AquascopePlugin {
       _ => {}
     };
 
-    let flags = match &args.command {
-      Permissions { flags, .. } => flags,
-      Interpreter { flags, .. } => flags,
-      _ => unreachable!(),
-    };
-
     RustcPluginArgs {
-      flags: Some(flags.clone()),
-      file: None,
+      filter: CrateFilter::OnlyWorkspace,
       args,
     }
   }
@@ -236,7 +224,7 @@ impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 
-  fn after_parsing<'tcx>(
+  fn after_expansion<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
     queries: &'tcx rustc_interface::Queries<'tcx>,
@@ -250,7 +238,7 @@ impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
 
     let _start = Instant::now();
 
-    queries.global_ctxt().unwrap().take().enter(|tcx| {
+    queries.global_ctxt().unwrap().enter(|tcx| {
       let mut analysis = self.analysis.take().unwrap();
       find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
         // Track diagnostics for the analysis of the current body

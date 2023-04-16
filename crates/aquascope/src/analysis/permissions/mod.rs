@@ -43,9 +43,8 @@ impl polonius_engine::FactTypes for AquascopeFacts {
 }
 
 rustc_index::newtype_index! {
-  pub struct PathIndex {
-    DEBUG_FORMAT = "path{}"
-  }
+  #[debug_format = "path{}"]
+  pub struct PathIndex {}
 }
 
 impl polonius_engine::Atom for PathIndex {

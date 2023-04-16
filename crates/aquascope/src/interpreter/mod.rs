@@ -3,8 +3,8 @@
 use anyhow::Result;
 use either::Either;
 use flowistry::mir::utils::SpanExt;
-use rustc_data_structures::vec_map::VecMap;
-use rustc_hir::def_id::{DefId, LocalDefId};
+use rustc_data_structures::fx::FxIndexMap;
+use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
   mir::{Body, BorrowCheckResult},
   ty::{self, query::Providers, TyCtxt},
@@ -91,7 +91,7 @@ fn fake_mir_borrowck(
   _id: LocalDefId,
 ) -> &'_ BorrowCheckResult<'_> {
   tcx.arena.alloc(BorrowCheckResult {
-    concrete_opaque_types: VecMap::new(),
+    concrete_opaque_types: FxIndexMap::default(),
     closure_requirements: None,
     used_mut_upvars: SmallVec::new(),
     tainted_by_errors: None,
@@ -101,7 +101,7 @@ fn fake_mir_borrowck(
 // Some optimizations like drop elaboration depend on MoveData, and will raise an error
 // if the MoveData is empty. Thankfully we can reset and ignore that error via
 // `Handler::reset_err_count` which we do by overriding optimized_mir.
-fn fake_optimized_mir(tcx: TyCtxt<'_>, did: DefId) -> &'_ Body<'_> {
+fn fake_optimized_mir(tcx: TyCtxt<'_>, did: LocalDefId) -> &'_ Body<'_> {
   let mut providers = Providers::default();
   rustc_mir_transform::provide(&mut providers);
   let body = (providers.optimized_mir)(tcx, did);
@@ -127,12 +127,12 @@ impl rustc_driver::Callbacks for InterpretCallbacks {
     }
   }
 
-  fn after_parsing<'tcx>(
+  fn after_expansion<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
     queries: &'tcx rustc_interface::Queries<'tcx>,
   ) -> rustc_driver::Compilation {
-    queries.global_ctxt().unwrap().take().enter(|tcx| {
+    queries.global_ctxt().unwrap().enter(|tcx| {
       self.result = Some(interpret(tcx));
     });
     rustc_driver::Compilation::Stop

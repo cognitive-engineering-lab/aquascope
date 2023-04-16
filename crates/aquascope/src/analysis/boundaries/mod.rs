@@ -10,10 +10,7 @@ use flowistry::mir::utils::{OperandExt, SpanExt};
 use path_visitor::get_path_boundaries;
 use rustc_hir::HirId;
 use rustc_middle::{
-  mir::{
-    Body, Location, Mutability, Place, Rvalue, Statement, StatementKind,
-    Terminator, TerminatorKind,
-  },
+  mir::{Body, Location, Mutability, Place, Rvalue, Statement, StatementKind},
   ty::{adjustment::AutoBorrowMutability, TyCtxt},
 };
 use rustc_span::Span;
@@ -407,8 +404,10 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
         smallvec![(loc, *place)]
       }
 
+
       StatementKind::SetDiscriminant { .. }
       | StatementKind::FakeRead(..)
+      | StatementKind::PlaceMention(..) // TODO: do we need to handle this new kind
 
       // These variants are compiler generated, but it would be
       // insufficient to find a source-visible place only in
@@ -423,43 +422,10 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
       | StatementKind::AscribeUserType(..)
       | StatementKind::Coverage(..)
       | StatementKind::Intrinsic(..)
+      | StatementKind::ConstEvalCounter
       | StatementKind::Nop => smallvec![],
     }
   };
-
-  let look_in_terminator =
-    |term: &Terminator<'tcx>, loc: Location| -> TempBuff {
-      match &term.kind {
-        TerminatorKind::DropAndReplace { place, value, .. } => {
-          let mut found_so_far = maybe_in_op!(loc, value);
-          if place.is_source_visible(tcx, body) {
-            found_so_far.push((loc, *place));
-          }
-          found_so_far
-        }
-
-        // None of these cases *should* contain source-visible
-        // places / operators. Usually a terminator is called
-        // with compiler temporaries, so why bother looking.
-        //
-        // I(gavinleroy) could be wrong so if something is
-        // missing suspect something in here.
-        TerminatorKind::Goto { .. }
-        | TerminatorKind::SwitchInt { .. }
-        | TerminatorKind::Resume
-        | TerminatorKind::Abort
-        | TerminatorKind::Return
-        | TerminatorKind::Unreachable
-        | TerminatorKind::Drop { .. }
-        | TerminatorKind::Call { .. }
-        | TerminatorKind::Assert { .. }
-        | TerminatorKind::Yield { .. }
-        | TerminatorKind::GeneratorDrop
-        | TerminatorKind::FalseEdge { .. }
-        | TerminatorKind::FalseUnwind { .. }
-        | TerminatorKind::InlineAsm { .. } => smallvec![],
-      }
-    };
 
   let mir_locations = mir_locations_opt?
     .values()
@@ -467,7 +433,7 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
       log::debug!("looking at {loc:?}");
       match body.stmt_at(loc) {
         Either::Left(stmt) => look_in_statement(stmt, loc),
-        Either::Right(term) => look_in_terminator(term, loc),
+        Either::Right(_term) => smallvec![],
       }
     })
     .collect::<Vec<_>>();

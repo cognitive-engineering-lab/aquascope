@@ -92,9 +92,8 @@ use super::{places_conflict, Origin, PermissionsCtxt};
 use crate::mir::utils::{BodyExt, ToRegionVid};
 
 rustc_index::newtype_index! {
-  pub struct SccIdx {
-    DEBUG_FORMAT = "scc{}"
-  }
+  #[debug_format = "scc{}"]
+  pub struct SccIdx {}
 }
 
 impl polonius_engine::Atom for SccIdx {

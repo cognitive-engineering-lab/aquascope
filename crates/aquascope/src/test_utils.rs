@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fs, io, panic, path::Path, process::Command};
+use std::{
+  collections::HashMap, env, fs, io, panic, path::Path, process::Command,
+  sync::atomic::Ordering,
+};
 
 use anyhow::{bail, Context, Result};
 use flowistry::{
@@ -13,6 +16,7 @@ use flowistry::{
 use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
+use rustc_errors::Handler;
 use rustc_hir::{BodyId, ItemKind};
 use rustc_middle::{
   mir::{Rvalue, StatementKind},
@@ -30,7 +34,7 @@ use crate::{
     },
     AquascopeAnalysis,
   },
-  errors,
+  errors::{self, silent_emitter::SilentEmitter},
   interpreter::{self, MTrace},
 };
 
@@ -39,8 +43,13 @@ impl FileLoader for StringLoader {
   fn file_exists(&self, _: &Path) -> bool {
     true
   }
+
   fn read_file(&self, _: &Path) -> io::Result<String> {
     Ok(self.0.clone())
+  }
+
+  fn read_binary_file(&self, path: &Path) -> io::Result<Vec<u8>> {
+    fs::read(path)
   }
 }
 
@@ -419,6 +428,7 @@ pub fn run_in_dir(
     let test_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
       .join("tests")
       .join(dir.as_ref());
+    let only = env::var("ONLY").ok();
     let tests = fs::read_dir(test_dir)?;
     let mut failed = false;
     let mut passed = 0;
@@ -426,6 +436,13 @@ pub fn run_in_dir(
     for test in tests {
       let path = test?.path();
       let test_name = path.file_name().unwrap().to_str().unwrap();
+
+      if let Some(only) = &only {
+        if !test_name.starts_with(only) {
+          continue;
+        }
+      }
+
       let res = panic::catch_unwind(|| test_fn(&path));
 
       if let Err(e) = res {
@@ -522,34 +539,11 @@ where
   Cb: FnOnce(TyCtxt<'_>),
 {
   fn config(&mut self, config: &mut rustc_interface::Config) {
-    use std::{io::sink, sync::atomic::Ordering};
-
-    use rustc_error_messages::fallback_fluent_bundle;
-    use rustc_errors::{
-      emitter::EmitterWriter, Handler, DEFAULT_LOCALE_RESOURCES,
-    };
     config.parse_sess_created = Some(Box::new(|sess| {
       // Create a new emitter writer which consumes *silently* all
       // errors. There most certainly is a *better* way to do this,
       // if you, the reader, know what that is, please open an issue :)
-      //
-      // I decided to not use the SilentEmitter, because it still emitted
-      // something, so it wasn't completely silent.
-      let fallback_bundle =
-        fallback_fluent_bundle(DEFAULT_LOCALE_RESOURCES, false);
-      let emitter = EmitterWriter::new(
-        Box::new(sink()),
-        None,
-        None,
-        fallback_bundle,
-        false,
-        false,
-        false,
-        None,
-        false,
-        false,
-      );
-      let handler = Handler::with_emitter(false, None, Box::new(emitter));
+      let handler = Handler::with_emitter(false, None, Box::new(SilentEmitter));
       sess.span_diagnostic = handler;
     }));
 
@@ -567,7 +561,7 @@ where
     queries: &'tcx rustc_interface::Queries<'tcx>,
   ) -> rustc_driver::Compilation {
     errors::initialize_error_tracking();
-    queries.global_ctxt().unwrap().take().enter(|tcx| {
+    queries.global_ctxt().unwrap().enter(|tcx| {
       let callback = self.callback.take().unwrap();
       callback(tcx);
     });

@@ -1,6 +1,6 @@
 fn main() {
   let mut s = String::from("");
-  let yay = || {
+  let mut yay = || {
     s.push_str("yay");
   };
 
