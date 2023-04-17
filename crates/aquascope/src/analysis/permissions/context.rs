@@ -1,4 +1,3 @@
-use flowistry::mir::utils::{PlaceExt, SpanExt};
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
 use rustc_borrowck::{
   borrow_set::{BorrowData, BorrowSet},
@@ -13,6 +12,7 @@ use rustc_middle::{
 };
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
+use rustc_utils::{PlaceExt, SpanExt};
 use smallvec::{smallvec, SmallVec};
 
 use crate::{

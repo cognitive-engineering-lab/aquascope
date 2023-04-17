@@ -89,6 +89,7 @@ pub mod mir;
 #[cfg(feature = "testing")]
 pub mod test_utils;
 
+use rustc_utils::source_map::range::CharRange;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -103,8 +104,8 @@ pub struct Range {
   pub filename: usize,
 }
 
-impl From<flowistry::source_map::CharRange> for Range {
-  fn from(i: flowistry::source_map::CharRange) -> Self {
+impl From<CharRange> for Range {
+  fn from(i: CharRange) -> Self {
     Range {
       char_start: i.start.0,
       char_end: i.end.0,

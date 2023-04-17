@@ -9,7 +9,6 @@
 use std::time::Instant;
 
 use datafrog::{Iteration, Relation, RelationLeaper, ValueFilter};
-use flowistry::mir::utils::PlaceExt;
 use polonius_engine::{Algorithm, FactTypes, Output as PEOutput};
 use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -20,6 +19,7 @@ use rustc_middle::{
   ty::TyCtxt,
 };
 use rustc_mir_dataflow::move_paths::MoveData;
+use rustc_utils::PlaceExt;
 
 use super::{
   context::PermissionsCtxt,

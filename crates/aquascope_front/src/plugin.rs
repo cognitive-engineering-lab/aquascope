@@ -16,15 +16,12 @@ use aquascope::{
   Range,
 };
 use clap::{Parser, Subcommand};
-use flowistry::{
-  mir::borrowck_facts::{self, NO_SIMPLIFY},
-  source_map::find_bodies,
-};
 use fluid_let::fluid_set;
 use rustc_hir::BodyId;
 use rustc_interface::interface::Result as RustcResult;
 use rustc_middle::ty::TyCtxt;
 use rustc_plugin::{CrateFilter, RustcPlugin, RustcPluginArgs, Utf8Path};
+use rustc_utils::{mir::borrowck_facts, source_map::find_bodies::find_bodies};
 use serde::{self, Deserialize, Serialize};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -220,7 +217,6 @@ struct AquascopeCallbacks<A: AquascopeAnalysis> {
 
 impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
   fn config(&mut self, config: &mut rustc_interface::Config) {
-    NO_SIMPLIFY.store(true, std::sync::atomic::Ordering::SeqCst);
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 

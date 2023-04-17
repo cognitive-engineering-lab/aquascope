@@ -2,13 +2,13 @@
 
 use anyhow::Result;
 use either::Either;
-use flowistry::mir::utils::SpanExt;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
   mir::{Body, BorrowCheckResult},
   ty::{self, query::Providers, TyCtxt},
 };
+use rustc_utils::{source_map::range::CharRange, SpanExt};
 
 mod mapper;
 mod miri_utils;
@@ -62,9 +62,7 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
       Either::Left(node_id) => hir.span(node_id).as_local(outer_span)?,
       Either::Right(span) => span.as_local(outer_span)?,
     };
-    let range =
-      flowistry::source_map::CharRange::from_span(span, tcx.sess.source_map())
-        .unwrap();
+    let range = CharRange::from_span(span, tcx.sess.source_map()).unwrap();
     Some(Range::from(range))
   });
 

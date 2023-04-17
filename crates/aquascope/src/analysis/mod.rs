@@ -17,13 +17,6 @@ use std::{
 pub use boundaries::compute_permission_boundaries;
 use boundaries::PermissionsBoundary;
 pub use find_bindings::find_bindings;
-use flowistry::{
-  mir::{
-    borrowck_facts::get_body_with_borrowck_facts,
-    utils::{BodyExt, SpanExt},
-  },
-  source_map::CharRange,
-};
 use ir_mapper::{GatherMode, IRMapper};
 use permissions::{
   Loan, Move, PermissionsCtxt, Point, RefinementRegion, Refiner,
@@ -33,6 +26,9 @@ use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{BytePos, Span};
+use rustc_utils::{
+  mir::borrowck_facts, source_map::range::CharRange, BodyExt, SpanExt,
+};
 use serde::Serialize;
 pub use stepper::compute_permission_steps;
 use stepper::PermissionsLineDisplay;
@@ -277,7 +273,7 @@ pub struct AnalysisOutput {
 impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
   pub fn new(tcx: TyCtxt<'tcx>, body_id: BodyId) -> Self {
     let def_id = tcx.hir().body_owner_def_id(body_id);
-    let bwf = get_body_with_borrowck_facts(tcx, def_id);
+    let bwf = borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
     let permissions = compute_permissions(tcx, body_id, bwf);
     let body = &permissions.body_with_facts.body;
 

@@ -6,7 +6,6 @@ pub(crate) mod path_visitor;
 
 use anyhow::Result;
 use either::Either;
-use flowistry::mir::utils::{OperandExt, SpanExt};
 use path_visitor::get_path_boundaries;
 use rustc_hir::HirId;
 use rustc_middle::{
@@ -14,6 +13,7 @@ use rustc_middle::{
   ty::{adjustment::AutoBorrowMutability, TyCtxt},
 };
 use rustc_span::Span;
+use rustc_utils::{OperandExt, SpanExt};
 use serde::Serialize;
 use smallvec::{smallvec, SmallVec};
 use ts_rs::TS;
@@ -329,7 +329,7 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
   macro_rules! maybe_in_op {
     ($loc:expr, $op:expr) => {
       $op
-        .to_place()
+        .as_place()
         .and_then(|p| p.is_source_visible(tcx, body).then_some(p))
         .map(|p| smallvec![($loc, p)])
         .unwrap_or(smallvec![])

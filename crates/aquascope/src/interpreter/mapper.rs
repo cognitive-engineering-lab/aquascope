@@ -6,12 +6,12 @@ use std::{
 };
 
 use either::Either;
-use flowistry::mir::utils::BodyExt;
 use itertools::Itertools;
 use miri::InterpCx;
 use rustc_hir::{intravisit::Visitor, Body, Expr, ExprKind, HirId, Stmt};
 use rustc_middle::{mir::Location, ty::InstanceDef};
 use rustc_span::{BytePos, Span};
+use rustc_utils::BodyExt;
 
 use super::step::{MFrame, MStack, MStep, MTrace, MirLoc};
 use crate::analysis::ir_mapper::{GatherDepth, GatherMode, IRMapper};
