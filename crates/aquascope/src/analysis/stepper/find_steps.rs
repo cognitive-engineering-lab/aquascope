@@ -206,7 +206,6 @@
 //!   and `else`, or if there are multiple returns, the algorithm also fails.
 
 use anyhow::{bail, Result};
-use flowistry::mir::utils::{PlaceExt as FlowistryPlaceExt, SpanExt};
 use rustc_data_structures::{self, fx::FxHashMap as HashMap};
 use rustc_hir::{
   self as hir,
@@ -218,6 +217,7 @@ use rustc_middle::{
   mir::{self, Local, Location, Place},
 };
 use rustc_span::Span;
+use rustc_utils::{PlaceExt as FlowistryPlaceExt, SpanExt};
 
 use super::{
   segment_tree::{MirSegment, SegmentSearchResult, SegmentTree, SplitType},

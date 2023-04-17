@@ -1,18 +1,8 @@
 use std::{
   collections::HashMap, env, fs, io, panic, path::Path, process::Command,
-  sync::atomic::Ordering,
 };
 
 use anyhow::{bail, Context, Result};
-use flowistry::{
-  indexed::impls::{FilenameIndex, LocationOrArg},
-  mir::{
-    borrowck_facts::{self, NO_SIMPLIFY},
-    utils::{BodyExt, OperandExt},
-  },
-  source_map::{self, Spanner, ToSpan},
-  test_utils::{DUMMY_FILE, DUMMY_FILE_NAME},
-};
 use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::BodyWithBorrowckFacts;
@@ -23,6 +13,16 @@ use rustc_middle::{
   ty::TyCtxt,
 };
 use rustc_span::source_map::FileLoader;
+use rustc_utils::{
+  mir::borrowck_facts,
+  source_map::{
+    filename::FilenameIndex,
+    range::{self, ToSpan},
+    spanner::{LocationOrArg, Spanner},
+  },
+  test_utils::{DUMMY_FILE, DUMMY_FILE_NAME},
+  BodyExt, OperandExt,
+};
 
 use crate::{
   analysis::{
@@ -79,8 +79,7 @@ impl From<&str> for Permissions {
 
 // Intermediate step that maps a start-end position,
 // to a place string and corresponding permissions.
-type PermMap =
-  HashMap<(source_map::BytePos, source_map::BytePos), (String, Permissions)>;
+type PermMap = HashMap<(range::BytePos, range::BytePos), (String, Permissions)>;
 
 static CFG_HASH: &str = "////!";
 
@@ -143,10 +142,7 @@ fn split_test_source(
       let perms = perms_str.into();
 
       perm_map.insert(
-        (
-          source_map::BytePos(start_range),
-          source_map::BytePos(end_range),
-        ),
+        (range::BytePos(start_range), range::BytePos(end_range)),
         (var.to_string(), perms),
       );
       source_idx += close.len();
@@ -169,14 +165,14 @@ fn split_test_source(
 fn parse_test_source(
   src: &str,
   delimeters: (&'static str, &'static str),
-) -> Result<(String, HashMap<source_map::ByteRange, Permissions>)> {
+) -> Result<(String, HashMap<range::ByteRange, Permissions>)> {
   let (clean, interim_map) = split_test_source(src, delimeters)?;
 
   let map = interim_map
     .into_iter()
     .map(|((start, end), (_var_str, perms))| {
       (
-        DUMMY_FILE.with(|filename| source_map::ByteRange {
+        DUMMY_FILE.with(|filename| range::ByteRange {
           start,
           end,
           filename: *filename,
@@ -266,7 +262,7 @@ pub fn test_refinements_in_file(path: &Path) {
 
               match rvalue {
                 Rvalue::Ref(_, _, place) => *place,
-                Rvalue::Use(op) => op.to_place().unwrap(),
+                Rvalue::Use(op) => op.as_place().unwrap(),
                 _ => unimplemented!(),
               }
             }
@@ -371,9 +367,9 @@ pub fn test_steps_in_file(
         let normalized = body_steps
           .into_iter()
           .map(|pss| {
-            let char_range = source_map::CharRange {
-              start: source_map::CharPos(pss.location.char_start),
-              end: source_map::CharPos(pss.location.char_end),
+            let char_range = range::CharRange {
+              start: range::CharPos(pss.location.char_start),
+              end: range::CharPos(pss.location.char_end),
               filename: FilenameIndex::from_usize(pss.location.filename),
             };
             let span = char_range.to_span(ctxt.permissions.tcx).unwrap();
@@ -547,7 +543,6 @@ where
       sess.span_diagnostic = handler;
     }));
 
-    NO_SIMPLIFY.store(true, Ordering::SeqCst);
     config.override_queries = Some(if self.is_interpreter {
       crate::interpreter::override_queries
     } else {

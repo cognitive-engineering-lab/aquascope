@@ -6,7 +6,6 @@ pub(crate) mod post_dominators;
 // pub(crate) mod region_name;
 
 pub(crate) use body_graph::CleanedBody;
-use flowistry::mir::utils::BodyExt;
 pub(crate) use mir_locations::MirOrderedLocations;
 use post_dominators::AllPostDominators;
 use rustc_data_structures::{
@@ -20,6 +19,7 @@ use rustc_middle::{
   },
   ty::TyCtxt,
 };
+use rustc_utils::BodyExt;
 
 pub struct IRMapper<'a, 'tcx> {
   pub(crate) cleaned_graph: CleanedBody<'a, 'tcx>,

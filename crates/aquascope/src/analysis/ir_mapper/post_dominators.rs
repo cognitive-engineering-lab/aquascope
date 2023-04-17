@@ -1,9 +1,9 @@
-use flowistry::mir::control_dependencies::PostDominators;
 use rustc_data_structures::graph::*;
 use rustc_index::{
   bit_set::{HybridBitSet, SparseBitMatrix},
   vec::Idx,
 };
+use rustc_utils::mir::control_dependencies::PostDominators;
 
 /// Computes the intersection of the post-dominators across all exits
 /// to a graph.

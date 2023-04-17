@@ -1,6 +1,5 @@
 //! A smattering of utilities not yet (or that won't ever be) upstreamed to Flowistry.
 
-use flowistry::mir::utils::PlaceExt as FlowistryPlaceExt;
 use rustc_data_structures::captures::Captures;
 use rustc_hir::def_id::DefId;
 use rustc_infer::infer::TyCtxtInferExt;
@@ -9,6 +8,7 @@ use rustc_middle::{
   ty::{self, subst::GenericArgKind, ParamEnv, Region, RegionVid, Ty, TyCtxt},
 };
 use rustc_trait_selection::infer::InferCtxtExt;
+use rustc_utils::PlaceExt as FlowistryPlaceExt;
 use smallvec::SmallVec;
 
 //------------------------------------------------

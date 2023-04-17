@@ -8,6 +8,3 @@ opt-level = 3
 
 [profile.dev.package.similar]
 opt-level = 3
-
-[patch.crates-io]
-flowistry = { git = "https://github.com/willcrichton/flowistry", rev = "a156ab9839b9e84fe9e178ce16937e98d13613b5" }

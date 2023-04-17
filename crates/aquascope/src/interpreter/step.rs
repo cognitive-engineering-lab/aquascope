@@ -4,7 +4,6 @@ use std::{cell::RefCell, cmp::Ordering, collections::HashMap};
 
 use anyhow::{anyhow, bail, Context, Result};
 use either::Either;
-use flowistry::mir::utils::PlaceExt;
 use miri::{
   AllocId, AllocMap, AllocRange, Frame, Immediate, InterpCx, InterpError,
   InterpErrorInfo, InterpResult, LocalState, LocalValue, Machine, MiriConfig,
@@ -18,6 +17,7 @@ use rustc_middle::{
 };
 use rustc_session::CtfeBacktrace;
 use rustc_span::Span;
+use rustc_utils::{source_map::range::CharRange, PlaceExt};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -155,7 +155,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
     let tcx = *self.ecx.tcx;
     let body_span = Range::from(
-      flowistry::source_map::CharRange::from_span(
+      CharRange::from_span(
         body_span(tcx, frame.instance.def_id(), BodySpanType::Whole),
         tcx.sess.source_map(),
       )
