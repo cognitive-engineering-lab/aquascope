@@ -85,11 +85,11 @@ use rustc_data_structures::{
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
 };
 use rustc_index::{bit_set::HybridBitSet, vec::Idx};
+use rustc_utils::{mir::places_conflict, BodyExt, RegionExt};
 use serde::Serialize;
 use ts_rs::TS;
 
-use super::{places_conflict, Origin, PermissionsCtxt};
-use crate::mir::utils::{BodyExt, ToRegionVid};
+use super::{Origin, PermissionsCtxt};
 
 rustc_index::newtype_index! {
   #[debug_format = "scc{}"]

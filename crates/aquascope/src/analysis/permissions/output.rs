@@ -19,16 +19,15 @@ use rustc_middle::{
   ty::TyCtxt,
 };
 use rustc_mir_dataflow::move_paths::MoveData;
-use rustc_utils::PlaceExt;
+use rustc_utils::{
+  mir::places_conflict::{self, AccessDepth, PlaceConflictBias},
+  BodyExt, PlaceExt,
+};
 
 use super::{
-  context::PermissionsCtxt,
-  flow,
-  places_conflict::{self, AccessDepth, PlaceConflictBias},
-  AquascopeFacts, Loan, Move, Path, Point, ENABLE_FLOW_DEFAULT,
-  ENABLE_FLOW_PERMISSIONS,
+  context::PermissionsCtxt, flow, AquascopeFacts, Loan, Move, Path, Point,
+  ENABLE_FLOW_DEFAULT, ENABLE_FLOW_PERMISSIONS,
 };
-use crate::mir::utils::BodyExt;
 
 /// Aquascope permissions facts output.
 #[derive(Debug)]
@@ -393,7 +392,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
       |(_origin, loan, _point)| {
         let borrow = ctxt.loan_to_borrow(*loan);
         places.iter().filter_map(|place| {
-          super::places_conflict::borrow_conflicts_with_place(
+          places_conflict::borrow_conflicts_with_place(
             tcx,
             body,
             borrow.borrowed_place,

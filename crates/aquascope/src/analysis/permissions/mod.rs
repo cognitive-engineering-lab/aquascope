@@ -3,11 +3,8 @@
 mod context;
 pub(crate) mod flow;
 // pub(crate) mod flow_datalog;
-#[allow(clippy::all, clippy::pedantic)]
-mod graphviz;
 mod output;
-#[allow(clippy::all, clippy::pedantic)]
-pub(crate) mod places_conflict;
+
 pub mod utils;
 
 use std::ops::{Deref, DerefMut};

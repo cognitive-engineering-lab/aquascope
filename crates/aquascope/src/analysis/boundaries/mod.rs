@@ -13,7 +13,7 @@ use rustc_middle::{
   ty::{adjustment::AutoBorrowMutability, TyCtxt},
 };
 use rustc_span::Span;
-use rustc_utils::{OperandExt, SpanExt};
+use rustc_utils::{OperandExt, PlaceExt, SpanExt};
 use serde::Serialize;
 use smallvec::{smallvec, SmallVec};
 use ts_rs::TS;
@@ -27,9 +27,7 @@ use crate::{
     },
     AquascopeAnalysis,
   },
-  errors,
-  mir::utils::PlaceExt,
-  Range,
+  errors, Range,
 };
 
 /// A point where a region flow is introduced, potentially resulting in a violation.

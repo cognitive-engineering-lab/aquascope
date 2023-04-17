@@ -1,22 +1,16 @@
 //! Various *debugging* utilities for permissions.
 
-use std::{collections::hash_map::Entry, io::Write, path::Path};
+use std::collections::hash_map::Entry;
 
-use anyhow::{bail, Result};
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_graphviz as dot;
-use rustc_hir::def_id::DefId;
-use rustc_middle::{
-  mir::{Body, Location},
-  ty::TyCtxt,
-};
+use rustc_middle::mir::Location;
 use rustc_mir_dataflow::{
-  fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice, Results,
+  fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice,
 };
+use rustc_utils::BodyExt;
 
 use super::{
-  context::PermissionsCtxt, graphviz, Permissions, PermissionsData,
-  PermissionsDomain,
+  context::PermissionsCtxt, Permissions, PermissionsData, PermissionsDomain,
 };
 
 pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
@@ -40,8 +34,7 @@ pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
 
   log::debug!("Dumping results for {:?}", name.as_str());
 
-  if let Err(e) = dump_results(
-    &ctxt.body_with_facts.body,
+  if let Err(e) = ctxt.body_with_facts.body.write_analysis_results(
     &results,
     def_id.to_def_id(),
     ctxt.tcx,
@@ -63,50 +56,6 @@ pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
     &mut stderr,
   )
   .unwrap();
-}
-
-fn write_dot(path: &Path, buf: Vec<u8>) -> Result<()> {
-  use std::process::{Command, Stdio};
-
-  // let mut file = File::create(path)?;
-  // file.write_all(&buf)?;
-  // file.sync_all()?;
-
-  let mut p = Command::new("dot")
-    .args(["-Tpdf", "-o", &path.display().to_string()])
-    .stdin(Stdio::piped())
-    .spawn()?;
-
-  p.stdin.as_mut().unwrap().write_all(&buf)?;
-  let status = p.wait()?;
-
-  if !status.success() {
-    bail!("dot for {} failed", path.display())
-  };
-
-  Ok(())
-}
-
-fn dump_results<'tcx, A>(
-  body: &Body<'tcx>,
-  results: &Results<'tcx, A>,
-  _def_id: DefId,
-  _tcx: TyCtxt<'tcx>,
-) -> Result<()>
-where
-  A: Analysis<'tcx>,
-  A::Domain: DebugWithContext<A>,
-{
-  let graphviz =
-    graphviz::Formatter::new(body, results, graphviz::OutputStyle::AfterOnly);
-  let mut buf = Vec::new();
-  dot::render(&graphviz, &mut buf)?;
-
-  let output_dir = Path::new("target");
-  let fname = "results";
-  let output_path = output_dir.join(format!("{fname}.pdf"));
-
-  write_dot(&output_path, buf)
 }
 
 // --------------------------------------------------

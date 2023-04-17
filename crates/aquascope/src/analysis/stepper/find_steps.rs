@@ -217,7 +217,7 @@ use rustc_middle::{
   mir::{self, Local, Location, Place},
 };
 use rustc_span::Span;
-use rustc_utils::{PlaceExt as FlowistryPlaceExt, SpanExt};
+use rustc_utils::{PlaceExt, SpanExt};
 
 use super::{
   segment_tree::{MirSegment, SegmentSearchResult, SegmentTree, SplitType},
@@ -230,9 +230,7 @@ use crate::{
       Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
     },
   },
-  errors,
-  mir::utils::PlaceExt as AquascopePlaceExt,
-  Range,
+  errors, Range,
 };
 
 pub fn compute_permission_steps<'a, 'tcx>(
