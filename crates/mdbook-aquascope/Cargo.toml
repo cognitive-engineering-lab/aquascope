@@ -15,8 +15,6 @@ include = [
 ]
 repository = "https://github.com/cognitive-engineering-lab/aquascope"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [features]
 dev = ["mdbook-preprocessor-utils/testing"]
 
