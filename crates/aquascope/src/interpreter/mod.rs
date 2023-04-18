@@ -20,9 +20,9 @@ use rustc_session::Session;
 use smallvec::SmallVec;
 pub use step::MTrace;
 
-use crate::{interpreter::mapper::Mapper, Range};
+use crate::interpreter::mapper::Mapper;
 
-pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
+pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<CharRange>> {
   let mut evaluator = step::VisEvaluator::new(tcx).unwrap();
   let mir_steps = evaluator.eval()?;
 
@@ -63,7 +63,7 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
       Either::Right(span) => span.as_local(outer_span)?,
     };
     let range = CharRange::from_span(span, tcx.sess.source_map()).unwrap();
-    Some(Range::from(range))
+    Some(range)
   });
 
   Ok(src_steps)
@@ -71,7 +71,7 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<Range>> {
 
 pub struct InterpretCallbacks {
   should_fail: bool,
-  pub result: Option<Result<MTrace<Range>>>,
+  pub result: Option<Result<MTrace<CharRange>>>,
 }
 
 impl InterpretCallbacks {

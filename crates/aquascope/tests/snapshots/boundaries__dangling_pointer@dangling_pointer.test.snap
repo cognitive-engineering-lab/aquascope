@@ -20,8 +20,9 @@ description: dangling_pointer@dangling_pointer.test
   expecting_flow:
     is_violation: true
     flow_context:
-      char_start: 93
-      char_end: 95
-      filename: 0
+      start: 93
+      end: 95
+      filename:
+        private: 0
     kind: LocalOutlivesUniversal
 

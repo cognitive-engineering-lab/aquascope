@@ -7,13 +7,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 14
-            char_end: 24
-            filename: 0
+            start: 14
+            end: 24
+            filename:
+              private: 0
           locals:
             - - x
               - type: Int
@@ -24,48 +26,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 27
-            char_end: 40
-            filename: 0
-          locals:
-            - - x
-              - type: Int
-                value: 0
-            - - f
-              - type: Adt
-                value:
-                  name: "main::{closure#0}"
-                  variant: ~
-                  fields:
-                    - - x
-                      - type: Pointer
-                        value:
-                          path:
-                            segment:
-                              type: Stack
-                              value:
-                                frame: 0
-                                local: x
-                            parts: []
-                          range: ~
-                  alloc_kind: ~
-    heap:
-      locations: []
-  - stack:
-      frames:
-        - name: main
-          body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
-          location:
-            char_start: 43
-            char_end: 55
-            filename: 0
+            start: 27
+            end: 40
+            filename:
+              private: 0
           locals:
             - - x
               - type: Int
@@ -94,13 +63,52 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 43
-            char_end: 55
-            filename: 0
+            start: 43
+            end: 55
+            filename:
+              private: 0
+          locals:
+            - - x
+              - type: Int
+                value: 0
+            - - f
+              - type: Adt
+                value:
+                  name: "main::{closure#0}"
+                  variant: ~
+                  fields:
+                    - - x
+                      - type: Pointer
+                        value:
+                          path:
+                            segment:
+                              type: Stack
+                              value:
+                                frame: 0
+                                local: x
+                            parts: []
+                          range: ~
+                  alloc_kind: ~
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start: 0
+            end: 59
+            filename:
+              private: 0
+          location:
+            start: 43
+            end: 55
+            filename:
+              private: 0
           locals:
             - - x
               - type: Int
@@ -125,13 +133,15 @@ steps:
                   alloc_kind: ~
         - name: "main::{closure#0}"
           body_span:
-            char_start: 35
-            char_end: 39
-            filename: 0
+            start: 35
+            end: 39
+            filename:
+              private: 0
           location:
-            char_start: 35
-            char_end: 37
-            filename: 0
+            start: 35
+            end: 37
+            filename:
+              private: 0
           locals: []
     heap:
       locations: []
@@ -139,13 +149,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 43
-            char_end: 55
-            filename: 0
+            start: 43
+            end: 55
+            filename:
+              private: 0
           locals:
             - - x
               - type: Int
@@ -170,13 +182,15 @@ steps:
                   alloc_kind: ~
         - name: "main::{closure#0}"
           body_span:
-            char_start: 35
-            char_end: 39
-            filename: 0
+            start: 35
+            end: 39
+            filename:
+              private: 0
           location:
-            char_start: 38
-            char_end: 39
-            filename: 0
+            start: 38
+            end: 39
+            filename:
+              private: 0
           locals:
             - - (return)
               - type: Int
@@ -187,13 +201,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 43
-            char_end: 55
-            filename: 0
+            start: 43
+            end: 55
+            filename:
+              private: 0
           locals:
             - - x
               - type: Int
@@ -225,13 +241,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 58
-            char_end: 59
-            filename: 0
+            start: 58
+            end: 59
+            filename:
+              private: 0
           locals: []
     heap:
       locations: []

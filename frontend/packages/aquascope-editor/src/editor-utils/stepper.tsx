@@ -272,7 +272,7 @@ let PermDiffRow = ({
 };
 
 let stepLocation = (step: PermissionsLineDisplay): number => {
-  return step.location.char_end;
+  return step.location.end;
 };
 
 let StepTable = ({

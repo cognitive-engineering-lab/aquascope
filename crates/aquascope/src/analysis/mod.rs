@@ -25,16 +25,16 @@ use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::{BytePos, Span};
+use rustc_span::{self, Span};
 use rustc_utils::{
-  mir::borrowck_facts, source_map::range::CharRange, BodyExt, SpanExt,
+  mir::borrowck_facts,
+  source_map::range::{CharPos, CharRange},
+  BodyExt, SpanExt,
 };
 use serde::Serialize;
 pub use stepper::compute_permission_steps;
 use stepper::PermissionsLineDisplay;
 use ts_rs::TS;
-
-use crate::Range;
 
 thread_local! {
   pub static BODY_ID_STACK: RefCell<Vec<BodyId>> =
@@ -59,11 +59,11 @@ pub struct MoveKey(pub u32);
 
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
-pub struct LoanPoints(pub HashMap<LoanKey, Range>);
+pub struct LoanPoints(pub HashMap<LoanKey, CharRange>);
 
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
-pub struct MovePoints(pub HashMap<MoveKey, Range>);
+pub struct MovePoints(pub HashMap<MoveKey, CharRange>);
 
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
@@ -114,7 +114,7 @@ impl DerefMut for LoanKey {
 }
 
 impl Deref for LoanPoints {
-  type Target = HashMap<LoanKey, Range>;
+  type Target = HashMap<LoanKey, CharRange>;
   fn deref(&self) -> &Self::Target {
     &self.0
   }
@@ -148,7 +148,7 @@ pub trait Bounded {
 }
 
 impl Bounded for Span {
-  type Bound = BytePos;
+  type Bound = rustc_span::BytePos;
   fn lo(&self) -> Self::Bound {
     Span::lo(*self)
   }
@@ -166,24 +166,24 @@ impl Bounded for Span {
   }
 }
 
-impl Bounded for Range {
-  type Bound = usize;
+impl Bounded for CharRange {
+  type Bound = CharPos;
   fn lo(&self) -> Self::Bound {
-    self.char_start
+    self.start
   }
 
   fn hi(&self) -> Self::Bound {
-    self.char_end
+    self.end
   }
 
   fn overlaps(&self, other: Self) -> bool {
-    !(self.char_end < other.char_start || other.char_end < self.char_start)
+    !(self.end < other.start || other.end < self.start)
   }
 
   fn to(&self, other: Self) -> Self {
-    Range {
-      char_start: std::cmp::min(self.char_start, other.char_start),
-      char_end: std::cmp::max(self.char_end, other.char_end),
+    CharRange {
+      start: std::cmp::min(self.start, other.start),
+      end: std::cmp::max(self.end, other.end),
       ..*self
     }
   }
@@ -241,7 +241,7 @@ pub fn compute_permissions<'a, 'tcx>(
 #[serde(tag = "type")]
 pub enum AquascopeError {
   // An error occured before the intended analysis could run.
-  BuildError { range: Range },
+  BuildError { range: Option<CharRange> },
   AnalysisError { msg: String },
 }
 
@@ -261,7 +261,7 @@ impl From<anyhow::Error> for AquascopeError {
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
 pub struct AnalysisOutput {
-  pub body_range: Range,
+  pub body_range: CharRange,
   pub boundaries: Vec<PermissionsBoundary>,
   pub steps: Vec<PermissionsLineDisplay>,
   pub loan_points: LoanPoints,
@@ -326,12 +326,12 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     span.is_dummy() || span.is_empty() // || !span.is_visible(source_map)
   }
 
-  pub fn span_to_range(&self, span: Span) -> Range {
+  pub fn span_to_range(&self, span: Span) -> CharRange {
     // if span.is_dummy() || span.is_empty() {
     //   panic!("HERE YOU GO");
     // }
     let source_map = self.permissions.tcx.sess.source_map();
-    CharRange::from_span(span, source_map).unwrap().into()
+    CharRange::from_span(span, source_map).unwrap()
   }
 
   fn construct_loan_info(&self) -> (LoanPoints, LoanRegions) {

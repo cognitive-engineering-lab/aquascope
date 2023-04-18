@@ -217,7 +217,9 @@ use rustc_middle::{
   mir::{self, Local, Location, Place},
 };
 use rustc_span::Span;
-use rustc_utils::{PlaceExt, SpanExt};
+use rustc_utils::{
+  source_map::range::CharRange, test_utils::DUMMY_CHAR_RANGE, PlaceExt, SpanExt,
+};
 
 use super::{
   segment_tree::{MirSegment, SegmentSearchResult, SegmentTree, SplitType},
@@ -230,7 +232,7 @@ use crate::{
       Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
     },
   },
-  errors, Range,
+  errors,
 };
 
 pub fn compute_permission_steps<'a, 'tcx>(
@@ -304,7 +306,7 @@ fn prettify_permission_steps<'tcx>(
     .into_iter()
     .fold(
       HashMap::<
-        Range,
+        CharRange,
         Vec<(MirSegment, Vec<(Place<'tcx>, PermissionsDataDiff)>)>,
       >::default(),
       |mut acc, (span, (segment, place_to_diffs))| {
@@ -374,8 +376,9 @@ fn prettify_permission_steps<'tcx>(
       //   .collect::<Vec<_>>();
 
       // Conforming to the above HACK this just takes any (from, to) pair.
+      let dummy_char_range = DUMMY_CHAR_RANGE.with(|range| *range);
       let (from, to) = entries.first().map_or_else(
-        || (Range::default(), Range::default()),
+        || (dummy_char_range, dummy_char_range),
         |(MirSegment { from, to }, _)| {
           let from = analysis.span_to_range(ctxt.location_to_span(*from));
           let to = analysis.span_to_range(ctxt.location_to_span(*to));

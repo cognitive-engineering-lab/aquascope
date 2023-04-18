@@ -13,7 +13,6 @@ use aquascope::{
     AquascopeError, AquascopeResult,
   },
   errors::{initialize_error_tracking, track_body_diagnostics},
-  Range,
 };
 use clap::{Parser, Subcommand};
 use fluid_let::fluid_set;
@@ -134,11 +133,12 @@ impl RustcPlugin for AquascopePlugin {
           plugin_args.should_fail,
         );
         let _ = run_with_callbacks(&compiler_args, &mut callbacks);
-        postprocess(callbacks.result.unwrap().map_err(|_| {
-          AquascopeError::BuildError {
-            range: Range::default(),
-          }
-        }))
+        postprocess(
+          callbacks
+            .result
+            .unwrap()
+            .map_err(|_| AquascopeError::BuildError { range: None }),
+        )
       }
       _ => unreachable!(),
     }
@@ -174,9 +174,9 @@ pub fn run_with_callbacks(
 
   log::debug!("building compiler ...");
 
-  compiler.run().map_err(|_| AquascopeError::BuildError {
-    range: Range::default(),
-  })
+  compiler
+    .run()
+    .map_err(|_| AquascopeError::BuildError { range: None })
 }
 
 pub trait AquascopeAnalysis: Sized + Send + Sync {

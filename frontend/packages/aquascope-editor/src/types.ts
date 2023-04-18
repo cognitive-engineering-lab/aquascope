@@ -4,7 +4,7 @@ import { MoveKey } from "./bindings/MoveKey";
 
 // Re-export auto-generated types
 
-export { Range } from "./bindings/Range";
+export { CharRange } from "./bindings/CharRange";
 
 export { Permissions } from "./bindings/Permissions";
 export { PermissionsBoundary } from "./bindings/PermissionsBoundary";

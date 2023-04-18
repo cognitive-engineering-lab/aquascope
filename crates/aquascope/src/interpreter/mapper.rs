@@ -182,17 +182,19 @@ pub fn group_steps<Loc1, Loc2: PartialEq + Clone>(
 
 #[cfg(test)]
 mod test {
-  use crate::{
-    interpreter::step::{MFrame, MHeap, MResult, MStack, MStep, MTrace},
-    Range,
+  use rustc_utils::test_utils::DUMMY_CHAR_RANGE;
+
+  use crate::interpreter::step::{
+    MFrame, MHeap, MResult, MStack, MStep, MTrace,
   };
 
   fn mk_step<T>(name: &str, location: T) -> MStep<T> {
+    let dummy_char_range = DUMMY_CHAR_RANGE.with(|r| *r);
     MStep {
       stack: MStack {
         frames: vec![MFrame {
           name: name.to_owned(),
-          body_span: Range::default(),
+          body_span: dummy_char_range,
           locals: Vec::new(),
           location,
         }],

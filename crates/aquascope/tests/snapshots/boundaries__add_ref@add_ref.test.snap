@@ -35,9 +35,10 @@ description: add_ref@add_ref.test
   expecting_flow:
     is_violation: false
     flow_context:
-      char_start: 73
-      char_end: 83
-      filename: 0
+      start: 73
+      end: 83
+      filename:
+        private: 0
     kind: Ok
 - location: 80
   expected:
@@ -57,8 +58,9 @@ description: add_ref@add_ref.test
   expecting_flow:
     is_violation: true
     flow_context:
-      char_start: 73
-      char_end: 83
-      filename: 0
+      start: 73
+      end: 83
+      filename:
+        private: 0
     kind: LocalOutlivesUniversal
 

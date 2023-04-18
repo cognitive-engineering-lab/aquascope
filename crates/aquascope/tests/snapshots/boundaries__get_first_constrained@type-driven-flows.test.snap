@@ -35,8 +35,9 @@ description: get_first_constrained@type-driven-flows.test
   expecting_flow:
     is_violation: false
     flow_context:
-      char_start: 603
-      char_end: 608
-      filename: 0
+      start: 603
+      end: 608
+      filename:
+        private: 0
     kind: Ok
 

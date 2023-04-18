@@ -10,15 +10,13 @@ pub use find_steps::compute_permission_steps;
 use fluid_let::fluid_let;
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_middle::mir::Place;
+use rustc_utils::source_map::range::CharRange;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{
-  analysis::{
-    permissions::{Permissions, PermissionsData, PermissionsDomain},
-    AquascopeAnalysis, LoanKey, MoveKey,
-  },
-  Range,
+use crate::analysis::{
+  permissions::{Permissions, PermissionsData, PermissionsDomain},
+  AquascopeAnalysis, LoanKey, MoveKey,
 };
 
 fluid_let!(pub static INCLUDE_MODE: PermIncludeMode);
@@ -50,8 +48,8 @@ pub trait Difference {
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsStepTable {
-  pub from: Range,
-  pub to: Range,
+  pub from: CharRange,
+  pub to: CharRange,
   pub state: Vec<(String, PermissionsDataDiff)>,
 }
 
@@ -59,7 +57,7 @@ pub struct PermissionsStepTable {
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsLineDisplay {
-  pub location: Range,
+  pub location: CharRange,
   pub state: Vec<PermissionsStepTable>,
 }
 
