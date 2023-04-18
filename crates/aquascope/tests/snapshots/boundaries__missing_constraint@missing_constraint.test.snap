@@ -20,8 +20,9 @@ description: missing_constraint@missing_constraint.test
   expecting_flow:
     is_violation: true
     flow_context:
-      char_start: 86
-      char_end: 87
-      filename: 0
+      start: 86
+      end: 87
+      filename:
+        private: 0
     kind: MissingUniversalConstraint
 

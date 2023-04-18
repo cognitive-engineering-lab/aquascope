@@ -18,41 +18,40 @@ use rustc_middle::{
 use rustc_session::CtfeBacktrace;
 use rustc_span::Span;
 use rustc_utils::{source_map::range::CharRange, PlaceExt};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use ts_rs::TS;
 
 use super::mvalue::{MMemorySegment, MValue};
-use crate::Range;
 
-#[derive(Serialize, Deserialize, Debug, TS)]
+#[derive(Serialize, Debug, TS)]
 #[ts(export)]
 pub struct MFrame<L> {
   pub name: String,
-  pub body_span: Range,
+  pub body_span: CharRange,
   pub location: L,
   pub locals: Vec<(String, MValue)>,
 }
 
-#[derive(Serialize, Deserialize, Debug, TS)]
+#[derive(Serialize, Debug, TS)]
 #[ts(export)]
 pub struct MStack<L> {
   pub frames: Vec<MFrame<L>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, TS, Default)]
+#[derive(Serialize, Debug, TS, Default)]
 #[ts(export)]
 pub struct MHeap {
   pub locations: Vec<MValue>,
 }
 
-#[derive(Serialize, Deserialize, Debug, TS)]
+#[derive(Serialize, Debug, TS)]
 #[ts(export)]
 pub struct MStep<L> {
   pub stack: MStack<L>,
   pub heap: MHeap,
 }
 
-#[derive(Serialize, Deserialize, Debug, TS)]
+#[derive(Serialize, Debug, TS)]
 #[serde(tag = "type", content = "value")]
 #[ts(export)]
 pub enum MUndefinedBehavior {
@@ -60,7 +59,7 @@ pub enum MUndefinedBehavior {
   Other(String),
 }
 
-#[derive(Serialize, Deserialize, Debug, TS)]
+#[derive(Serialize, Debug, TS)]
 #[serde(tag = "type", content = "value")]
 #[ts(export)]
 pub enum MResult {
@@ -68,7 +67,7 @@ pub enum MResult {
   Error(MUndefinedBehavior),
 }
 
-#[derive(Serialize, Deserialize, Debug, TS)]
+#[derive(Serialize, Debug, TS)]
 #[ts(export)]
 pub struct MTrace<L> {
   pub steps: Vec<MStep<L>>,
@@ -154,13 +153,11 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     let name = self.fn_name(def_id);
 
     let tcx = *self.ecx.tcx;
-    let body_span = Range::from(
-      CharRange::from_span(
-        body_span(tcx, frame.instance.def_id(), BodySpanType::Whole),
-        tcx.sess.source_map(),
-      )
-      .unwrap(),
-    );
+    let body_span = CharRange::from_span(
+      body_span(tcx, frame.instance.def_id(), BodySpanType::Whole),
+      tcx.sess.source_map(),
+    )
+    .unwrap();
 
     let current_loc =
       loc_override.unwrap_or((frame.instance.def, frame.current_loc()));

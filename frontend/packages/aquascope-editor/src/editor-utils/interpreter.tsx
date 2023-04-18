@@ -13,6 +13,7 @@ import ReactDOM from "react-dom/client";
 
 import {
   Abbreviated,
+  CharRange,
   InterpAnnotations,
   MFrame,
   MHeap,
@@ -21,7 +22,6 @@ import {
   MTrace,
   MUndefinedBehavior,
   MValue,
-  Range,
 } from "../types";
 import { evenlySpaceAround, makeDecorationField } from "./misc";
 
@@ -40,8 +40,8 @@ let ErrorContext = React.createContext<MUndefinedBehavior | undefined>(
   undefined
 );
 
-let codeRange = (code: string, range: Range) => {
-  return code.slice(range.char_start, range.char_end);
+let codeRange = (code: string, range: CharRange) => {
+  return code.slice(range.start, range.end);
 };
 
 let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) => {
@@ -366,7 +366,13 @@ let Header: React.FC<React.PropsWithChildren<{ className: string }>> = ({
   </div>
 );
 
-let FrameView = ({ index, frame }: { index: number; frame: MFrame<Range> }) => {
+let FrameView = ({
+  index,
+  frame,
+}: {
+  index: number;
+  frame: MFrame<CharRange>;
+}) => {
   let code = useContext(CodeContext);
   let snippet = codeRange(code, frame.location);
   return (
@@ -378,7 +384,7 @@ let FrameView = ({ index, frame }: { index: number; frame: MFrame<Range> }) => {
   );
 };
 
-let StackView = ({ stack }: { stack: MStack<Range> }) => (
+let StackView = ({ stack }: { stack: MStack<CharRange> }) => (
   <div className="memory stack">
     <Header className="memory-header">Stack</Header>
     <div className="frames">
@@ -637,7 +643,7 @@ let StepView = ({
   index,
   containerRef,
 }: {
-  step: MStep<Range>;
+  step: MStep<CharRange>;
   index: number;
   containerRef: React.RefObject<HTMLDivElement>;
 }) => {
@@ -678,7 +684,7 @@ let InterpreterView = ({
   trace,
   config,
 }: {
-  trace: MTrace<Range>;
+  trace: MTrace<CharRange>;
   config?: InterpreterConfig;
 }) => {
   let ref = useRef<HTMLDivElement>(null);
@@ -724,16 +730,16 @@ let InterpreterView = ({
 };
 
 let filterSteps = (
-  steps: MStep<Range>[],
+  steps: MStep<CharRange>[],
   marks: number[]
-): [number[], MStep<Range>[]] => {
+): [number[], MStep<CharRange>[]] => {
   let stepsRev = [...steps].reverse();
-  let indexedMarks: [number, number, MStep<Range>][] = marks.map(idx => {
+  let indexedMarks: [number, number, MStep<CharRange>][] = marks.map(idx => {
     let stepRevIdx = stepsRev.findIndex(step => {
       let frame = _.last(step.stack.frames)!;
       let markInFrame =
-        frame.body_span.char_start <= idx && idx <= frame.body_span.char_end;
-      let markAfterLoc = idx > frame.location.char_start;
+        frame.body_span.start <= idx && idx <= frame.body_span.end;
+      let markAfterLoc = idx > frame.location.start;
       return markInFrame && markAfterLoc;
     });
     if (stepRevIdx == -1)
@@ -776,21 +782,21 @@ export let markerField = makeDecorationField();
 export function renderInterpreter(
   view: EditorView,
   container: HTMLDivElement,
-  trace: MTrace<Range>,
+  trace: MTrace<CharRange>,
   contents: string,
   config?: InterpreterConfig,
   annotations?: InterpAnnotations
 ) {
   let root = ReactDOM.createRoot(container);
   let marks = annotations?.state_locations || [];
-  let widgetRanges;
+  let widgetRanges;  
   if (marks.length > 0) {
     let [sortedMarks, filteredSteps] = filterSteps(trace.steps, marks);
     widgetRanges = sortedMarks;
     trace.steps = filteredSteps;
   } else {
     widgetRanges = trace.steps.map(
-      step => _.last(step.stack.frames)!.location.char_end
+      step => _.last(step.stack.frames)!.location.end
     );
   }
 

@@ -20,9 +20,10 @@ description: get_first_specified@type-driven-flows.test
   expecting_flow:
     is_violation: false
     flow_context:
-      char_start: 474
-      char_end: 492
-      filename: 0
+      start: 474
+      end: 492
+      filename:
+        private: 0
     kind: Ok
 - location: 495
   expected:
@@ -42,8 +43,9 @@ description: get_first_specified@type-driven-flows.test
   expecting_flow:
     is_violation: false
     flow_context:
-      char_start: 495
-      char_end: 500
-      filename: 0
+      start: 495
+      end: 500
+      filename:
+        private: 0
     kind: Ok
 

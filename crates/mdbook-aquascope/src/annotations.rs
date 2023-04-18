@@ -10,11 +10,11 @@ use ts_rs::TS;
 
 #[derive(PartialEq, Eq, Debug, TS, Serialize, Clone, Copy)]
 #[ts(export)]
-pub struct CharPos(usize);
+pub struct MdCharPos(usize);
 
 #[derive(PartialEq, Eq, Debug, TS, Serialize, Hash, Clone, Copy)]
 #[ts(export)]
-pub struct LinePos(usize);
+pub struct MdLinePos(usize);
 
 #[derive(PartialEq, Eq, Debug, TS, Serialize, Clone)]
 #[ts(export)]
@@ -27,26 +27,26 @@ pub enum PathMatcher {
 #[derive(PartialEq, Eq, Debug, TS, Serialize, Default, Clone)]
 #[ts(export)]
 pub struct StepperAnnotations {
-  focused_lines: Vec<LinePos>,
-  focused_paths: HashMap<LinePos, Vec<PathMatcher>>,
+  focused_lines: Vec<MdLinePos>,
+  focused_paths: HashMap<MdLinePos, Vec<PathMatcher>>,
 }
 
 #[derive(PartialEq, Eq, Debug, TS, Serialize, Default, Clone)]
 #[ts(export)]
 pub struct BoundariesAnnotations {
-  focused_lines: Vec<LinePos>,
+  focused_lines: Vec<MdLinePos>,
 }
 
 #[derive(PartialEq, Eq, Debug, TS, Serialize, Default, Clone)]
 #[ts(export)]
 pub struct InterpAnnotations {
-  state_locations: Vec<CharPos>,
+  state_locations: Vec<MdCharPos>,
 }
 
 #[derive(PartialEq, Eq, Debug, Default, TS, Serialize, Clone)]
 #[ts(export)]
 pub struct AquascopeAnnotations {
-  hidden_lines: Vec<LinePos>,
+  hidden_lines: Vec<MdLinePos>,
   interp: InterpAnnotations,
   stepper: StepperAnnotations,
   boundaries: BoundariesAnnotations,
@@ -85,7 +85,7 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
   let mut idx = 0;
   let mut output_lines = Vec::new();
   for (line_idx, mut line) in code.lines().enumerate() {
-    let line_pos = LinePos(line_idx + 1);
+    let line_pos = MdLinePos(line_idx + 1);
     let mut fragments = Vec::new();
     macro_rules! add_fragment {
       ($s:expr) => {
@@ -123,7 +123,7 @@ pub fn parse_annotations(code: &str) -> Result<(String, AquascopeAnnotations)> {
         }
 
         match match_type {
-          "interp" => annots.interp.state_locations.push(CharPos(idx)),
+          "interp" => annots.interp.state_locations.push(MdCharPos(idx)),
           "stepper" => {
             if config.contains_key("focus") {
               annots.stepper.focused_lines.push(line_pos);
@@ -178,18 +178,18 @@ let y = 2;
 }"#
   );
   assert_eq!(annot, AquascopeAnnotations {
-    hidden_lines: vec![LinePos(1), LinePos(4)],
+    hidden_lines: vec![MdLinePos(1), MdLinePos(4)],
     interp: InterpAnnotations {
-      state_locations: vec![CharPos(23)],
+      state_locations: vec![MdCharPos(23)],
     },
     stepper: StepperAnnotations {
-      focused_lines: vec![LinePos(2)],
+      focused_lines: vec![MdLinePos(2)],
       focused_paths: maplit::hashmap! {
-        LinePos(2) => vec![PathMatcher::Literal("x".into()), PathMatcher::Regex("y".into())]
+        MdLinePos(2) => vec![PathMatcher::Literal("x".into()), PathMatcher::Regex("y".into())]
       }
     },
     boundaries: BoundariesAnnotations {
-      focused_lines: vec![LinePos(3)]
+      focused_lines: vec![MdLinePos(3)]
     }
   });
 }

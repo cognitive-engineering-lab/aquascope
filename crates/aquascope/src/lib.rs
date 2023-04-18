@@ -50,9 +50,6 @@
   clippy::similar_names
 )]
 
-#[macro_use]
-extern crate rustc_middle;
-
 extern crate datafrog;
 extern crate either;
 extern crate polonius_engine;
@@ -71,6 +68,7 @@ extern crate rustc_index;
 extern crate rustc_infer;
 extern crate rustc_interface;
 extern crate rustc_macros;
+extern crate rustc_middle;
 extern crate rustc_mir_dataflow;
 extern crate rustc_mir_transform;
 extern crate rustc_serialize;
@@ -85,31 +83,5 @@ pub mod analysis;
 pub mod errors;
 #[allow(clippy::similar_names)]
 pub mod interpreter;
-pub mod mir;
 #[cfg(feature = "testing")]
 pub mod test_utils;
-
-use rustc_utils::source_map::range::CharRange;
-use serde::{Deserialize, Serialize};
-use ts_rs::TS;
-
-// re-export Range from Flowistry with TS.
-#[derive(
-  Copy, Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, Default, TS,
-)]
-#[ts(export)]
-pub struct Range {
-  pub char_start: usize,
-  pub char_end: usize,
-  pub filename: usize,
-}
-
-impl From<CharRange> for Range {
-  fn from(i: CharRange) -> Self {
-    Range {
-      char_start: i.start.0,
-      char_end: i.end.0,
-      filename: i.filename.as_usize(),
-    }
-  }
-}

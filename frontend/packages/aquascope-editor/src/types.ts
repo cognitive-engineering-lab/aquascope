@@ -4,7 +4,7 @@ import { MoveKey } from "./bindings/MoveKey";
 
 // Re-export auto-generated types
 
-export { Range } from "./bindings/Range";
+export { CharRange } from "./bindings/CharRange";
 
 export { Permissions } from "./bindings/Permissions";
 export { PermissionsBoundary } from "./bindings/PermissionsBoundary";
@@ -43,8 +43,6 @@ export { MUndefinedBehavior } from "./bindings/MUndefinedBehavior";
 export { MHeapAllocKind } from "./bindings/MHeapAllocKind";
 export { Abbreviated } from "./bindings/Abbreviated";
 
-export { CharPos } from "./bindings/CharPos";
-export { LinePos } from "./bindings/LinePos";
 export { StepperAnnotations } from "./bindings/StepperAnnotations";
 export { PathMatcher } from "./bindings/PathMatcher";
 export { InterpAnnotations } from "./bindings/InterpAnnotations";

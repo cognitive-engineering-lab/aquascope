@@ -13,7 +13,7 @@ import {
   AnalysisOutput,
   LoanKey,
   MoveKey,
-  Range as RangeT,
+  CharRange,
   RefinementRegion,
 } from "../types";
 
@@ -111,7 +111,7 @@ export function genStateField<T>(
 export type ActionFacts = {
   refinerTag: string;
   regionTag: string;
-  refinerPoint: RangeT;
+  refinerPoint: CharRange;
   region: RefinementRegion;
 };
 
@@ -132,15 +132,15 @@ function loanFactsToDecoration({
   let loanDeco = Decoration.mark({
     class: "aquascope-loan",
     tagName: refinerTag,
-  }).range(refinerPoint.char_start, refinerPoint.char_end);
+  }).range(refinerPoint.start, refinerPoint.end);
 
   let regionDecos = region.refined_ranges
-    .filter(range => range.char_start != range.char_end)
+    .filter(range => range.start != range.end)
     .map(range => {
       let highlightedRange = Decoration.mark({
         class: "aquascope-live-region",
         tagName: regionTag,
-      }).range(range.char_start, range.char_end);
+      }).range(range.start, range.end);
       return highlightedRange;
     });
 

@@ -7,13 +7,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 86
-            filename: 0
+            start: 0
+            end: 86
+            filename:
+              private: 0
           location:
-            char_start: 14
-            char_end: 40
-            filename: 0
+            start: 14
+            end: 40
+            filename:
+              private: 0
           locals:
             - - v
               - type: Adt
@@ -80,13 +82,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 86
-            filename: 0
+            start: 0
+            end: 86
+            filename:
+              private: 0
           location:
-            char_start: 43
-            char_end: 57
-            filename: 0
+            start: 43
+            end: 57
+            filename:
+              private: 0
           locals:
             - - v
               - type: Adt
@@ -165,13 +169,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 86
-            filename: 0
+            start: 0
+            end: 86
+            filename:
+              private: 0
           location:
-            char_start: 60
-            char_end: 70
-            filename: 0
+            start: 60
+            end: 70
+            filename:
+              private: 0
           locals:
             - - v
               - type: Adt
@@ -244,13 +250,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 86
-            filename: 0
+            start: 0
+            end: 86
+            filename:
+              private: 0
           location:
-            char_start: 73
-            char_end: 84
-            filename: 0
+            start: 73
+            end: 84
+            filename:
+              private: 0
           locals:
             - - v
               - type: Adt

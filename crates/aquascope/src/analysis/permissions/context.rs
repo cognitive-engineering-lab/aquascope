@@ -12,16 +12,13 @@ use rustc_middle::{
 };
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
-use rustc_utils::{PlaceExt, SpanExt};
+use rustc_utils::{BodyExt, PlaceExt, SpanExt, TyExt};
 use smallvec::{smallvec, SmallVec};
 
-use crate::{
-  analysis::permissions::{
-    flow::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin,
-    Output, Path, Permissions, PermissionsData, PermissionsDomain, Point,
-    Variable,
-  },
-  mir::utils::{BodyExt, TyExt},
+use crate::analysis::permissions::{
+  flow::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin,
+  Output, Path, Permissions, PermissionsData, PermissionsDomain, Point,
+  Variable,
 };
 
 /// A path as defined in rustc.

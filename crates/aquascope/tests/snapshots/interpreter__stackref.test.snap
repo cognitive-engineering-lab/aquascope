@@ -7,13 +7,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 14
-            char_end: 28
-            filename: 0
+            start: 14
+            end: 28
+            filename:
+              private: 0
           locals:
             - - x
               - type: Int
@@ -24,13 +26,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 31
-            char_end: 46
-            filename: 0
+            start: 31
+            end: 46
+            filename:
+              private: 0
           locals:
             - - x
               - type: Int
@@ -52,13 +56,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 49
-            char_end: 57
-            filename: 0
+            start: 49
+            end: 57
+            filename:
+              private: 0
           locals:
             - - x
               - type: Int
@@ -80,13 +86,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 59
-            filename: 0
+            start: 0
+            end: 59
+            filename:
+              private: 0
           location:
-            char_start: 58
-            char_end: 59
-            filename: 0
+            start: 58
+            end: 59
+            filename:
+              private: 0
           locals: []
     heap:
       locations: []

@@ -15,9 +15,10 @@ use rustc_middle::{
   },
 };
 use rustc_span::Span;
+use rustc_utils::TyExt;
 
 use super::{ExpectedPermissions, PathBoundary};
-use crate::{analysis::permissions::PermissionsCtxt, mir::utils::TyExt};
+use crate::analysis::permissions::PermissionsCtxt;
 
 // The current region flow context for outer statements and returns.
 fluid_let!(pub static FLOW_CONTEXT: HirId);

@@ -33,7 +33,7 @@ import {
   BackendError,
   InterpAnnotations,
   MTrace,
-  Range,
+  CharRange,
 } from "./types";
 
 export * as types from "./types";
@@ -257,7 +257,7 @@ export class Editor {
   }
 
   renderInterpreter(
-    trace: MTrace<Range>,
+    trace: MTrace<CharRange>,
     config?: InterpreterConfig,
     annotations?: InterpAnnotations
   ) {

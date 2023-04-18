@@ -3,11 +3,8 @@
 mod context;
 pub(crate) mod flow;
 // pub(crate) mod flow_datalog;
-#[allow(clippy::all, clippy::pedantic)]
-mod graphviz;
 mod output;
-#[allow(clippy::all, clippy::pedantic)]
-pub(crate) mod places_conflict;
+
 pub mod utils;
 
 use std::ops::{Deref, DerefMut};
@@ -19,13 +16,11 @@ use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::RustcFacts;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_middle::mir::Place;
+use rustc_utils::source_map::range::CharRange;
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::{
-  analysis::{LoanKey, MoveKey},
-  Range,
-};
+use crate::analysis::{LoanKey, MoveKey};
 
 fluid_let!(pub static ENABLE_FLOW_PERMISSIONS: bool);
 pub const ENABLE_FLOW_DEFAULT: bool = false;
@@ -135,7 +130,7 @@ pub enum Refiner {
 #[ts(export)]
 pub struct RefinementRegion {
   pub refiner_point: Refiner,
-  pub refined_ranges: Vec<Range>,
+  pub refined_ranges: Vec<CharRange>,
 }
 
 /// Permissions data *forall* places in the body under analysis.

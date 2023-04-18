@@ -7,13 +7,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 67
-            filename: 0
+            start: 0
+            end: 67
+            filename:
+              private: 0
           location:
-            char_start: 14
-            char_end: 53
-            filename: 0
+            start: 14
+            end: 53
+            filename:
+              private: 0
           locals:
             - - x
               - type: Tuple
@@ -95,13 +97,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 67
-            filename: 0
+            start: 0
+            end: 67
+            filename:
+              private: 0
           location:
-            char_start: 56
-            char_end: 65
-            filename: 0
+            start: 56
+            end: 65
+            filename:
+              private: 0
           locals:
             - - x
               - type: Tuple
@@ -183,13 +187,15 @@ steps:
       frames:
         - name: main
           body_span:
-            char_start: 0
-            char_end: 67
-            filename: 0
+            start: 0
+            end: 67
+            filename:
+              private: 0
           location:
-            char_start: 66
-            char_end: 67
-            filename: 0
+            start: 66
+            end: 67
+            filename:
+              private: 0
           locals: []
     heap:
       locations: []

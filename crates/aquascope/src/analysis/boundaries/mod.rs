@@ -13,7 +13,10 @@ use rustc_middle::{
   ty::{adjustment::AutoBorrowMutability, TyCtxt},
 };
 use rustc_span::Span;
-use rustc_utils::{OperandExt, SpanExt};
+use rustc_utils::{
+  source_map::range::{BytePos, ByteRange, CharPos, CharRange},
+  OperandExt, PlaceExt, SpanExt,
+};
 use serde::Serialize;
 use smallvec::{smallvec, SmallVec};
 use ts_rs::TS;
@@ -28,8 +31,6 @@ use crate::{
     AquascopeAnalysis,
   },
   errors,
-  mir::utils::PlaceExt,
-  Range,
 };
 
 /// A point where a region flow is introduced, potentially resulting in a violation.
@@ -39,7 +40,7 @@ pub struct FlowBoundary {
   // Used for simplicity in the frontend, later the extra information
   // in the flow kind can be shown with extra details.
   is_violation: bool,
-  flow_context: Range,
+  flow_context: CharRange,
   kind: FlowEdgeKind,
 }
 
@@ -47,7 +48,9 @@ pub struct FlowBoundary {
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsBoundary {
-  pub location: usize,
+  pub location: CharPos,
+  #[serde(skip)]
+  byte_location: BytePos,
   pub expected: Permissions,
   pub actual: PermissionsData,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -510,10 +513,14 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
       // FIXME(gavinleroy): the spans are chosen in the `path_visitor` such that the end
       // of the span is where we want the stack to be placed. I would like to
       // make this a bit more explicit.
-      let location = analysis.span_to_range(span).char_end;
+      let location = analysis.span_to_range(span).end;
+      let byte_location = ByteRange::from_span(span, tcx.sess.source_map())
+        .unwrap()
+        .end;
 
       PermissionsBoundary {
         location,
+        byte_location,
         expected: expected.into(),
         actual,
         expecting_flow,
@@ -550,7 +557,12 @@ pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
   let boundaries = path_use_points
     .filter(|pb| {
       first_error_span_opt.map_or(true, |error_span| {
-        pb.expecting_flow.is_some() || (pb.location as u32) <= error_span.hi().0
+        pb.expecting_flow.is_some() || {
+          let error_range =
+            ByteRange::from_span(error_span, ctxt.tcx.sess.source_map())
+              .unwrap();
+          pb.byte_location <= error_range.end
+        }
       })
     })
     .collect::<Vec<_>>();

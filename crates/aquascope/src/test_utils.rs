@@ -16,8 +16,7 @@ use rustc_span::source_map::FileLoader;
 use rustc_utils::{
   mir::borrowck_facts,
   source_map::{
-    filename::FilenameIndex,
-    range::{self, ToSpan},
+    range::{self, CharRange, ToSpan},
     spanner::{LocationOrArg, Spanner},
   },
   test_utils::{DUMMY_FILE, DUMMY_FILE_NAME},
@@ -367,12 +366,7 @@ pub fn test_steps_in_file(
         let normalized = body_steps
           .into_iter()
           .map(|pss| {
-            let char_range = range::CharRange {
-              start: range::CharPos(pss.location.char_start),
-              end: range::CharPos(pss.location.char_end),
-              filename: FilenameIndex::from_usize(pss.location.filename),
-            };
-            let span = char_range.to_span(ctxt.permissions.tcx).unwrap();
+            let span = pss.location.to_span(ctxt.permissions.tcx).unwrap();
             let source_map = tcx.sess.source_map();
             let line_num = source_map.lookup_line(span.hi()).unwrap().line;
             // FIXME: we shouldn't flatten the tables together, this was only a
@@ -398,7 +392,7 @@ pub fn test_steps_in_file(
 
 pub fn test_interpreter_in_file(
   path: &Path,
-  run_insta: impl Fn(String, MTrace<crate::Range>) + Sync,
+  run_insta: impl Fn(String, MTrace<CharRange>) + Sync,
 ) {
   let main = || -> Result<()> {
     let (input, _) = load_test_from_file(path)?;

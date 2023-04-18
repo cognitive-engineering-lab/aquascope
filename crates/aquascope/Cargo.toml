@@ -15,7 +15,7 @@ publish = false
 rustc_private = true
 
 [features]
-testing = ["lazy_static", "insta", "rustc-utils/test"]
+testing = ["lazy_static", "insta"]
 
 [dependencies]
 anyhow = "1.0.0"
@@ -36,7 +36,8 @@ insta = { version = "1.22.0", features = ["json", "yaml", "redactions"], optiona
 
 [dependencies.rustc-utils]
 git = "https://github.com/cognitive-engineering-lab/rustc-plugin"
-tag = "nightly-2023-04-12-v0.1.2"
+tag = "nightly-2023-04-12-v0.1.4"
+features = ["graphviz", "ts-rs", "serde", "test"]
 
 [dev-dependencies]
 aquascope = { path = ".", features = ["testing"] }
