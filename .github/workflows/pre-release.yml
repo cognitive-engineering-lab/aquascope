@@ -1,7 +1,9 @@
 name: pre-release
 
 on:
-  pull_request_target:
+  workflow_run:
+    types: [requested]
+  pull_request:
     branches: [main]
     types: [labeled]
 
