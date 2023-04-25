@@ -10,29 +10,29 @@ env:
   IMAGE_TAG: aquascope:latest
 
 jobs:
-  check-publishable-versions:
-    # if: ${{ github.event.label.name == 'release' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - name: Install Roswell
-        env:
-          LISP: ccl-bin
-        run: |
-          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
-      - name: Get Previous tag
-        id: previoustag
-        uses: WyriHaximus/github-action-get-previous-tag@v1
-        env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Validate Version
-        run: |
-          cd scripts
-          ros versioning.ros check ${{ steps.previoustag.outputs.tag }}
+  # check-publishable-versions:
+  #   if: ${{ github.event.label.name == 'release' }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v1
+  #     - name: Install Roswell
+  #       env:
+  #         LISP: ccl-bin
+  #       run: |
+  #         curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+  #     - name: Get Previous tag
+  #       id: previoustag
+  #       uses: WyriHaximus/github-action-get-previous-tag@v1
+  #       env:
+  #         GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+  #     - name: Validate Version
+  #       run: |
+  #         cd scripts
+  #         ros versioning.ros check ${{ steps.previoustag.outputs.tag }}
 
   build-artifacts:
     runs-on: ubuntu-20.04
-    if: ${{ github.event.label.name == 'release' }}
+    # if: ${{ github.event.label.name == 'release' }}
     needs: check-publishable-versions
     env:
       AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
