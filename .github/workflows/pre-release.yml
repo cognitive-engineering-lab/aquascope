@@ -11,7 +11,7 @@ env:
 
 jobs:
   check-publishable-versions:
-    if: ${{ github.event.label.name == 'release' }}
+    # if: ${{ github.event.label.name == 'release' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
@@ -33,6 +33,7 @@ jobs:
   build-artifacts:
     runs-on: ubuntu-20.04
     if: ${{ github.event.label.name == 'release' }}
+    needs: check-publishable-versions
     env:
       AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
     steps:
