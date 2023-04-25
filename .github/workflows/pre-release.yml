@@ -1,0 +1,122 @@
+name: pre-release
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [labeled]
+
+env:
+  IMAGE_TAG: aquascope:latest
+
+jobs:
+  check-publishable-versions:
+    if: ${{ github.event.label.name == 'release' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install Roswell
+        env:
+          LISP: ccl-bin
+        run: |
+          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+      - name: Get Previous tag
+        id: previoustag
+        uses: WyriHaximus/github-action-get-previous-tag@v1
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Validate Version
+        run: |
+          cd scripts
+          ros versioning.ros check ${{ steps.previoustag.outputs.tag }}
+
+  build-artifacts:
+    runs-on: ubuntu-20.04
+    if: ${{ github.event.label.name == 'release' }}
+    env:
+      AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Quick Setup
+        uses: ./.github/workflows/quick-setup
+      - name: Build frontend and docs
+        run: |
+          cargo doc --lib
+          cd frontend
+          graco build
+          mv ../target/doc packages/aquascope-standalone/dist/doc
+      - name: Build and save docker image
+        run: |
+          docker build --tag "${IMAGE_TAG}" .
+          docker save --output image.tar "${IMAGE_TAG}"
+      - name: Build Aquascope serve
+        run: cargo build -p aquascope_serve --locked --release
+      - name: Upload standalone and docs
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: ./frontend/packages/aquascope-standalone/dist
+      - name: Upload server artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: server-artifacts
+          path: |
+            ./image.tar
+            ./crates/aquascope_serve/target/release/aquascope_serve
+
+  publish-standalone-and-docs:
+    needs: build-artifacts
+    runs-on: ubuntu-20.04
+    if: ${{ github.event.label.name == 'release' }}
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: dist
+      - uses: JamesIves/github-pages-deploy-action@v4.3.0
+        with:
+          branch: gh-pages
+          folder: ./dist
+          clean: true
+          clean-exclude: dev
+
+  publish-crate:
+    needs: publish-standalone-and-docs
+    runs-on: ubuntu-20.04
+    if: ${{ github.event.label.name == 'release' }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-workspaces
+          version: latest
+          use-tool-cache: true
+      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Quick Setup
+        uses: ./.github/workflows/quick-setup
+      - uses: actions-rs/cargo@v1
+        with:
+          command: ws
+          args: publish --from-git --yes
+
+  update-server:
+    needs: build-artifacts
+    runs-on: ubuntu-20.04
+    if: ${{ github.event.label.name == 'release' }}
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+    - uses: actions/checkout@v3
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
+    - name: Restart server
+      uses: google-github-actions/ssh-compute@v0.3
+      with:
+        project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
+        instance_name: aquascope
+        ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
+        ssh_username: gh-actions
+        command: 'export GITHUB_TOKEN=$GITHUB_TOKEN && ./aquascope/deploy/update.sh'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,8 @@
+[Unit]
+Description=Aquascope Playground
+
+[Service]
+Environment=RUST_LOG=warn
+WorkingDirectory=/home/gh-actions/artifacts
+User=gh-actions
+ExecStart=/home/gh-actions/artifacts/aquascope_serve

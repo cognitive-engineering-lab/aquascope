@@ -1,61 +1,21 @@
 name: release
 
 on:
-  push:
-    tags:
-      - "v*"
+  pull_request_target:
+    branches: [main]
+    types: [labeled,closed]
 
 jobs:
-  test:
-    runs-on: ubuntu-20.04
-    env:
-      AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
+  tag:
+    runs-on: ubuntu-latest
+    if: |
+      ${{ github.event.label.name == 'release' }}
+      ${{ github.event.pull_request.merged == true }}
     steps:
-      - uses: actions/checkout@v2
-      - name: Setup
-        uses: ./.github/workflows/setup
-      - name: Standalone connect
-        run: |
-          cd frontend
-          graco prepare
-          cd packages/aquascope-standalone/dist
-          python3 -m http.server 8000 &
-          cd ../../../
-          graco test
-
-  publish-standalone-and-docs:
-    needs: test
-    runs-on: ubuntu-20.04
-    env:
-      AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
-    steps:
-      - uses: actions/checkout@v2
-      - name: Quick Setup
-        uses: ./.github/workflows/quick-setup
-      - run: cargo doc --lib
-      - run: cd frontend && graco build
-      - run: mv ./target/doc ./frontend/packages/aquascope-standalone/dist/doc
-      - uses: JamesIves/github-pages-deploy-action@v4.3.0
-        with:
-          branch: gh-pages
-          folder: ./frontend/packages/aquascope-standalone/dist
-          clean: true
-          clean-exclude: dev
-
-  publish-crate:
-    needs: publish-standalone-and-docs
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-workspaces
-          version: latest
-          use-tool-cache: true
-      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
-      - name: Quick Setup
-        uses: ./.github/workflows/quick-setup
-      - uses: actions-rs/cargo@v1
-        with:
-          command: ws
-          args: publish --from-git --yes
+    - uses: actions/checkout@v3
+    - uses: christophebedard/tag-version-commit@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        version_regex: 'v([0-9]+\.[0-9]+\.[0-9]+)'
+        version_tag_prefix: 'v'
+        dry_run: true
