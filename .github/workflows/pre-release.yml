@@ -3,9 +3,17 @@ name: pre-release
 on:
   workflow_run:
     types: [requested]
+  push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "v*"
   pull_request:
-    branches: [main]
-    types: [labeled]
+    branches:
+      - "main"
+    types:
+      - opened
+      - labeled
 
 env:
   IMAGE_TAG: aquascope:latest
