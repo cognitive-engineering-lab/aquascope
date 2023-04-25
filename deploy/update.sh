@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/bin/bash
 
 set -euv -o pipefail
 
@@ -35,6 +35,7 @@ curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
 # Extract the artifacts
 unzip artifacts.zip -d $artifact_dir
 docker load $artifact_dir/image.tar
+
 chmod +x "${binary_path}"
 
 # Restart to get new server binary

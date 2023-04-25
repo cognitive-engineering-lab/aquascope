@@ -74,31 +74,14 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: dist
+      - name: Display structure of downloaded files
+        run: ls -R
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:
           branch: gh-pages
-          folder: ./dist
+          folder: ./aquascope/dist
           clean: true
           clean-exclude: dev
-
-  publish-crate:
-    if: contains(github.event.pull_request.labels.*.name, 'release')
-    needs: publish-standalone-and-docs
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-workspaces
-          version: latest
-          use-tool-cache: true
-      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
-      - name: Quick Setup
-        uses: ./.github/workflows/quick-setup
-      - uses: actions-rs/cargo@v1
-        with:
-          command: ws
-          args: publish --from-git --yes
 
   update-server:
     if: contains(github.event.pull_request.labels.*.name, 'release')
@@ -114,7 +97,7 @@ jobs:
       with:
         credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
     - name: Restart server
-      uses: google-github-actions/ssh-compute@v0.3
+      uses: google-github-actions/ssh-compute@v0
       with:
         project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
         instance_name: aquascope
@@ -123,3 +106,22 @@ jobs:
         command: 'export GITHUB_TOKEN=$GITHUB_TOKEN && ./aquascope/deploy/update.sh'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-crate:
+    if: contains(github.event.pull_request.labels.*.name, 'release')
+    needs: [publish-standalone-and-docs,update-server]
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-workspaces
+          version: latest
+          use-tool-cache: true
+      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Quick Setup
+        uses: ./.github/workflows/quick-setup
+      - uses: actions-rs/cargo@v1
+        with:
+          command: ws
+          args: publish --from-git --yes
