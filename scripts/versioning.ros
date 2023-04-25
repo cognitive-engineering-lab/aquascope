@@ -5,7 +5,7 @@ exec ros -Q -- $0 "$@"
 |#
 (progn ;;init forms
   (ros:ensure-asdf)
-  #+quicklisp(ql:quickload '("cl-toml" "alexandria") :silent t)
+  #+quicklisp(ql:quickload '("cl-toml") :silent t)
   )
 
 (defpackage :ros.script.versioning.3891266390
@@ -18,6 +18,8 @@ exec ros -Q -- $0 "$@"
 (defparameter *tomls* #P"../crates/**/Cargo.toml")
 (defparameter *no-publish-version*
   (make-semver :major 0 :minor 0 :patch 1))
+(defparameter *file-warning*
+  "# This file is automatically managed by scripts/versioning.ros")
 
 (defmethod semver-lt ((lhs semver) (rhs semver))
   (or (< (semver-major lhs) (semver-major rhs))
@@ -93,7 +95,10 @@ exec ros -Q -- $0 "$@"
                (if (toml-published? toml)
                    sv
                    *no-publish-version*)))
-        (alexandria:write-string-into-file (cl-toml:encode toml) fn)))))
+        (with-open-file (fout fn :direction :output
+                                 :if-exists :supersede)
+          (write-line *file-warning* fout)
+          (cl-toml:encode toml fout))))))
 
 (defun main (mode &rest argv)
   (handler-case (cond ((string-equal mode "check") (assert-update (car argv)))
