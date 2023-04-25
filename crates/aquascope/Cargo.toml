@@ -1,6 +1,6 @@
 [package]
 name = "aquascope"
-version = "0.0.1"
+version = "0.1.0"
 license = "MIT"
 edition = "2021"
 authors = [
@@ -28,7 +28,7 @@ fluid-let = "1.0"
 
 # interpret module
 miri = {git = "https://github.com/rust-lang/miri.git", rev = "35d6927663065d7fdeeaed45dda7e7748fc9f222"}
-aquascope_workspace_utils = { version = "0.1", path = "../aquascope_workspace_utils" }
+aquascope_workspace_utils = { version = "0.2", path = "../aquascope_workspace_utils" }
 
 # testing
 lazy_static = { version = "1.4", optional = true }

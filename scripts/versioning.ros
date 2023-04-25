@@ -17,7 +17,7 @@ exec ros -Q -- $0 "$@"
 
 (defparameter *tomls* #P"../crates/**/Cargo.toml")
 (defparameter *no-publish-version*
-  (make-semver :major 0 :minor 0 :patch 1))
+  (make-semver :major 0 :minor 1 :patch 0))
 (defparameter *file-warning*
   "# This file is automatically managed by scripts/versioning.ros")
 
