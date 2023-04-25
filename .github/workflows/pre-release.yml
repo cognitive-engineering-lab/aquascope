@@ -11,7 +11,7 @@ env:
 
 jobs:
   check-publishable-versions:
-    if: ${{ github.event.label.name == 'release' }}
+    # if: ${{ github.event.label.name == 'release' }}
     runs-on: ubuntu-latest
     steps:
       - run: echo Skipping silently
