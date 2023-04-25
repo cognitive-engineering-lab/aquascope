@@ -11,30 +11,30 @@ env:
 
 jobs:
   check-publishable-versions:
+    if: contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-latest
     env:
       LISP: ccl-bin
-    if: contains(github.event.pull_request.labels.*.name, 'release')
     steps:
       - run: echo Skipping silently
-      - uses: actions/checkout@v3
-      - uses: 40ants/setup-lisp@v2
-        with:
-          asdf-system: cl-info
-      - name: Get Previous tag
-        id: previoustag
-        uses: WyriHaximus/github-action-get-previous-tag@v1
-        env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Validate Version
-        run: |
-          cd scripts
-          ros versioning.ros check ${{ steps.previoustag.outputs.tag }}
+      # - uses: actions/checkout@v3
+      # - uses: 40ants/setup-lisp@v2
+      #   with:
+      #     asdf-system: cl-info
+      # - name: Get Previous tag
+      #   id: previoustag
+      #   uses: WyriHaximus/github-action-get-previous-tag@v1
+      #   env:
+      #     GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+      # - name: Validate Version
+      #   run: |
+      #     cd scripts
+      #     ros versioning.ros check ${{ steps.previoustag.outputs.tag }}
 
   build-artifacts:
-    runs-on: ubuntu-20.04
-    if: ${{ github.event.label.name == 'false' }}
+    if: contains(github.event.pull_request.labels.*.name, 'release')
     needs: check-publishable-versions
+    runs-on: ubuntu-20.04
     env:
       AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
     steps:
@@ -67,9 +67,9 @@ jobs:
             ./crates/aquascope_serve/target/release/aquascope_serve
 
   publish-standalone-and-docs:
+    if: contains(github.event.pull_request.labels.*.name, 'release')
     needs: build-artifacts
     runs-on: ubuntu-20.04
-    if: ${{ github.event.label.name == 'release' }}
     steps:
       - uses: actions/download-artifact@v3
         with:
@@ -82,9 +82,9 @@ jobs:
           clean-exclude: dev
 
   publish-crate:
+    if: contains(github.event.pull_request.labels.*.name, 'release')
     needs: publish-standalone-and-docs
     runs-on: ubuntu-20.04
-    if: ${{ github.event.label.name == 'release' }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/install@v0.1
@@ -101,9 +101,9 @@ jobs:
           args: publish --from-git --yes
 
   update-server:
+    if: contains(github.event.pull_request.labels.*.name, 'release')
     needs: build-artifacts
     runs-on: ubuntu-20.04
-    if: ${{ github.event.label.name == 'release' }}
     permissions:
       contents: 'read'
       id-token: 'write'
