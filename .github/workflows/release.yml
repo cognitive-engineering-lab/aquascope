@@ -8,8 +8,8 @@ on:
 jobs:
   tag:
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.pull_request.labels.*.name, 'release')
+    if: >
+      contains(github.event.pull_request.labels.*.name, 'release') &&
       ${{ github.event.pull_request.merged == true }}
     steps:
     - uses: actions/checkout@v3
@@ -18,4 +18,3 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         version_regex: 'v([0-9]+\.[0-9]+\.[0-9]+)'
         version_tag_prefix: 'v'
-        dry_run: true

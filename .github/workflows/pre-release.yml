@@ -73,6 +73,7 @@ jobs:
     needs: build-artifacts
     runs-on: ubuntu-20.04
     steps:
+      - uses: actions/checkout@v3
       - uses: actions/download-artifact@v3
         with:
           name: dist
@@ -94,21 +95,21 @@ jobs:
       contents: 'read'
       id-token: 'write'
     steps:
-    - uses: actions/checkout@v3
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v1
-      with:
-        credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
-    - name: Restart server
-      uses: google-github-actions/ssh-compute@v0
-      with:
-        project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
-        instance_name: aquascope
-        ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-        ssh_username: gh-actions
-        command: 'export GITHUB_TOKEN=$GITHUB_TOKEN && ./aquascope/deploy/update.sh'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+      - name: Restart server
+        uses: google-github-actions/ssh-compute@v0
+        with:
+          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
+          instance_name: aquascope
+          ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
+          ssh_username: gh-actions
+          command: 'export GITHUB_TOKEN=$GITHUB_TOKEN && ./aquascope/deploy/update.sh'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-crate:
     if: contains(github.event.pull_request.labels.*.name, 'release')
