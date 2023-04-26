@@ -58,6 +58,7 @@ jobs:
         with:
           name: dist
           path: ./frontend/packages/aquascope-standalone/dist
+          retention-days: 5
       - name: Upload server artifacts
         uses: actions/upload-artifact@v2
         with:
@@ -65,6 +66,7 @@ jobs:
           path: |
             ./image.tar
             ./crates/aquascope_serve/target/release/aquascope_serve
+          retention-days: 5
 
   publish-standalone-and-docs:
     if: contains(github.event.pull_request.labels.*.name, 'release')
@@ -74,12 +76,13 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: dist
+          path: ./dist
       - name: Display structure of downloaded files
         run: ls -R
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:
           branch: gh-pages
-          folder: ./aquascope/dist
+          folder: ./dist
           clean: true
           clean-exclude: dev
 
@@ -95,7 +98,7 @@ jobs:
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v1
       with:
-        credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
+        credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
     - name: Restart server
       uses: google-github-actions/ssh-compute@v0
       with:

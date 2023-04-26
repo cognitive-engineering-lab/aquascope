@@ -1,7 +1,7 @@
 name: release
 
 on:
-  pull_request_target:
+  pull_request:
     branches: [main]
     types: [labeled,closed]
 
@@ -9,7 +9,7 @@ jobs:
   tag:
     runs-on: ubuntu-latest
     if: |
-      ${{ github.event.label.name == 'release' }}
+      contains(github.event.pull_request.labels.*.name, 'release')
       ${{ github.event.pull_request.merged == true }}
     steps:
     - uses: actions/checkout@v3
