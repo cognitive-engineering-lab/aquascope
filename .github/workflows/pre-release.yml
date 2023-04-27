@@ -10,30 +10,8 @@ env:
   IMAGE_TAG: aquascope:latest
 
 jobs:
-  test-tunnel-auth:
-    if: contains(github.event.pull_request.labels.*.name, 'release')
-    runs-on: ubuntu-20.04
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    steps:
-      - uses: actions/checkout@v3
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
-      - name: Restart server
-        uses: google-github-actions/ssh-compute@v0
-        with:
-          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
-          instance_name: aquascope
-          zone: 'us-central1-a'
-          ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          command: 'echo Hello GCLOUD > secret.txt'
-
   check-publishable-versions:
-    # if: contains(github.event.pull_request.labels.*.name, 'release')
-    if: ${{ false }}
+    if: contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-latest
     env:
       LISP: ccl-bin
