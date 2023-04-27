@@ -29,8 +29,7 @@ jobs:
           bash generated.sh
 
   check-publishable-versions:
-    # if: contains(github.event.pull_request.labels.*.name, 'release')
-    if: ${{ false }}
+    if: contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-latest
     env:
       LISP: ccl-bin
