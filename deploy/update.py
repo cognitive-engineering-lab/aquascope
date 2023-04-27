@@ -27,20 +27,23 @@ if [[ -f "${{binary_path}}" ]]; then
 fi
 
 # Get the latest workflow run ID
-run_id=$(curl -L \
+run_resp=$(curl -L \
     -H "Authorization: Bearer {TK}" \
-    https://api.github.com/repos/$owner/$repo/actions/workflows/pre-release.yml/runs?status=success&branch=main&event=pull_request \
-    | jq -r '.workflow_runs[0].id')
+    https://api.github.com/repos/$owner/$repo/actions/workflows/pre-release.yml/runs?status=success&branch=main&event=pull_request)
+
+echo Run resp is $run_resp
+
+run_id=$(jq -r '.workflow_runs[0].id' $run_resp)
 
 echo Run id is $run_id
 
 # Download the artifacts for the latest workflow run
 curl -L \
     -H "Authorization: Bearer {TK}" \
-    https://api.github.com/repos/$owner/$repo/actions/runs/$run_id/artifacts \
-    | jq -r '.artifacts[] | select(.name == "server-artifacts") \
-    | .archive_download_url' \
-    | xargs curl -L -H "Authorization: Bearer {TK}" -o artifacts.zip {{}}
+    https://api.github.com/repos/$owner/$repo/actions/runs/$run_id/artifacts | \
+    jq -r '.artifacts[] | select(.name == "server-artifacts") | \
+    .archive_download_url' | \
+    xargs curl -L -H "Authorization: Bearer {TK}" -o artifacts.zip {{}}
 
 echo SUCCESS
     ''')
