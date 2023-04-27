@@ -31,13 +31,13 @@ curl -L \
         -H "Authorization: Bearer {TK}" \
         https://api.github.com/repos/$owner/$repo/actions/workflows/pre-release.yml/runs?status=success&branch=main&event=pull_request | \
     jq -r '.workflow_runs[0].id' |
-    xargs curl -L \
+    xargs -I ID curl -L \
         -H "Authorization: Bearer {TK}" \
-        https://api.github.com/repos/$owner/$repo/actions/runs/{{}}/artifacts | \
+        https://api.github.com/repos/$owner/$repo/actions/runs/ID/artifacts | \
     jq -r '.artifacts[] | \
     select(.name == "server-artifacts") | \
     .archive_download_url' | \
-    xargs curl -L -H "Authorization: Bearer {TK}" -o artifacts.zip {{}}
+    xargs curl -L -H "Authorization: Bearer {TK}" -o artifacts.zip
 
 ls -R
 echo SUCCESS
