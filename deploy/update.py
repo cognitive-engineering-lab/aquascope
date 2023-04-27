@@ -32,14 +32,15 @@ curl -L \
     jq -r '.workflow_runs[0].id' | \
     xargs -I ID curl -L \
         -H "Authorization: Bearer {TK}" \
-        https://api.github.com/repos/$OWNER/$REPO/actions/runs/ID/artifacts
+        https://api.github.com/repos/$OWNER/$REPO/actions/runs/ID/artifacts > \
+    response.txt
     # | \
-    # jq -r '.artifacts[] | \
-    # select(.name == "server-artifacts") | \
-    # .archive_download_url' | \
+    # jq -r '.artifacts[] | select(.name == "server-artifacts") | .archive_download_url' | \
     # xargs -I URL curl -L \
     #     -H "Authorization: Bearer {TK}" \
     #     URL -o artifacts.zip
+
+cat response.txt
 
 ls -R
 echo SUCCESS
