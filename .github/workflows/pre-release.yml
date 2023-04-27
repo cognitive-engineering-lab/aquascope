@@ -12,7 +12,6 @@ env:
 jobs:
   test-tunnel-auth:
     if: contains(github.event.pull_request.labels.*.name, 'release')
-    needs: build-artifacts
     runs-on: ubuntu-20.04
     permissions:
       contents: 'read'
