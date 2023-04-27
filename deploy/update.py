@@ -42,7 +42,6 @@ curl -L \
 
 cat response.txt
 
-ls -R
 echo SUCCESS
     ''')
 
