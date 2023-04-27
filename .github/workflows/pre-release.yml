@@ -27,9 +27,9 @@ jobs:
         with:
           project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
           instance_name: aquascope
+          zone: 'us-central1-a'
           ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
           command: 'echo Hello GCLOUD > secret.txt'
-
 
   check-publishable-versions:
     # if: contains(github.event.pull_request.labels.*.name, 'release')
@@ -131,6 +131,7 @@ jobs:
       - name: Restart server
         uses: google-github-actions/ssh-compute@v0
         with:
+          zone: 'us-central1-a'
           project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
           instance_name: aquascope
           ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
