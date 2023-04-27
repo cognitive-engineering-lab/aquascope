@@ -28,9 +28,8 @@ jobs:
           zone: 'us-central1-a'
           instance_name: aquascope
           ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          command: 'export TOKEN=$TOKEN && ./aquascope/deploy/test.sh'
-        env:
-          TOKEN: "actions-token"
+          script: './aquascope/deploy/test.sh'
+          ssh_args: 'LC_TOKEN="hello-remote"'
 
   check-publishable-versions:
     # if: contains(github.event.pull_request.labels.*.name, 'release')
