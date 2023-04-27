@@ -30,7 +30,7 @@ fi
 curl -L \
         -H "Authorization: Bearer {TK}" \
         https://api.github.com/repos/$owner/$repo/actions/workflows/pre-release.yml/runs?status=success&branch=main&event=pull_request | \
-    jq -r '.workflow_runs[0].id' |
+    jq -r '.workflow_runs[0].id' | \
     xargs -I ID curl -L \
         -H "Authorization: Bearer {TK}" \
         https://api.github.com/repos/$owner/$repo/actions/runs/ID/artifacts | \
