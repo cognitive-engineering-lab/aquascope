@@ -37,7 +37,9 @@ curl -L \
     jq -r '.artifacts[] | \
     select(.name == "server-artifacts") | \
     .archive_download_url' | \
-    xargs curl -L -H "Authorization: Bearer {TK}" -o artifacts.zip
+    xargs -I URL curl -L \
+        -H "Authorization: Bearer {TK}" \
+        URL -o artifacts.zip
 
 ls -R
 echo SUCCESS
