@@ -10,24 +10,6 @@ env:
   IMAGE_TAG: aquascope:latest
 
 jobs:
-  test-gcloud-connection:
-    runs-on: ubuntu-20.04
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    steps:
-      - uses: actions/checkout@v3
-      - name: Gen script
-        env:
-          NAME: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd deploy
-          python3 update.py
-      - name: Test script
-        run: |
-          cd deploy
-          bash generated.sh
-
   check-publishable-versions:
     if: contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-latest
@@ -114,6 +96,12 @@ jobs:
       id-token: 'write'
     steps:
       - uses: actions/checkout@v3
+      - name: Gen script
+        env:
+          NAME: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd deploy
+          python3 update.py
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
@@ -124,9 +112,7 @@ jobs:
           project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
           instance_name: aquascope
           ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          command: 'export GITHUB_TOKEN=$GITHUB_TOKEN && ./aquascope/deploy/update.sh'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          script: './deploy/generated.sh'
 
   publish-crate:
     if: contains(github.event.pull_request.labels.*.name, 'release')
