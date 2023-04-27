@@ -17,24 +17,16 @@ jobs:
       id-token: 'write'
     steps:
       - uses: actions/checkout@v3
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
       - name: Gen script
         env:
-          NAME: test
+          NAME: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd deploy
           python3 update.py
-      - name: Restart server
-        uses: google-github-actions/ssh-compute@v0
-        with:
-          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
-          zone: 'us-central1-a'
-          instance_name: aquascope
-          ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          script: './deploy/generated.sh'
+      - name: Test script
+        run: |
+          cd deploy
+          bash generated.sh
 
   check-publishable-versions:
     # if: contains(github.event.pull_request.labels.*.name, 'release')

@@ -8,9 +8,36 @@ with open('generated.sh', 'w') as fout:
     fout.write(f'''
 #!/bin/bash
 
-cd /home/$USER
+set -euv -o pipefail
 
-echo {TK} > secrets.txt
+root=/home/$USER
+artifact_dir=$root/artifacts
+binary_path=$artifact_dir/aquascope_serve
+
+owner="cognitive-engineering-lab"
+repo="aquascope"
+
+# Do all work from home directory
+cd $root
+
+# Get the binary's hash so we know if it has changed
+previous_binary_hash=""
+if [[ -f "${{binary_path}}" ]]; then
+    previous_binary_hash=$(md5sum "${{binary_path}}")
+fi
+
+# Get the latest workflow run ID
+run_id=$(curl -s -H "Authorization: Bearer {TK}" \
+  "https://api.github.com/repos/$owner/$repo/actions/workflows/workflow.yml/runs?status=success&branch=main&event=pull_request" \
+  | jq -r '.workflow_runs[0].id')
+
+# Download the artifacts for the latest workflow run
+curl -s -H "Authorization: Bearer {TK}" \
+  "https://api.github.com/repos/$owner/$repo/actions/runs/$run_id/artifacts" \
+  | jq -r '.artifacts[] | select(.name == "server-artifacts") | .archive_download_url' \
+  | xargs curl -sL -o artifacts.zip
+
+echo SUCCESS
     ''')
 
 #     fout.write(f'''
@@ -18,7 +45,7 @@ echo {TK} > secrets.txt
 
 # set -euv -o pipefail
 
-# root=/home/gh-actions
+# root=/home/$USER
 # artifact_dir=$root/artifacts
 # binary_path=$artifact_dir/aquascope_serve
 
