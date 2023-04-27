@@ -27,13 +27,10 @@ if [[ -f "${{binary_path}}" ]]; then
 fi
 
 # Get the latest workflow run ID
-run_resp=$(curl -L \
+run_id=$(curl -L \
     -H "Authorization: Bearer {TK}" \
-    https://api.github.com/repos/$owner/$repo/actions/workflows/pre-release.yml/runs?status=success&branch=main&event=pull_request)
-
-echo Run resp is $run_resp
-
-run_id=$(jq -r '.workflow_runs[0].id' $run_resp)
+    https://api.github.com/repos/$owner/$repo/actions/workflows/pre-release.yml/runs?status=success&branch=main&event=pull_request | \
+    jq -r '.workflow_runs[0].id')
 
 echo Run id is $run_id
 
