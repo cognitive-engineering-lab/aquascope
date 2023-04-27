@@ -30,6 +30,7 @@ fi
 run_id=$(curl -L \
     -H "Authorization: Bearer {TK}" \
     https://api.github.com/repos/$owner/$repo/actions/workflows/pre-release.yml/runs?status=success&branch=main&event=pull_request | \
+    jq -r '.workflow_runs[0].id' | \
     jq -r '.workflow_runs[0].id')
 
 echo Run id is $run_id
