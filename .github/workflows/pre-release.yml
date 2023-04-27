@@ -10,8 +10,31 @@ env:
   IMAGE_TAG: aquascope:latest
 
 jobs:
+  test-gcloud-connection:
+    runs-on: ubuntu-20.04
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+      - name: Restart server
+        uses: google-github-actions/ssh-compute@v0
+        with:
+          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
+          zone: 'us-central1-a'
+          instance_name: aquascope
+          ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
+          command: 'export TOKEN=$TOKEN && ./aquascope/deploy/test.sh'
+        env:
+          TOKEN: "actions-token"
+
   check-publishable-versions:
-    if: contains(github.event.pull_request.labels.*.name, 'release')
+    # if: contains(github.event.pull_request.labels.*.name, 'release')
+    if: ${{ false }}
     runs-on: ubuntu-latest
     env:
       LISP: ccl-bin
@@ -65,7 +88,7 @@ jobs:
           name: server-artifacts
           path: |
             ./image.tar
-            ./crates/aquascope_serve/target/release/aquascope_serve
+            ./target/release/aquascope_serve
           retention-days: 5
 
   publish-standalone-and-docs:
