@@ -31,7 +31,7 @@ jobs:
       #     cd scripts
       #     ros versioning.ros check ${{ steps.previoustag.outputs.tag }}
 
-  build-artifacts:
+  build-artifacts-and-restart:
     if: contains(github.event.pull_request.labels.*.name, 'release')
     needs: check-publishable-versions
     runs-on: ubuntu-20.04
@@ -39,6 +39,14 @@ jobs:
       AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
     steps:
       - uses: actions/checkout@v3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          version: '>= 412.0.0'
       - name: Quick Setup
         uses: ./.github/workflows/quick-setup
       - name: Build frontend and docs
@@ -53,59 +61,16 @@ jobs:
           docker save --output image.tar "${IMAGE_TAG}"
       - name: Build Aquascope serve
         run: cargo build -p aquascope_serve --locked --release
-      - name: Upload standalone and docs
-        uses: actions/upload-artifact@v2
-        with:
-          name: dist
-          path: ./frontend/packages/aquascope-standalone/dist
-          retention-days: 5
-      - name: Upload server artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: server-artifacts
-          path: |
-            ./image.tar
-            ./target/release/aquascope_serve
-          retention-days: 5
-
-  publish-standalone-and-docs:
-    if: contains(github.event.pull_request.labels.*.name, 'release')
-    needs: build-artifacts
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/download-artifact@v3
-        with:
-          name: dist
-          path: ./dist
-      - name: Display structure of downloaded files
-        run: ls -R
+      - name: Upload artifacts
+        run: |
+          gcloud compute scp --zone=us-central1-a image.tar gh-actions@aquascope:~/
+          gcloud compute scp --zone=us-central1-a ./target/release/aquascope_serve gh-actions@aquascope:~/
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:
           branch: gh-pages
-          folder: ./dist
+          folder: ./frontend/packages/aquascope-standalone/dist
           clean: true
           clean-exclude: dev
-
-  update-server:
-    if: contains(github.event.pull_request.labels.*.name, 'release')
-    needs: build-artifacts
-    runs-on: ubuntu-20.04
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    steps:
-      - uses: actions/checkout@v3
-      - name: Gen script
-        env:
-          NAME: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd deploy
-          python3 update.py
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
       - name: Restart server
         uses: google-github-actions/ssh-compute@v0
         with:
@@ -113,11 +78,11 @@ jobs:
           project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
           instance_name: aquascope
           ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          script: './deploy/generated.sh'
+          script: './deploy/update.sh'
 
-  publish-crate:
+  publish-crates:
     if: contains(github.event.pull_request.labels.*.name, 'release')
-    needs: [publish-standalone-and-docs,update-server]
+    needs: build-artifacts-and-restart
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
