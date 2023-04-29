@@ -1,0 +1,37 @@
+name: run-on-remote
+inputs:
+  file:
+    description: 'Script file to run on remote server'
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v3
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        version: '>= 412.0.0'
+    - name: Copy to server
+      run: gcloud compute scp ./${{ inputs.file }} gh-actions@aquascope:~/${{ inputs.file }} --zone us-central1-a --tunnel-through-iap
+    - name: Make executable
+      uses: google-github-actions/ssh-compute@v0
+      with:
+        zone: 'us-central1-a'
+        project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
+        ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
+        instance_name: aquascope
+        user: gh-actions
+        command: "chmod +x ~/${{ inputs.file }}"
+    - name: Ping server
+      uses: google-github-actions/ssh-compute@v0
+      with:
+        zone: 'us-central1-a'
+        project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
+        ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
+        instance_name: aquascope
+        user: gh-actions
+        command: /home/gh-actions/${{ inputs.file }}

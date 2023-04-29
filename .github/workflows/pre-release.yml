@@ -14,35 +14,10 @@ jobs:
   test-authentication:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+      - name: Ping remote
+        uses: ./.github/workflows/run-on-remote
         with:
-          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          version: '>= 412.0.0'
-      - name: Copy to server
-        run: gcloud compute scp ./deploy/ping.sh gh-actions@aquascope:~/deploy/ping.sh --zone us-central1-a --tunnel-through-iap
-      - name: Make executable
-        uses: google-github-actions/ssh-compute@v0
-        with:
-          zone: 'us-central1-a'
-          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
-          ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          instance_name: aquascope
-          user: gh-actions
-          command: "chmod +x /home/gh-actions/deploy/ping.sh"
-      - name: Ping server
-        uses: google-github-actions/ssh-compute@v0
-        with:
-          zone: 'us-central1-a'
-          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
-          ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          instance_name: aquascope
-          user: gh-actions
-          command: /home/gh-actions/deploy/ping.sh
+          file: deploy/ping.sh
 
   check-publishable-versions:
     if: contains(github.event.pull_request.labels.*.name, 'release')
@@ -68,7 +43,7 @@ jobs:
   build-artifacts-and-restart:
     # if: contains(github.event.pull_request.labels.*.name, 'release')
     if: ${{ false }}
-    needs: check-publishable-versions
+    needs: [check-publishable-versions,test-authentication]
     runs-on: ubuntu-20.04
     env:
       AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
