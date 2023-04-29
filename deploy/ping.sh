@@ -1,3 +1,3 @@
 #!/bin/bash
 
-echo "GH_Actions" > ~/testing.txt
+echo From_GHActions > ~/testing.txt
