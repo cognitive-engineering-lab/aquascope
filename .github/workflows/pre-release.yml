@@ -25,6 +25,14 @@ jobs:
           version: '>= 412.0.0'
       - name: Copy to server
         run: gcloud compute scp ./deploy/ping.sh gh-actions@aquascope:~/deploy/ping.sh --zone us-central1-a --tunnel-through-iap
+      - name: Make executable
+        uses: google-github-actions/ssh-compute@v0
+        with:
+          zone: 'us-central1-a'
+          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
+          instance_name: aquascope
+          ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
+          command: chmod +x ./deploy/ping.sh
       - name: Ping server
         uses: google-github-actions/ssh-compute@v0
         with:
@@ -32,7 +40,7 @@ jobs:
           project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
           instance_name: aquascope
           ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          script: ./deploy/ping.sh
+          command: ./deploy/ping.sh
 
   check-publishable-versions:
     if: contains(github.event.pull_request.labels.*.name, 'release')
