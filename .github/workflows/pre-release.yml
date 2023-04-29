@@ -51,14 +51,6 @@ jobs:
       AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
     steps:
       - uses: actions/checkout@v3
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          version: '>= 412.0.0'
       - name: Quick Setup
         uses: ./.github/workflows/quick-setup
       - name: Build frontend and docs
@@ -74,17 +66,19 @@ jobs:
       - name: Build Aquascope serve
         run: cargo build -p aquascope_serve --locked --release
       - name: Zip artifacts
-        uses: montudor/action-zip@v1
+        run : zip artifacts.zip ./image.tar ./target/release/aquascope_serve
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
         with:
-          args: zip artifacts.zip ./image.tar ./target/release/aquascope_serve
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          version: '>= 412.0.0'
       - name: Upload artifacts
         run: gcloud compute scp artifacts.zip gh-actions@aquascope:~/ --zone us-central1-a --tunnel-through-iap
-      - uses: JamesIves/github-pages-deploy-action@v4.3.0
-        with:
-          branch: gh-pages
-          folder: ./frontend/packages/aquascope-standalone/dist
-          clean: true
-          clean-exclude: dev
+
       - name: Restart server
         uses: ./.github/workflows/run-on-remote
         with:
@@ -93,3 +87,9 @@ jobs:
           project-id: ${{ secrets.GOOGLE_PROJECT_ID }}
           ssh-key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
 
+      - uses: JamesIves/github-pages-deploy-action@v4.3.0
+        with:
+          branch: gh-pages
+          folder: ./frontend/packages/aquascope-standalone/dist
+          clean: true
+          clean-exclude: dev
