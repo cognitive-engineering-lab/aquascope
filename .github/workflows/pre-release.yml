@@ -19,6 +19,9 @@ jobs:
         uses: ./.github/workflows/run-on-remote
         with:
           file: deploy/ping.sh
+          credentials: ${{ secrets.GOOGLE_CREDENTIALS }}
+          project-id: ${{ secrets.GOOGLE_PROJECT_ID }}
+          ssh-key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
 
   check-publishable-versions:
     if: contains(github.event.pull_request.labels.*.name, 'release')
