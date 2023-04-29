@@ -25,9 +25,9 @@ jobs:
           version: '>= 412.0.0'
       - name: Copy to server
         run: gcloud compute scp \
-                 --zone=us-central1-a \
-                 --tunnel-through-iap \
-                 ./deploy/ping.sh gh-actions@aquascope:~/deploy/ping.sh
+                 ./deploy/ping.sh gh-actions@aquascope:~/deploy/ping.sh \
+                 --zone us-central1-a \
+                 --tunnel-through-iap
       - name: Ping server
         uses: google-github-actions/ssh-compute@v0
         with:
