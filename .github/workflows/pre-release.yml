@@ -14,6 +14,7 @@ jobs:
   test-authentication:
     runs-on: ubuntu-20.04
     steps:
+      - uses: actions/checkout@v3
       - name: Ping remote
         uses: ./.github/workflows/run-on-remote
         with:
