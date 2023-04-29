@@ -6,11 +6,33 @@ on:
     types: [labeled,closed]
 
 jobs:
+
+  publish-crates:
+    if: >
+      ${{ github.event.pull_request.merged == true }} &&
+      contains(github.event.pull_request.labels.*.name, 'release')
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-workspaces
+          version: latest
+          use-tool-cache: true
+      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Quick Setup
+        uses: ./.github/workflows/quick-setup
+      - uses: actions-rs/cargo@v1
+        with:
+          command: ws
+          args: publish --from-git --yes
+
   tag:
     runs-on: ubuntu-latest
     if: >
       ${{ github.event.pull_request.merged == true }} &&
       contains(github.event.pull_request.labels.*.name, 'release')
+    needs: publish-crates
     steps:
     - uses: actions/checkout@v3
     - uses: christophebedard/tag-version-commit@v1

@@ -10,7 +10,6 @@ env:
   IMAGE_TAG: aquascope:latest
 
 jobs:
-
   test-authentication:
     runs-on: ubuntu-20.04
     steps:
@@ -45,8 +44,7 @@ jobs:
       #     ros versioning.ros check ${{ steps.previoustag.outputs.tag }}
 
   build-artifacts-and-restart:
-    # if: contains(github.event.pull_request.labels.*.name, 'release')
-    if: ${{ false }}
+    if: contains(github.event.pull_request.labels.*.name, 'release')
     needs: [check-publishable-versions,test-authentication]
     runs-on: ubuntu-20.04
     env:
@@ -75,14 +73,12 @@ jobs:
           docker save --output image.tar "${IMAGE_TAG}"
       - name: Build Aquascope serve
         run: cargo build -p aquascope_serve --locked --release
+      - name: Zip artifacts
+        uses: montudor/action-zip@v1
+        with:
+          args: zip artifacts.zip ./image.tar ./target/release/aquascope_serve
       - name: Upload artifacts
-        run: |
-          gcloud compute scp --zone=us-central1-a \
-                             --tunnel-through-iap \
-                             image.tar gh-actions@aquascope:~/
-          gcloud compute scp --zone=us-central1-a \
-                             --tunnel-through-iap \
-                             ./target/release/aquascope_serve gh-actions@aquascope:~/
+        run: gcloud compute scp artifacts.zip gh-actions@aquascope:~/ --zone us-central1-a --tunnel-through-iap
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:
           branch: gh-pages
@@ -90,29 +86,10 @@ jobs:
           clean: true
           clean-exclude: dev
       - name: Restart server
-        uses: google-github-actions/ssh-compute@v0
+        uses: ./.github/workflows/run-on-remote
         with:
-          zone: 'us-central1-a'
-          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
-          instance_name: aquascope
-          ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          script: './deploy/update.sh'
+          file: deploy/update.sh
+          credentials: ${{ secrets.GOOGLE_CREDENTIALS }}
+          project-id: ${{ secrets.GOOGLE_PROJECT_ID }}
+          ssh-key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
 
-  publish-crates:
-    if: contains(github.event.pull_request.labels.*.name, 'release')
-    needs: build-artifacts-and-restart
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-workspaces
-          version: latest
-          use-tool-cache: true
-      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
-      - name: Quick Setup
-        uses: ./.github/workflows/quick-setup
-      - uses: actions-rs/cargo@v1
-        with:
-          command: ws
-          args: publish --from-git --yes
