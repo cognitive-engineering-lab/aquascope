@@ -32,7 +32,7 @@ jobs:
           project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
           instance_name: aquascope
           ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          command: chmod +x ./deploy/ping.sh
+          command: "chmod +x /home/gh-actions/deploy/ping.sh"
       - name: Ping server
         uses: google-github-actions/ssh-compute@v0
         with:
@@ -40,7 +40,7 @@ jobs:
           project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
           instance_name: aquascope
           ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-          command: ./deploy/ping.sh
+          command: /home/gh-actions/deploy/ping.sh
 
   check-publishable-versions:
     if: contains(github.event.pull_request.labels.*.name, 'release')
