@@ -10,6 +10,28 @@ env:
   IMAGE_TAG: aquascope:latest
 
 jobs:
+
+  test-authentication:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          version: '>= 412.0.0'
+      - name: Ping server
+        uses: google-github-actions/ssh-compute@v0
+        with:
+          zone: 'us-central1-a'
+          project_id: ${{ secrets.GOOGLE_PROJECT_ID }}
+          instance_name: aquascope
+          ssh_private_key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
+          script: './deploy/ping.sh'
+
   check-publishable-versions:
     if: contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-latest
@@ -32,7 +54,8 @@ jobs:
       #     ros versioning.ros check ${{ steps.previoustag.outputs.tag }}
 
   build-artifacts-and-restart:
-    if: contains(github.event.pull_request.labels.*.name, 'release')
+    # if: contains(github.event.pull_request.labels.*.name, 'release')
+    if: ${{ false }}
     needs: check-publishable-versions
     runs-on: ubuntu-20.04
     env:
@@ -63,8 +86,12 @@ jobs:
         run: cargo build -p aquascope_serve --locked --release
       - name: Upload artifacts
         run: |
-          gcloud compute scp --zone=us-central1-a image.tar gh-actions@aquascope:~/
-          gcloud compute scp --zone=us-central1-a ./target/release/aquascope_serve gh-actions@aquascope:~/
+          gcloud compute scp --zone=us-central1-a \
+                             --tunnel-through-iap \
+                             image.tar gh-actions@aquascope:~/
+          gcloud compute scp --zone=us-central1-a \
+                             --tunnel-through-iap \
+                             ./target/release/aquascope_serve gh-actions@aquascope:~/
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:
           branch: gh-pages
