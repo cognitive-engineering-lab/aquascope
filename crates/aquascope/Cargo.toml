@@ -1,6 +1,6 @@
 [package]
 name = "aquascope"
-version = "0.1.4"
+version = "0.1.0"
 license = "MIT"
 edition = "2021"
 authors = [
@@ -15,7 +15,7 @@ publish = false
 rustc_private = true
 
 [features]
-testing = ["lazy_static", "insta"]
+testing = ["lazy_static"]
 
 [dependencies]
 anyhow = "1.0.0"
@@ -28,11 +28,10 @@ fluid-let = "1.0"
 
 # interpret module
 miri = {git = "https://github.com/rust-lang/miri.git", rev = "35d6927663065d7fdeeaed45dda7e7748fc9f222"}
-aquascope_workspace_utils = { version = "0.1", path = "../aquascope_workspace_utils" }
+aquascope_workspace_utils = { version = "0.2", path = "../aquascope_workspace_utils" }
 
-# testing
+# testing utils
 lazy_static = { version = "1.4", optional = true }
-insta = { version = "1.22.0", features = ["json", "yaml", "redactions"], optional = true }
 
 [dependencies.rustc-utils]
 git = "https://github.com/cognitive-engineering-lab/rustc-plugin"
@@ -40,6 +39,7 @@ tag = "nightly-2023-04-12-v0.1.4"
 features = ["graphviz", "ts-rs", "serde", "test"]
 
 [dev-dependencies]
+insta = { version = "1.22.0", features = ["json", "yaml", "redactions"] }
 aquascope = { path = ".", features = ["testing"] }
 env_logger = "0.9.3"
 test-log = "0.2.11"

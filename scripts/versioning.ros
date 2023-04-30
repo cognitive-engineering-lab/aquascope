@@ -1,0 +1,115 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp(ql:quickload '("cl-toml") :silent t)
+  )
+
+(defpackage :ros.script.versioning.3891266390
+  (:use :cl))
+(in-package :ros.script.versioning.3891266390)
+
+
+(defstruct semver major minor patch)
+
+(defparameter *tomls* #P"../crates/**/Cargo.toml")
+(defparameter *no-publish-version*
+  (make-semver :major 0 :minor 1 :patch 0))
+(defparameter *file-warning*
+  "# This file is automatically managed by scripts/versioning.ros")
+
+(defmethod semver-lt ((lhs semver) (rhs semver))
+  (or (< (semver-major lhs) (semver-major rhs))
+      (and (= (semver-major lhs) (semver-major rhs))
+           (< (semver-minor lhs) (semver-minor rhs)))
+      (and (= (semver-major lhs) (semver-major rhs))
+           (= (semver-minor lhs) (semver-minor rhs))
+           (< (semver-patch lhs) (semver-patch rhs)))))
+
+(defmethod semver-encode ((v semver))
+  (format nil "~d.~d.~d"
+          (semver-major v) (semver-minor v) (semver-patch v)))
+
+(defun semver-parse (s)
+  (multiple-value-bind (mj mn p)
+      (values-list (uiop:split-string s :separator "."))
+    (make-semver :major (parse-integer
+                         (string-left-trim '(#\v #\V) mj))
+                 :minor (parse-integer mn)
+                 :patch (parse-integer p))))
+
+(defun toml-published? (toml)
+  (not (eq (gethash "publish"
+                    (gethash "package" toml))
+           'cl-toml:false)))
+
+(defmacro toml-version (toml)
+  `(gethash "version" (gethash "package" ,toml)))
+
+(defun toml-published-version (toml)
+  (and (toml-published? toml)
+       (semver-parse (toml-version toml))))
+
+(defun get-synced-version ()
+  (let ((versions
+          (remove nil
+                  (loop for fn in (directory *tomls*)
+                        collect
+                        (toml-published-version (cl-toml:parse-file fn))))))
+    (and (every #'equalp versions (rest versions))
+         (car versions))))
+
+(defun semver-increment-synced (current)
+  (declare (ignore current))
+  (error "UNIMPLEMENTED"))
+
+(defun assert-update (&optional previous)
+  (let* ((version (get-synced-version)))
+    (unless (and version
+         (or (not previous)
+             (semver-lt (semver-parse previous) version)))
+      (error (format nil "passed previous version: ~a is invalid" previous)))))
+
+(defun assert-current (v)
+  (let ((version (get-synced-version))
+        (s (semver-parse v)))
+    (unless (and version s (equalp version s))
+      (error "version invalid"))))
+
+(defun print-published ()
+  (dolist (fn (directory *tomls*))
+    (when (toml-published? (cl-toml:parse-file fn))
+      (print fn))))
+
+(defun update-to (v)
+  (let ((sv (typecase v
+              (string (semver-parse v))
+              (semver v))))
+    (dolist (fn (directory *tomls*))
+      (let* ((toml (cl-toml:parse-file fn)))
+        (setf (toml-version toml)
+              (semver-encode
+               (if (toml-published? toml)
+                   sv
+                   *no-publish-version*)))
+        (with-open-file (fout fn :direction :output
+                                 :if-exists :supersede)
+          (write-line *file-warning* fout)
+          (cl-toml:encode toml fout))))))
+
+(defun main (mode &rest argv)
+  (handler-case (cond ((string-equal mode "check") (assert-update (car argv)))
+                      ((string-equal mode "equal") (assert-current (car argv)))
+                      ((string-equal mode "published") (print-published))
+                      ((string-equal mode "set") (update-to (car argv)))
+                      ((string-equal mode "inc")
+                       (update-to (semver-increment-synced
+                                   (read-from-string (car argv)))))
+                      (t nil))
+    (error (c)
+      (format t "ERR: ~a" c)
+      (uiop:quit 1))))
+;;; vim: set ft=lisp lisp:

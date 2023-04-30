@@ -11,23 +11,25 @@ default-run = "aquascope_serve"
 repository = "https://github.com/cognitive-engineering-lab/aquascope"
 publish = false
 
+[features]
+no-docker = ["tempfile"]
+
 [dependencies]
 async-trait = "0.1.52"
-axum = { version = "0.5", features = ["headers"] }
+axum = { version = "0.5" }
 env_logger = "0.9.0"
 futures = "0.3.21"
 log = "0.4.0"
-serde = { version = "1.0", features = ["rc", "derive"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 snafu = "0.7.0"
-tokio = { version = "1.9", features = ["macros", "time", "process", "rt-multi-thread"] }
-tower-http = { version = "0.3", features = ["cors", "fs", "set-header", "trace"] }
+tokio = { version = "1.9", features = ["macros", "time", "process"] }
+tower-http = { version = "0.3", features = ["cors", "trace"] }
 bollard = "0.13"
 tar = "0.4"
-tempfile = "3.3.0"
+
+# No docker
+tempfile = { version = "3.3.0", optional = true }
 
 [dev-dependencies]
 lazy_static = "1"
-
-[features]
-no-docker = []
