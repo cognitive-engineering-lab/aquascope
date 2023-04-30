@@ -23,7 +23,7 @@ fi
 
 # Unzip archive files if they exist
 if [[ -f "${ZIP}" ]]; then
-    unzip "${ZIP}" -d "${ARTIFACT_DIR}"
+    unzip -o "${ZIP}" -d "${ARTIFACT_DIR}"
     docker load -i "${IMAGE_PATH}"
     chmod +x "${BINARY_PATH}"
     mv "${ZIP}" "${ZIP_STASH}"
