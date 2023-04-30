@@ -65,7 +65,9 @@ jobs:
         with:
           version: '>= 412.0.0'
       - name: Upload artifacts
-        run: gcloud compute scp artifacts.zip gh-actions@aquascope:~/ --zone us-central1-a --tunnel-through-iap
+        run: >
+          gcloud compute scp artifacts.zip gh-actions@aquascope:~/
+                 --zone us-central1-a --tunnel-through-iap
 
   update-frontend:
     needs: build-backend
@@ -101,3 +103,21 @@ jobs:
           credentials: ${{ secrets.GOOGLE_CREDENTIALS }}
           project-id: ${{ secrets.GOOGLE_PROJECT_ID }}
           ssh-key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
+
+  publish-crates:
+    needs: [update-frontend,update-server]
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-workspaces
+          version: latest
+          use-tool-cache: true
+      - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Quick Setup
+        uses: ./.github/workflows/quick-setup
+      - uses: actions-rs/cargo@v1
+        with:
+          command: ws
+          args: publish --from-git --yes
