@@ -9,7 +9,6 @@ jobs:
   tag:
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release')
-    needs: publish-crates
     steps:
     - uses: actions/checkout@v3
     - uses: christophebedard/tag-version-commit@v1
