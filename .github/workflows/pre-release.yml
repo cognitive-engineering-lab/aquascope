@@ -93,6 +93,7 @@ jobs:
     needs: update-frontend
     runs-on: ubuntu-20.04
     steps:
+      - uses: actions/checkout@v3
       - name: Restart server
         uses: ./.github/workflows/run-on-remote
         with:
