@@ -9,7 +9,7 @@ jobs:
 
   publish-crates:
     if: >
-      ${{ github.event.pull_request.merged == true }} &&
+      github.event.pull_request.merged == true &&
       contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-20.04
     steps:

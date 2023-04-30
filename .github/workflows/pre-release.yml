@@ -43,8 +43,38 @@ jobs:
       #     cd scripts
       #     ros versioning.ros check ${{ steps.previoustag.outputs.tag }}
 
-  build-artifacts-and-restart:
-    if: contains(github.event.pull_request.labels.*.name, 'release')
+  update-server:
+    needs: [check-publishable-versions,test-authentication]
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build and save docker image
+        run: |
+          docker build --tag "${IMAGE_TAG}" .
+          docker save --output image.tar "${IMAGE_TAG}"
+      - name: Build Aquascope serve
+        run: cargo build -p aquascope_serve --locked --release
+      - name: Zip artifacts
+        run : zip artifacts.zip ./image.tar ./target/release/aquascope_serve
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          version: '>= 412.0.0'
+      - name: Upload artifacts
+        run: gcloud compute scp artifacts.zip gh-actions@aquascope:~/ --zone us-central1-a --tunnel-through-iap
+      - name: Restart server
+        uses: ./.github/workflows/run-on-remote
+        with:
+          file: deploy/update.sh
+          credentials: ${{ secrets.GOOGLE_CREDENTIALS }}
+          project-id: ${{ secrets.GOOGLE_PROJECT_ID }}
+          ssh-key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
+
+  update-frontend:
     needs: [check-publishable-versions,test-authentication]
     runs-on: ubuntu-20.04
     env:
@@ -59,34 +89,6 @@ jobs:
           cd frontend
           graco build
           mv ../target/doc packages/aquascope-standalone/dist/doc
-      - name: Build and save docker image
-        run: |
-          docker build --tag "${IMAGE_TAG}" .
-          docker save --output image.tar "${IMAGE_TAG}"
-      - name: Build Aquascope serve
-        run: cargo build -p aquascope_serve --locked --release
-      - name: Zip artifacts
-        run : zip artifacts.zip ./image.tar ./target/release/aquascope_serve
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          version: '>= 412.0.0'
-      - name: Upload artifacts
-        run: gcloud compute scp artifacts.zip gh-actions@aquascope:~/ --zone us-central1-a --tunnel-through-iap
-
-      - name: Restart server
-        uses: ./.github/workflows/run-on-remote
-        with:
-          file: deploy/update.sh
-          credentials: ${{ secrets.GOOGLE_CREDENTIALS }}
-          project-id: ${{ secrets.GOOGLE_PROJECT_ID }}
-          ssh-key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
-
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:
           branch: gh-pages
