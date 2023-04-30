@@ -65,9 +65,7 @@ jobs:
         with:
           version: '>= 412.0.0'
       - name: Upload artifacts
-        run: >
-          gcloud compute scp artifacts.zip gh-actions@aquascope:~/
-                 --zone us-central1-a --tunnel-through-iap
+        run: gcloud compute scp artifacts.zip gh-actions@aquascope:~/ --zone us-central1-a --tunnel-through-iap
 
   update-frontend:
     needs: build-backend
