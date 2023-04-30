@@ -53,7 +53,7 @@ jobs:
           docker build --tag "${IMAGE_TAG}" .
           docker save --output image.tar "${IMAGE_TAG}"
       - name: Build Aquascope serve
-        run: cargo build -p aquascope_serve --locked --release
+        run: cargo build -p aquascope_serve --release
       - name: Zip artifacts
         run : zip artifacts.zip ./image.tar ./target/release/aquascope_serve
       - name: Authenticate to Google Cloud
