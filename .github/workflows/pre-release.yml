@@ -11,6 +11,7 @@ env:
 
 jobs:
   test-authentication:
+    if: contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
