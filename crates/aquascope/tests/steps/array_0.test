@@ -1,0 +1,15 @@
+fn with_string() {
+   // a[_] doesn't have O
+   let a = [String::from("a")];
+
+   let s = a[0];
+}
+
+fn with_int() {
+   // a[_] doesn't have O
+   let a = [0];
+
+   let i = a[0];
+
+   drop(i);
+}

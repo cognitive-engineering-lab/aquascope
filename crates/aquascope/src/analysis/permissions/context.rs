@@ -7,7 +7,7 @@ use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{def_id::DefId, BodyId, Mutability};
 use rustc_index::vec::IndexVec;
 use rustc_middle::{
-  mir::{BorrowKind, Local, Location, Place},
+  mir::{BorrowKind, Local, Location, Place, ProjectionElem},
   ty::{self, ParamEnv, Ty, TyCtxt},
 };
 use rustc_mir_dataflow::move_paths::MoveData;
@@ -213,16 +213,30 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   ///
   /// never_drop(Path) :-
   ///    !is_direct(Path),
+  ///    !is_index(Path),
   ///    has_adt_prefix_with_dtor(Path).
+  ///
+  /// This logic follows from Rust's [`MoveData::gather_moves`] builder,
+  /// the core logic is found here:
+  /// <https://doc.rust-lang.org/nightly/nightly-rustc/src/rustc_mir_dataflow/move_paths/builder.rs.html#100>
   pub fn is_path_drop_enabled(&self, path: Path) -> bool {
     let place = self.path_to_place(path);
     let is_indirect = place.is_indirect();
+    let contains_array_index = place.iter_projections().any(|(_, elem)| {
+      matches!(
+        elem,
+        ProjectionElem::Index(_)
+          | ProjectionElem::ConstantIndex { .. }
+          | ProjectionElem::Subslice { .. }
+      )
+    });
+
     // Rust maintains invariant that all `Drop`
     // ADT's remain fully-initialized so that user-defined destructor
     // can safely read from all of the ADT's fields. If a prefix of this
     // path is such an ADT then it cannot be moved.
     //
-    // See: https://github.com/rust-lang/rust/blob/master/compiler/rustc_mir_dataflow/src/move_paths/mod.rs#L359-L363
+    // See: <https://github.com/rust-lang/rust/blob/master/compiler/rustc_mir_dataflow/src/move_paths/mod.rs#L359-L363>
     let has_adt_prefix_with_dtor = || {
       place.projection.iter().enumerate().any(|(i, _)| {
         let proj_base = &place.projection[.. i];
@@ -234,7 +248,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       })
     };
 
-    !is_indirect && !has_adt_prefix_with_dtor()
+    !is_indirect && !contains_array_index && !has_adt_prefix_with_dtor()
   }
 
   // Permission utilities
