@@ -1,0 +1,14 @@
+fn with_string() {
+   let a = [String::from("a")];
+
+   // ERROR: array indices cannot be moved.
+   let s = a[0];
+}
+
+fn with_int() {
+   let a = [0];
+
+   let i = a[0];
+
+   drop(i);
+}

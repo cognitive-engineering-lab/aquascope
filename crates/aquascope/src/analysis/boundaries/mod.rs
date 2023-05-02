@@ -162,6 +162,13 @@ impl std::fmt::Debug for PathBoundary {
 // haven't found a great way to do this, so for now, we consider all
 // Places occurring inside of a mapped HirId, and for some cases we can
 // remove Places from consideration depending on the hir::Node they came from.
+// TODO: this mechanism needs to be built up and inserted into the IRMapper.
+// We could make this more robust by doing a union from a hir::Path with a
+// mir::Path comparing on *shape*, (number and types of projections).
+/// Pick a matching [`Location`] and [`Place`] from the given [`HirId`] use site.
+///
+/// NOTE: candidates are expected to be given as an
+/// [*inorder*](https://en.wikipedia.org/wiki/Tree_traversal) HIR tree traversal.
 fn select_candidate_location<'tcx>(
   _tcx: TyCtxt<'tcx>,
   _body: &Body<'tcx>,
@@ -169,14 +176,50 @@ fn select_candidate_location<'tcx>(
   subtract_from: impl FnOnce() -> Vec<(Location, Place<'tcx>)>,
   candidates: &[(Location, Place<'tcx>)],
 ) -> Option<(Location, Place<'tcx>)> {
-  match candidates.len() {
-    0 => None,
-    1 => Some(candidates[0]),
-    _ => {
-      let others = subtract_from();
-      candidates.iter().find(|t| !others.contains(t)).copied()
-    }
+  if candidates.is_empty() {
+    return None;
   }
+
+  if candidates.len() == 1 {
+    return Some(candidates[0]);
+  }
+
+  let others = subtract_from();
+  // Remove all candidates present in the subtraction set.
+  let candidates = candidates
+    .iter()
+    .filter(|t| !others.contains(t))
+    .collect::<Vec<_>>();
+
+  // The first usage contains the relevant Local,
+  // in most cases the first use will also be the desired
+  // Place but when indexing an array this isn't true.
+  // ```ignore
+  // let a = [0];
+  // let i0 = a[i];
+  //          ^^^ expands to:
+  //          // len_a = Len(a)
+  //          // assert 0 <= i < len_a
+  //          // copy a[i]
+  // ```
+  // For an array index, the first use is actually getting the
+  // length of the array, but we want to make sure to use the
+  // actual indexing. To achieve this we filter out all places
+  // with a different base Local, then we chooset he Place with
+  // the *most* projections.
+  let base_local = candidates.first()?.1.local;
+
+  let matching_locals = candidates
+    .into_iter()
+    .filter(|(_, p)| p.local == base_local);
+
+  // We first reverse the iterator because
+  // `max_by_key` takes the last matching value
+  // when there is a clash but we need the first.
+  matching_locals
+    .rev()
+    .max_by_key(|(_, p)| p.projection.len())
+    .copied()
 }
 
 /// Return the constraints that occur nested within a [`HirId`].
