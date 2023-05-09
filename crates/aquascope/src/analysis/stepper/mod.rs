@@ -1,22 +1,31 @@
 //! Analysis for the “Missing-at” relations.
 
 mod find_steps;
+#[allow(dead_code)]
+mod hir_steps;
 mod segment_tree;
+#[allow(dead_code, unused_variables)]
+mod segmented_mir;
 
 use std::collections::hash_map::Entry;
 
-use anyhow::Result;
-pub use find_steps::compute_permission_steps;
+use anyhow::{bail, Result};
 use fluid_let::fluid_let;
-use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_middle::mir::Place;
-use rustc_utils::source_map::range::CharRange;
+use rustc_data_structures::{self, fx::FxHashMap as HashMap};
+use rustc_hir::intravisit::Visitor as HirVisitor;
+use rustc_middle::mir::{Location, Place};
+use rustc_utils::{
+  source_map::range::CharRange, test_utils::DUMMY_CHAR_RANGE, PlaceExt,
+};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::analysis::{
-  permissions::{Permissions, PermissionsData, PermissionsDomain},
-  AquascopeAnalysis, LoanKey, MoveKey,
+use crate::{
+  analysis::{
+    permissions::{Permissions, PermissionsData, PermissionsDomain},
+    AquascopeAnalysis, LoanKey, MoveKey,
+  },
+  errors,
 };
 
 fluid_let!(pub static INCLUDE_MODE: PermIncludeMode);
@@ -264,4 +273,69 @@ impl<'tcx> Difference for &PermissionsDomain<'tcx> {
         acc
       })
   }
+}
+
+trait HirPermissionStepper<'tcx>: HirVisitor<'tcx> {
+  /// Get message explaining any encountered unsupported features, if any.
+  fn get_unsupported_feature(&self) -> Option<&str>;
+
+  /// Get message explaining any internal errors that occurred.
+  fn get_internal_error(&self) -> Option<String>;
+
+  /// Finalize the computed steps consuming the visitor.
+  fn finalize(
+    self,
+    analysis: &AquascopeAnalysis<'_, 'tcx>,
+    mode: PermIncludeMode,
+  ) -> Vec<PermissionsLineDisplay>;
+}
+
+/// Represents a segment of the MIR control-flow graph.
+///
+/// A `MirSegment` corresponds directly to locations where a permissions step
+/// will be made. However, a segment is also control-flow specific.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MirSegment {
+  pub from: Location,
+  pub to: Location,
+}
+
+impl std::fmt::Debug for MirSegment {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "MirSegment({:?} -> {:?})", self.from, self.to)
+  }
+}
+
+impl MirSegment {
+  pub fn new(l1: Location, l2: Location) -> Self {
+    MirSegment { from: l1, to: l2 }
+  }
+}
+
+// ----------
+// Main entry
+
+pub fn compute_permission_steps<'a, 'tcx>(
+  analysis: &AquascopeAnalysis<'a, 'tcx>,
+) -> Result<Vec<PermissionsLineDisplay>>
+where
+  'tcx: 'a,
+{
+  let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
+  let ctxt = &analysis.permissions;
+  let ir_mapper = &analysis.ir_mapper;
+  let body = &ctxt.body_with_facts.body;
+  let _basic_blocks = body.basic_blocks.indices();
+  let mut hir_visitor = hir_steps::HirStepPoints::make(ctxt, ir_mapper)?;
+  hir_visitor.visit_nested_body(ctxt.body_id);
+
+  if let Some(msg) = hir_visitor.get_unsupported_feature() {
+    bail!(msg.to_string());
+  }
+
+  if let Some(fatal_error) = hir_visitor.get_internal_error() {
+    bail!(fatal_error);
+  }
+
+  Ok(hir_visitor.finalize(analysis, mode))
 }

@@ -1,7 +1,9 @@
 use itertools::Itertools;
-use rustc_data_structures::{fx::FxHashMap as HashMap, graph::*};
+use rustc_data_structures::{
+  captures::Captures, fx::FxHashMap as HashMap, graph::*,
+};
 use rustc_middle::mir::{
-  BasicBlock, BasicBlockData, BasicBlocks, Body, Location,
+  BasicBlock, BasicBlockData, BasicBlocks, Body, Location, Terminator,
 };
 use smallvec::SmallVec;
 
@@ -56,9 +58,26 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
           statement_index: 0,
         })
       } else {
+        log::debug!("No Location (or too many) successor(s) found: {nexts:?}");
         None
       }
     }
+  }
+
+  pub fn terminator_in_block(&self, block: BasicBlock) -> &Terminator<'tcx> {
+    self.body().basic_blocks[block].terminator()
+  }
+
+  pub fn blocks(
+    &self,
+  ) -> impl Iterator<Item = BasicBlock> + Captures<'a> + Captures<'tcx> + '_ {
+    self
+      .0
+      .basic_blocks
+      .postorder()
+      .iter()
+      .filter(|bb| CleanedBody::keep_block(&self.0.basic_blocks[**bb]))
+      .copied()
   }
 
   fn keep_block(bb: &BasicBlockData) -> bool {
@@ -199,11 +218,111 @@ where
 #[cfg(test)]
 mod test {
   use rustc_data_structures::graph::vec_graph::VecGraph;
+  use rustc_utils::BodyExt;
 
-  use super::*;
+  use super::{super::AllPostDominators, *};
+  use crate::test_utils as tu;
+
+  // CleanedBody tests
 
   #[test]
-  fn if_shape() {
+  fn cleaned_body_simple_if() {
+    // EXPECTED MIR:
+    // -------------
+    // bb0: {
+    //     StorageLive(_2);
+    //     _2 = const 0_i32;
+    //     FakeRead(ForLet(None), _2);
+    //     StorageLive(_3);
+    //     StorageLive(_4);
+    //     _4 = const true;
+    //     switchInt(move _4) -> [0: bb3, otherwise: bb1];
+    // }
+    //
+    // bb1: {
+    //     _5 = CheckedAdd(_2, const 1_i32);
+    //     assert(!move (_5.1: bool), <removed>) -> [success: bb2, unwind: bb5];
+    // }
+    //
+    // bb2: {
+    //     _2 = move (_5.0: i32);
+    //     _3 = const ();
+    //     goto -> bb4;
+    // }
+    //
+    // bb3: {
+    //     _3 = const ();
+    //     goto -> bb4;
+    // }
+    //
+    // bb4: {
+    //     StorageDead(_4);
+    //     StorageDead(_3);
+    //     _0 = _2;
+    //     StorageDead(_2);
+    //     return;
+    // }
+    //
+    // bb5 (cleanup): {
+    //     resume;
+    // }
+
+    tu::compile_normal(
+      r#"
+fn foo() -> i32 {
+  let mut v1 = 0;
+  if true {
+    v1 += 1;
+  }
+  return v1;
+}
+"#,
+      |tcx| {
+        tu::for_each_body(tcx, |_, wfacts| {
+          let cleaned_graph = CleanedBody(&wfacts.body);
+
+          let post_doms = AllPostDominators::<BasicBlock>::build(
+            &cleaned_graph,
+            wfacts.body.all_returns().map(|loc| loc.block),
+          );
+
+          let cleaned_blocks = cleaned_graph.blocks().collect::<Vec<_>>();
+
+          let bb0 = BasicBlock::from_usize(0);
+          let bb1 = BasicBlock::from_usize(1);
+          let bb2 = BasicBlock::from_usize(2);
+          let bb3 = BasicBlock::from_usize(3);
+          let bb4 = BasicBlock::from_usize(4);
+          let bb5 = BasicBlock::from_usize(5);
+
+          assert!(cleaned_blocks.contains(&bb0));
+          assert!(cleaned_blocks.contains(&bb1));
+          assert!(cleaned_blocks.contains(&bb2));
+          assert!(cleaned_blocks.contains(&bb3));
+          assert!(cleaned_blocks.contains(&bb4));
+          // Cleanup  blocks
+          assert!(!cleaned_blocks.contains(&bb5));
+
+          for &bb in vec![bb0, bb1, bb2, bb3, bb4].iter() {
+            assert!(post_doms.is_postdominated_by(bb, bb4));
+          }
+
+          assert!(!post_doms.is_postdominated_by(bb0, bb2));
+          assert!(!post_doms.is_postdominated_by(bb0, bb3));
+          assert!(post_doms.is_postdominated_by(bb1, bb2));
+          assert!(!post_doms.is_postdominated_by(bb1, bb3));
+        })
+      },
+    );
+  }
+
+  // TODO: add a test for infinite loops (non-exiting bodies),
+  // they currently break the post-dominance computation.
+
+  // DFSFinder tests
+
+  #[test]
+  fn dfs_finder_if_shape() {
     // Diamond shaped IF.
     let graph = VecGraph::new(6, vec![
       (0u32, 1u32),
@@ -220,7 +339,7 @@ mod test {
   }
 
   #[test]
-  fn while_loop_shape() {
+  fn dfs_finder_while_loop_shape() {
     // While loop shape:
     // 0 -> 1 -> 2 -> 3 -> 5
     //           ^    |

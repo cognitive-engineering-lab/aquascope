@@ -540,6 +540,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     smooth_elements(spans)
   }
 
+  /// Convert a potentially non-contiguous collection of [`Point`]s into [`Span`]s.
   fn points_to_spans(
     &self,
     points: impl IntoIterator<Item = Point>,

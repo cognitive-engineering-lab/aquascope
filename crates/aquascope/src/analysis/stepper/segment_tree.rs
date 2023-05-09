@@ -9,16 +9,6 @@ use rustc_span::Span;
 use super::*;
 use crate::analysis::{ir_mapper::CleanedBody, permissions::PermissionsCtxt};
 
-/// Represents a segment of the MIR control-flow graph.
-///
-/// A `MirSegment` corresponds directly to locations where a permissions step
-/// will be made. However, a segment is also control-flow specific.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct MirSegment {
-  pub from: Location,
-  pub to: Location,
-}
-
 /// The types of splits that can be performed on a [`SegmentTre::Single`].
 #[derive(Clone)]
 pub enum SplitType {
@@ -77,12 +67,6 @@ pub enum SegmentSearchResult<'a> {
 
 // ------------------------------------------------
 // Debugging pretty printers
-
-impl std::fmt::Debug for MirSegment {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "MirSegment({:?} -> {:?})", self.from, self.to)
-  }
-}
 
 impl std::fmt::Debug for SegmentTree {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -179,10 +163,6 @@ impl std::fmt::Debug for SegmentTree {
 // Impls
 
 impl MirSegment {
-  pub fn new(l1: Location, l2: Location) -> Self {
-    MirSegment { from: l1, to: l2 }
-  }
-
   /// Expand the path through the segment to a full set of [`Location`]s.
   fn squash_block_path(
     &self,
@@ -242,6 +222,7 @@ impl MirSegment {
   }
 }
 
+#[allow(dead_code)]
 impl SegmentTree {
   pub fn new(body: MirSegment, span: Span) -> Self {
     Self::Single {

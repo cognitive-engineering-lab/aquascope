@@ -67,6 +67,13 @@ pub enum GatherDepth {
   Nested,
 }
 
+// FIXME rever these changes, they shouldn't be needed.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum ExitJoinSearch {
+  None,
+  Successor,
+}
+
 impl<'a, 'tcx> IRMapper<'a, 'tcx>
 where
   'tcx: 'a,
@@ -107,6 +114,25 @@ where
     ir_map
   }
 
+  pub fn dominates(&self, dom: Location, node: Location) -> bool {
+    if dom.block == node.block {
+      return dom.statement_index <= node.statement_index;
+    }
+
+    self.dominators.is_reachable(node.block)
+      && self.dominators.dominates(dom.block, node.block)
+  }
+
+  pub fn post_dominates(&self, dom: Location, node: Location) -> bool {
+    if dom.block == node.block {
+      return dom.statement_index >= node.statement_index;
+    }
+
+    self
+      .post_dominators
+      .is_postdominated_by(node.block, dom.block)
+  }
+
   pub fn local_assigned_place(&self, local: &hir::Local) -> Vec<Place<'tcx>> {
     use either::Either;
     use mir::{FakeReadCause as FRC, StatementKind as SK};
@@ -140,19 +166,19 @@ where
       && matches!(term.kind, TK::FalseUnwind { .. } | TK::FalseEdge { .. })
   }
 
-  /// Produces a MirOrderedLocations which is defined as follows.
-  /// The `entry_block` represents the `BasicBlock` which post-dominates all
-  /// blocks in the given set of locations and conversely the `exit_block`
-  /// dominates all blocks in the set.
+  /// Search for entry/exit locations allowing for a tolerance on the exit block.
   ///
-  /// This works under the assumption that there exists a global
-  /// maximum in the (post-)dominator lattice.
-  ///
-  /// See: <https://en.wikipedia.org/wiki/Dominator_(graph_theory)>
-  pub fn get_mir_locations(
+  /// See [`get_mir_locations`] for a description of the non-tolerant version,
+  /// here, we give the option of relaxing the initial set of basic blocks
+  /// to search from.
+  /// When branching control-flow has a return in one of the branches, it's
+  /// possible that the entire HIR node doesn't include the block which joins
+  /// these branches.
+  pub(crate) fn get_mir_locations_fuzzy(
     &self,
     hir_id: HirId,
     depth: GatherDepth,
+    exit_search: ExitJoinSearch,
   ) -> Option<MirOrderedLocations> {
     let empty_set = &HashSet::default();
     let outer = self.hir_to_mir.get(&hir_id).unwrap_or(empty_set);
@@ -192,20 +218,49 @@ where
       idxs.sort_unstable();
     }
 
-    let basic_blocks = total_location_map.keys().collect::<Vec<_>>();
+    let basic_blocks = total_location_map.keys().copied().collect::<Vec<_>>();
 
-    let entry_block = basic_blocks.iter().find(|&&&b1| {
-      basic_blocks.iter().all(|&&b2| {
-        self.dominators.is_reachable(b2)
-          && (b1 == b2 || self.dominators.dominates(b1, b2))
+    let entry_block = basic_blocks
+      .iter()
+      .find(|&&candidate_dom| {
+        basic_blocks.iter().all(|&block| {
+          self.dominators.is_reachable(block)
+            && (block == candidate_dom
+              || self.dominators.dominates(candidate_dom, block))
+        })
       })
-    });
+      .copied();
 
-    let exit_block = basic_blocks.iter().find(|&&&b1| {
-      basic_blocks.iter().all(|&&b2| {
-        b1 == b2 || self.post_dominators.is_postdominated_by(b2, b1)
-      })
-    });
+    let find_exit_from = |basic_blocks: &[BasicBlock]| -> Option<BasicBlock> {
+      basic_blocks
+        .iter()
+        .find(|&&candidate_postdom| {
+          basic_blocks.iter().all(|&block| {
+            block == candidate_postdom
+              || self
+                .post_dominators
+                .is_postdominated_by(block, candidate_postdom)
+          })
+        })
+        .copied()
+    };
+
+    let exit_block = find_exit_from(&basic_blocks);
+
+    let exit_block = match (exit_block, exit_search) {
+      (None, ExitJoinSearch::Successor) => {
+        let successor_blocks = basic_blocks
+          .iter()
+          .flat_map(|&bb| self.cleaned_graph.successors(bb));
+        let basic_blocks = successor_blocks
+          .chain(total_location_map.keys().copied())
+          .collect::<Vec<_>>();
+        find_exit_from(&basic_blocks)
+      }
+      (eb, _) => eb,
+    };
+
+    log::debug!("Gathering MIR location entry / exit blocks: {entry_block:?}{exit_block:?}");
 
     if exit_block.is_none() {
       log::debug!("Found locations: {total_location_map:#?}");
@@ -215,10 +270,27 @@ where
     }
 
     Some(MirOrderedLocations {
-      entry_block: entry_block.map(|b| **b),
-      exit_block: exit_block.map(|b| **b),
+      entry_block,
+      exit_block,
       locations: total_location_map,
     })
+  }
+
+  /// Produces a MirOrderedLocations which is defined as follows.
+  /// The `entry_block` represents the `BasicBlock` which post-dominates all
+  /// blocks in the given set of locations and conversely the `exit_block`
+  /// dominates all blocks in the set.
+  ///
+  /// This works under the assumption that there exists a global
+  /// maximum in the (post-)dominator lattice.
+  ///
+  /// See: <https://en.wikipedia.org/wiki/Dominator_(graph_theory)>
+  pub fn get_mir_locations(
+    &self,
+    hir_id: HirId,
+    depth: GatherDepth,
+  ) -> Option<MirOrderedLocations> {
+    self.get_mir_locations_fuzzy(hir_id, depth, ExitJoinSearch::None)
   }
 
   fn is_block_unreachable(&self, block: BasicBlock) -> bool {

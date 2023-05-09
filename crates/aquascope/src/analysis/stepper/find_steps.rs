@@ -217,56 +217,220 @@ use rustc_middle::{
   mir::{self, Local, Location, Place},
 };
 use rustc_span::Span;
-use rustc_utils::{
-  source_map::range::CharRange, test_utils::DUMMY_CHAR_RANGE, PlaceExt, SpanExt,
-};
+use rustc_utils::SpanExt;
 
 use super::{
-  segment_tree::{MirSegment, SegmentSearchResult, SegmentTree, SplitType},
+  segment_tree::{SegmentSearchResult, SegmentTree, SplitType},
   *,
 };
-use crate::{
-  analysis::{
-    ir_mapper::{GatherDepth, IRMapper},
-    permissions::{
-      Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
-    },
+use crate::analysis::{
+  ir_mapper::{GatherDepth, IRMapper},
+  permissions::{
+    Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
   },
-  errors,
 };
 
-pub fn compute_permission_steps<'a, 'tcx>(
-  analysis: &AquascopeAnalysis<'a, 'tcx>,
-) -> Result<Vec<PermissionsLineDisplay>>
+macro_rules! fatal {
+  ($this:expr, $( $rest:tt ),*) => {
+    let f = format!( $($rest)*);
+    $this.report_fatal(&f);
+    bail!(f);
+  }
+}
+
+/// Visitor for creating permission steps in the HIR.
+///
+/// Visits the HIR in a Nested order, splitting the MIR and accumulating permission steps.
+pub(super) struct HirStepPoints<'a, 'tcx>
 where
   'tcx: 'a,
 {
-  let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
-  let ctxt = &analysis.permissions;
-  let ir_mapper = &analysis.ir_mapper;
-  let body = &ctxt.body_with_facts.body;
-  let _basic_blocks = body.basic_blocks.indices();
-  let mut hir_visitor = HirStepPoints::make(ctxt, ir_mapper)?;
-  hir_visitor.visit_nested_body(ctxt.body_id);
+  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  ir_mapper: &'a IRMapper<'a, 'tcx>,
+  mir_segments: Box<SegmentTree>,
+  unsupported_encounter: Option<(Span, String)>,
+  fatal_error: String,
+}
 
-  log::debug!(
-    "Final tree for permission steps\n{:?}",
-    hir_visitor.mir_segments
-  );
-
-  if let Some((_, msg)) = hir_visitor.unsupported_encounter {
-    bail!(msg);
+impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
+  fn get_unsupported_feature(&self) -> Option<&str> {
+    self.unsupported_encounter.as_ref().map(|(_, s)| s.as_str())
   }
 
-  if !hir_visitor.fatal_error.is_empty() {
-    bail!(hir_visitor.fatal_error);
+  fn get_internal_error(&self) -> Option<String> {
+    let not_empty = !self.fatal_error.is_empty();
+    not_empty.then_some(self.fatal_error.clone())
   }
 
-  Ok(prettify_permission_steps(
-    analysis,
-    hir_visitor.finalize_diffs(),
-    mode,
-  ))
+  fn finalize(
+    self,
+    analysis: &AquascopeAnalysis<'_, 'tcx>,
+    mode: PermIncludeMode,
+  ) -> Vec<PermissionsLineDisplay> {
+    let body_hir_id = self.body_value_id();
+    let body_open_brace = self.span_of(body_hir_id).shrink_to_lo();
+    let first_point = self.ctxt.location_to_point(self.body_segment().from);
+    let first_domain = &self.ctxt.permissions_domain_at_point(first_point);
+    let empty_domain = &self.domain_bottom();
+
+    // Upon entry, the function parameters are already "live". But we want to
+    // special case this, and show that they "come alive" at the opening brace.
+    let first_diff = empty_domain.diff(first_domain);
+
+    fn diff_subtree<'tcx>(
+      ctxt: &PermissionsCtxt<'_, 'tcx>,
+      tree: &SegmentTree,
+      result: &mut HashMap<
+        Span,
+        (MirSegment, HashMap<Place<'tcx>, PermissionsDataDiff>),
+      >,
+      attached_at: &mut HashMap<Local, Location>,
+    ) {
+      log::trace!(
+        "\ndiff_subtree\n[FILTERS]:\n{attached_at:?}\n[TREE]:{tree:?}"
+      );
+
+      macro_rules! is_attached {
+        ($set:expr, $place:expr, $loc:expr) => {
+          $set.get(&$place.local).map(|l| *l == $loc).unwrap_or(false)
+        };
+      }
+
+      let mut insert_segment = |segment: MirSegment, span: Span| {
+        if segment.from != segment.to {
+          let p0 = ctxt.location_to_point(segment.from);
+          let p1 = ctxt.location_to_point(segment.to);
+          let before = &ctxt.permissions_domain_at_point(p0);
+          let after = &ctxt.permissions_domain_at_point(p1);
+          let mut diff = before.diff(after);
+
+          let removed = diff
+            .drain_filter(|place, _| {
+              is_attached!(attached_at, place, segment.to)
+            })
+            .collect::<Vec<_>>();
+
+          log::debug!(
+            "removed domain places due to attached filter at {:?} {:?}",
+            segment.to,
+            removed
+          );
+
+          result.insert(span, (segment, diff));
+        }
+      };
+
+      match tree {
+        SegmentTree::Single { segment, span, .. } => {
+          insert_segment(*segment, *span)
+        }
+        SegmentTree::Split {
+          segments,
+          attached,
+          reach,
+          span,
+        } => {
+          // Add the attached places filter
+          for local in attached.iter() {
+            log::debug!(
+              "filtering Local {local:?} not attached to {:?}",
+              reach.to
+            );
+
+            let old = attached_at.insert(*local, reach.to);
+            assert!(old.is_none());
+          }
+
+          match segments {
+            SplitType::Linear { first, second } => {
+              diff_subtree(ctxt, first, result, attached_at);
+              diff_subtree(ctxt, second, result, attached_at);
+            }
+
+            // CF Splits with exactly one branch / join are considered linear
+            // This happens frequently when there is ForLoop desugaring.
+            SplitType::ControlFlow { splits, joins }
+              if splits.len() == 1 && joins.len() == 1 =>
+            {
+              diff_subtree(ctxt, &splits[0], result, attached_at);
+              diff_subtree(ctxt, &joins[0], result, attached_at);
+            }
+
+            SplitType::ControlFlow { splits, joins } => {
+              for subtree in splits.iter() {
+                diff_subtree(ctxt, subtree, result, attached_at);
+              }
+
+              let mut joined_diff = HashMap::default();
+              let mut entire_diff = reach.into_diff(ctxt);
+
+              // Rules for joining two domain differences.
+              // 1. We always insert the attached locals.
+              let attached_here = entire_diff
+                .drain_filter(|place, _| {
+                  is_attached!(attached_at, place, reach.to)
+                })
+                .collect::<HashMap<_, _>>();
+
+              // 2. Differences not found in *any* of the join segments are ignored
+              for subtree in joins.iter() {
+                let mut temp = HashMap::default();
+                diff_subtree(ctxt, subtree, &mut temp, attached_at);
+
+                // HACK: remove any differences that were attached to this span.
+                temp.remove(span);
+
+                // HACK: manually remove any attached places which got added.
+                for (_, (_, diffs)) in temp.iter_mut() {
+                  diffs
+                    .drain_filter(|place, _| attached_here.contains_key(place));
+                }
+
+                joined_diff.extend(temp);
+              }
+
+              assert!(!result.contains_key(span));
+              assert!(joined_diff.get(span).is_none());
+
+              // FIXME: the reach is not the correct set of points here.
+              // But we don't currently have a good semantic model for
+              // what it should be. They aren't currently being
+              // displayed by the frontend so this isn't a problem (yet).
+              result.insert(*span, (*reach, attached_here));
+              result.extend(joined_diff);
+            }
+          }
+
+          // Remove the attached places filter.
+          for local in attached.iter() {
+            attached_at.remove(local);
+          }
+        }
+      }
+    }
+
+    let mut diffs = HashMap::default();
+    let mut attached_at = HashMap::default();
+    let dummy_loc = Location {
+      block: mir::START_BLOCK,
+      statement_index: 0,
+    };
+
+    diffs.insert(
+      body_open_brace,
+      (
+        MirSegment {
+          from: dummy_loc,
+          to: dummy_loc,
+        },
+        first_diff,
+      ),
+    );
+
+    diff_subtree(self.ctxt, &self.mir_segments, &mut diffs, &mut attached_at);
+
+    prettify_permission_steps(analysis, diffs, mode)
+  }
 }
 
 // Prettify, means:
@@ -454,32 +618,9 @@ fn prettify_permission_steps<'tcx>(
     .collect::<Vec<_>>()
 }
 
-// ------------------------------------------------
-
-macro_rules! fatal {
-  ($this:expr, $( $rest:tt ),*) => {
-    let f = format!( $($rest)*);
-    $this.report_fatal(&f);
-    bail!(f);
-  }
-}
-
-/// Visitor for creating permission steps in the HIR.
-///
-/// Visits the HIR in a Nested order, splitting the MIR and accumulating permission steps.
-struct HirStepPoints<'a, 'tcx>
-where
-  'tcx: 'a,
-{
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
-  ir_mapper: &'a IRMapper<'a, 'tcx>,
-  mir_segments: Box<SegmentTree>,
-  unsupported_encounter: Option<(Span, String)>,
-  fatal_error: String,
-}
-
+#[allow(dead_code)]
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
-  fn make(
+  pub(super) fn make(
     ctxt: &'a PermissionsCtxt<'a, 'tcx>,
     ir_mapper: &'a IRMapper<'a, 'tcx>,
   ) -> Result<Self> {
@@ -778,176 +919,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       })
       .collect::<HashMap<_, _>>()
       .into()
-  }
-
-  /// Convert the current [`SegmentTree`] into permission steps.
-  fn finalize_diffs(
-    self,
-  ) -> HashMap<Span, (MirSegment, HashMap<Place<'tcx>, PermissionsDataDiff>)>
-  {
-    let body_hir_id = self.body_value_id();
-    let body_open_brace = self.span_of(body_hir_id).shrink_to_lo();
-    let first_point = self.ctxt.location_to_point(self.body_segment().from);
-    let first_domain = &self.ctxt.permissions_domain_at_point(first_point);
-    let empty_domain = &self.domain_bottom();
-
-    // Upon entry, the function parameters are already "live". But we want to
-    // special case this, and show that they "come alive" at the opening brace.
-    let first_diff = empty_domain.diff(first_domain);
-
-    fn diff_subtree<'tcx>(
-      ctxt: &PermissionsCtxt<'_, 'tcx>,
-      tree: &SegmentTree,
-      result: &mut HashMap<
-        Span,
-        (MirSegment, HashMap<Place<'tcx>, PermissionsDataDiff>),
-      >,
-      attached_at: &mut HashMap<Local, Location>,
-    ) {
-      log::trace!(
-        "\ndiff_subtree\n[FILTERS]:\n{attached_at:?}\n[TREE]:{tree:?}"
-      );
-
-      macro_rules! is_attached {
-        ($set:expr, $place:expr, $loc:expr) => {
-          $set.get(&$place.local).map(|l| *l == $loc).unwrap_or(false)
-        };
-      }
-
-      let mut insert_segment = |segment: MirSegment, span: Span| {
-        if segment.from != segment.to {
-          let p0 = ctxt.location_to_point(segment.from);
-          let p1 = ctxt.location_to_point(segment.to);
-          let before = &ctxt.permissions_domain_at_point(p0);
-          let after = &ctxt.permissions_domain_at_point(p1);
-          let mut diff = before.diff(after);
-
-          let removed = diff
-            .drain_filter(|place, _| {
-              is_attached!(attached_at, place, segment.to)
-            })
-            .collect::<Vec<_>>();
-
-          log::debug!(
-            "removed domain places due to attached filter at {:?} {:?}",
-            segment.to,
-            removed
-          );
-
-          result.insert(span, (segment, diff));
-        }
-      };
-
-      match tree {
-        SegmentTree::Single { segment, span, .. } => {
-          insert_segment(*segment, *span)
-        }
-        SegmentTree::Split {
-          segments,
-          attached,
-          reach,
-          span,
-        } => {
-          // Add the attached places filter
-          for local in attached.iter() {
-            log::debug!(
-              "filtering Local {local:?} not attached to {:?}",
-              reach.to
-            );
-
-            let old = attached_at.insert(*local, reach.to);
-            assert!(old.is_none());
-          }
-
-          match segments {
-            SplitType::Linear { first, second } => {
-              diff_subtree(ctxt, first, result, attached_at);
-              diff_subtree(ctxt, second, result, attached_at);
-            }
-
-            // CF Splits with exactly one branch / join are considered linear
-            // This happens frequently when there is ForLoop desugaring.
-            SplitType::ControlFlow { splits, joins }
-              if splits.len() == 1 && joins.len() == 1 =>
-            {
-              diff_subtree(ctxt, &splits[0], result, attached_at);
-              diff_subtree(ctxt, &joins[0], result, attached_at);
-            }
-
-            SplitType::ControlFlow { splits, joins } => {
-              for subtree in splits.iter() {
-                diff_subtree(ctxt, subtree, result, attached_at);
-              }
-
-              let mut joined_diff = HashMap::default();
-              let mut entire_diff = reach.into_diff(ctxt);
-
-              // Rules for joining two domain differences.
-              // 1. We always insert the attached locals.
-              let attached_here = entire_diff
-                .drain_filter(|place, _| {
-                  is_attached!(attached_at, place, reach.to)
-                })
-                .collect::<HashMap<_, _>>();
-
-              // 2. Differences not found in *any* of the join segments are ignored
-              for subtree in joins.iter() {
-                let mut temp = HashMap::default();
-                diff_subtree(ctxt, subtree, &mut temp, attached_at);
-
-                // HACK: remove any differences that were attached to this span.
-                temp.remove(span);
-
-                // HACK: manually remove any attached places which got added.
-                for (_, (_, diffs)) in temp.iter_mut() {
-                  diffs
-                    .drain_filter(|place, _| attached_here.contains_key(place));
-                }
-
-                joined_diff.extend(temp);
-              }
-
-              assert!(!result.contains_key(span));
-              assert!(joined_diff.get(span).is_none());
-
-              // FIXME: the reach is not the correct set of points here.
-              // But we don't currently have a good semantic model for
-              // what it should be. They aren't currently being
-              // displayed by the frontend so this isn't a problem (yet).
-              result.insert(*span, (*reach, attached_here));
-              result.extend(joined_diff);
-            }
-          }
-
-          // Remove the attached places filter.
-          for local in attached.iter() {
-            attached_at.remove(local);
-          }
-        }
-      }
-    }
-
-    let mut diffs = HashMap::default();
-    let mut attached_at = HashMap::default();
-    let dummy_loc = Location {
-      block: mir::START_BLOCK,
-      statement_index: 0,
-    };
-
-    diffs.insert(
-      body_open_brace,
-      (
-        MirSegment {
-          from: dummy_loc,
-          to: dummy_loc,
-        },
-        first_diff,
-      ),
-    );
-
-    diff_subtree(self.ctxt, &self.mir_segments, &mut diffs, &mut attached_at);
-
-    diffs
   }
 
   fn body_segment(&self) -> &MirSegment {
