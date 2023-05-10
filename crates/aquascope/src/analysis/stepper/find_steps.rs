@@ -266,7 +266,7 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
     self,
     analysis: &AquascopeAnalysis<'_, 'tcx>,
     mode: PermIncludeMode,
-  ) -> Vec<PermissionsLineDisplay> {
+  ) -> Result<Vec<PermissionsLineDisplay>> {
     let body_hir_id = self.body_value_id();
     let body_open_brace = self.span_of(body_hir_id).shrink_to_lo();
     let first_point = self.ctxt.location_to_point(self.body_segment().from);
@@ -429,7 +429,7 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
 
     diff_subtree(self.ctxt, &self.mir_segments, &mut diffs, &mut attached_at);
 
-    prettify_permission_steps(analysis, diffs, mode)
+    Ok(prettify_permission_steps(analysis, diffs, mode))
   }
 }
 

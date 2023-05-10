@@ -14,9 +14,6 @@ publish = false
 [package.metadata.rust-analyzer]
 rustc_private = true
 
-[features]
-testing = ["lazy_static"]
-
 [dependencies]
 anyhow = "1.0.0"
 log = "0.4"
@@ -31,7 +28,7 @@ miri = {git = "https://github.com/rust-lang/miri.git", rev = "35d6927663065d7fde
 aquascope_workspace_utils = { version = "0.2", path = "../aquascope_workspace_utils" }
 
 # testing utils
-lazy_static = { version = "1.4", optional = true }
+lazy_static = { version = "1.4" }
 
 [dependencies.rustc-utils]
 git = "https://github.com/cognitive-engineering-lab/rustc-plugin"
@@ -40,6 +37,6 @@ features = ["graphviz", "ts-rs", "serde", "test"]
 
 [dev-dependencies]
 insta = { version = "1.22.0", features = ["json", "yaml", "redactions"] }
-aquascope = { path = ".", features = ["testing"] }
+aquascope = { path = "." }
 env_logger = "0.9.3"
 test-log = "0.2.11"

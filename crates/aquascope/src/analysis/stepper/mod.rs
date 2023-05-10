@@ -287,7 +287,7 @@ trait HirPermissionStepper<'tcx>: HirVisitor<'tcx> {
     self,
     analysis: &AquascopeAnalysis<'_, 'tcx>,
     mode: PermIncludeMode,
-  ) -> Vec<PermissionsLineDisplay>;
+  ) -> Result<Vec<PermissionsLineDisplay>>;
 }
 
 /// Represents a segment of the MIR control-flow graph.
@@ -337,5 +337,5 @@ where
     bail!(fatal_error);
   }
 
-  Ok(hir_visitor.finalize(analysis, mode))
+  hir_visitor.finalize(analysis, mode)
 }

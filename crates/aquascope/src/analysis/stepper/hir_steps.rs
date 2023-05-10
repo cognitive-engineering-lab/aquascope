@@ -26,7 +26,9 @@ use rustc_utils::{
 };
 
 use super::{
-  segmented_mir::{ScopeIdx, SegmentCollection, SegmentedMir},
+  segmented_mir::{
+    CollectionIdx, CollectionKind, ScopeIdx, SegmentedMir, BASE_SCOPE,
+  },
   *,
 };
 use crate::{
@@ -287,7 +289,7 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
     self,
     analysis: &AquascopeAnalysis<'_, 'tcx>,
     mode: PermIncludeMode,
-  ) -> Vec<PermissionsLineDisplay> {
+  ) -> Result<Vec<PermissionsLineDisplay>> {
     let ctxt = self.ctxt;
 
     let body_hir_id = self.body_value_id();
@@ -295,9 +297,9 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
     let first_point = self.ctxt.location_to_point(self.start_loc);
     let first_domain = &self.ctxt.permissions_domain_at_point(first_point);
     let empty_domain = &self.ctxt.domain_bottom();
-    let mir_segments = self.mir_segments.freeze();
+    let mir_segments = self.mir_segments.freeze()?;
 
-    let places_to_filter = |scope: ScopeIdx| -> HashSet<Local> {
+    let locals_attached_on = |scope: ScopeIdx| -> HashSet<Local> {
       let ps = mir_segments.parent_scopes(scope).collect::<Vec<_>>();
       log::debug!("scope {scope:?} paents: {ps:?}");
       ps.iter()
@@ -312,94 +314,131 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
     let first_diff = empty_domain.diff(first_domain);
 
     // Insert a segment into a table filtering defined places.
-    let insert_segment = |result: &mut Tables<'tcx>, segment: MirSegment| {
-      let (span, scope) = mir_segments.segment_data(segment);
-      let _to_filter = places_to_filter(scope);
-      if segment.from != segment.to {
-        let p0 = ctxt.location_to_point(segment.from);
-        let p1 = ctxt.location_to_point(segment.to);
-        let before = &ctxt.permissions_domain_at_point(p0);
-        let after = &ctxt.permissions_domain_at_point(p1);
-        let mut diff = before.diff(after);
+    let insert_segment =
+      |result: &mut Tables<'tcx>, segment: MirSegment| -> ScopeIdx {
+        let Some((span, scope)) = mir_segments.segment_data(segment) else {
+        return *BASE_SCOPE;
+      };
 
-        let removed = diff
-          .drain_filter(
-            |_place, _| false, // to_filter.contains(&place.local)
-          )
-          .collect::<Vec<_>>();
+        let to_filter = locals_attached_on(scope);
+        if segment.from != segment.to {
+          let p0 = ctxt.location_to_point(segment.from);
+          let p1 = ctxt.location_to_point(segment.to);
+          let before = &ctxt.permissions_domain_at_point(p0);
+          let after = &ctxt.permissions_domain_at_point(p1);
+          let mut diff = before.diff(after);
 
-        log::debug!(
-          "removed domain places due to attached filter at {:?} {:?}",
-          segment.to,
-          removed
-        );
+          let removed = diff
+            .drain_filter(|place, _| to_filter.contains(&place.local))
+            .collect::<Vec<_>>();
 
-        result.entry(span).or_default().push((segment, diff));
-      }
-    };
+          log::debug!(
+            "removed domain places due to attached filter at {:?} {:?}",
+            segment.to,
+            removed
+          );
 
-    let insert_collection =
-      |result: &mut Tables<'tcx>, shape: &SegmentCollection| {
-        match shape {
+          result.entry(span).or_default().push((segment, diff));
+        }
+        scope
+      };
+
+    let inserted_collections = &mut HashSet::default();
+    let mut insert_collection =
+      |result: &mut Tables<'tcx>, idx: CollectionIdx| {
+        // Only insert a collection once.
+        if inserted_collections.contains(&idx) {
+          return;
+        }
+
+        let Some(shape) = mir_segments.collection_data(idx) else {
+        return;
+      };
+        inserted_collections.insert(idx);
+
+        match &shape.kind {
           // TODO: for both types of collecitons, we need a start / end
           // location, as well as a scope so that we can find the attached
           // locals on a scope.
 
           // For linear collections of segments we can simply
           // insert them into the resulting table.
-          SegmentCollection::Linear { segments } => {
+          CollectionKind::Linear { segments } => {
             for &segment in segments.iter() {
               insert_segment(result, segment);
             }
           }
-          SegmentCollection::Branch {
-            // root,
-            // phi,
+          CollectionKind::Branch {
+            root,
+            phi,
             splits,
             middle,
-            ..
-            // joins,
+            joins,
           } => {
-            // let mut joined_diff = HashMap::default();
-            // let mut entire_diff = if let Some(phi) = phi {
-            //   MirSegment::new(*root, *phi).into_diff(ctxt)
-            // } else {
-            //   HashMap::default()
-            // };
+            // The differences from the start of the condition to the end.
+            let reach;
+            let mut entire_diff: PseudoTable;
+            if let Some(phi) = phi {
+              let s = MirSegment::new(*root, *phi);
+              reach = Some(s);
+              entire_diff = s.into_diff(ctxt);
+            } else {
+              reach = None;
+              entire_diff = HashMap::default();
+            };
 
-            for &segment in splits.iter() {
-              insert_segment(result, segment);
+            let temp_middle: &mut Tables = &mut HashMap::default();
+            let temp_joins: &mut Tables = &mut HashMap::default();
+
+            let split_scopes = splits
+              .iter()
+              .map(|&segment| insert_segment(result, segment));
+
+            let middle_scopes = middle
+              .iter()
+              .map(|&segment| insert_segment(temp_middle, segment));
+
+            let join_scopes = joins
+              .iter()
+              .map(|&segment| insert_segment(temp_joins, segment));
+
+            // TODO: the scoped attached locals still don't appear
+            //       for if-lets and join segments aren't filtered
+            //       if they appear within a different branch.
+
+            let all_scopes =
+              split_scopes.chain(middle_scopes).chain(join_scopes);
+            let all_attached = all_scopes
+              .flat_map(locals_attached_on)
+              .collect::<HashSet<_>>();
+
+            let attached_here = entire_diff
+              .drain_filter(|place: &Place, _| {
+                all_attached.contains(&place.local)
+              })
+              .collect::<PseudoTable>();
+
+            log::debug!("Locals attached to collection: {attached_here:#?}");
+
+            macro_rules! insert {
+              ($m1:expr => into $m2:expr) => {
+                for (&span, ref mut vs) in $m1.into_iter() {
+                  $m2.entry(span).or_default().append(vs);
+                }
+              };
             }
 
-            for &segment in middle.iter() {
-              insert_segment(result, segment);
+            insert!(temp_middle => into result);
+            insert!(temp_joins => into result);
+
+            if let Some(reach) = reach {
+              result
+                .entry(rustc_span::DUMMY_SP)
+                .or_default()
+                .push((reach, attached_here));
             }
-
-            // TODO
-
-            todo!()
           }
         }
-
-        // // span, places_to_filter(scope)
-        // if segment.from != segment.to {
-        //   log::debug!(
-        //   "adding segment to diff table: {segment:?} filtering: {to_filter:?}"
-        // );
-
-        //   let p0 = ctxt.location_to_point(segment.from);
-        //   let p1 = ctxt.location_to_point(segment.to);
-        //   let before = &ctxt.permissions_domain_at_point(p0);
-        //   let after = &ctxt.permissions_domain_at_point(p1);
-        //   let mut diff = before.diff(after);
-
-        //   let removed = diff
-        //     .drain_filter(|place, _| to_filter.contains(&place.local))
-        //     .collect::<Vec<_>>();
-        //   log::debug!("removed {removed:#?} because of attached scope filter");
-
-        //   result.entry(span).or_default().push((segment, diff))
-        // }
       };
 
     let mut diffs = HashMap::default();
@@ -409,15 +448,11 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
       first_diff,
     )]);
 
-    let segments = mir_segments.segments().collect::<Vec<_>>();
-
-    log::debug!("finalized segments {:#?}", segments);
-
-    for &shape in segments.iter() {
-      insert_collection(&mut diffs, shape);
+    for &c in mir_segments.collections() {
+      insert_collection(&mut diffs, c);
     }
 
-    prettify_permission_steps(analysis, diffs, mode)
+    Ok(prettify_permission_steps(analysis, diffs, mode))
   }
 }
 
