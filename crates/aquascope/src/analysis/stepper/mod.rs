@@ -14,6 +14,7 @@ use fluid_let::fluid_let;
 use rustc_data_structures::{self, fx::FxHashMap as HashMap};
 use rustc_hir::intravisit::Visitor as HirVisitor;
 use rustc_middle::mir::{Location, Place};
+use rustc_span::Span;
 use rustc_utils::{
   source_map::range::CharRange, test_utils::DUMMY_CHAR_RANGE, PlaceExt,
 };
@@ -22,7 +23,9 @@ use ts_rs::TS;
 
 use crate::{
   analysis::{
-    permissions::{Permissions, PermissionsData, PermissionsDomain},
+    permissions::{
+      Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
+    },
     AquascopeAnalysis, LoanKey, MoveKey,
   },
   errors,
@@ -30,7 +33,7 @@ use crate::{
 
 fluid_let!(pub static INCLUDE_MODE: PermIncludeMode);
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Deserialize, Serialize, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Hash)]
 pub enum PermIncludeMode {
   Changes,
   All,
@@ -70,17 +73,36 @@ pub struct PermissionsLineDisplay {
   pub state: Vec<PermissionsStepTable>,
 }
 
-#[derive(Clone, PartialEq, Eq, Serialize, TS)]
+pub trait Stepable:
+  Copy
+  + Clone
+  + std::fmt::Debug
+  + std::cmp::PartialEq
+  + std::cmp::Eq
+  + std::hash::Hash
+  + Serialize
+  + TS
+{
+}
+
+impl<A> Stepable for A where
+  A: Copy
+    + Clone
+    + std::fmt::Debug
+    + std::cmp::PartialEq
+    + std::cmp::Eq
+    + std::hash::Hash
+    + Serialize
+    + TS
+{
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, TS)]
 #[serde(tag = "type")]
 #[ts(export)]
 pub enum ValueStep<A>
 where
-  A: Clone
-    + std::fmt::Debug
-    + std::cmp::PartialEq
-    + std::cmp::Eq
-    + Serialize
-    + TS,
+  A: Stepable,
 {
   High {
     value: A,
@@ -94,12 +116,7 @@ where
 
 impl<A> std::fmt::Debug for ValueStep<A>
 where
-  A: Clone
-    + std::fmt::Debug
-    + std::cmp::PartialEq
-    + std::cmp::Eq
-    + Serialize
-    + TS,
+  A: Stepable,
 {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
@@ -119,7 +136,7 @@ where
 // the default BoolStep can be taken.
 macro_rules! make_diff {
   ($base:ident => $diff:ident { $($i:ident),* }) => {
-    #[derive(Clone, PartialEq, Eq, Serialize, TS)]
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, TS)]
     #[ts(export)]
     pub struct $diff {
       $( pub $i: ValueStep<bool>, )*
@@ -143,7 +160,7 @@ impl std::fmt::Debug for PermissionsDiff {
   }
 }
 
-#[derive(Clone, Serialize, TS, PartialEq, Eq)]
+#[derive(Copy, Clone, Serialize, TS, PartialEq, Eq, Hash)]
 #[ts(export)]
 pub struct PermissionsDataDiff {
   pub is_live: ValueStep<bool>,
@@ -192,7 +209,7 @@ impl Difference for bool {
 
 impl<T> ValueStep<T>
 where
-  T: Clone + std::fmt::Debug + std::cmp::PartialEq + Eq + Serialize + TS,
+  T: Stepable,
 {
   fn is_empty(&self) -> bool {
     matches!(self, Self::None { .. })
@@ -201,7 +218,7 @@ where
 
 impl<A> Difference for Option<A>
 where
-  A: Clone + PartialEq + Eq + std::fmt::Debug + Serialize + TS,
+  A: Stepable,
 {
   type Diff = ValueStep<A>;
 
@@ -309,6 +326,13 @@ impl std::fmt::Debug for MirSegment {
 impl MirSegment {
   pub fn new(l1: Location, l2: Location) -> Self {
     MirSegment { from: l1, to: l2 }
+  }
+
+  /// A _rough_ approximation of the source span of the step.
+  pub fn span(&self, ctxt: &PermissionsCtxt) -> Span {
+    let lo = ctxt.location_to_span(self.from);
+    let hi = ctxt.location_to_span(self.to);
+    lo.with_hi(hi.hi())
   }
 }
 

@@ -508,7 +508,7 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
   pub fn open_branch(
     &mut self,
     location: Location,
-    get_span: impl Fn(MirSegment) -> Span,
+    get_span: impl Fn(&mut Location) -> Span,
   ) -> Result<()> {
     log::debug!("creating new branch rooted at {location:?}");
     let next_collection = self.next_collection();
@@ -559,11 +559,17 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
     let branch = stack.get_current_branch_mut()?;
     log::debug!("flushing branch split steps");
 
-    for to in branch.open_paths.iter() {
+    // NOTE: we are passing a `&mut Location` for a reason.
+    //       The HIR node that starts the branch entry often
+    //       has a Location in the middle of a BasicBlock, not
+    //       right at the beginning. The mut ref allows the HIR
+    //       to do small corrections on the location as necessary.
+    for to in branch.open_paths.iter_mut() {
+      let span = get_span(to); // Update loc first!
       let segment = MirSegment::new(branch.root, *to);
       log::debug!("inserting split step {segment:?}");
       branch.splits.push(segment);
-      insert_segment_unchecked!(self, segment, get_span(segment), scope);
+      insert_segment_unchecked!(self, segment, span, scope);
     }
 
     Ok(())
@@ -592,14 +598,14 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
       "expecting to close branch rooted at {root:?} but given {branch:#?}"
     );
 
-    log::debug!("Flusing branch state {branch:#?}");
+    log::debug!("Flushing branch state {branch:#?}");
 
     // Flush any remaining open paths to step back to the phi node.
     if let Some(to) = branch.phi {
       for &from in branch.open_paths.iter() {
         let segment = MirSegment::new(from, to);
         log::debug!("flushing join step {segment:?}");
-        branch.splits.push(segment);
+        branch.joins.push(segment);
         insert_segment_unchecked!(self, segment, get_span(segment), scope);
       }
     }

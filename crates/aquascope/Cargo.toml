@@ -14,6 +14,9 @@ publish = false
 [package.metadata.rust-analyzer]
 rustc_private = true
 
+[features]
+testing = []
+
 [dependencies]
 anyhow = "1.0.0"
 log = "0.4"
@@ -37,6 +40,6 @@ features = ["graphviz", "ts-rs", "serde", "test"]
 
 [dev-dependencies]
 insta = { version = "1.22.0", features = ["json", "yaml", "redactions"] }
-aquascope = { path = "." }
+aquascope = { path = ".", features = ["testing"] }
 env_logger = "0.9.3"
 test-log = "0.2.11"

@@ -39,8 +39,12 @@ use crate::{
   errors,
 };
 
+/// A single table, unprocessed mapping Places to their differences for a MirSegment.
 type PseudoTable<'tcx> = HashMap<Place<'tcx>, PermissionsDataDiff>;
-// type SpanTableMap<'tcx> = HashMap<Span, (MirSegment, PseudoTable<'tcx>)>;
+
+/// At a given Span, there could be multiple tables generated, each for a different
+/// MirSegment. These tables can either be merged or displayed side-by-side.
+/// See [`prettify_permission_steps`] for merging strategy.
 type Tables<'tcx> = HashMap<Span, Vec<(MirSegment, PseudoTable<'tcx>)>>;
 
 // Prettify, means:
@@ -352,15 +356,11 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
         }
 
         let Some(shape) = mir_segments.collection_data(idx) else {
-        return;
-      };
+          return;
+        };
         inserted_collections.insert(idx);
 
         match &shape.kind {
-          // TODO: for both types of collecitons, we need a start / end
-          // location, as well as a scope so that we can find the attached
-          // locals on a scope.
-
           // For linear collections of segments we can simply
           // insert them into the resulting table.
           CollectionKind::Linear { segments } => {
@@ -375,39 +375,41 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
             middle,
             joins,
           } => {
-            // The differences from the start of the condition to the end.
+            // The differences from the start of the branching to the end.
             let reach;
-            let mut entire_diff: PseudoTable;
+            let mut entire_diff;
             if let Some(phi) = phi {
-              let s = MirSegment::new(*root, *phi);
-              reach = Some(s);
-              entire_diff = s.into_diff(ctxt);
+              reach = MirSegment::new(*root, *phi);
+              entire_diff = reach.into_diff(ctxt);
             } else {
-              reach = None;
-              entire_diff = HashMap::default();
+              reach = MirSegment::new(*root, *root);
+              entire_diff = PseudoTable::default();
             };
 
-            let temp_middle: &mut Tables = &mut HashMap::default();
-            let temp_joins: &mut Tables = &mut HashMap::default();
+            log::debug!("Inserting Branched Collection {:?}:\n\tsplits: {:?}\n\tmiddle: {:?}\n\tjoins: {:?}", reach, splits, middle, joins);
 
-            let split_scopes = splits
-              .iter()
-              .map(|&segment| insert_segment(result, segment));
+            let temp_middle = &mut Tables::default();
+            let temp_joins = &mut Tables::default();
 
-            let middle_scopes = middle
+            // let split_scopes = splits
+            //   .iter()
+            //   .map(|&segment| insert_segment(result, segment));
+
+            let middle_scopes = splits
               .iter()
+              .chain(middle)
               .map(|&segment| insert_segment(temp_middle, segment));
 
             let join_scopes = joins
               .iter()
               .map(|&segment| insert_segment(temp_joins, segment));
 
-            // TODO: the scoped attached locals still don't appear
-            //       for if-lets and join segments aren't filtered
-            //       if they appear within a different branch.
+            let all_scopes = middle_scopes.chain(join_scopes);
 
-            let all_scopes =
-              split_scopes.chain(middle_scopes).chain(join_scopes);
+            // Find the locals which were filtered from all scopes. In theory,
+            // `all_scopes` should contains the same scope, copied over,
+            // but the SegmentedMir doesn't enforce this and there's no
+            // scope attached to collections.
             let all_attached = all_scopes
               .flat_map(locals_attached_on)
               .collect::<HashSet<_>>();
@@ -418,30 +420,59 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
               })
               .collect::<PseudoTable>();
 
+            // TODO: the scoped attached locals still don't appear
+            //       for if-lets and join segments aren't filtered
+            //       if they appear within a different branch.
+
+            let diffs_in_tables = |tbls: &Tables| {
+              tbls
+                .iter()
+                .flat_map(|(_, tbls)| {
+                  tbls
+                    .iter()
+                    .flat_map(|(_, ptbl)| ptbl.iter().map(|(_, diff)| *diff))
+                })
+                .collect::<HashSet<PermissionsDataDiff>>()
+            };
+
+            // Flatten all tables to the unique `PermissionsDataDiff`s
+            // that exist within them.
+            let diffs_in_branches = diffs_in_tables(temp_middle);
+
+            for (_, tbls) in temp_joins.iter_mut() {
+              for (_, ptbl) in tbls.iter_mut() {
+                let drained = ptbl
+                  .drain_filter(|_, diff| diffs_in_branches.contains(diff))
+                  .collect::<Vec<_>>();
+                log::debug!("drained {drained:#?} because diff exists");
+              }
+            }
+
             log::debug!("Locals attached to collection: {attached_here:#?}");
+            log::debug!(
+              "Differences contained within the branches {:#?} and those in joins {:#?}", diffs_in_branches, diffs_in_tables(temp_joins));
 
             macro_rules! insert {
-              ($m1:expr => into $m2:expr) => {
+              ($m1:expr => $m2:expr) => {
                 for (&span, ref mut vs) in $m1.into_iter() {
                   $m2.entry(span).or_default().append(vs);
                 }
               };
             }
 
-            insert!(temp_middle => into result);
-            insert!(temp_joins => into result);
+            insert!(temp_middle => result);
+            insert!(temp_joins => result);
 
-            if let Some(reach) = reach {
-              result
-                .entry(rustc_span::DUMMY_SP)
-                .or_default()
-                .push((reach, attached_here));
-            }
+            // Attach filtered locals
+            result
+              .entry(reach.span(ctxt))
+              .or_default()
+              .push((reach, attached_here));
           }
         }
       };
 
-    let mut diffs = HashMap::default();
+    let mut diffs = Tables::default();
 
     diffs.insert(body_open_brace, vec![(
       MirSegment::new(self.start_loc, self.start_loc),
@@ -573,6 +604,75 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       })
       .collect::<HashMap<_, _>>()
   }
+
+  fn arms_to_entry_spans(&self, arms: &[hir::Arm]) -> HashMap<Location, Span> {
+    arms
+      .iter()
+      .filter_map(|arm| {
+        // NOTE: we use the body of the arm to capture
+        //       the opening of the expression rather than
+        //       the entire arm itself.
+        let id = arm.body.hir_id;
+        self
+          .get_node_entry(id)
+          .map(|entry| (entry, self.span_of(id).shrink_to_lo()))
+      })
+      .collect::<HashMap<_, _>>()
+  }
+
+  /// Open a conditional expression for branching. On success, returns
+  /// the exit `Location` of the given conditon.
+  ///
+  /// Examples, given a `EK::If(Expr, Expr, Option<Expr>)`, the given condition expression should
+  /// be the first expression in the tuple, which is the condition.
+  /// For a `EK::Match(Expr, [Arm], ...)` the given condition should be the first expression
+  /// in the tuple which is the match condition.
+  fn expr_condition_prelude(
+    &mut self,
+    cnd: &'tcx hir::Expr,
+  ) -> Option<Location> {
+    // NOTE: first we need to walk and split the condition. In the
+    // case of a more complex condition expression, splitting this
+    // first will result in a split location closest to the `SwitchInt`.
+    self.visit_expr(cnd);
+    let Some(cnd_exit) = self.get_node_exit(cnd.hir_id) else {
+      log::warn!(
+        "Skipping EXPR, condition has no exit {}",
+        self.prettify_node(cnd.hir_id)
+      );
+
+      return None;
+    };
+
+    trap_ice!(
+      self,
+      insert,
+      cnd_exit,
+      self.get_path_hint(),
+      self.span_of(cnd.hir_id)
+    );
+
+    Some(cnd_exit)
+  }
+
+  /// Close the entire branching expression which had the condition exit.
+  ///
+  /// Here, the given expression should be the _entire_ `EK::If` or `EK::Match`.
+  fn expr_condition_postlude(
+    &mut self,
+    expr: &'tcx hir::Expr,
+    cnd_exit: Location,
+  ) {
+    if self.mir_segments.is_branch_open(cnd_exit) {
+      log::warn!(
+        "branch still open, flushing and closing steps:\n{}",
+        self.prettify_node(expr.hir_id)
+      );
+
+      let ss = self.span_of(expr.hir_id).shrink_to_hi();
+      trap_ice!(self, close_branch, cnd_exit, |_| ss);
+    }
+  }
 }
 
 impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
@@ -618,19 +718,13 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
     let scope = self.mir_segments.open_scope();
 
-    // TODO: have a way to put locally assigned places in a hierarchy so
-    //       we can easily filter out the nested assignments.
-    let locals = match stmt.kind {
-      SK::Local(local) => {
-        let places = self.ir_mapper.local_assigned_place(local);
-        places.into_iter().map(|p| p.local).collect::<Vec<_>>()
+    if let SK::Local(local) = stmt.kind {
+      let places = self.ir_mapper.local_assigned_place(local);
+      let locals = places.into_iter().map(|p| p.local).collect::<Vec<_>>();
+      if !locals.is_empty() {
+        log::debug!("storing locals at scope {scope:?} {locals:?}");
+        self.locals_at_scope.insert(scope, locals);
       }
-      _ => vec![],
-    };
-
-    if !locals.is_empty() {
-      log::debug!("storing locals at scope {scope:?} {locals:?}");
-      self.locals_at_scope.insert(scope, locals);
     }
 
     if self.should_visit_nested(stmt.hir_id, stmt.span) {
@@ -654,43 +748,32 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   }
 
   fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
-    use hir::ExprKind as EK;
-
-    log::debug!("visiting EXPR : {}", self.prettify_node(expr.hir_id));
-
+    use hir::{ExprKind as EK, MatchSource};
     match expr.kind {
       EK::If(cnd, then, else_opt) => {
-        // NOTE: first we need to walk and split the condition. In the
-        // case of a more complex condition expression, splitting this
-        // first will result in a split location closest to the `SwitchInt`.
-        self.visit_expr(cnd);
-        let cnd_exit_opt = self.get_node_exit(cnd.hir_id);
-
-        if cnd_exit_opt.is_none() {
-          log::warn!(
-            "Skipping EXPR, IF condition has no exit {}",
-            self.prettify_node(cnd.hir_id)
-          );
-
-          return;
-        }
-
-        let cnd_exit = cnd_exit_opt.unwrap();
-
-        trap_ice!(
-          self,
-          insert,
-          cnd_exit,
-          self.get_path_hint(),
-          self.span_of(cnd.hir_id)
+        log::debug!(
+          "visiting EXPR-IF\n\tCND: {}\n\t\tTHEN: {}\n\t\tELSE: {}",
+          self.prettify_node(cnd.hir_id),
+          self.prettify_node(then.hir_id),
+          else_opt
+            .map_or(String::from("<NONE>"), |e| self.prettify_node(e.hir_id))
         );
 
+        let Some(cnd_exit) = self.expr_condition_prelude(cnd) else {
+          return;
+        };
+
         let entry_to_spans = self.exprs_to_entry_spans(&[Some(then), else_opt]);
-        trap_ice!(self, open_branch, cnd_exit, |MirSegment { to, .. }| {
+        trap_ice!(self, open_branch, cnd_exit, |to: &mut Location| {
           entry_to_spans
             .iter()
             .find_map(|(&l, &span)| {
-              self.ir_mapper.dominates(to, l).then_some(span)
+              if self.ir_mapper.dominates(*to, l) {
+                *to = l;
+                Some(span)
+              } else {
+                None
+              }
             })
             .unwrap_or_default()
         });
@@ -721,34 +804,72 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
           }
         }
 
-        if self.mir_segments.is_branch_open(cnd_exit) {
-          log::warn!(
-            "branch still open, flushing and closing steps:\n{}",
-            self.prettify_node(expr.hir_id)
-          );
-
-          let ss = self.span_of(expr.hir_id).shrink_to_hi();
-          trap_ice!(self, close_branch, cnd_exit, |_| ss);
-        }
+        self.expr_condition_postlude(expr, cnd_exit);
       }
 
-      // TODO: uncomment and implement match
-      // - MATCH
-      // - For / While (I don't want to special case these but it may be necessary)
+      EK::Match(_, [arm], MatchSource::ForLoopDesugar) => {
+        self.visit_expr(arm.body);
+      }
 
-      //   EK::Match(swtch, arms, _source) => {
-      //     // NOTE: first we need to walk and split the condition. In the
-      //     // case of a more complex condition expression, splitting this
-      //     // first will result in a split location closest to the `SwitchInt`.
-      //     self.visit_expr(swtch);
-      //     for arm in arms.iter() {
-      //       self.visit_arm(arm);
-      //     }
+      EK::Match(cnd, arms, _source) => {
+        use itertools::Itertools;
+        log::debug!(
+          "visiting EXPR-MATCH\n\tCND: {}\n\t\tARMS: {}",
+          self.prettify_node(cnd.hir_id),
+          arms
+            .iter()
+            .map(|arm| self.prettify_node(arm.hir_id))
+            .join("\n\t\t")
+        );
+        log::debug!("RAW MATCH: {expr:#?}");
 
-      //   }
+        let Some(cnd_exit) = self.expr_condition_prelude(cnd) else {
+          return;
+        };
+
+        let entry_to_spans = self.arms_to_entry_spans(arms);
+        trap_ice!(self, open_branch, cnd_exit, |to: &mut Location| {
+          entry_to_spans
+            .iter()
+            .find_map(|(&l, &span)| {
+              if self.ir_mapper.dominates(*to, l) {
+                // Update the location to be the entry of the arm.
+                *to = l;
+                Some(span)
+              } else {
+                None
+              }
+            })
+            .unwrap_or_default()
+        });
+
+        // Visit all the arms
+        //
+        // NOTE: arms will handle path hinting.
+        for arm in arms {
+          self.visit_arm(arm);
+        }
+
+        self.expr_condition_postlude(expr, cnd_exit);
+      }
       _ => {
         intravisit::walk_expr(self, expr);
       }
+    }
+  }
+
+  // NOTE: it's impotant that arms handle path hinting
+  fn visit_arm(&mut self, arm: &'tcx hir::Arm) {
+    if let Some(arm_entry) = self.get_node_entry(arm.hir_id) {
+      self.push_branch_start(arm_entry);
+      intravisit::walk_arm(self, arm);
+      self.pop_branch_start(arm_entry);
+    } else {
+      report_unexpected!(
+        self,
+        "match-arm doesn't have entry {}",
+        self.prettify_node(arm.hir_id)
+      );
     }
   }
 }
