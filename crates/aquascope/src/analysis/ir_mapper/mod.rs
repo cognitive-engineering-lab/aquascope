@@ -114,6 +114,9 @@ where
     ir_map
   }
 
+  // --------------------------------------------------------
+  // TODO: these utilities probably belong in the CleanedBody
+
   pub fn dominates(&self, dom: Location, node: Location) -> bool {
     if dom.block == node.block {
       return dom.statement_index <= node.statement_index;
@@ -131,6 +134,14 @@ where
     self
       .post_dominators
       .is_postdominated_by(node.block, dom.block)
+  }
+
+  /// Returns true if the terminator in the location's block is a `switchInt`.
+  pub fn is_terminator_switchint(&self, location: Location) -> bool {
+    matches!(
+      self.cleaned_graph.terminator_in_block(location.block).kind,
+      mir::TerminatorKind::SwitchInt { .. }
+    )
   }
 
   pub fn local_assigned_place(&self, local: &hir::Local) -> Vec<Place<'tcx>> {

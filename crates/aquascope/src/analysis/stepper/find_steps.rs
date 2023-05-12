@@ -253,8 +253,8 @@ where
 }
 
 impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
-  fn get_unsupported_feature(&self) -> Option<&str> {
-    self.unsupported_encounter.as_ref().map(|(_, s)| s.as_str())
+  fn get_unsupported_feature(&self) -> Option<String> {
+    self.unsupported_encounter.as_ref().map(|(_, s)| s.clone())
   }
 
   fn get_internal_error(&self) -> Option<String> {

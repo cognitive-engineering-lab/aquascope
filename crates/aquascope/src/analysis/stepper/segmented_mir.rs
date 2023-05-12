@@ -13,7 +13,7 @@ use rustc_data_structures::{
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
 };
 use rustc_index::vec::Idx;
-use rustc_middle::mir::{Location, TerminatorKind, START_BLOCK};
+use rustc_middle::mir::{Location, START_BLOCK};
 use rustc_span::Span;
 
 use super::MirSegment;
@@ -176,6 +176,60 @@ impl From<BranchedState> for Collection {
 }
 
 impl BranchedState {
+  /// Makes a new `BranchedState` that is rooted at the given location.
+  ///
+  /// Building a `BranchedState` could fail if the given root
+  /// comes from a block without a `switchInt` terminator. The
+  /// HIR Visitor should of course make sure this prerequisite holds.
+  fn make(
+    mapper: &IRMapper,
+    idx: CollectionIdx,
+    root: Location,
+  ) -> Result<Self> {
+    ensure!(
+      mapper.is_terminator_switchint(root),
+      "terminator in block {root:?} is not a `switchInt`"
+    );
+
+    let open_branches = mapper
+      .cleaned_graph
+      .successors(root.block)
+      .map(|bb| bb.start_location())
+      .collect::<Vec<_>>();
+
+    let potential_joins = mapper
+      .cleaned_graph
+      .blocks()
+      .filter_map(|bb| {
+        open_branches
+          .iter()
+          .all(|loc| mapper.post_dominates(bb.start_location(), *loc))
+          .then_some(bb.start_location())
+      })
+      .collect::<Vec<_>>();
+
+    let close = potential_joins
+      .iter()
+      .find(|&before| {
+        potential_joins
+          .iter()
+          .all(|after| mapper.dominates(*before, *after))
+      })
+      .copied();
+
+    log::debug!("creating new branch:\n\troot: {root:?}\n\tpath_starts: {open_branches:?}\n\tphi: {close:?}");
+
+    Ok(BranchedState {
+      idx,
+      joins: Vec::default(),
+      middle: Vec::default(),
+      splits: Vec::default(),
+      root,
+      open_paths: open_branches,
+      phi: close,
+    })
+  }
+
   pub fn location_dominators(
     &self,
     mapper: &IRMapper,
@@ -202,7 +256,7 @@ impl BranchedState {
   ) -> Result<usize> {
     let expect_unique = |branches: &[(usize, &Location)]| -> Result<usize> {
       match branches.len() {
-        0 => bail!("no branches {self:#?} dominate {location:?}"),
+        0 => bail!("no branches dominate {location:?} {self:#?}"),
         1 => Ok(branches[0].0),
         _ => bail!("multiple dominating branches {location:?} {branches:#?}"),
       }
@@ -290,58 +344,6 @@ impl State {
   }
 }
 
-fn build_branch_from_root(
-  mapper: &IRMapper,
-  idx: CollectionIdx,
-  root: Location,
-) -> Result<BranchedState> {
-  let graph = &mapper.cleaned_graph;
-
-  ensure!(
-    matches!(
-      graph.terminator_in_block(root.block).kind,
-      TerminatorKind::SwitchInt { .. }
-    ),
-    "terminator in block {root:?} is not a `SwitchInt`"
-  );
-
-  let open_branches = graph
-    .successors(root.block)
-    .map(|bb| bb.start_location())
-    .collect::<Vec<_>>();
-
-  let potential_joins = graph
-    .blocks()
-    .filter_map(|bb| {
-      open_branches
-        .iter()
-        .all(|loc| mapper.post_dominates(bb.start_location(), *loc))
-        .then_some(bb.start_location())
-    })
-    .collect::<Vec<_>>();
-
-  let close = potential_joins
-    .iter()
-    .find(|&before| {
-      potential_joins
-        .iter()
-        .all(|after| mapper.dominates(*before, *after))
-    })
-    .copied();
-
-  log::debug!("creating new branch:\n\troot: {root:?}\n\tpath_starts: {open_branches:?}\n\tphi: {close:?}");
-
-  Ok(BranchedState {
-    idx,
-    joins: Vec::default(),
-    middle: Vec::default(),
-    splits: Vec::default(),
-    root,
-    open_paths: open_branches,
-    phi: close,
-  })
-}
-
 impl std::fmt::Debug for SegmentedMir<'_, '_> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "#<SegmentedMir: TODO>")
@@ -410,8 +412,8 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
       },
       scope_graph: TransitiveRelationBuilder::default(),
       collection_graph: TransitiveRelationBuilder::default(),
-      // XXX: maintains that there is always an open scope
-      //      that the user cannot close.
+      // NOTE: this maintains that there is always
+      //       an open scope that the visitor cannot close.
       open_scopes: vec![*BASE_SCOPE],
       next_scope: BASE_SCOPE.plus(1),
       next_collection: initial_collection.plus(1),
@@ -445,12 +447,7 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
   }
 
   // ----------------
-  // Scope operations
-
-  /// After starting a body analysis this should never be None.
-  fn current_scope(&self) -> ScopeIdx {
-    *self.open_scopes.last().unwrap()
-  }
+  // Idx operations
 
   fn next_scope(&mut self) -> ScopeIdx {
     let next = self.next_scope;
@@ -470,10 +467,18 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
     next
   }
 
-  pub fn open_scope(&mut self) -> ScopeIdx {
+  // ----------------
+  // Scope operations
+
+  /// After starting a body analysis this should never be None.
+  fn current_scope(&self) -> ScopeIdx {
+    *self.open_scopes.last().unwrap()
+  }
+
+  pub fn open_scope(&mut self) -> Result<ScopeIdx> {
     let next_scope = self.next_scope();
     self.open_scopes.push(next_scope);
-    next_scope
+    Ok(next_scope)
   }
 
   pub fn close_scope(&mut self, idx: ScopeIdx) -> Result<()> {
@@ -493,7 +498,7 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
   // -----------------
   // Branch operations
 
-  pub fn is_branch_open(&self, root: Location) -> bool {
+  fn is_branch_open(&self, root: Location) -> bool {
     if let StateKind::Branched(stack) = &self.state.kind {
       stack.iter().any(|bs| bs.root == root)
     } else {
@@ -514,7 +519,7 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
     let next_collection = self.next_collection();
 
     let new_branch =
-      build_branch_from_root(self.mapper, next_collection, location);
+      BranchedState::make(self.mapper, next_collection, location);
 
     // Put the current state into a branched state building a
     // new branch node on the stack.
@@ -627,6 +632,9 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
 
     Ok(())
   }
+
+  // ----------
+  // Insertions
 
   pub fn insert(
     &mut self,

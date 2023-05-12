@@ -243,7 +243,7 @@ where
 
   // Error reporting counters
   unsupported_encounter: Option<(Span, String)>,
-  fatal_errors: Vec<Result<()>>,
+  fatal_errors: Vec<anyhow::Error>,
 
   // Actual state of the analysis
   /// Entry location of the body under analysis.
@@ -256,37 +256,60 @@ where
 }
 
 /// Makes calling functions on the SegmentedMir easier.
-/// All functions on the SegmentedMIR could fail, but this
-/// doesn't always mean we should stop.
-/// This always abstracts away syntax in the case I want
-/// to change how the internal failures are reported
-/// in the future.
-macro_rules! trap_ice {
-  ($this:ident, $call:ident) => {
-    trap_ice!($this, $call,)
+/// All functions on the `SegmentedMir` return a Result in
+/// the case that the internal state gets off. When it does,
+/// we should save the error and stop the current computation.
+/// As with most error-relevant things, if internally an error
+/// state is entered more errors are likely to occur, but it's
+/// really the first we care about.
+macro_rules! invoke_internal {
+  (on_fail -> $ret:expr, $this:ident, $call:ident, $($param:expr),*) => {
+    match $this.mir_segments.$call($( $param ),*) {
+      Err(e) => {
+        $this.fatal_errors.push(e);
+        return $ret;
+      },
+      Ok(v) => v,
+    }
   };
-  ($this:ident, $call:ident, $($param:expr),*) => {
-    $this.fatal_errors.push($this.mir_segments.$call($( $param ),*))
+  (on_fail -> $ret:expr, $this:ident, $call:ident) => {
+    invoke_internal!(on_fail -> $ret, $this, $call,)
+  };
+  (on_fail -> $ret:expr, $this:ident, $call:ident, $($param:expr),*) => {
+    invoke_internal!(on_fail -> $ret, $this, $call, $($param:expr),*)
+  };
+  ($this:ident, $call:ident) => {
+    invoke_internal!(on_fail -> (), $this, $call,)
+  };
+  ($this:ident, $call:ident, $( $param:expr ),*) => {
+    invoke_internal!(on_fail -> (), $this, $call, $( $param ),*)
   };
 }
 
 macro_rules! report_unexpected {
   ($this:ident, $($param:expr),*) => {
-    $this.fatal_errors.push(Err(anyhow!($( $param ),*)))
+    $this.fatal_errors.push(anyhow!($( $param ),*))
   }
 }
 
 impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
-  fn get_unsupported_feature(&self) -> Option<&str> {
-    self.unsupported_encounter.as_ref().map(|(_, s)| s.as_str())
+  fn get_unsupported_feature(&self) -> Option<String> {
+    self.unsupported_encounter.as_ref().map(|(_, s)| s.clone())
   }
 
   fn get_internal_error(&self) -> Option<String> {
-    self
-      .fatal_errors
-      .iter()
-      .find(|r| r.is_err())
-      .map(|r| r.as_ref().unwrap_err().to_string())
+    use itertools::Itertools;
+    if self.fatal_errors.is_empty() {
+      return None;
+    }
+
+    Some(
+      self
+        .fatal_errors
+        .iter()
+        .map(|e: &anyhow::Error| e.to_string())
+        .join("\n"),
+    )
   }
 
   fn finalize(
@@ -368,6 +391,10 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
               insert_segment(result, segment);
             }
           }
+          // TODO: need to process nested collections first.
+          //       the attached locals works for the tests
+          //       but there's a logic issue there to revisit
+          //       when other stuff is sorted out.
           CollectionKind::Branch {
             root,
             phi,
@@ -441,16 +468,16 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
 
             for (_, tbls) in temp_joins.iter_mut() {
               for (_, ptbl) in tbls.iter_mut() {
-                let drained = ptbl
+                let _drained = ptbl
                   .drain_filter(|_, diff| diffs_in_branches.contains(diff))
                   .collect::<Vec<_>>();
-                log::debug!("drained {drained:#?} because diff exists");
+                // log::debug!("drained {drained:#?} because diff exists");
               }
             }
 
-            log::debug!("Locals attached to collection: {attached_here:#?}");
-            log::debug!(
-              "Differences contained within the branches {:#?} and those in joins {:#?}", diffs_in_branches, diffs_in_tables(temp_joins));
+            // log::debug!("Locals attached to collection: {attached_here:#?}");
+            // log::debug!(
+            //   "Differences contained within the branches {:#?} and those in joins {:#?}", diffs_in_branches, diffs_in_tables(temp_joins));
 
             macro_rules! insert {
               ($m1:expr => $m2:expr) => {
@@ -566,9 +593,9 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       .ir_mapper
       .get_mir_locations(hir_id, GatherDepth::Nested)?;
 
-    // XXX: shift the exit to the next successor if available.
-    //      this way we capture the state changes for a single
-    //      operation rather than having an off by one.
+    // HACK: shift the exit to the next successor if available.
+    //       this way we capture the state changes for a single
+    //       operation rather than having an off by one.
     // TODO: a more elegant solution would be to have a way to
     //       specify at which execution point you want the permission
     //       state, before, middle, or after an instruction. This is
@@ -586,38 +613,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   fn prettify_node(&self, hir_id: HirId) -> String {
     let hir = self.ctxt.tcx.hir();
     hir.node_to_string(hir_id)
-  }
-
-  fn exprs_to_entry_spans(
-    &self,
-    exprs: &[Option<&hir::Expr>],
-  ) -> HashMap<Location, Span> {
-    exprs
-      .iter()
-      .filter_map(|expr| {
-        expr.and_then(|expr| {
-          let id = expr.hir_id;
-          self
-            .get_node_entry(id)
-            .map(|entry| (entry, self.span_of(id).shrink_to_lo()))
-        })
-      })
-      .collect::<HashMap<_, _>>()
-  }
-
-  fn arms_to_entry_spans(&self, arms: &[hir::Arm]) -> HashMap<Location, Span> {
-    arms
-      .iter()
-      .filter_map(|arm| {
-        // NOTE: we use the body of the arm to capture
-        //       the opening of the expression rather than
-        //       the entire arm itself.
-        let id = arm.body.hir_id;
-        self
-          .get_node_entry(id)
-          .map(|entry| (entry, self.span_of(id).shrink_to_lo()))
-      })
-      .collect::<HashMap<_, _>>()
   }
 
   /// Open a conditional expression for branching. On success, returns
@@ -644,7 +639,8 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       return None;
     };
 
-    trap_ice!(
+    invoke_internal!(
+      on_fail -> None,
       self,
       insert,
       cnd_exit,
@@ -658,20 +654,148 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   /// Close the entire branching expression which had the condition exit.
   ///
   /// Here, the given expression should be the _entire_ `EK::If` or `EK::Match`.
-  fn expr_condition_postlude(
-    &mut self,
-    expr: &'tcx hir::Expr,
-    cnd_exit: Location,
-  ) {
-    if self.mir_segments.is_branch_open(cnd_exit) {
-      log::warn!(
-        "branch still open, flushing and closing steps:\n{}",
-        self.prettify_node(expr.hir_id)
-      );
+  fn expr_condition_postlude(&mut self, hir_id: HirId, cnd_exit: Location) {
+    log::warn!(
+      "flushing and closing branch steps:\n{}",
+      self.prettify_node(hir_id)
+    );
 
-      let ss = self.span_of(expr.hir_id).shrink_to_hi();
-      trap_ice!(self, close_branch, cnd_exit, |_| ss);
+    let ss = self.span_of(hir_id).shrink_to_hi();
+    invoke_internal!(self, close_branch, cnd_exit, |_| ss);
+  }
+
+  /// Inserts a step point after the specified `HirId`. This
+  /// method is generic and takes the raw span returned by the
+  /// `IRMapper`, if a node requires tweaking for the span this
+  /// should not be used.
+  fn insert_step_at_node_exit(&mut self, hir_id: HirId) {
+    if let Some(exit) = self.get_node_exit(hir_id) {
+      invoke_internal!(
+        self,
+        insert,
+        exit,
+        self.get_path_hint(),
+        self.span_of(hir_id)
+      );
+    } else {
+      log::warn!(
+        "Node {} doesn't have an exit location.",
+        self.prettify_node(hir_id)
+      );
     }
+  }
+
+  fn condition_produced_switchint(&self, expr: &'tcx hir::Expr) -> bool {
+    if let Some(exit) = self.get_node_exit(expr.hir_id) {
+      log::debug!(
+        "checking location {exit:?} to see if terminator is switchInt"
+      );
+      self.ir_mapper.is_terminator_switchint(exit)
+    } else {
+      // If the IRMapper can't determine a single exit location that
+      // is most often caused by branching, in this case we just assume
+      // that a switchInt was procued. We could do something more robust
+      // if we see the need for it.
+      true
+    }
+  }
+
+  // Factored out of the Visitor because this same logic is needed for
+  // EK::If and while loop desugarings, just with a different location
+  // to span mapping.
+  fn handle_expr_if(
+    &mut self,
+    expr_id: HirId,
+    cnd: &'tcx hir::Expr,
+    then: &'tcx hir::Expr,
+    else_opt: Option<&'tcx hir::Expr>,
+    entry_locs_to_spans: &HashMap<Location, Span>,
+  ) {
+    log::debug!(
+      "visiting EXPR-IF\n\tCND: {}\n\t\tTHEN: {}\n\t\tELSE: {}",
+      self.prettify_node(cnd.hir_id),
+      self.prettify_node(then.hir_id),
+      else_opt.map_or(String::from("<NONE>"), |e| self.prettify_node(e.hir_id))
+    );
+
+    let Some(cnd_exit) = self.expr_condition_prelude(cnd) else {
+          return;
+        };
+
+    invoke_internal!(self, open_branch, cnd_exit, |to: &mut Location| {
+      entry_locs_to_spans
+        .iter()
+        .find_map(|(&l, &span)| {
+          if self.ir_mapper.dominates(*to, l) {
+            *to = l;
+            Some(span)
+          } else {
+            None
+          }
+        })
+        .unwrap_or_default()
+    });
+
+    if let Some(then_entry) = self.get_node_entry(then.hir_id) {
+      self.push_branch_start(then_entry);
+      self.visit_expr(then);
+      self.pop_branch_start(then_entry);
+    } else {
+      report_unexpected!(
+        self,
+        "then-branch doesn't have entry {}",
+        self.prettify_node(then.hir_id)
+      );
+    }
+
+    if let Some(els) = else_opt {
+      if let Some(els_entry) = self.get_node_entry(els.hir_id) {
+        self.push_branch_start(els_entry);
+        self.visit_expr(els);
+        self.pop_branch_start(els_entry);
+      } else {
+        report_unexpected!(
+          self,
+          "else-branch doesn't have entry {}",
+          self.prettify_node(els.hir_id)
+        );
+      }
+    }
+
+    self.expr_condition_postlude(expr_id, cnd_exit);
+  }
+
+  fn handle_expr_match(
+    &mut self,
+    expr_id: HirId,
+    cnd: &'tcx hir::Expr,
+    arms: &'tcx [hir::Arm],
+    entry_locs_to_spans: &HashMap<Location, Span>,
+  ) {
+    let Some(cnd_exit) = self.expr_condition_prelude(cnd) else {
+      return;
+    };
+
+    invoke_internal!(self, open_branch, cnd_exit, |to: &mut Location| {
+      entry_locs_to_spans
+        .iter()
+        .find_map(|(&l, &span)| {
+          if self.ir_mapper.dominates(*to, l) {
+            // Update the location to be the entry of the arm.
+            *to = l;
+            Some(span)
+          } else {
+            None
+          }
+        })
+        .unwrap_or(Span::default())
+    });
+
+    for arm in arms {
+      self.visit_arm(arm);
+    }
+
+    self.expr_condition_postlude(expr_id, cnd_exit);
   }
 }
 
@@ -684,10 +808,11 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
   fn visit_body(&mut self, body: &'tcx hir::Body) {
     intravisit::walk_body(self, body);
+    self.insert_step_at_node_exit(body.value.hir_id);
   }
 
   fn visit_block(&mut self, block: &'tcx hir::Block) {
-    let scope = self.mir_segments.open_scope();
+    let scope = invoke_internal!(self, open_scope);
     for stmt in block.stmts.iter() {
       self.visit_stmt(stmt);
     }
@@ -695,17 +820,9 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
     if let Some(expr) = block.expr {
       log::debug!("BLOCK contains final EXPR");
       self.visit_expr(expr);
-      if let Some(exit) = self.get_node_exit(expr.hir_id) {
-        trap_ice!(
-          self,
-          insert,
-          exit,
-          self.get_path_hint(),
-          self.span_of(expr.hir_id)
-        );
-      }
+      self.insert_step_at_node_exit(expr.hir_id);
     }
-    trap_ice!(self, close_scope, scope);
+    invoke_internal!(self, close_scope, scope);
   }
 
   fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt) {
@@ -716,7 +833,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
       self.prettify_node(stmt.hir_id),
     );
 
-    let scope = self.mir_segments.open_scope();
+    let scope = invoke_internal!(self, open_scope);
 
     if let SK::Local(local) = stmt.kind {
       let places = self.ir_mapper.local_assigned_place(local);
@@ -732,125 +849,192 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
     }
 
     // Close the scope before inserting the final steps.
-    trap_ice!(self, close_scope, scope);
+    invoke_internal!(self, close_scope, scope);
 
-    if let Some(exit_loc) = self.get_node_exit(stmt.hir_id) {
-      trap_ice!(
-        self,
-        insert,
-        exit_loc,
-        self.get_path_hint(),
-        self.span_of(stmt.hir_id)
-      );
-    } else {
-      log::warn!("STMT doesn't have single exit");
-    }
+    self.insert_step_at_node_exit(stmt.hir_id);
   }
 
   fn visit_expr(&mut self, expr: &'tcx hir::Expr) {
-    use hir::{ExprKind as EK, MatchSource};
+    use hir::{ExprKind as EK, LoopSource, MatchSource, StmtKind as SK};
     match expr.kind {
       EK::If(cnd, then, else_opt) => {
-        log::debug!(
-          "visiting EXPR-IF\n\tCND: {}\n\t\tTHEN: {}\n\t\tELSE: {}",
-          self.prettify_node(cnd.hir_id),
-          self.prettify_node(then.hir_id),
-          else_opt
-            .map_or(String::from("<NONE>"), |e| self.prettify_node(e.hir_id))
-        );
+        // For the generic case we can take the use the opening brace of each branch
+        // target as the span.
+        let mut entry_to_spans = HashMap::default();
 
-        let Some(cnd_exit) = self.expr_condition_prelude(cnd) else {
-          return;
-        };
-
-        let entry_to_spans = self.exprs_to_entry_spans(&[Some(then), else_opt]);
-        trap_ice!(self, open_branch, cnd_exit, |to: &mut Location| {
-          entry_to_spans
-            .iter()
-            .find_map(|(&l, &span)| {
-              if self.ir_mapper.dominates(*to, l) {
-                *to = l;
-                Some(span)
-              } else {
-                None
-              }
-            })
-            .unwrap_or_default()
-        });
-
+        // Insert the location and span for the then branch
         if let Some(then_entry) = self.get_node_entry(then.hir_id) {
-          self.push_branch_start(then_entry);
-          self.visit_expr(then);
-          self.pop_branch_start(then_entry);
-        } else {
-          report_unexpected!(
-            self,
-            "then-branch doesn't have entry {}",
-            self.prettify_node(then.hir_id)
-          );
+          let then_span = self.span_of(then.hir_id).shrink_to_lo();
+          entry_to_spans.insert(then_entry, then_span);
         }
 
-        if let Some(els) = else_opt {
-          if let Some(els_entry) = self.get_node_entry(els.hir_id) {
-            self.push_branch_start(els_entry);
-            self.visit_expr(els);
-            self.pop_branch_start(els_entry);
-          } else {
-            report_unexpected!(
-              self,
-              "else-branch doesn't have entry {}",
-              self.prettify_node(els.hir_id)
-            );
-          }
+        // Insert the location and span for the else branch
+        if let Some(els) = else_opt && let Some(else_entry) = self.get_node_entry(els.hir_id) {
+        let else_span = self.span_of(els.hir_id).shrink_to_lo();
+          entry_to_spans.insert(else_entry, else_span);
         }
 
-        self.expr_condition_postlude(expr, cnd_exit);
+        self.handle_expr_if(expr.hir_id, cnd, then, else_opt, &entry_to_spans);
       }
 
-      EK::Match(_, [arm], MatchSource::ForLoopDesugar) => {
-        self.visit_expr(arm.body);
+      // HACK: Special cases for ForLoop and While desugarings.
+      //
+      // These special cases are needed to _adjust the spans_.
+      // Example:
+      // ```ignore
+      // fn foo(mut s: String) {
+      //   s.push_str("looping ")
+      //   let b = &mut s;                // - Table 1 -
+      //                                  // b: +R +W
+      //                                  // s: -R -W -O
+      //   while true { /* open */
+      //     b.push_str("again... and ");
+      //   } /* close */                  // - Table 2 -
+      //                                  // b: -R -W
+      //                                  // s: +R +W +O
+      //   s.push_str("done!");
+      //   println!("{s}");
+      // }
+      // ```
+      // If we don't adjust for the desugaring, "Table 2" would
+      // be placed on the line labeled "/* open */", but we want
+      // it to actually get placed at the end of the loop where
+      // it is depicted above. A similar adjustment is needed
+      // for `for` loops.
+
+      // While loops need to be detected with the surrounding loop.
+      EK::Loop(
+        hir::Block {
+          stmts: [],
+          expr:
+            Some(hir::Expr {
+              kind: EK::If(cnd, then, Some(els)),
+              ..
+            }),
+          ..
+        },
+        _,
+        LoopSource::While,
+        _,
+      ) => {
+        // For the generic case we can take the use the opening brace of each branch
+        // target as the span.
+        let mut entry_to_spans = HashMap::default();
+
+        // Insert the location and span for the then branch
+        if let Some(then_entry) = self.get_node_entry(then.hir_id) {
+          let then_span = self.span_of(then.hir_id).shrink_to_lo();
+          entry_to_spans.insert(then_entry, then_span);
+        }
+
+        // Insert the location and span for the else branch
+        if let Some(else_entry) = self.get_node_entry(els.hir_id) {
+          // NOTE: we adjust the span of the break block to
+          //       be _after_ the loop.
+          let else_span = self.span_of(expr.hir_id).shrink_to_hi();
+          entry_to_spans.insert(else_entry, else_span);
+        }
+
+        self.handle_expr_if(expr.hir_id, cnd, then, Some(els), &entry_to_spans);
       }
 
-      EK::Match(cnd, arms, _source) => {
-        use itertools::Itertools;
+      EK::Loop(
+        hir::Block {
+          stmts:
+            [hir::Stmt {
+              kind:
+                SK::Expr(hir::Expr {
+                  kind: EK::Match(cnd, arms @ [none, some], _),
+                  ..
+                }),
+              ..
+            }],
+          expr: None,
+          ..
+        },
+        _,
+        LoopSource::ForLoop,
+        _,
+      ) => {
+        let entry_to_spans = &mut HashMap::default();
+
+        let loop_span = self.span_of(expr.hir_id);
+        let loop_start = loop_span.shrink_to_lo();
+        let loop_end = loop_span.shrink_to_hi();
+
+        // Iterator::next => None, breaking out of the loop
+        if let Some(none_entry) = self.get_node_entry(none.body.hir_id) {
+          entry_to_spans.insert(none_entry, loop_end);
+        }
+
+        // Iterator::next => Some(_), execute loop body
+        if let Some(some_entry) = self.get_node_entry(some.body.hir_id) {
+          entry_to_spans.insert(some_entry, loop_start);
+        }
+
+        self.handle_expr_match(expr.hir_id, cnd, arms, entry_to_spans);
+      }
+
+      // NOTE: if a match condition doesn't produce a `switchInt`, there
+      //       is no need to open a scope for this case. This most
+      //       commonly happens when there is a single arm (common for desugarings)
+      //       but it can also happen if future arms are elided. However, we
+      //       still want to show the steps at the arm locations.
+      EK::Match(cnd, [_], MatchSource::ForLoopDesugar)
+        if !self.condition_produced_switchint(cnd) =>
+      {
         log::debug!(
-          "visiting EXPR-MATCH\n\tCND: {}\n\t\tARMS: {}",
-          self.prettify_node(cnd.hir_id),
-          arms
-            .iter()
-            .map(|arm| self.prettify_node(arm.hir_id))
-            .join("\n\t\t")
+          "Match condition didn't produce switchInt {}",
+          self.prettify_node(cnd.hir_id)
         );
-        log::debug!("RAW MATCH: {expr:#?}");
+        intravisit::walk_expr(self, expr);
+      }
 
-        let Some(cnd_exit) = self.expr_condition_prelude(cnd) else {
-          return;
-        };
+      // TODO this view of how a match branches is too simplistic, and
+      //      doesn't accurately reflect reality. There could be many
+      //      generated `switchInt`s or there could be none.
+      //      Example:
+      //      ```ignore
+      //      match x {
+      //        0 => 1,
+      //        1 => 1,
+      //        x => x,
+      //      }
+      //      ```
+      //      the above match block would generate NO `switchInt`, just
+      //      a series of `goto`s. Contrasted with something such as:
+      //
+      //      ```ignore
+      //      match x {
+      //        None => 1,
+      //        Some(1) => 1,
+      //        Some(x) => x,
+      //      }
+      //      ```
+      //
+      //      which will actually generate two `switchInt`s, one for the
+      //      discriminant match and another for the inner integer check.
+      //      These two cases are relatively simple, but branching for a
+      //      generic match is complicated with the current internal API.
+      //      What we would want, is automatic opening of a branch,
+      //      this would make closing branches more difficult ...
+      //      I'm(gavin) currently in thinking mode for this.
+      EK::Match(cnd, arms, _) => {
+        // This is the generic case and assumes no desugaring.
+        // For the span we want to pick the END of the matched pattern,
+        // but we choose the location as the entry to the arm body
+        // (after all bound variables have been assigned).
+        let entry_to_spans = arms
+          .iter()
+          .filter_map(|arm| {
+            let id = arm.body.hir_id;
+            self
+              .get_node_entry(id)
+              .map(|entry| (entry, self.span_of(arm.pat.hir_id).shrink_to_hi()))
+          })
+          .collect::<HashMap<_, _>>();
 
-        let entry_to_spans = self.arms_to_entry_spans(arms);
-        trap_ice!(self, open_branch, cnd_exit, |to: &mut Location| {
-          entry_to_spans
-            .iter()
-            .find_map(|(&l, &span)| {
-              if self.ir_mapper.dominates(*to, l) {
-                // Update the location to be the entry of the arm.
-                *to = l;
-                Some(span)
-              } else {
-                None
-              }
-            })
-            .unwrap_or_default()
-        });
-
-        // Visit all the arms
-        //
-        // NOTE: arms will handle path hinting.
-        for arm in arms {
-          self.visit_arm(arm);
-        }
-
-        self.expr_condition_postlude(expr, cnd_exit);
+        self.handle_expr_match(expr.hir_id, cnd, arms, &entry_to_spans);
       }
       _ => {
         intravisit::walk_expr(self, expr);
@@ -859,10 +1043,25 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   }
 
   // NOTE: it's impotant that arms handle path hinting
+  //
+  // TODO: handle arm guards!
   fn visit_arm(&mut self, arm: &'tcx hir::Arm) {
+    // We use the arm_entry for path hinting, because it's
+    // closer the the `switchInt`.
     if let Some(arm_entry) = self.get_node_entry(arm.hir_id) {
       self.push_branch_start(arm_entry);
-      intravisit::walk_arm(self, arm);
+
+      // We get the entry of the arm body (or before the arm guard),
+      // this is where any arm patterns will be initialized and bound.
+      if let Some(entry) = self.get_node_entry(arm.body.hir_id) {
+        let span = self.span_of(arm.hir_id).shrink_to_lo();
+        invoke_internal!(self, insert, entry, self.get_path_hint(), span);
+        self.visit_expr(arm.body);
+        // self.insert_step_at_node_exit(arm.hir_id);
+      } else {
+        intravisit::walk_arm(self, arm);
+      }
+
       self.pop_branch_start(arm_entry);
     } else {
       report_unexpected!(

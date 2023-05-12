@@ -294,7 +294,7 @@ impl<'tcx> Difference for &PermissionsDomain<'tcx> {
 
 trait HirPermissionStepper<'tcx>: HirVisitor<'tcx> {
   /// Get message explaining any encountered unsupported features, if any.
-  fn get_unsupported_feature(&self) -> Option<&str>;
+  fn get_unsupported_feature(&self) -> Option<String>;
 
   /// Get message explaining any internal errors that occurred.
   fn get_internal_error(&self) -> Option<String>;
@@ -354,7 +354,7 @@ where
   hir_visitor.visit_nested_body(ctxt.body_id);
 
   if let Some(msg) = hir_visitor.get_unsupported_feature() {
-    bail!(msg.to_string());
+    bail!(msg);
   }
 
   if let Some(fatal_error) = hir_visitor.get_internal_error() {
