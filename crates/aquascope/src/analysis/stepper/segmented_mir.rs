@@ -1,19 +1,15 @@
 //! Basic relaxation of MIR fragmentation storage.
 
-use std::{
-  collections::hash_map::Entry,
-  ops::{Deref, DerefMut},
-};
-
 use anyhow::{anyhow, bail, ensure, Result};
 use rustc_data_structures::{
   frozen::Frozen,
-  fx::FxHashMap as HashMap,
+  fx::{FxHashMap as HashMap, FxHashSet as HashSet},
   graph::*,
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
+  unify::{InPlaceUnificationTable, UnifyKey},
 };
-use rustc_index::vec::Idx;
-use rustc_middle::mir::{Location, START_BLOCK};
+use rustc_index::vec::{Idx, IndexVec};
+use rustc_middle::mir::{BasicBlock, Location};
 use rustc_span::Span;
 
 use super::MirSegment;
@@ -23,433 +19,297 @@ use crate::analysis::ir_mapper::IRMapper;
 // Decls sections
 
 rustc_index::newtype_index! {
-  /// Scopes are controlled at the segment-level
-  /// and controlled by the caller.
-  pub(super) struct ScopeIdx {}
+  pub(super) struct SegmentId {}
+}
+
+rustc_index::newtype_index! {
+  pub(super) struct BranchId {}
 }
 
 rustc_index::newtype_index! {
   /// Collections are groups of segments thare nest.
   /// E.g., when a branch contains another branch.
   /// These are controlled internally.
-  pub(super) struct CollectionIdx {}
+  pub(super) struct CollectionId {}
+}
+
+rustc_index::newtype_index! {
+  /// Scopes are controlled at the segment-level
+  /// and controlled by the caller.
+  pub(super) struct ScopeId {}
+}
+
+rustc_index::newtype_index! {
+  pub(super) struct TableId {}
+}
+
+impl UnifyKey for TableId {
+  type Value = ();
+
+  fn index(&self) -> u32 {
+    self.as_u32()
+  }
+
+  fn from_index(i: u32) -> Self {
+    Self::from_u32(i)
+  }
+
+  fn tag() -> &'static str {
+    "TableId"
+  }
 }
 
 lazy_static::lazy_static! {
-  pub(super) static ref BASE_SCOPE: ScopeIdx = ScopeIdx::new(0);
+  static ref BASE_SCOPE: ScopeId = ScopeId::new(0);
 }
 
-#[derive(Clone, Debug)]
-struct UnifiedState {
-  idx: CollectionIdx,
-  inserted: Vec<MirSegment>,
-  from: Location,
-}
-
-/// The state of a current branch.
-///
-/// A branch splits the control flow at the given `Location`
-/// and steps will be inserted along each open path until
-/// they converge at `phi`. If there is not join node, e.g.
-/// infinite loops or (TODO finish writing).
-#[derive(Clone, Debug)]
-struct BranchedState {
-  idx: CollectionIdx,
-
-  // Finalized segments
-  splits: Vec<MirSegment>,
-  joins: Vec<MirSegment>,
-  middle: Vec<MirSegment>,
-
-  // In-progress data
-  root: Location,
-  open_paths: Vec<Location>,
-  phi: Option<Location>,
-}
-
-/// Currently processing steps within a control-flow branch.
-///
-/// Each open branch needs to be completed before it can be
-/// popped off the stack and the previous continued. On exit
-/// of the last branch the state returns to `Unified`.
-#[derive(Clone, Debug)]
-struct BranchStack(Vec<BranchedState>);
-
-#[derive(Clone, Debug)]
-enum StateKind {
-  Unified(UnifiedState),
-  Branched(BranchStack),
-}
-
-#[derive(Clone, Debug)]
-struct State {
-  kind: StateKind,
-}
-
-#[derive(Clone, Debug)]
-pub enum CollectionKind {
-  Linear {
-    segments: Vec<MirSegment>,
-  },
-  Branch {
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+enum LengthKind {
+  Bounded {
+    /// Entry location for the collection, location
+    /// must dominate all locations contained within the collection.
     root: Location,
-    phi: Option<Location>,
-    splits: Vec<MirSegment>,
-    middle: Vec<MirSegment>,
-    joins: Vec<MirSegment>,
+    phi: Location,
+  },
+  Unbounded {
+    /// Exit location (if it exists) where control flow must leave,
+    /// if a phi exists then it must post-dominate all locations
+    /// contained within the collection.
+    root: Location,
   },
 }
 
-#[derive(Clone, Debug)]
-pub struct Collection {
-  pub(super) idx: CollectionIdx,
-  pub(super) kind: CollectionKind,
+#[derive(Debug)]
+pub(super) struct SegmentData {
+  pub(super) segment: MirSegment,
+  pub(super) span: Span,
+  pub(super) scope: ScopeId,
 }
 
-pub(super) struct FrozenMir {
-  scopes: TransitiveRelation<ScopeIdx>,
-  nesting: TransitiveRelation<CollectionIdx>,
-  collections: Frozen<HashMap<CollectionIdx, Collection>>,
-  segments: Frozen<HashMap<MirSegment, (Span, ScopeIdx)>>,
+#[derive(Debug)]
+pub(super) struct BranchData {
+  table_id: TableId,
+  pub(super) reach: MirSegment,
+  /// Split segments, `from` dominates `to` but
+  /// `to` does not post-dominate `from`.
+  pub(super) splits: Vec<SegmentId>,
+  /// Join segments, `to` post-dominates `from` but
+  /// `from` does not post-dominate `to`.
+  pub(super) joins: Vec<SegmentId>,
+  pub(super) nested: Vec<CollectionId>,
 }
 
-pub(super) struct SegmentedMir<'a, 'tcx: 'a> {
+#[derive(Copy, Clone, Debug)]
+pub(super) enum CFKind {
+  Linear(SegmentId),
+  Branch(BranchId),
+}
+
+#[derive(Debug)]
+pub(super) struct Collection {
+  pub(super) data: Vec<CFKind>,
+  kind: LengthKind,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct CollectionBuilder {
+  collection: CollectionId,
+  current_location: Location,
+}
+
+type BuilderIdx = usize;
+
+#[derive(Copy, Clone)]
+enum FindResult {
+  None,
+  NonLinear(BranchId, Location),
+  Linear(BuilderIdx),
+}
+
+#[derive(Debug, Default)]
+struct OpenCollections(Vec<CollectionBuilder>);
+
+type BranchSpannerMap<'a> =
+  HashMap<BranchId, Box<dyn Fn(&mut Location) -> Span + 'a>>;
+
+pub(super) struct SegmentedMirBuilder<'a, 'tcx: 'a> {
   mapper: &'a IRMapper<'a, 'tcx>,
-  shapes: HashMap<CollectionIdx, Collection>,
-  segments: HashMap<MirSegment, (Span, ScopeIdx)>,
-  state: State,
-  scope_graph: TransitiveRelationBuilder<ScopeIdx>,
-  collection_graph: TransitiveRelationBuilder<CollectionIdx>,
-  open_scopes: Vec<ScopeIdx>,
-  next_collection: CollectionIdx,
-  next_scope: ScopeIdx,
+  first_collection: CollectionId,
+  root_mappings: BranchSpannerMap<'a>,
+  collections: IndexVec<CollectionId, Collection>,
+  branches: IndexVec<BranchId, BranchData>,
+  segments: IndexVec<SegmentId, SegmentData>,
+  processing: OpenCollections,
+  branch_roots: InPlaceUnificationTable<TableId>,
+  scope_graph: TransitiveRelationBuilder<ScopeId>,
+  open_scopes: Vec<ScopeId>,
+  next_scope: ScopeId,
+}
+
+pub(super) struct SegmentedMir {
+  pub(super) first_collection: CollectionId,
+  collections: Frozen<IndexVec<CollectionId, Collection>>,
+  branches: Frozen<IndexVec<BranchId, BranchData>>,
+  segments: Frozen<IndexVec<SegmentId, SegmentData>>,
+  scopes: TransitiveRelation<ScopeId>,
 }
 
 // --------------------------
 // Impl sections
 
-impl From<UnifiedState> for Collection {
-  fn from(state: UnifiedState) -> Self {
-    Collection {
-      idx: state.idx,
-      kind: CollectionKind::Linear {
-        segments: state.inserted,
-      },
-    }
-  }
-}
-
-impl UnifiedState {
-  pub fn new(idx: CollectionIdx, from: Location) -> Self {
-    Self {
-      idx,
-      inserted: Vec::default(),
-      from,
-    }
-  }
-}
-
-// XXX: only used so we can use `std::mem::take`.
-impl Default for UnifiedState {
-  fn default() -> Self {
-    Self {
-      idx: CollectionIdx::from(0u32),
-      inserted: Vec::default(),
-      from: START_BLOCK.start_location(),
-    }
-  }
-}
-
-impl From<BranchedState> for Collection {
-  fn from(state: BranchedState) -> Self {
-    Collection {
-      idx: state.idx,
-      kind: CollectionKind::Branch {
-        root: state.root,
-        phi: state.phi,
-        splits: state.splits,
-        middle: state.middle,
-        joins: state.joins,
-      },
-    }
-  }
-}
-
-impl BranchedState {
-  /// Makes a new `BranchedState` that is rooted at the given location.
-  ///
-  /// Building a `BranchedState` could fail if the given root
-  /// comes from a block without a `switchInt` terminator. The
-  /// HIR Visitor should of course make sure this prerequisite holds.
-  fn make(
-    mapper: &IRMapper,
-    idx: CollectionIdx,
-    root: Location,
-  ) -> Result<Self> {
-    ensure!(
-      mapper.is_terminator_switchint(root),
-      "terminator in block {root:?} is not a `switchInt`"
-    );
-
-    let open_branches = mapper
-      .cleaned_graph
-      .successors(root.block)
-      .map(|bb| bb.start_location())
-      .collect::<Vec<_>>();
-
-    let potential_joins = mapper
-      .cleaned_graph
-      .blocks()
-      .filter_map(|bb| {
-        open_branches
-          .iter()
-          .all(|loc| mapper.post_dominates(bb.start_location(), *loc))
-          .then_some(bb.start_location())
-      })
-      .collect::<Vec<_>>();
-
-    let close = potential_joins
-      .iter()
-      .find(|&before| {
-        potential_joins
-          .iter()
-          .all(|after| mapper.dominates(*before, *after))
-      })
-      .copied();
-
-    log::debug!("creating new branch:\n\troot: {root:?}\n\tpath_starts: {open_branches:?}\n\tphi: {close:?}");
-
-    Ok(BranchedState {
-      idx,
-      joins: Vec::default(),
-      middle: Vec::default(),
+impl BranchData {
+  pub fn new(tid: TableId, root: Location, phi: Option<Location>) -> Self {
+    let to = phi.unwrap_or(root);
+    BranchData {
+      table_id: tid,
+      reach: MirSegment::new(root, to),
       splits: Vec::default(),
-      root,
-      open_paths: open_branches,
-      phi: close,
-    })
-  }
-
-  pub fn location_dominators(
-    &self,
-    mapper: &IRMapper,
-    location: Location,
-  ) -> Vec<(usize, &Location)> {
-    self
-      .open_paths
-      .iter()
-      .enumerate()
-      .filter(|&(_, start)| mapper.dominates(*start, location))
-      .collect::<Vec<_>>()
-  }
-
-  /// Gets the index of the path that dominates the given `Location`.
-  ///
-  /// Returns `Err` if no dominating path is found, or if _multiple_
-  /// are found, this indicates that the bookkeeping went awry or
-  /// my mental model of the problem broke down.
-  pub fn get_dominating_path_idx(
-    &self,
-    mapper: &IRMapper,
-    location: Location,
-    path_hint: Option<Location>,
-  ) -> Result<usize> {
-    let expect_unique = |branches: &[(usize, &Location)]| -> Result<usize> {
-      match branches.len() {
-        0 => bail!("no branches dominate {location:?} {self:#?}"),
-        1 => Ok(branches[0].0),
-        _ => bail!("multiple dominating branches {location:?} {branches:#?}"),
-      }
-    };
-
-    log::debug!(
-      "finding open paths that dominate {location:?} with hint {path_hint:?}\noptions: {:#?}",
-      self.open_paths
-    );
-
-    let containing_branches = self.location_dominators(mapper, location);
-    match (expect_unique(&containing_branches), path_hint) {
-      (r @ Ok(_), _) | (r, None) => r,
-      (_, Some(hint)) => {
-        let hint_block_start = hint.block.start_location();
-        let hinted_branches = containing_branches
-          .into_iter()
-          .filter(|(_, l)| mapper.dominates(hint_block_start, **l))
-          .collect::<Vec<_>>();
-        expect_unique(&hinted_branches)
-      }
-    }
-  }
-
-  pub fn is_closed_by(&self, mapper: &IRMapper, location: Location) -> bool {
-    if let Some(phi) = self.phi {
-      mapper.dominates(phi, location)
-    } else {
-      false
+      joins: Vec::default(),
+      nested: Vec::default(),
     }
   }
 }
 
-impl Deref for BranchStack {
-  type Target = Vec<BranchedState>;
-  fn deref(&self) -> &Self::Target {
-    &self.0
+#[allow(dead_code)]
+impl OpenCollections {
+  pub fn push(&mut self, c: CollectionBuilder) {
+    self.0.push(c)
+  }
+
+  pub fn iter(&self) -> impl Iterator<Item = &CollectionBuilder> + '_ {
+    // Open collections are pushed on the end, but we want to search
+    // in the most recently pushed by reverse the Vec::iter
+    self.0.iter().rev()
+  }
+
+  pub fn iter_mut(
+    &mut self,
+  ) -> impl Iterator<Item = &mut CollectionBuilder> + '_ {
+    // Open collections are pushed on the end, but we want to search
+    // in the most recently pushed by reverse the Vec::iter
+    self.0.iter_mut().rev()
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.0.is_empty()
+  }
+
+  pub fn drain_collections<'a, 'this: 'a>(
+    &'this mut self,
+    cids: &'a HashSet<CollectionId>,
+  ) -> impl Iterator<Item = CollectionBuilder> + 'a {
+    self.0.drain_filter(|cb| cids.contains(&cb.collection))
+  }
+
+  pub fn get(&self, i: BuilderIdx) -> &CollectionBuilder {
+    let l = self.0.len();
+    &self.0[l - 1 - i]
+  }
+
+  pub fn get_mut(&mut self, i: BuilderIdx) -> &mut CollectionBuilder {
+    let l = self.0.len();
+    &mut self.0[l - 1 - i]
   }
 }
 
-impl DerefMut for BranchStack {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
-  }
-}
-
-impl BranchStack {
-  pub fn new(initial: BranchedState) -> Self {
-    Self(vec![initial])
-  }
-
-  pub fn get_current_branch(&self) -> Result<&BranchedState> {
-    self.last().ok_or(anyhow!("branch stack empty"))
-  }
-
-  pub fn get_current_branch_mut(&mut self) -> Result<&mut BranchedState> {
-    self.last_mut().ok_or(anyhow!("branch stack empty"))
-  }
-}
-
-impl State {
-  pub fn get_unified_mut(&mut self) -> Result<&mut UnifiedState> {
-    match self.kind {
-      StateKind::Unified(ref mut from) => Ok(from),
-      _ => bail!("expected unified state"),
-    }
-  }
-
-  pub fn get_branched(&self) -> Result<&BranchStack> {
-    match self.kind {
-      StateKind::Branched(ref stack) => Ok(stack),
-      _ => bail!("expected branched state"),
-    }
-  }
-
-  pub fn get_branched_mut(&mut self) -> Result<&mut BranchStack> {
-    match self.kind {
-      StateKind::Branched(ref mut stack) => Ok(stack),
-      _ => bail!("expected branched state"),
-    }
-  }
-
-  pub fn get_current_branch(&self) -> Result<&BranchedState> {
-    self.get_branched()?.get_current_branch()
-  }
-}
-
-impl std::fmt::Debug for SegmentedMir<'_, '_> {
+impl std::fmt::Debug for SegmentedMirBuilder<'_, '_> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "#<SegmentedMir: TODO>")
   }
 }
 
-impl FrozenMir {
-  pub fn collections(&self) -> impl Iterator<Item = &CollectionIdx> + '_ {
-    self.collections.keys()
+impl SegmentedMir {
+  pub fn get_branch_scope(&self, bid: BranchId) -> ScopeId {
+    let branch = self.get_branch(bid);
+    let sid = branch.splits[0];
+    let segment = self.get_segment(sid);
+    segment.scope
   }
 
-  pub fn collection_data(
-    &self,
-    collection: CollectionIdx,
-  ) -> Option<&Collection> {
-    self.collections.get(&collection)
+  pub fn get_collection(&self, cid: CollectionId) -> &Collection {
+    &self.collections[cid]
   }
 
-  pub fn segment_data(&self, segment: MirSegment) -> Option<(Span, ScopeIdx)> {
-    self.segments.get(&segment).copied()
+  pub fn get_segment(&self, sid: SegmentId) -> &SegmentData {
+    &self.segments[sid]
   }
 
+  pub fn get_branch(&self, bid: BranchId) -> &BranchData {
+    &self.branches[bid]
+  }
+
+  /// Returns all ancestor scopes excluding `scope`.
   pub fn parent_scopes(
     &self,
-    scope: ScopeIdx,
-  ) -> impl Iterator<Item = ScopeIdx> + '_ {
-    let mut parents = self.scopes.reachable_from(scope);
-    parents.push(scope);
-    parents.into_iter()
-  }
-
-  pub fn nested_collections(
-    &self,
-    collection: CollectionIdx,
-  ) -> impl Iterator<Item = CollectionIdx> + '_ {
-    self.nesting.reachable_from(collection).into_iter()
+    scope: ScopeId,
+  ) -> impl Iterator<Item = ScopeId> + '_ {
+    self.scopes.reachable_from(scope).into_iter()
   }
 }
 
-// Using as a macro to avoid double mutable refs
-macro_rules! insert_segment_unchecked {
-  ($this:ident, $seg:expr, $sp:expr, $sc:expr) => {
-    match $this.segments.entry($seg) {
-      Entry::Occupied(entry) => {
-        log::warn!(
-          "inserting segment failed because it already existed {:?} {:?}",
-          $seg,
-          entry
-        );
-      }
-      Entry::Vacant(entry) => {
-        entry.insert(($sp, $sc));
-      }
-    }
-  };
+enum GetSpanner<'a> {
+  GetFrom(BranchId),
+  InsertNew(Box<dyn Fn(&mut Location) -> Span + 'a>),
 }
 
-impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
+impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   pub fn make(mapper: &'a IRMapper<'a, 'tcx>) -> Self {
     let from = mapper.cleaned_graph.start_node().start_location();
-    let initial_collection = CollectionIdx::new(0);
-    Self {
+
+    let mut collections = IndexVec::new();
+
+    // We start with an empty linear collection.
+    // TODO: try to find the bound for the entire body
+    //       if it exists, only use LengthKind::Unbounded
+    //       as a default.
+    let first_collection = collections.push(Collection {
+      data: Vec::default(),
+      kind: LengthKind::Unbounded { root: from },
+    });
+
+    let mut this = Self {
+      first_collection,
       mapper,
-      state: State {
-        kind: StateKind::Unified(UnifiedState::new(initial_collection, from)),
-      },
+      root_mappings: HashMap::default(),
+      collections,
+      branches: IndexVec::default(),
+      segments: IndexVec::default(),
+      processing: OpenCollections::default(),
+      branch_roots: InPlaceUnificationTable::default(),
       scope_graph: TransitiveRelationBuilder::default(),
-      collection_graph: TransitiveRelationBuilder::default(),
       // NOTE: this maintains that there is always
       //       an open scope that the visitor cannot close.
       open_scopes: vec![*BASE_SCOPE],
       next_scope: BASE_SCOPE.plus(1),
-      next_collection: initial_collection.plus(1),
-      shapes: HashMap::default(),
-      segments: HashMap::default(),
-    }
-  }
-
-  pub fn freeze(mut self) -> Result<FrozenMir> {
-    // TODO: Do validation on the end state of things.
-
-    match self.state.kind {
-      StateKind::Unified(unified) => {
-        let collection: Collection = unified.into();
-        self.shapes.insert(collection.idx, collection);
-      }
-      StateKind::Branched(stack) if !stack.is_empty() => {
-        bail!("finishing computation with open branches")
-      }
-      // empty branch stack, which shouldn't happen but
-      // we can ignore that here if it does.
-      _ => (),
     };
 
-    Ok(FrozenMir {
-      scopes: self.scope_graph.freeze(),
-      nesting: self.collection_graph.freeze(),
-      collections: Frozen::freeze(self.shapes),
+    this.processing.push(CollectionBuilder {
+      collection: first_collection,
+      current_location: mapper.cleaned_graph.start_node().start_location(),
+    });
+
+    this
+  }
+
+  fn finish_first_collection(&mut self) -> Result<()> {
+    // TODO: make sure that the only open collection is the first collection.
+    Ok(())
+  }
+
+  pub fn freeze(mut self) -> Result<SegmentedMir> {
+    self.finish_first_collection()?;
+
+    Ok(SegmentedMir {
+      first_collection: self.first_collection,
       segments: Frozen::freeze(self.segments),
+      branches: Frozen::freeze(self.branches),
+      collections: Frozen::freeze(self.collections),
+      scopes: self.scope_graph.freeze(),
     })
   }
 
-  // ----------------
-  // Idx operations
-
-  fn next_scope(&mut self) -> ScopeIdx {
+  fn next_scope(&mut self) -> ScopeId {
     let next = self.next_scope;
     // The scope graph is used to find _parent scopes_.
     self.scope_graph.add(next, self.current_scope());
@@ -457,31 +317,26 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
     next
   }
 
-  fn next_collection(&mut self) -> CollectionIdx {
-    let next = self.next_collection;
-    if let Ok(branch) = self.state.get_current_branch() {
-      // The collection graph is used to find _nested branches_.
-      self.collection_graph.add(branch.idx, next);
-    }
-    self.next_collection.increment_by(1);
-    next
-  }
-
-  // ----------------
+  // ------------------------------------------------
   // Scope operations
+  //
+  // NOTE: scopes are controlled by the HIR Visitor
+  //       so we don't need to sanitize them at all.
+  //       They return Results to match the interface
+  //       of everything else though.
 
-  /// After starting a body analysis this should never be None.
-  fn current_scope(&self) -> ScopeIdx {
+  // NOTE: After starting a body analysis this should never be None.
+  fn current_scope(&self) -> ScopeId {
     *self.open_scopes.last().unwrap()
   }
 
-  pub fn open_scope(&mut self) -> Result<ScopeIdx> {
+  pub fn open_scope(&mut self) -> Result<ScopeId> {
     let next_scope = self.next_scope();
     self.open_scopes.push(next_scope);
     Ok(next_scope)
   }
 
-  pub fn close_scope(&mut self, idx: ScopeIdx) -> Result<()> {
+  pub fn close_scope(&mut self, idx: ScopeId) -> Result<()> {
     ensure!(idx != *BASE_SCOPE, "cannot close base scope");
 
     let last_open = self.open_scopes.last().ok_or(anyhow!("no open scopes"))?;
@@ -498,12 +353,153 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
   // -----------------
   // Branch operations
 
-  fn is_branch_open(&self, root: Location) -> bool {
-    if let StateKind::Branched(stack) = &self.state.kind {
-      stack.iter().any(|bs| bs.root == root)
+  // TODO: we can use the post-dominating tree to get this information.
+  /// Finds the basic block that is the last post-dominator of the successors of `root`.
+  fn least_post_dominator(&self, root: BasicBlock) -> Option<BasicBlock> {
+    log::debug!("Finding the least post-dominator for root {root:?}");
+    let mapper = &self.mapper;
+
+    let open_blocks = mapper.cleaned_graph.successors(root).collect::<Vec<_>>();
+
+    log::debug!("Successors: {open_blocks:?}");
+
+    let bb = open_blocks.first()?;
+
+    mapper
+      .cleaned_graph
+      .depth_first_search(*bb)
+      .find(|&can_pdom| {
+        open_blocks
+          .iter()
+          .all(|&node| mapper.post_dominates(can_pdom, node))
+      })
+
+    // let reachable_blocks = open_blocks
+    //   .iter()
+    //   .flat_map(|&bb| )
+    //   .collect::<Vec<_>>();
+
+    // log::debug!("Reachable blocks: {reachable_blocks:?}");
+
+    // let potential_joins = reachable_blocks
+    //   .iter()
+    //   .filter_map(|&can_pdom| {
+    //     open_blocks
+    //       .iter()
+    //       .all(|open| mapper.post_dominates(can_pdom, *open))
+    //       .then_some(can_pdom)
+    //   })
+    //   .collect::<Vec<_>>();
+
+    // log::debug!("Potential join blocks: {potential_joins:#?}");
+
+    // potential_joins
+    //   .iter()
+    //   .find(|&before| {
+    //     potential_joins
+    //       .iter()
+    //       .all(|after| mapper.dominates(*before, *after))
+    //   })
+    //   .copied()
+  }
+
+  fn mk_branch(
+    &mut self,
+    location: Location,
+    get_span: GetSpanner<'a>,
+  ) -> Result<BranchId> {
+    let mapper = &self.mapper;
+    let scope = self.current_scope();
+
+    ensure!(
+      self.mapper.is_terminator_switchint(location),
+      "terminator in block {location:?} is not a `switchInt`"
+    );
+
+    // The convergence of all branching paths.
+    let phi_opt = self
+      .least_post_dominator(location.block)
+      .map(|bb| bb.start_location());
+
+    let builder_opt = self
+      .processing
+      .iter_mut()
+      .find(|cb| mapper.ldominates(cb.current_location, location));
+
+    let Some(builder) = builder_opt else {
+      bail!("no open collection dominates root location {location:?}");
+    };
+
+    ensure!(
+      builder.current_location == location,
+      "opening a branch missed a step, expected {:?} given: {:?}",
+      builder.current_location,
+      location
+    );
+
+    // Make a new branch
+    let tid = self.branch_roots.new_key(());
+    let bid = self.branches.push(BranchData::new(tid, location, phi_opt));
+    let branch = &mut self.branches[bid];
+
+    // Save the Location -> Span mappings under this root BranchId.
+    let get_span = match get_span {
+      GetSpanner::InsertNew(b) => {
+        self.root_mappings.insert(bid, b);
+        &self.root_mappings[&bid]
+      }
+      GetSpanner::GetFrom(bid) => &self.root_mappings[&bid],
+    };
+
+    // Push the new Branch as a control flow kind on
+    // the current collection's data set.
+    self.collections[builder.collection]
+      .data
+      .push(CFKind::Branch(bid));
+
+    let length_kind = if let Some(phi) = phi_opt {
+      builder.current_location = phi;
+      LengthKind::Bounded {
+        root: location,
+        phi,
+      }
     } else {
-      false
+      // TODO: how should we update the collection if there
+      //       isn't a phi? My current feeling is that we should
+      //       just close the collection.
+      LengthKind::Unbounded { root: location }
+    };
+
+    // For each of the target BasicBlocks of the switchInt:
+    for sblock in mapper.cleaned_graph.successors(location.block) {
+      // 1. insert the split segment into the branch
+      let mut to = sblock.start_location();
+      let span = get_span(&mut to);
+      let sid = self.segments.push(SegmentData {
+        segment: MirSegment::new(location, to),
+        span,
+        scope,
+      });
+      branch.splits.push(sid);
+
+      // 2. Open a new Collection with it's starting
+      //    location at the branch target location.
+      let cid = self.collections.push(Collection {
+        data: Vec::default(),
+        kind: length_kind,
+      });
+
+      // 3. Store this new collection in the branch middle section.
+      branch.nested.push(cid);
+
+      // 4. Put a new collection builder on the open collection stack.
+      self.processing.push(CollectionBuilder {
+        collection: cid,
+        current_location: to,
+      });
     }
+
+    Ok(bid)
   }
 
   /// Opens a branch of control flow rooted at `location`.
@@ -513,227 +509,186 @@ impl<'a, 'tcx: 'a> SegmentedMir<'a, 'tcx> {
   pub fn open_branch(
     &mut self,
     location: Location,
-    get_span: impl Fn(&mut Location) -> Span,
+    get_span: impl Fn(&mut Location) -> Span + 'a,
+  ) -> Result<BranchId> {
+    log::debug!("opening user initiated branch at {location:?}");
+    log::debug!("open branches BEFORE {:#?}", self.processing);
+    let r = self.mk_branch(location, GetSpanner::InsertNew(Box::new(get_span)));
+    log::debug!("open branches AFTER {:#?}", self.processing);
+    r
+  }
+
+  fn open_child_branch(
+    &mut self,
+    parent: BranchId,
+    root: Location,
   ) -> Result<()> {
-    log::debug!("creating new branch rooted at {location:?}");
-    let next_collection = self.next_collection();
-
-    let new_branch =
-      BranchedState::make(self.mapper, next_collection, location);
-
-    // Put the current state into a branched state building a
-    // new branch node on the stack.
-    //
-    // If we were in a unifying state this location must be the
-    // last one where a step ended. If it isn't we could either:
-    // 1. insert the step (bad idea IMO)
-    // 2. fail
-    //
-    // From a already branched state this location needs to be
-    // reachable from exactly one variant and (TODO: finish writing).
-    // NOTE: a linear state is not returned to, it is replaced by a
-    //       new linear state. Branch states stack up until they are
-    //       all finished.
-    match self.state.kind {
-      StateKind::Unified(ref mut ustate) => {
-        ensure!(
-          location == ustate.from,
-          "opened control flow missed a step: unified @ {:?} CF {:?}",
-          ustate.from,
-          location
-        );
-
-        // Store the shape of collected mir segments
-        let unified = std::mem::take(ustate);
-        let collection: Collection = unified.into();
-        self.shapes.insert(collection.idx, collection);
-
-        // Swap to the new branched state
-        self.state.kind = StateKind::Branched(BranchStack::new(new_branch?));
-      }
-      StateKind::Branched(ref mut stack) => {
-        let branch = stack.get_current_branch_mut()?;
-        let _ = branch.get_dominating_path_idx(self.mapper, location, None)?;
-        // TODO: we should update the branch we're going from
-        stack.push(new_branch?);
-      }
-    };
-
-    let scope = self.current_scope();
-    let stack = self.state.get_branched_mut()?;
-    let branch = stack.get_current_branch_mut()?;
-    log::debug!("flushing branch split steps");
-
-    // NOTE: we are passing a `&mut Location` for a reason.
-    //       The HIR node that starts the branch entry often
-    //       has a Location in the middle of a BasicBlock, not
-    //       right at the beginning. The mut ref allows the HIR
-    //       to do small corrections on the location as necessary.
-    for to in branch.open_paths.iter_mut() {
-      let span = get_span(to); // Update loc first!
-      let segment = MirSegment::new(branch.root, *to);
-      log::debug!("inserting split step {segment:?}");
-      branch.splits.push(segment);
-      insert_segment_unchecked!(self, segment, span, scope);
-    }
-
+    log::debug!("opening implicit branch at {root:?}");
+    let child = self.mk_branch(root, GetSpanner::GetFrom(parent))?;
+    let parent_tid = self.branches[parent].table_id;
+    let child_tid = self.branches[child].table_id;
+    self.branch_roots.union(parent_tid, child_tid);
     Ok(())
   }
 
-  /// Opens a branch of control flow rooted at `location`.
+  /// Closes a branch of control flow with an origin root of `location`.
   ///
   /// The function implicitly adds a new segment for all split steps
   /// and `get_span` should return the associated Span for these split steps.
   pub fn close_branch(
     &mut self,
-    root: Location,
-    get_span: impl Fn(MirSegment) -> Span,
+    bid: BranchId,
+    get_span: impl Fn(MirSegment) -> Span + Clone,
   ) -> Result<()> {
-    ensure!(
-      self.is_branch_open(root),
-      "no open branch rooted at {root:?}"
-    );
-
     let scope = self.current_scope();
-    let stack = self.state.get_branched_mut()?;
-    let mut branch = stack.pop().ok_or(anyhow!("branch stack empty"))?;
 
-    ensure!(
-      branch.root == root,
-      "expecting to close branch rooted at {root:?} but given {branch:#?}"
-    );
+    let table_root = self.branches[bid].table_id;
 
-    log::debug!("Flushing branch state {branch:#?}");
+    let branches_to_close = self
+      .branches
+      .iter_enumerated()
+      .filter_map(|(bid, bd)| {
+        (table_root == self.branch_roots.find(bd.table_id)).then_some(bid)
+      })
+      .collect::<Vec<_>>();
 
-    // Flush any remaining open paths to step back to the phi node.
-    if let Some(to) = branch.phi {
-      for &from in branch.open_paths.iter() {
-        let segment = MirSegment::new(from, to);
-        log::debug!("flushing join step {segment:?}");
-        branch.joins.push(segment);
-        insert_segment_unchecked!(self, segment, get_span(segment), scope);
+    for bid in branches_to_close.into_iter() {
+      let branch = &mut self.branches[bid];
+
+      let nested_collections =
+        branch.nested.iter().copied().collect::<HashSet<_>>();
+
+      // We need to close out the steps of each nested collection.
+      for builder in self.processing.drain_collections(&nested_collections) {
+        log::debug!("Closing builder: {builder:?}");
+        let collection = &self.collections[builder.collection];
+        if let LengthKind::Bounded { phi, .. } = collection.kind {
+          let from = builder.current_location;
+          let segment = MirSegment::new(from, phi);
+          let span = get_span(segment);
+          let sid = self.segments.push(SegmentData {
+            segment,
+            span,
+            scope,
+          });
+          branch.joins.push(sid);
+        }
       }
     }
 
-    // If we're closing the last branch then we need to put the
-    // state back to uniform, the last branch node should always
-    // have a valid phi.
-    if stack.is_empty() {
-      if let Some(from) = branch.phi {
-        let idx = self.next_collection();
-        self.state.kind = StateKind::Unified(UnifiedState::new(idx, from));
-      } else {
-        bail!("closing last branch without a phi node");
-      }
-    }
-
-    let collection: Collection = branch.into();
-    self.shapes.insert(collection.idx, collection);
+    log::debug!("State after closing branches {:#?}", self.processing);
 
     Ok(())
+  }
+
+  fn find_containing_branch(&self, cid: CollectionId) -> Option<BranchId> {
+    self
+      .branches
+      .iter_enumerated()
+      .find_map(|(bid, branch)| branch.nested.contains(&cid).then_some(bid))
+  }
+
+  fn find_suitable_collection(&mut self, location: Location) -> FindResult {
+    let mapper = &self.mapper;
+
+    // We can insert into a collection where the last location
+    // was the dominates the new location to insert.
+    let builder_opt = self.processing.iter().enumerate().find_map(|(i, cb)| {
+      log::debug!("TRYING TO FIND OPEN COLLECTION: {cb:?}");
+      mapper
+        .ldominates(cb.current_location, location)
+        .then_some((i, cb))
+    });
+
+    // No collection found
+    let Some((builder_i, builder)) = builder_opt else {
+      return FindResult::None;
+    };
+
+    // Easy case! We can use a linear insert.
+    if mapper.lpost_dominates(location, builder.current_location) {
+      log::debug!(
+        "location post-dominates builder: {location:?} {:?}",
+        builder.current_location
+      );
+      return FindResult::Linear(builder_i);
+    }
+
+    match self.find_containing_branch(builder.collection) {
+      None => {
+        log::error!("couldn't find branch containing {:?}", builder.collection);
+        FindResult::None
+      }
+      Some(bid) => FindResult::NonLinear(bid, builder.current_location),
+    }
   }
 
   // ----------
   // Insertions
 
+  /// Insert a step ending at the given `Location`.
+  ///
+  /// It's the `SegmentedMir`s job to find out where the step came from,
+  /// in the case of ambiguity the given path hint can be used, this
+  /// proves most usefull when an implicit branch child needs to be spawned.
+  /// See the doc comment for further details.
   pub fn insert(
     &mut self,
     location: Location,
     path_hint: Option<Location>,
     span: Span,
   ) -> Result<()> {
-    log::debug!("starting insertion with hint {path_hint:?} at {location:?}");
+    log::debug!(
+      "starting insertion with hint {path_hint:?} at {location:?} \ninto: {:?}",
+      self.processing
+    );
 
-    match &self.state.kind {
-      StateKind::Unified(UnifiedState { from, .. }) => {
-        self.insert_linear(*from, location, span)
+    match self.find_suitable_collection(location) {
+      // BAD case, no dominating locations where we can insert.
+      FindResult::None => bail!(
+        "no suitable collection for location {location:?} {:#?}",
+        self.processing
+      ),
+
+      // RARE case:
+      // Spawn a new child branch and retry the insert.
+      FindResult::NonLinear(parent, branch_loc) => {
+        self.open_child_branch(parent, branch_loc)?;
+        self.insert(location, path_hint, span)
       }
-      StateKind::Branched(..) => {
-        self.insert_in_branch(location, path_hint, span)
+
+      // EASY case:
+      // We can insert a segment _linearly_ into the list of segments,
+      FindResult::Linear(builder_idx) => {
+        let scope = self.current_scope();
+        let builder = self.processing.get_mut(builder_idx);
+        let collection = &mut self.collections[builder.collection];
+
+        log::debug!("Inserting into builder {builder:?}");
+
+        let mut insert_to = |to| {
+          let segment_data = SegmentData {
+            segment: MirSegment::new(builder.current_location, to),
+            span,
+            scope,
+          };
+          let segid = self.segments.push(segment_data);
+          collection.data.push(CFKind::Linear(segid));
+          builder.current_location = to;
+        };
+
+        match collection.kind {
+          LengthKind::Bounded { phi, .. }
+            if self.mapper.ldominates(phi, location) =>
+          {
+            insert_to(phi)
+          }
+          // All other cases can use the given location as the `to` location.
+          _ => insert_to(location),
+        }
+
+        Ok(())
       }
     }
-  }
-
-  /// Insert a step where all control flow start at `from` and ends at `to`.
-  ///
-  /// This means that `from` dominates `to`, and `to` post-dominates `from`.
-  fn insert_linear(
-    &mut self,
-    from: Location,
-    to: Location,
-    span: Span,
-  ) -> Result<()> {
-    log::debug!("starting linear insertion step {from:?} -> {to:?}");
-
-    ensure!(
-      self.mapper.dominates(from, to),
-      "linear insert dominance condition unsatisfied {from:?} -> {to:?}"
-    );
-
-    ensure!(
-      self.mapper.post_dominates(to, from),
-      "linear insert post-dominance condition unsatisfied {from:?} -> {to:?}"
-    );
-
-    let unified = self.state.get_unified_mut()?;
-
-    ensure!(
-      unified.from == from,
-      "missed step in unified state {:?}: {:?} -> {:?}",
-      unified.from,
-      from,
-      to
-    );
-
-    let segment = MirSegment::new(from, to);
-    log::debug!("inserting {segment:?} into unified state");
-
-    // Update the UnifiedState
-    unified.from = to;
-    unified.inserted.push(segment);
-
-    let scope = self.current_scope();
-    insert_segment_unchecked!(self, segment, span, scope);
-
-    Ok(())
-  }
-
-  fn insert_in_branch(
-    &mut self,
-    to: Location,
-    path_hint: Option<Location>,
-    span: Span,
-  ) -> Result<()> {
-    log::debug!("trying branched insertion with hint {path_hint:?} at {to:?}");
-
-    let branch_stack = self.state.get_branched_mut()?;
-    let branch = branch_stack.get_current_branch_mut()?;
-    let path_idx =
-      branch.get_dominating_path_idx(self.mapper, to, path_hint)?;
-    let from = branch.open_paths[path_idx];
-
-    // If the step will go past the phi node, or to the phi
-    // node exactly, then we will close this open path and
-    // limit the step to only reach the phi node.
-    let to = if let Some(phi) = branch.phi && self.mapper.dominates(phi, to) {
-      // We've gone past the phi node, close the open path and
-      // return phi as the to location
-      log::debug!("location {to:?} closed branch path {from:?} -> {phi:?}");
-      branch.open_paths.remove(path_idx);
-      phi
-    } else {
-      branch.open_paths[path_idx] = to;
-      to
-    };
-
-    let segment = MirSegment::new(from, to);
-    // Update the branch state
-    branch.middle.push(segment);
-
-    log::debug!("inserting {segment:?} into current branch {branch:#?}");
-    let scope = self.current_scope();
-    insert_segment_unchecked!(self, segment, span, scope);
-
-    Ok(())
   }
 }

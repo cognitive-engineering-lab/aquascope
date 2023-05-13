@@ -148,7 +148,7 @@ mod tests {
   #[test]
   fn pdom_double_diamond() {
     //         2     5
-    // 0 -> 1     4     7
+    // 0 -> 1     4     7 ->
     //         3     6
     let dd = VG::<usize>::make(8, 0, vec![
       (0, 1),

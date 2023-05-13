@@ -67,13 +67,6 @@ pub enum GatherDepth {
   Nested,
 }
 
-// FIXME rever these changes, they shouldn't be needed.
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum ExitJoinSearch {
-  None,
-  Successor,
-}
-
 impl<'a, 'tcx> IRMapper<'a, 'tcx>
 where
   'tcx: 'a,
@@ -114,26 +107,26 @@ where
     ir_map
   }
 
-  // --------------------------------------------------------
-  // TODO: these utilities probably belong in the CleanedBody
-
-  pub fn dominates(&self, dom: Location, node: Location) -> bool {
+  pub fn ldominates(&self, dom: Location, node: Location) -> bool {
     if dom.block == node.block {
       return dom.statement_index <= node.statement_index;
     }
-
-    self.dominators.is_reachable(node.block)
-      && self.dominators.dominates(dom.block, node.block)
+    self.dominates(dom.block, node.block)
   }
 
-  pub fn post_dominates(&self, dom: Location, node: Location) -> bool {
-    if dom.block == node.block {
-      return dom.statement_index >= node.statement_index;
+  pub fn lpost_dominates(&self, pdom: Location, node: Location) -> bool {
+    if pdom.block == node.block {
+      return pdom.statement_index >= node.statement_index;
     }
+    self.post_dominates(pdom.block, node.block)
+  }
 
-    self
-      .post_dominators
-      .is_postdominated_by(node.block, dom.block)
+  pub fn dominates(&self, dom: BasicBlock, node: BasicBlock) -> bool {
+    self.dominators.is_reachable(node) && self.dominators.dominates(dom, node)
+  }
+
+  pub fn post_dominates(&self, pdom: BasicBlock, node: BasicBlock) -> bool {
+    self.post_dominators.is_postdominated_by(node, pdom)
   }
 
   /// Returns true if the terminator in the location's block is a `switchInt`.
@@ -177,19 +170,19 @@ where
       && matches!(term.kind, TK::FalseUnwind { .. } | TK::FalseEdge { .. })
   }
 
-  /// Search for entry/exit locations allowing for a tolerance on the exit block.
+  /// Produces a MirOrderedLocations which is defined as follows.
+  /// The `entry_block` represents the `BasicBlock` which post-dominates all
+  /// blocks in the given set of locations and conversely the `exit_block`
+  /// dominates all blocks in the set.
   ///
-  /// See [`get_mir_locations`] for a description of the non-tolerant version,
-  /// here, we give the option of relaxing the initial set of basic blocks
-  /// to search from.
-  /// When branching control-flow has a return in one of the branches, it's
-  /// possible that the entire HIR node doesn't include the block which joins
-  /// these branches.
-  pub(crate) fn get_mir_locations_fuzzy(
+  /// This works under the assumption that there exists a global
+  /// maximum in the (post-)dominator lattice.
+  ///
+  /// See: <https://en.wikipedia.org/wiki/Dominator_(graph_theory)>
+  pub fn get_mir_locations(
     &self,
     hir_id: HirId,
     depth: GatherDepth,
-    exit_search: ExitJoinSearch,
   ) -> Option<MirOrderedLocations> {
     let empty_set = &HashSet::default();
     let outer = self.hir_to_mir.get(&hir_id).unwrap_or(empty_set);
@@ -258,19 +251,6 @@ where
 
     let exit_block = find_exit_from(&basic_blocks);
 
-    let exit_block = match (exit_block, exit_search) {
-      (None, ExitJoinSearch::Successor) => {
-        let successor_blocks = basic_blocks
-          .iter()
-          .flat_map(|&bb| self.cleaned_graph.successors(bb));
-        let basic_blocks = successor_blocks
-          .chain(total_location_map.keys().copied())
-          .collect::<Vec<_>>();
-        find_exit_from(&basic_blocks)
-      }
-      (eb, _) => eb,
-    };
-
     log::debug!("Gathering MIR location entry / exit blocks: {entry_block:?}{exit_block:?}");
 
     if exit_block.is_none() {
@@ -285,23 +265,6 @@ where
       exit_block,
       locations: total_location_map,
     })
-  }
-
-  /// Produces a MirOrderedLocations which is defined as follows.
-  /// The `entry_block` represents the `BasicBlock` which post-dominates all
-  /// blocks in the given set of locations and conversely the `exit_block`
-  /// dominates all blocks in the set.
-  ///
-  /// This works under the assumption that there exists a global
-  /// maximum in the (post-)dominator lattice.
-  ///
-  /// See: <https://en.wikipedia.org/wiki/Dominator_(graph_theory)>
-  pub fn get_mir_locations(
-    &self,
-    hir_id: HirId,
-    depth: GatherDepth,
-  ) -> Option<MirOrderedLocations> {
-    self.get_mir_locations_fuzzy(hir_id, depth, ExitJoinSearch::None)
   }
 
   fn is_block_unreachable(&self, block: BasicBlock) -> bool {

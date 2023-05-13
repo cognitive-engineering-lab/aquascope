@@ -1,10 +1,9 @@
 //! Analysis for the “Missing-at” relations.
 
 mod find_steps;
-#[allow(dead_code)]
 mod hir_steps;
 mod segment_tree;
-#[allow(dead_code, unused_variables)]
+#[allow(clippy::similar_names)]
 mod segmented_mir;
 
 use std::collections::hash_map::Entry;

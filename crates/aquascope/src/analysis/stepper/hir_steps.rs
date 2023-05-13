@@ -25,12 +25,7 @@ use rustc_utils::{
   source_map::range::CharRange, test_utils::DUMMY_CHAR_RANGE, PlaceExt, SpanExt,
 };
 
-use super::{
-  segmented_mir::{
-    CollectionIdx, CollectionKind, ScopeIdx, SegmentedMir, BASE_SCOPE,
-  },
-  *,
-};
+use super::{segmented_mir::*, *};
 use crate::{
   analysis::{
     ir_mapper::{GatherDepth, IRMapper},
@@ -248,11 +243,11 @@ where
   // Actual state of the analysis
   /// Entry location of the body under analysis.
   start_loc: Location,
-  locals_at_scope: HashMap<ScopeIdx, Vec<Local>>,
+  locals_at_scope: HashMap<ScopeId, Vec<Local>>,
   /// Stack of the current branch entry points, used
   /// for hinting path steps to the `SegmentedMir`.
   current_branch_start: Vec<Location>,
-  mir_segments: SegmentedMir<'a, 'tcx>,
+  mir_segments: SegmentedMirBuilder<'a, 'tcx>,
 }
 
 /// Makes calling functions on the SegmentedMir easier.
@@ -292,6 +287,157 @@ macro_rules! report_unexpected {
   }
 }
 
+struct TableFinalizer<'a, 'tcx: 'a> {
+  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  mir: &'a SegmentedMir,
+  locals_at_scope: HashMap<ScopeId, Vec<Local>>,
+}
+
+#[allow(clippy::similar_names)]
+impl<'a, 'tcx: 'a> TableFinalizer<'a, 'tcx> {
+  fn locals_to_filter(&self, scope: ScopeId) -> HashSet<Local> {
+    self
+      .mir
+      .parent_scopes(scope)
+      .filter_map(|sid| self.locals_at_scope.get(&sid))
+      .flatten()
+      .copied()
+      .collect::<HashSet<_>>()
+  }
+
+  fn insert_collection(&self, result: &mut Tables<'tcx>, cid: CollectionId) {
+    let collection = self.mir.get_collection(cid);
+
+    for &part in collection.data.iter() {
+      match part {
+        CFKind::Linear(seg_id) => self.insert_segment(result, seg_id),
+        CFKind::Branch(branch_id) => self.insert_branch(result, branch_id),
+      }
+    }
+  }
+
+  fn insert_segment(&self, result: &mut Tables<'tcx>, sid: SegmentId)
+  // -> ScopeId
+  {
+    let ctxt = &self.ctxt;
+    let &SegmentData {
+      segment,
+      span,
+      scope,
+    } = self.mir.get_segment(sid);
+
+    let to_filter = self.locals_to_filter(scope);
+
+    if segment.from == segment.to {
+      return;
+    }
+
+    let p0 = ctxt.location_to_point(segment.from);
+    let p1 = ctxt.location_to_point(segment.to);
+    let before = &ctxt.permissions_domain_at_point(p0);
+    let after = &ctxt.permissions_domain_at_point(p1);
+    let mut diff = before.diff(after);
+
+    let removed = diff
+      .drain_filter(|place, _| to_filter.contains(&place.local))
+      .collect::<Vec<_>>();
+
+    log::debug!(
+      "removed domain places due to attached filter at {:?} {:?}",
+      segment.to,
+      removed
+    );
+
+    result.entry(span).or_default().push((segment, diff));
+  }
+
+  fn insert_branch(&self, result: &mut Tables<'tcx>, bid: BranchId) {
+    let BranchData {
+      reach,
+      splits,
+      joins,
+      nested,
+      ..
+    } = self.mir.get_branch(bid);
+
+    let mut entire_diff = reach.into_diff(self.ctxt);
+
+    log::debug!("Inserting Branched Collection {:?}:\n\tsplits: {:?}\n\tmiddle: {:?}\n\tjoins: {:?}", reach, splits, nested, joins);
+
+    let temp_middle = &mut Tables::default();
+    let temp_joins = &mut Tables::default();
+
+    for &sid in splits.iter() {
+      self.insert_segment(temp_middle, sid);
+    }
+
+    for &cid in nested.iter() {
+      self.insert_collection(temp_middle, cid);
+    }
+
+    for &sid in splits.iter() {
+      self.insert_segment(temp_joins, sid);
+    }
+
+    // Find the locals which were filtered from all scopes. In theory,
+    // `all_scopes` should contains the same scope, copied over,
+    // but the SegmentedMir doesn't enforce this and there's no
+    // scope attached to collections.
+    let scope_here = self.mir.get_branch_scope(bid);
+    let all_attached = self
+      .locals_at_scope
+      .get(&scope_here)
+      .map(|v| v.iter())
+      .unwrap_or_default()
+      .collect::<HashSet<_>>();
+
+    let attached_here = entire_diff
+      .drain_filter(|place: &Place, _| all_attached.contains(&place.local))
+      .collect::<PseudoTable>();
+
+    let diffs_in_tables = |tbls: &Tables| {
+      tbls
+        .iter()
+        .flat_map(|(_, tbls)| {
+          tbls
+            .iter()
+            .flat_map(|(_, ptbl)| ptbl.iter().map(|(_, diff)| *diff))
+        })
+        .collect::<HashSet<PermissionsDataDiff>>()
+    };
+
+    // Flatten all tables to the unique `PermissionsDataDiff`s
+    // that exist within them.
+    let diffs_in_branches = diffs_in_tables(temp_middle);
+
+    for (_, tbls) in temp_joins.iter_mut() {
+      for (_, ptbl) in tbls.iter_mut() {
+        let _drained = ptbl
+          .drain_filter(|_, diff| diffs_in_branches.contains(diff))
+          .collect::<Vec<_>>();
+        // log::debug!("drained {drained:#?} because diff exists");
+      }
+    }
+
+    macro_rules! insert {
+      ($m1:expr => $m2:expr) => {
+        for (&span, ref mut vs) in $m1.into_iter() {
+          $m2.entry(span).or_default().append(vs);
+        }
+      };
+    }
+
+    insert!(temp_middle => result);
+    insert!(temp_joins => result);
+
+    // Attach filtered locals
+    result
+      .entry(reach.span(self.ctxt))
+      .or_default()
+      .push((*reach, attached_here));
+  }
+}
+
 impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
   fn get_unsupported_feature(&self) -> Option<String> {
     self.unsupported_encounter.as_ref().map(|(_, s)| s.clone())
@@ -326,189 +472,29 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
     let empty_domain = &self.ctxt.domain_bottom();
     let mir_segments = self.mir_segments.freeze()?;
 
-    let locals_attached_on = |scope: ScopeIdx| -> HashSet<Local> {
-      let ps = mir_segments.parent_scopes(scope).collect::<Vec<_>>();
-      log::debug!("scope {scope:?} paents: {ps:?}");
-      ps.iter()
-        .filter_map(|idx| self.locals_at_scope.get(idx))
-        .flatten()
-        .copied()
-        .collect::<HashSet<_>>()
-    };
-
     // Upon entry, the function parameters are already "live". But we want to
     // special case this, and show that they "come alive" at the opening brace.
     let first_diff = empty_domain.diff(first_domain);
 
     // Insert a segment into a table filtering defined places.
-    let insert_segment =
-      |result: &mut Tables<'tcx>, segment: MirSegment| -> ScopeIdx {
-        let Some((span, scope)) = mir_segments.segment_data(segment) else {
-        return *BASE_SCOPE;
-      };
-
-        let to_filter = locals_attached_on(scope);
-        if segment.from != segment.to {
-          let p0 = ctxt.location_to_point(segment.from);
-          let p1 = ctxt.location_to_point(segment.to);
-          let before = &ctxt.permissions_domain_at_point(p0);
-          let after = &ctxt.permissions_domain_at_point(p1);
-          let mut diff = before.diff(after);
-
-          let removed = diff
-            .drain_filter(|place, _| to_filter.contains(&place.local))
-            .collect::<Vec<_>>();
-
-          log::debug!(
-            "removed domain places due to attached filter at {:?} {:?}",
-            segment.to,
-            removed
-          );
-
-          result.entry(span).or_default().push((segment, diff));
-        }
-        scope
-      };
-
-    let inserted_collections = &mut HashSet::default();
-    let mut insert_collection =
-      |result: &mut Tables<'tcx>, idx: CollectionIdx| {
-        // Only insert a collection once.
-        if inserted_collections.contains(&idx) {
-          return;
-        }
-
-        let Some(shape) = mir_segments.collection_data(idx) else {
-          return;
-        };
-        inserted_collections.insert(idx);
-
-        match &shape.kind {
-          // For linear collections of segments we can simply
-          // insert them into the resulting table.
-          CollectionKind::Linear { segments } => {
-            for &segment in segments.iter() {
-              insert_segment(result, segment);
-            }
-          }
-          // TODO: need to process nested collections first.
-          //       the attached locals works for the tests
-          //       but there's a logic issue there to revisit
-          //       when other stuff is sorted out.
-          CollectionKind::Branch {
-            root,
-            phi,
-            splits,
-            middle,
-            joins,
-          } => {
-            // The differences from the start of the branching to the end.
-            let reach;
-            let mut entire_diff;
-            if let Some(phi) = phi {
-              reach = MirSegment::new(*root, *phi);
-              entire_diff = reach.into_diff(ctxt);
-            } else {
-              reach = MirSegment::new(*root, *root);
-              entire_diff = PseudoTable::default();
-            };
-
-            log::debug!("Inserting Branched Collection {:?}:\n\tsplits: {:?}\n\tmiddle: {:?}\n\tjoins: {:?}", reach, splits, middle, joins);
-
-            let temp_middle = &mut Tables::default();
-            let temp_joins = &mut Tables::default();
-
-            // let split_scopes = splits
-            //   .iter()
-            //   .map(|&segment| insert_segment(result, segment));
-
-            let middle_scopes = splits
-              .iter()
-              .chain(middle)
-              .map(|&segment| insert_segment(temp_middle, segment));
-
-            let join_scopes = joins
-              .iter()
-              .map(|&segment| insert_segment(temp_joins, segment));
-
-            let all_scopes = middle_scopes.chain(join_scopes);
-
-            // Find the locals which were filtered from all scopes. In theory,
-            // `all_scopes` should contains the same scope, copied over,
-            // but the SegmentedMir doesn't enforce this and there's no
-            // scope attached to collections.
-            let all_attached = all_scopes
-              .flat_map(locals_attached_on)
-              .collect::<HashSet<_>>();
-
-            let attached_here = entire_diff
-              .drain_filter(|place: &Place, _| {
-                all_attached.contains(&place.local)
-              })
-              .collect::<PseudoTable>();
-
-            // TODO: the scoped attached locals still don't appear
-            //       for if-lets and join segments aren't filtered
-            //       if they appear within a different branch.
-
-            let diffs_in_tables = |tbls: &Tables| {
-              tbls
-                .iter()
-                .flat_map(|(_, tbls)| {
-                  tbls
-                    .iter()
-                    .flat_map(|(_, ptbl)| ptbl.iter().map(|(_, diff)| *diff))
-                })
-                .collect::<HashSet<PermissionsDataDiff>>()
-            };
-
-            // Flatten all tables to the unique `PermissionsDataDiff`s
-            // that exist within them.
-            let diffs_in_branches = diffs_in_tables(temp_middle);
-
-            for (_, tbls) in temp_joins.iter_mut() {
-              for (_, ptbl) in tbls.iter_mut() {
-                let _drained = ptbl
-                  .drain_filter(|_, diff| diffs_in_branches.contains(diff))
-                  .collect::<Vec<_>>();
-                // log::debug!("drained {drained:#?} because diff exists");
-              }
-            }
-
-            // log::debug!("Locals attached to collection: {attached_here:#?}");
-            // log::debug!(
-            //   "Differences contained within the branches {:#?} and those in joins {:#?}", diffs_in_branches, diffs_in_tables(temp_joins));
-
-            macro_rules! insert {
-              ($m1:expr => $m2:expr) => {
-                for (&span, ref mut vs) in $m1.into_iter() {
-                  $m2.entry(span).or_default().append(vs);
-                }
-              };
-            }
-
-            insert!(temp_middle => result);
-            insert!(temp_joins => result);
-
-            // Attach filtered locals
-            result
-              .entry(reach.span(ctxt))
-              .or_default()
-              .push((reach, attached_here));
-          }
-        }
-      };
 
     let mut diffs = Tables::default();
 
+    let finalizer = TableFinalizer {
+      ctxt,
+      mir: &mir_segments,
+      locals_at_scope: self.locals_at_scope,
+    };
+
+    finalizer.insert_collection(&mut diffs, mir_segments.first_collection);
+
+    // We do an unchecked insert here to avoid
+    // the segment from getting filtered because the
+    // segment from and to locations are equal.
     diffs.insert(body_open_brace, vec![(
       MirSegment::new(self.start_loc, self.start_loc),
       first_diff,
     )]);
-
-    for &c in mir_segments.collections() {
-      insert_collection(&mut diffs, c);
-    }
 
     Ok(prettify_permission_steps(analysis, diffs, mode))
   }
@@ -519,7 +505,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     ctxt: &'a PermissionsCtxt<'a, 'tcx>,
     ir_mapper: &'a IRMapper<'a, 'tcx>,
   ) -> Result<Self> {
-    let mir_segments = SegmentedMir::make(ir_mapper);
+    let mir_segments = SegmentedMirBuilder::make(ir_mapper);
     let start_loc = mir::START_BLOCK.start_location();
 
     Ok(HirStepPoints {
@@ -549,13 +535,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       report_unexpected!(self, "expecting popped location {expecting:?} but got {popped:?}")
     }
   }
-
-  // fn report_unsupported(&mut self, id: HirId, msg: &str) {
-  //   if self.unsupported_encounter.is_none() {
-  //     let span = self.span_of(id);
-  //     self.unsupported_encounter = Some((span, String::from(msg)));
-  //   }
-  // }
 
   /// Determine whether the traversal should visited nested HIR nodes.
   ///
@@ -654,14 +633,14 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   /// Close the entire branching expression which had the condition exit.
   ///
   /// Here, the given expression should be the _entire_ `EK::If` or `EK::Match`.
-  fn expr_condition_postlude(&mut self, hir_id: HirId, cnd_exit: Location) {
+  fn expr_condition_postlude(&mut self, bid: BranchId, hir_id: HirId) {
     log::warn!(
       "flushing and closing branch steps:\n{}",
       self.prettify_node(hir_id)
     );
 
     let ss = self.span_of(hir_id).shrink_to_hi();
-    invoke_internal!(self, close_branch, cnd_exit, |_| ss);
+    invoke_internal!(self, close_branch, bid, |_| ss);
   }
 
   /// Inserts a step point after the specified `HirId`. This
@@ -709,7 +688,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     cnd: &'tcx hir::Expr,
     then: &'tcx hir::Expr,
     else_opt: Option<&'tcx hir::Expr>,
-    entry_locs_to_spans: &HashMap<Location, Span>,
+    entry_locs_to_spans: HashMap<Location, Span>,
   ) {
     log::debug!(
       "visiting EXPR-IF\n\tCND: {}\n\t\tTHEN: {}\n\t\tELSE: {}",
@@ -722,19 +701,25 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
           return;
         };
 
-    invoke_internal!(self, open_branch, cnd_exit, |to: &mut Location| {
-      entry_locs_to_spans
-        .iter()
-        .find_map(|(&l, &span)| {
-          if self.ir_mapper.dominates(*to, l) {
-            *to = l;
-            Some(span)
-          } else {
-            None
-          }
-        })
-        .unwrap_or_default()
-    });
+    let mapper = self.ir_mapper;
+    let branch_id = invoke_internal!(
+      self,
+      open_branch,
+      cnd_exit,
+      move |to: &mut Location| {
+        entry_locs_to_spans
+          .iter()
+          .find_map(|(&l, &span)| {
+            if mapper.ldominates(*to, l) {
+              *to = l;
+              Some(span)
+            } else {
+              None
+            }
+          })
+          .unwrap_or_default()
+      }
+    );
 
     if let Some(then_entry) = self.get_node_entry(then.hir_id) {
       self.push_branch_start(then_entry);
@@ -762,7 +747,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       }
     }
 
-    self.expr_condition_postlude(expr_id, cnd_exit);
+    self.expr_condition_postlude(branch_id, expr_id);
   }
 
   fn handle_expr_match(
@@ -770,32 +755,38 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     expr_id: HirId,
     cnd: &'tcx hir::Expr,
     arms: &'tcx [hir::Arm],
-    entry_locs_to_spans: &HashMap<Location, Span>,
+    entry_locs_to_spans: HashMap<Location, Span>,
   ) {
     let Some(cnd_exit) = self.expr_condition_prelude(cnd) else {
       return;
     };
 
-    invoke_internal!(self, open_branch, cnd_exit, |to: &mut Location| {
-      entry_locs_to_spans
-        .iter()
-        .find_map(|(&l, &span)| {
-          if self.ir_mapper.dominates(*to, l) {
-            // Update the location to be the entry of the arm.
-            *to = l;
-            Some(span)
-          } else {
-            None
-          }
-        })
-        .unwrap_or(Span::default())
-    });
+    let mapper = self.ir_mapper;
+    let branch_id = invoke_internal!(
+      self,
+      open_branch,
+      cnd_exit,
+      move |to: &mut Location| {
+        entry_locs_to_spans
+          .iter()
+          .find_map(|(&l, &span)| {
+            if mapper.ldominates(*to, l) {
+              // Update the location to be the entry of the arm.
+              *to = l;
+              Some(span)
+            } else {
+              None
+            }
+          })
+          .unwrap_or(Span::default())
+      }
+    );
 
     for arm in arms {
       self.visit_arm(arm);
     }
 
-    self.expr_condition_postlude(expr_id, cnd_exit);
+    self.expr_condition_postlude(branch_id, expr_id);
   }
 }
 
@@ -874,7 +865,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
           entry_to_spans.insert(else_entry, else_span);
         }
 
-        self.handle_expr_if(expr.hir_id, cnd, then, else_opt, &entry_to_spans);
+        self.handle_expr_if(expr.hir_id, cnd, then, else_opt, entry_to_spans);
       }
 
       // HACK: Special cases for ForLoop and While desugarings.
@@ -935,7 +926,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
           entry_to_spans.insert(else_entry, else_span);
         }
 
-        self.handle_expr_if(expr.hir_id, cnd, then, Some(els), &entry_to_spans);
+        self.handle_expr_if(expr.hir_id, cnd, then, Some(els), entry_to_spans);
       }
 
       EK::Loop(
@@ -956,11 +947,10 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
         LoopSource::ForLoop,
         _,
       ) => {
-        let entry_to_spans = &mut HashMap::default();
+        let mut entry_to_spans = HashMap::default();
 
-        let loop_span = self.span_of(expr.hir_id);
-        let loop_start = loop_span.shrink_to_lo();
-        let loop_end = loop_span.shrink_to_hi();
+        let loop_start = self.span_of(some.body.hir_id).shrink_to_lo();
+        let loop_end = self.span_of(expr.hir_id).shrink_to_hi();
 
         // Iterator::next => None, breaking out of the loop
         if let Some(none_entry) = self.get_node_entry(none.body.hir_id) {
@@ -972,7 +962,8 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
           entry_to_spans.insert(some_entry, loop_start);
         }
 
-        self.handle_expr_match(expr.hir_id, cnd, arms, entry_to_spans);
+        #[allow(clippy::needless_borrow)]
+        self.handle_expr_match(expr.hir_id, cnd, &arms, entry_to_spans);
       }
 
       // NOTE: if a match condition doesn't produce a `switchInt`, there
@@ -1034,7 +1025,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
           })
           .collect::<HashMap<_, _>>();
 
-        self.handle_expr_match(expr.hir_id, cnd, arms, &entry_to_spans);
+        self.handle_expr_match(expr.hir_id, cnd, arms, entry_to_spans);
       }
       _ => {
         intravisit::walk_expr(self, expr);
