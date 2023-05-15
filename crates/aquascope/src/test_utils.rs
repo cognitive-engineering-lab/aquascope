@@ -89,7 +89,7 @@ pub(crate) struct TestFileConfig {
 
 fn split_test_source(
   source: impl AsRef<str>,
-  delimeters: (&'static str, &'static str),
+  delimiters: (&'static str, &'static str),
 ) -> Result<(String, PermMap)> {
   let source = source.as_ref();
   let mut source_idx = 0;
@@ -99,7 +99,7 @@ fn split_test_source(
 
   let mut perm_map = HashMap::default();
 
-  let (open, close) = delimeters;
+  let (open, close) = delimiters;
 
   // Make this a macro so I can change it later.
   macro_rules! check_delim {
@@ -110,7 +110,7 @@ fn split_test_source(
   }
 
   // The current assumption is that annotations are of the form `(VAR PERMS)`, in this scenario
-  // `()` are the delimeters and there is a VAR and expected PERMS separated by a space.
+  // `()` are the delimiters and there is a VAR and expected PERMS separated by a space.
   while source_idx < bytes.len() {
     if check_delim!(open) {
       source_idx += open.len();
@@ -123,7 +123,7 @@ fn split_test_source(
       }
 
       if !check_delim!(close) || stack.is_empty() {
-        bail!("Unmatched opening delimeter {:?}", stack);
+        bail!("Unmatched opening delimiter {:?}", stack);
       }
 
       let start_idx = stack.pop().unwrap();
@@ -147,7 +147,7 @@ fn split_test_source(
       source_idx += close.len();
     } else if check_delim!(close) {
       bail!(
-        "Closing delimeter without matching open {:?}",
+        "Closing delimiter without matching open {:?}",
         &bytes[.. source_idx]
       );
     } else {
@@ -163,9 +163,9 @@ fn split_test_source(
 
 fn parse_test_source(
   src: &str,
-  delimeters: (&'static str, &'static str),
+  delimiters: (&'static str, &'static str),
 ) -> Result<(String, HashMap<range::ByteRange, Permissions>)> {
-  let (clean, interim_map) = split_test_source(src, delimeters)?;
+  let (clean, interim_map) = split_test_source(src, delimiters)?;
 
   let map = interim_map
     .into_iter()

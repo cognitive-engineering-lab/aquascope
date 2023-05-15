@@ -116,7 +116,7 @@
 //!
 //! #### Control-flow slices
 //!
-//! A *control-flow* slice, then does not slice a continous subsequence but multiple that
+//! A *control-flow* slice, then does not slice a continuous subsequence but multiple that
 //! /span across/ branches of control flow.
 //!
 //! Example:
@@ -154,7 +154,7 @@
 //! ⬤ [l3] ----> ⬤ [l4]
 //!
 //! ```
-//! Before the slice in segment 1 there is a graph which rougly captures the shape
+//! Before the slice in segment 1 there is a graph which roughly captures the shape
 //! of an if expression. location `l1` would be the branch point (corresponding
 //! to a `SwitchInt`), `l2` and `l3` would be the then and else branches. Here these
 //! branches are abstracted to a single point, but in practice they can be any valid

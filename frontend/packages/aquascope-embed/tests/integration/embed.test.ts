@@ -24,7 +24,7 @@ describe("Aquascope Embed", () => {
     );
 
     await page.waitForSelector(".aquascope");
-    // The embeded editors don't have to call out to aquascope,
+    // The embedded editors don't have to call out to aquascope,
     // they just need to render their contents. After the first editor has been
     // rendered they should all follow shortly.
     await page.waitForTimeout(5000);

@@ -416,7 +416,7 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
 
       // Unimplemented cases, ignore nested information for now.
       //
-      // These are separated in the or because they aren't impelemented,
+      // These are separated in the or because they aren't implemented,
       // but still silently ignored.
       Rvalue::ThreadLocalRef(..)
         | Rvalue::NullaryOp(..)

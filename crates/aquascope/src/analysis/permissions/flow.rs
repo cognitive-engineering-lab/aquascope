@@ -71,7 +71,7 @@
 //! algorithm, details about it can be found at <https://rustc-dev-guide.rust-lang.org/borrow_check/region_inference.html>.
 //!
 //! Briefly summarized here, the set of constraints provided by Polonius' `subset_base` facts
-//! are turned into a flow graph, where a constraint such as `'a: 'b` get's turned into an
+//! are turned into a flow graph, where a constraint such as `'a: 'b` gets turned into an
 //! edge `'a -> 'b`. This graph forms the basis of flow analysis as outlined previously.
 use std::time::Instant;
 
@@ -118,7 +118,7 @@ pub enum FlowEdgeKind {
   /// is slightly more generic. This could be returned if a local value escapes
   /// its scope, not necessarily a function boundary, which would be necessary
   /// for `LocalOutlivesUniversal`. Because it's more generic, this type of
-  /// edge kind would be reported with lower priorty.
+  /// edge kind would be reported with lower priority.
   LocalInvalidatedAtExit,
   Ok,
 }
