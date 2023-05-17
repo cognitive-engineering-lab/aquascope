@@ -240,7 +240,7 @@ pub fn compute_permissions<'a, 'tcx>(
 #[ts(export)]
 #[serde(tag = "type")]
 pub enum AquascopeError {
-  // An error occured before the intended analysis could run.
+  // An error occurred before the intended analysis could run.
   BuildError { range: Option<CharRange> },
   AnalysisError { msg: String },
 }

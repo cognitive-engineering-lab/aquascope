@@ -217,7 +217,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
         }),
     );
 
-  // move_conflics_with(Move, Path) :-
+  // move_conflicts_with(Move, Path) :-
   //   moved_out(Move, Path)
   //
   // move_conflicts_with(Move, PathChild) :-

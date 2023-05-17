@@ -53,7 +53,7 @@ pub(crate) async fn serve(cfg: Config) {
 macro_rules! make_single_file_endpoint {
     ($name:ident, $ectx:path) => {
         async fn $name(Json(req): Json<SingleFileRequest>) -> Result<Json<ServerResponse>> {
-            log::trace!("Received requeset for {}", stringify!($name));
+            log::trace!("Received request for {}", stringify!($name));
 
             let json = with_container(
                 req,
