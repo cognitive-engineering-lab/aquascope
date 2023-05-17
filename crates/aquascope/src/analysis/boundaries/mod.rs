@@ -1,6 +1,177 @@
 //! Analysis for the “Needs-at” relations.
 //!
 //! In other words, finding expected vs existing permission for a path usage.
+//!
+//! # Walthrough
+//!
+//! The “boundaries” analysis is relatively simple and as such poses as a
+//! good demonstration for how to use permissions in a larger analysis.
+//!
+//! This analysis must do three things:
+//! 1. Find all places where a path is used at the source-level, determine what
+//!    permissions are necessary for this operation to be allowed.
+//! 2. Determine the MIR-level [`Place`] and [`Location`] for this usage.
+//! 3. Compute the permissions the given Place actually has at the use point.
+//!
+//! These three steps are represented as two distinct stages. In the [`path_visitor`]
+//! module all of the [`PathBoundary`]s are computed. This returns information
+//! such as the expected permissions, and the [`HirId`] of the usage. There's some
+//! other stuff available in the struct, mostly to resolve the Flow permissions, but
+//! those aren't relevant for this basic discussion.
+//!
+//! ## Finding path usages
+//!
+//! ### Example
+//!
+//! Let's walk through what this would look like for a simple function:
+//!
+//! ```ignore
+//! fn append_hello(s: &mut String) {
+//!   println!("Adding hello to string { s }");
+//!   s.push_str("hello!");
+//! }
+//! ```
+//!
+//! Within the function there are two path usages. The first within the `println!`
+//! when `s` is read and the second when the method `push_str` is invoked on `s`.
+//! Therefore, a call to [`get_path_boundaries`] should return a vector of two elements:
+//!
+//! ```text
+//! [
+//!   PathBoundary {
+//!     hir_id: { &s }
+//!     expected: Permissions { read: true, write: false, drop: false },
+//!     ...
+//!  },
+//!  PathBoundary {
+//!    hir_id: { &mut *s }
+//!    expected: Permissions { read: true, write: true, drop: false },
+//!    ...
+//!  },
+//! ]
+//! ```
+//!
+//! Let's go through each of these boundaries and discuss what this information means and
+//! how it was found. The first usage of `s` occurs within a macro. Macros, and other
+//! desugarings, are in tension with how we want to display information. When traversing the
+//! HIR, you won't see a nice source code location that looks like `println!("... {s}")`,
+//! what you do see is an ugly monster, such as the following:
+//!
+//! ```text
+//! ::std::io::_print(
+//!     ::new_v1(
+//!       &["... ", "\n"], &[::new_display(&s)]
+//!     )
+//! );
+//! ```
+//!
+//! When desugaring, the compiler can insert new variables and places which are
+//! _invisible_ at the source-level. The current solution to this is to use
+//! [`rustc_hir::hir::Expr::is_syntactic_place_expr`] and [`rustc_span::Span::from_expansion`]
+//! to find out if the path we're looking is a “syntactic place” (i.e., it looks like a place)
+//! and if it came from some sort of expansion. Returning to our example, the HIR node that we
+//! are going to find permissions for is `&s`. That is, the shared borrow that occurs within the macro
+//! expansion. One last hiccup in the process of finding source spans is the span information
+//! available in the HIR. For this macro, if you just look at the source location it will point
+//! to somewhere from within rustc. We utilize the [`SpanExt::as_local`] method to sanitize spans
+//! and lift them back to original source code.
+//! Lastly, the struct [`ExpectedPermissions`] has a series of construction methods
+//! which show concisely when certain permissions are expected for the respective uses.
+//! In this case, a shared borrow only requires the Read permission.
+//!
+//! The second boundary returned corresponds to the usage of `s` as the receiver of the
+//! invoked meethod `push_str`. At the HIR, this is desugared into a function call
+//! passing the  receiver as the first argument, like so: `String::push_str(&mut *s, "hello!")`.
+//! There isn't anything tricky about visualizing this information and the code is
+//! straightforward, if you want to peruse through the HIR visitor [`path_visitor::HirExprScraper`].
+//! The reason method calls are interesting is, at the time of writing, we visualize the
+//! boundary stack in-between the receiver and the dot (`.`), instead of to the left of the
+//! path like every other case. Note, there's also a reborrow introduced but that's only
+//! relevant in the next section.
+//!
+//! ## Resolving actual permissions
+//!
+//! The second stage of the boundaries analysis is taking the found [`PathBoundaries`]
+//! and converting them into a [`PermissionsBoundary`]. This is the step that does
+//! most of the heavy lifting. So try to follow along!
+//!
+//! The crux of the entire analysis is converting a [`HirId`], specifially a HIR node
+//! that we _know_ contains a path use, to the corresponding MIR [`Place`] and [`Location`].
+//! Unfortunately, there isn't a “really good way” to do this and before we return to the
+//! running example I'll outline the strategy that is currently taken.
+//!
+//! Given a `HirId`, we can use the [`IRMapper`] to gather all of the MIR instructions
+//! that correspond to the given HIR node. That means, given a HIR node such as `let a = &b`,
+//! the `IRMapper` can tell you that the below MIR instructions were generated:
+//!
+//! ```text
+//! StorageLive(a);
+//! _t0 = &b;
+//! a = move _t0;
+//! FakeRead(ForLet, a)
+//! ```
+//!
+//! When doing resolution we search through the generated MIR instructions to find
+//! all Places that belong to a source-visible path that belongs to a source-visible
+//! variable. As you can see in the above mini-example, compiler temporaries are
+//! introduced that we don't want to consider. After finding these so-called
+//! “candidate places” we need to actually pick one that belongs to the _specific_ usage
+//! we're interested in (more on this in the example). To date, every bug reported for
+//! the boundaries analysis had to do with picking a place from the list of candidates.
+//!
+//! ## Example
+//!
+//! Returning to our example function, remember that we have two `PathBoundaries`,
+//! representing `&s` and `&mut *s`.
+//!
+//! ```ignore
+//! fn append_hello(s: &mut String) {
+//!   println!("Adding hello to string { s }");
+//!   s.push_str("hello!");
+//! }
+//! ```
+//!
+//! The first boundary is fortunately very simple. The MIR instructions generated for `&s` would
+//! be something such as `_t0 = &s`. This means we have very little to search through, and the
+//! list of candidate locations would be `[ s ]`. Thus we can easily resolve the place and location.
+//!
+//! _A quick side note_, in the above examples I've been using the source-level paths within
+//! the MIR, but this **doesn't** happen. It's merely for readability. All paths are replaced
+//! by compiler temporaries, and those coming from HIR paths will have extra debug information
+//! attached to them. We can use the [`PlaceExt::is_source_visible`] method to see if a MIR
+//! `Place` is something with that information attached. The attentive reader will note that
+//! I've said “coming from the HIR” which means paths introduced by loop desugarings will
+//! also have this attached debug info, this is only a minor inconvenience.
+//!
+//! The second boundary in our example is the `&mut *s` that occurs within the larger
+//! method invocation. For this, the `IRMapper` will tell us that the following MIR
+//! instructions are associated:
+//!
+//! ```text
+//! let _t0 = &mut *s;
+//! let _t1 = move _t0;
+//! ...
+//! String::push_str(move _t1, "hello!");
+//! ```
+//!
+//! This demonstrates that there can be a level (or two, or three, ...) between
+//! the action, in this case the method invocation, and the first _usage_ being
+//! the reborrow. Method calls are quite straightforward because we can take
+//! the first use of the path (and it's corresponding location), but for all
+//! constructs that's not sufficient (e.g., array accesses first do a
+//! bounds check, but the bounds check is on a different `Place` than what we're
+//! after). One additional thing to note, however, is that for the method call our
+//! resolved `Place` corresponds to `(*s)`, different from the path `s` visible
+//! in the source code.
+//!
+//! For our example, after this selection we will have an exact `Place` and
+//! `Location` for a path use. To get the actual permissions, we can use the
+//! ever-so-handy [`PermissionsCtxt::permissions_data_at_point`] to get the
+//! `PermissionsData`, a struct containing the exact permissions as well as
+//! first-order provenance describing any active refinements.
+//!
+//! The entry location to this process of resolving a HIR path to a MIR place,
+//! and retrieving the permissions can be found in the [`path_to_perm_boundary`] function.
 
 pub(crate) mod path_visitor;
 
@@ -360,6 +531,9 @@ fn get_flow_permission(
   })
 }
 
+/// Find all of the places used at the MIR-level of the
+/// given HIR node. This builds our set of candidate places
+/// that we consider for boundary resolution.
 #[allow(clippy::wildcard_in_or_patterns)]
 fn paths_at_hir_id<'a, 'tcx: 'a>(
   tcx: TyCtxt<'tcx>,
