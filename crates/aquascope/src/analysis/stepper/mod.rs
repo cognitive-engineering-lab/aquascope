@@ -5,6 +5,7 @@ mod hir_steps;
 mod segment_tree;
 #[allow(clippy::similar_names)]
 mod segmented_mir;
+mod table_builder;
 
 use std::collections::hash_map::Entry;
 

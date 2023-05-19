@@ -7,10 +7,7 @@
 //!    restriction of multiple returns and infinite loops.
 
 use anyhow::{anyhow, Result};
-use rustc_data_structures::{
-  self,
-  fx::{FxHashMap as HashMap, FxHashSet as HashSet},
-};
+use rustc_data_structures::{self, fx::FxHashMap as HashMap};
 use rustc_hir::{
   self as hir,
   intravisit::{self, Visitor as HirVisitor},
@@ -18,213 +15,16 @@ use rustc_hir::{
 };
 use rustc_middle::{
   hir::nested_filter,
-  mir::{self, Local, Location, Place},
+  mir::{self, Local, Location},
 };
 use rustc_span::Span;
-use rustc_utils::{
-  source_map::range::CharRange, test_utils::DUMMY_CHAR_RANGE, PlaceExt, SpanExt,
+use rustc_utils::SpanExt;
+
+use super::{segmented_mir::*, table_builder::*, *};
+use crate::analysis::{
+  ir_mapper::{GatherDepth, IRMapper},
+  permissions::PermissionsCtxt,
 };
-
-use super::{segmented_mir::*, *};
-use crate::{
-  analysis::{
-    ir_mapper::{GatherDepth, IRMapper},
-    permissions::PermissionsCtxt,
-  },
-  errors,
-};
-
-/// A single table, unprocessed mapping Places to their differences for a MirSegment.
-type PseudoTable<'tcx> = HashMap<Place<'tcx>, PermissionsDataDiff>;
-
-/// At a given Span, there could be multiple tables generated, each for a different
-/// MirSegment. These tables can either be merged or displayed side-by-side.
-/// See [`prettify_permission_steps`] for merging strategy.
-type Tables<'tcx> = HashMap<Span, Vec<(MirSegment, PseudoTable<'tcx>)>>;
-
-// Prettify, means:
-// - Remove all places that are not source visible
-// - Remove all tables which are empty
-// - Convert Spans to Ranges
-fn prettify_permission_steps<'tcx>(
-  analysis: &AquascopeAnalysis<'_, 'tcx>,
-  perm_steps: Tables<'tcx>,
-  mode: PermIncludeMode,
-) -> Vec<PermissionsLineDisplay> {
-  let ctxt = &analysis.permissions;
-  let tcx = ctxt.tcx;
-  let body = &ctxt.body_with_facts.body;
-
-  let should_keep = |p: &PermissionsDataDiff| -> bool {
-    !(matches!(p.is_live, ValueStep::None { value: Some(false) })
-      || (mode == PermIncludeMode::Changes && p.is_empty()))
-  };
-
-  macro_rules! place_to_string {
-    ($p:expr) => {
-      $p.to_string(tcx, body)
-        .unwrap_or_else(|| String::from("<var>"))
-    };
-  }
-
-  let first_error_span_opt =
-    errors::get_span_of_first_error(ctxt.def_id.expect_local())
-      .and_then(|s| s.as_local(ctxt.body_with_facts.body.span));
-  let source_map = tcx.sess.source_map();
-
-  perm_steps
-    .into_iter()
-    .fold(
-      HashMap::<
-        CharRange,
-        Vec<(MirSegment, Vec<(Place<'tcx>, PermissionsDataDiff)>)>,
-      >::default(),
-      |mut acc, (span, vs)| {
-        for (segment, place_to_diffs) in vs.into_iter() {
-          // Attach the span to the end of the line. Later, all permission
-          // steps appearing on the same line will be combined.
-          let span = source_map.span_extend_to_line(span).shrink_to_hi();
-          let entries = place_to_diffs
-            .into_iter()
-            .filter(|(place, diff)| {
-              place.is_source_visible(tcx, body) && should_keep(diff)
-            })
-            .collect::<Vec<_>>();
-
-          // This could be a little more graceful. The idea is that
-          // we want to remove all permission steps which occur after
-          // the first error, but the steps involved with the first
-          // error could still be helpful. This is why we filter all
-          // spans with a LO BytePos greater than the error
-          // span HI BytePos.
-          if !(entries.is_empty()
-            || first_error_span_opt
-              .is_some_and(|err_span| err_span.hi() < span.lo()))
-          {
-            let range = analysis.span_to_range(span);
-            acc.entry(range).or_default().push((segment, entries));
-          }
-        }
-
-        acc
-      },
-    )
-    .into_iter()
-    // HACK FIXME: we're at odds with the multi-table setup. This quick
-    // hack combines table entries into a single table until the
-    // visual explanation gets up-to-speed.
-    // Another weird thing about this is that you can have a single
-    // table with two changes for one place.
-    // ```example
-    // # fn main() {
-    // let closure = |s: &str| s.len(); // s: +R+O
-    //                                  // s: -R-O
-    //                                  // closure: +R+O
-    // # }
-    // ```
-    // imagine that the comments to the right of the Let represent
-    // a pseudo combined table. The path `s` gains and loses the same
-    // set of permissions in the same table. This is kind of weird, we'd
-    // rather just show *no change*.
-    .filter_map(|(range, mut entries)| {
-      for (_, v) in entries.iter_mut() {
-        v.sort_by_key(|(place, _)| (place.local.as_usize(), place.projection))
-      }
-
-      // let state = entries
-      //   .into_iter()
-      //   .map(|(MirSegment { from, to }, diffs)| {
-      //     let state = diffs
-      //       .into_iter()
-      //       .map(|(place, diff)| {
-      //         let s = place_to_string!(place);
-      //         (s, diff)
-      //       })
-      //       .collect::<Vec<_>>();
-      //     let from = analysis.span_to_range(ctxt.location_to_span(from));
-      //     let to = analysis.span_to_range(ctxt.location_to_span(to));
-      //     PermissionsStepTable { from, to, state }
-      //   })
-      //   .collect::<Vec<_>>();
-
-      // Conforming to the above HACK this just takes any (from, to) pair.
-      let dummy_char_range = DUMMY_CHAR_RANGE.with(|range| *range);
-      let (from, to) = entries.first().map_or_else(
-        || (dummy_char_range, dummy_char_range),
-        |(MirSegment { from, to }, _)| {
-          let from = analysis.span_to_range(ctxt.location_to_span(*from));
-          let to = analysis.span_to_range(ctxt.location_to_span(*to));
-          (from, to)
-        },
-      );
-
-      let mut master_table: Vec<(Place<'tcx>, PermissionsDataDiff)> =
-        Vec::default();
-
-      let is_symmetric_diff =
-        |diff1: &PermissionsDataDiff, diff2: &PermissionsDataDiff| -> bool {
-          macro_rules! is_symmetric {
-            ($v1:expr, $v2:expr) => {
-              matches!(
-                (&$v1, &$v2),
-                (ValueStep::High { .. }, ValueStep::Low { .. })
-                  | (ValueStep::Low { .. }, ValueStep::High { .. })
-                  | (ValueStep::None { .. }, ValueStep::None { .. })
-              )
-            };
-          }
-          let p1 = &diff1.permissions;
-          let p2 = &diff2.permissions;
-          is_symmetric!(p1.read, p2.read)
-            && is_symmetric!(p1.write, p2.write)
-            && is_symmetric!(p1.drop, p2.drop)
-        };
-
-      // For all tables which fall on the same line, we combine them into a single table
-      // and remove all *SYMMETRIC* differences. That is, if you have permission changes such as:
-      // - path: +R+O
-      // - path: -R-O
-      // these are exactly symmetric, and will be removed.
-      for (_, diffs) in entries.into_iter() {
-        for (place, diff) in diffs.into_iter() {
-          let i_opt = master_table.iter().position(|(p, _)| *p == place);
-          if let Some(idx) = i_opt {
-            let (_, old_diff) = &master_table[idx];
-            if is_symmetric_diff(&diff, old_diff) {
-              log::debug!(
-                "REMOVING place {place:?} with diff {diff:?} into the MT."
-              );
-              master_table.remove(idx);
-              continue;
-            }
-          }
-
-          log::debug!("ADDING place {place:?} with diff {diff:?} into the MT.");
-          master_table.push((place, diff));
-        }
-      }
-
-      // This means the tables were symmetric and all were removed.
-      if master_table.is_empty() {
-        return None;
-      }
-
-      let master_table = PermissionsStepTable {
-        from,
-        to,
-        state: master_table
-          .into_iter()
-          .map(|(place, diff)| (place_to_string!(place), diff))
-          .collect::<Vec<_>>(),
-      };
-
-      Some(PermissionsLineDisplay {
-        location: range,
-        state: vec![master_table],
-      })
-    })
-    .collect::<Vec<_>>()
-}
 
 /// Visitor for creating permission steps in the HIR.
 ///
@@ -287,157 +87,6 @@ macro_rules! report_unexpected {
   }
 }
 
-struct TableFinalizer<'a, 'tcx: 'a> {
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
-  mir: &'a SegmentedMir,
-  locals_at_scope: HashMap<ScopeId, Vec<Local>>,
-}
-
-#[allow(clippy::similar_names)]
-impl<'a, 'tcx: 'a> TableFinalizer<'a, 'tcx> {
-  fn locals_to_filter(&self, scope: ScopeId) -> HashSet<Local> {
-    self
-      .mir
-      .parent_scopes(scope)
-      .filter_map(|sid| self.locals_at_scope.get(&sid))
-      .flatten()
-      .copied()
-      .collect::<HashSet<_>>()
-  }
-
-  fn insert_collection(&self, result: &mut Tables<'tcx>, cid: CollectionId) {
-    let collection = self.mir.get_collection(cid);
-
-    for &part in collection.data.iter() {
-      match part {
-        CFKind::Linear(seg_id) => self.insert_segment(result, seg_id),
-        CFKind::Branch(branch_id) => self.insert_branch(result, branch_id),
-      }
-    }
-  }
-
-  fn insert_segment(&self, result: &mut Tables<'tcx>, sid: SegmentId)
-  // -> ScopeId
-  {
-    let ctxt = &self.ctxt;
-    let &SegmentData {
-      segment,
-      span,
-      scope,
-    } = self.mir.get_segment(sid);
-
-    let to_filter = self.locals_to_filter(scope);
-
-    if segment.from == segment.to {
-      return;
-    }
-
-    let p0 = ctxt.location_to_point(segment.from);
-    let p1 = ctxt.location_to_point(segment.to);
-    let before = &ctxt.permissions_domain_at_point(p0);
-    let after = &ctxt.permissions_domain_at_point(p1);
-    let mut diff = before.diff(after);
-
-    let removed = diff
-      .drain_filter(|place, _| to_filter.contains(&place.local))
-      .collect::<Vec<_>>();
-
-    log::debug!(
-      "removed domain places due to attached filter at {:?} {:?}",
-      segment.to,
-      removed
-    );
-
-    result.entry(span).or_default().push((segment, diff));
-  }
-
-  fn insert_branch(&self, result: &mut Tables<'tcx>, bid: BranchId) {
-    let BranchData {
-      reach,
-      splits,
-      joins,
-      nested,
-      ..
-    } = self.mir.get_branch(bid);
-
-    let mut entire_diff = reach.into_diff(self.ctxt);
-
-    log::debug!("Inserting Branched Collection {:?}:\n\tsplits: {:?}\n\tmiddle: {:?}\n\tjoins: {:?}", reach, splits, nested, joins);
-
-    let temp_middle = &mut Tables::default();
-    let temp_joins = &mut Tables::default();
-
-    for &sid in splits.iter() {
-      self.insert_segment(temp_middle, sid);
-    }
-
-    for &cid in nested.iter() {
-      self.insert_collection(temp_middle, cid);
-    }
-
-    for &sid in splits.iter() {
-      self.insert_segment(temp_joins, sid);
-    }
-
-    // Find the locals which were filtered from all scopes. In theory,
-    // `all_scopes` should contains the same scope, copied over,
-    // but the SegmentedMir doesn't enforce this and there's no
-    // scope attached to collections.
-    let scope_here = self.mir.get_branch_scope(bid);
-    let all_attached = self
-      .locals_at_scope
-      .get(&scope_here)
-      .map(|v| v.iter())
-      .unwrap_or_default()
-      .collect::<HashSet<_>>();
-
-    let attached_here = entire_diff
-      .drain_filter(|place: &Place, _| all_attached.contains(&place.local))
-      .collect::<PseudoTable>();
-
-    let diffs_in_tables = |tbls: &Tables| {
-      tbls
-        .iter()
-        .flat_map(|(_, tbls)| {
-          tbls
-            .iter()
-            .flat_map(|(_, ptbl)| ptbl.iter().map(|(_, diff)| *diff))
-        })
-        .collect::<HashSet<PermissionsDataDiff>>()
-    };
-
-    // Flatten all tables to the unique `PermissionsDataDiff`s
-    // that exist within them.
-    let diffs_in_branches = diffs_in_tables(temp_middle);
-
-    for (_, tbls) in temp_joins.iter_mut() {
-      for (_, ptbl) in tbls.iter_mut() {
-        let _drained = ptbl
-          .drain_filter(|_, diff| diffs_in_branches.contains(diff))
-          .collect::<Vec<_>>();
-        // log::debug!("drained {drained:#?} because diff exists");
-      }
-    }
-
-    macro_rules! insert {
-      ($m1:expr => $m2:expr) => {
-        for (&span, ref mut vs) in $m1.into_iter() {
-          $m2.entry(span).or_default().append(vs);
-        }
-      };
-    }
-
-    insert!(temp_middle => result);
-    insert!(temp_joins => result);
-
-    // Attach filtered locals
-    result
-      .entry(reach.span(self.ctxt))
-      .or_default()
-      .push((*reach, attached_here));
-  }
-}
-
 impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
   fn get_unsupported_feature(&self) -> Option<String> {
     self.unsupported_encounter.as_ref().map(|(_, s)| s.clone())
@@ -463,40 +112,19 @@ impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
     analysis: &AquascopeAnalysis<'_, 'tcx>,
     mode: PermIncludeMode,
   ) -> Result<Vec<PermissionsLineDisplay>> {
-    let ctxt = self.ctxt;
-
     let body_hir_id = self.body_value_id();
-    let body_open_brace = self.span_of(body_hir_id).shrink_to_lo();
-    let first_point = self.ctxt.location_to_point(self.start_loc);
-    let first_domain = &self.ctxt.permissions_domain_at_point(first_point);
-    let empty_domain = &self.ctxt.domain_bottom();
+    let body_span = self.span_of(body_hir_id);
+
     let mir_segments = self.mir_segments.freeze()?;
 
-    // Upon entry, the function parameters are already "live". But we want to
-    // special case this, and show that they "come alive" at the opening brace.
-    let first_diff = empty_domain.diff(first_domain);
-
-    // Insert a segment into a table filtering defined places.
-
-    let mut diffs = Tables::default();
-
-    let finalizer = TableFinalizer {
-      ctxt,
+    let finalizer = TableBuilder {
+      analysis,
+      ctxt: &analysis.permissions,
       mir: &mir_segments,
       locals_at_scope: self.locals_at_scope,
     };
 
-    finalizer.insert_collection(&mut diffs, mir_segments.first_collection);
-
-    // We do an unchecked insert here to avoid
-    // the segment from getting filtered because the
-    // segment from and to locations are equal.
-    diffs.insert(body_open_brace, vec![(
-      MirSegment::new(self.start_loc, self.start_loc),
-      first_diff,
-    )]);
-
-    Ok(prettify_permission_steps(analysis, diffs, mode))
+    Ok(finalizer.finalize_body(self.start_loc, body_span, mode))
   }
 }
 
