@@ -23,15 +23,9 @@ serde_json = "1"
 ts-rs = "6.2"
 itertools = "0.10.5"
 fluid-let = "1.0"
+rustc_plugin = "0.6.0-nightly-2023-04-12"
+rustc_utils = "0.6.0-nightly-2023-04-12"
 
 # For binaries
 env_logger = {version = "0.9", default-features = false}
 clap = {version = "3.1", default-features = false, features = ["std", "derive"]}
-
-[dependencies.rustc-plugin]
-git = "https://github.com/cognitive-engineering-lab/rustc-plugin"
-tag = "nightly-2023-04-12-v0.1.4"
-
-[dependencies.rustc-utils]
-git = "https://github.com/cognitive-engineering-lab/rustc-plugin"
-tag = "nightly-2023-04-12-v0.1.4"
