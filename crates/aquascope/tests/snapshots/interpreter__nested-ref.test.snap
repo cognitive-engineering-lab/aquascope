@@ -12,13 +12,30 @@ steps:
             filename:
               private: 0
           location:
+            start: 0
+            end: 9
+            filename:
+              private: 0
+          locals: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start: 0
+            end: 60
+            filename:
+              private: 0
+          location:
             start: 14
             end: 39
             filename:
               private: 0
           locals:
-            - - x
-              - type: Array
+            - name: x
+              value:
+                type: Array
                 value:
                   type: All
                   value:
@@ -34,6 +51,7 @@ steps:
                           value: 2
                         - type: Int
                           value: 3
+              moved_paths: []
     heap:
       locations: []
   - stack:
@@ -50,8 +68,9 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Array
+            - name: x
+              value:
+                type: Array
                 value:
                   type: All
                   value:
@@ -67,8 +86,10 @@ steps:
                           value: 2
                         - type: Int
                           value: 3
-            - - y
-              - type: Pointer
+              moved_paths: []
+            - name: y
+              value:
+                type: Pointer
                 value:
                   path:
                     segment:
@@ -82,6 +103,7 @@ steps:
                       - type: Field
                         value: 1
                   range: ~
+              moved_paths: []
     heap:
       locations: []
   - stack:

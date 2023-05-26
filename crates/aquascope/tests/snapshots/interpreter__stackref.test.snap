@@ -12,14 +12,32 @@ steps:
             filename:
               private: 0
           location:
+            start: 0
+            end: 9
+            filename:
+              private: 0
+          locals: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start: 0
+            end: 59
+            filename:
+              private: 0
+          location:
             start: 14
             end: 28
             filename:
               private: 0
           locals:
-            - - x
-              - type: Int
+            - name: x
+              value:
+                type: Int
                 value: 1
+              moved_paths: []
     heap:
       locations: []
   - stack:
@@ -36,11 +54,14 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Int
+            - name: x
+              value:
+                type: Int
                 value: 1
-            - - y
-              - type: Pointer
+              moved_paths: []
+            - name: y
+              value:
+                type: Pointer
                 value:
                   path:
                     segment:
@@ -50,6 +71,7 @@ steps:
                         local: x
                     parts: []
                   range: ~
+              moved_paths: []
     heap:
       locations: []
   - stack:
@@ -66,11 +88,14 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Int
+            - name: x
+              value:
+                type: Int
                 value: 2
-            - - y
-              - type: Pointer
+              moved_paths: []
+            - name: y
+              value:
+                type: Pointer
                 value:
                   path:
                     segment:
@@ -80,6 +105,7 @@ steps:
                         local: x
                     parts: []
                   range: ~
+              moved_paths: []
     heap:
       locations: []
   - stack:
