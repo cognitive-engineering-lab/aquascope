@@ -6,12 +6,9 @@ use miri::{
 };
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
-use rustc_middle::{
-  mir::PlaceElem,
-  ty::{
-    layout::{LayoutOf, TyAndLayout},
-    AdtKind, Ty, TyKind,
-  },
+use rustc_middle::ty::{
+  layout::{LayoutOf, TyAndLayout},
+  AdtKind, Ty, TyKind,
 };
 use rustc_target::abi::Size;
 use rustc_type_ir::FloatTy;
@@ -146,14 +143,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
     );
     segments
       .into_iter()
-      .map(|segment| match segment {
-        PlaceElem::Field(f, _) => MPathSegment::Field(f.as_usize()),
-        PlaceElem::Index(i) => MPathSegment::Index(i.as_usize()),
-        PlaceElem::Subslice { from, to, .. } => {
-          MPathSegment::Subslice(from as usize, to as usize)
-        }
-        _ => todo!(),
-      })
+      .map(|segment| self.ev.place_elem_to_path_segment(segment))
       .collect()
   }
 

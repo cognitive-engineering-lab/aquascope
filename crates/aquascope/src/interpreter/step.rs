@@ -1,19 +1,30 @@
 //! Stepping through a Rust program
 
-use std::{cell::RefCell, cmp::Ordering, collections::HashMap};
+use std::{
+  cell::RefCell,
+  cmp::Ordering,
+  collections::{HashMap, HashSet},
+};
 
 use anyhow::{anyhow, bail, Context, Result};
 use either::Either;
+use itertools::Itertools;
 use miri::{
-  AllocId, AllocMap, AllocRange, Frame, Immediate, InterpCx, InterpError,
+  AllocId, AllocMap, AllocRange, Immediate, InterpCx, InterpError,
   InterpErrorInfo, InterpResult, LocalState, LocalValue, Machine, MiriConfig,
   MiriMachine, OpTy, Operand, UndefinedBehaviorInfo,
 };
 use rustc_abi::{FieldsShape, Size};
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
-  mir::{Local, Location, Place, VarDebugInfoContents, RETURN_PLACE},
-  ty::{layout::TyAndLayout, InstanceDef, TyCtxt},
+  mir::{
+    self, visit::Visitor, Local, Location, Place, PlaceElem,
+    VarDebugInfoContents, RETURN_PLACE,
+  },
+  ty::{
+    layout::{HasTyCtxt, TyAndLayout},
+    InstanceDef, TyCtxt,
+  },
 };
 use rustc_session::CtfeBacktrace;
 use rustc_span::Span;
@@ -21,7 +32,15 @@ use rustc_utils::{source_map::range::CharRange, PlaceExt};
 use serde::Serialize;
 use ts_rs::TS;
 
-use super::mvalue::{MMemorySegment, MValue};
+use super::mvalue::{MMemorySegment, MPathSegment, MValue};
+
+#[derive(Serialize, Debug, TS)]
+#[ts(export)]
+pub struct MLocal {
+  name: String,
+  value: MValue,
+  moved_paths: Vec<Vec<MPathSegment>>,
+}
 
 #[derive(Serialize, Debug, TS)]
 #[ts(export)]
@@ -29,7 +48,7 @@ pub struct MFrame<L> {
   pub name: String,
   pub body_span: CharRange,
   pub location: L,
-  pub locals: Vec<(String, MValue)>,
+  pub locals: Vec<MLocal>,
 }
 
 #[derive(Serialize, Debug, TS)]
@@ -85,9 +104,37 @@ pub(crate) struct MemoryMap<'tcx> {
   pub(crate) alloc_id_remapping: HashMap<AllocId, usize>,
 }
 
+pub struct MovedPlaces<'tcx>(Vec<HashSet<Place<'tcx>>>);
+
+impl<'tcx> MovedPlaces<'tcx> {
+  pub fn new() -> Self {
+    MovedPlaces(vec![HashSet::new()])
+  }
+
+  pub fn places_at(
+    &self,
+    index: usize,
+  ) -> impl Iterator<Item = Place<'tcx>> + '_ {
+    self.0[index].iter().copied()
+  }
+
+  pub fn add_place(&mut self, frame: usize, place: Place<'tcx>) {
+    self.0.get_mut(frame).unwrap().insert(place);
+  }
+
+  pub fn push_frame(&mut self) {
+    self.0.push(HashSet::new());
+  }
+
+  pub fn pop_frame(&mut self) {
+    self.0.pop();
+  }
+}
+
 pub struct VisEvaluator<'mir, 'tcx> {
   pub(super) ecx: InterpCx<'mir, 'tcx, MiriMachine<'mir, 'tcx>>,
   pub(super) memory_map: RefCell<MemoryMap<'tcx>>,
+  pub(super) moved_places: RefCell<MovedPlaces<'tcx>>,
 }
 
 enum BodySpanType {
@@ -105,7 +152,17 @@ fn body_span(tcx: TyCtxt, def_id: DefId, body_span_type: BodySpanType) -> Span {
   }
 }
 
-type FrameLocals<'tcx> = Vec<(String, OpTy<'tcx, miri::Provenance>)>;
+type FrameLocals<'tcx> = Vec<(Local, String, OpTy<'tcx, miri::Provenance>)>;
+type MiriFrame<'mir, 'tcx> =
+  miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>;
+
+#[derive(Copy, Clone)]
+struct LocalFrame<'a, 'mir, 'tcx> {
+  current: bool,
+  local_index: usize,
+  global_index: usize,
+  frame: &'a MiriFrame<'mir, 'tcx>,
+}
 
 impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   pub fn new(tcx: TyCtxt<'tcx>) -> Result<Self> {
@@ -127,6 +184,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     Ok(VisEvaluator {
       ecx,
       memory_map: RefCell::default(),
+      moved_places: RefCell::new(MovedPlaces::new()),
     })
   }
 
@@ -140,14 +198,32 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     self.ecx.tcx.def_path_str(def_id)
   }
 
+  pub(super) fn place_elem_to_path_segment(
+    &self,
+    elem: PlaceElem<'tcx>,
+  ) -> MPathSegment {
+    match elem {
+      PlaceElem::Field(f, _) => MPathSegment::Field(f.as_usize()),
+      PlaceElem::Index(i) => MPathSegment::Index(i.as_usize()),
+      PlaceElem::Subslice { from, to, .. } => {
+        MPathSegment::Subslice(from as usize, to as usize)
+      }
+      _ => todo!(),
+    }
+  }
+
   fn build_frame(
     &self,
-    frame: &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
-    index: usize,
-    loc_override: Option<MirLoc<'tcx>>,
+    LocalFrame {
+      frame,
+      local_index,
+      global_index,
+      current,
+    }: LocalFrame<'_, 'mir, 'tcx>,
+    loc_override: MirLoc<'tcx>,
     locals: FrameLocals<'tcx>,
   ) -> InterpResult<'tcx, MFrame<MirLoc<'tcx>>> {
-    log::trace!("Building frame {index}");
+    log::trace!("Building frame {local_index}");
 
     let def_id = frame.instance.def_id();
     let name = self.fn_name(def_id);
@@ -159,15 +235,41 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     )
     .unwrap();
 
-    let current_loc =
-      loc_override.unwrap_or((frame.instance.def, frame.current_loc()));
+    let current_loc = if current {
+      loc_override
+    } else {
+      (frame.instance.def, frame.current_loc())
+    };
+
+    let moved_places = self.moved_places.borrow();
+    let moved_place_map = moved_places
+      .places_at(global_index)
+      .map(|place| (place.local, place))
+      .into_group_map();
 
     let locals = locals
       .into_iter()
-      .map(|(name, op_ty)| {
+      .map(|(local, name, op_ty)| {
         log::trace!("Reading local {name:?}");
         let value = self.read(&op_ty)?;
-        Ok((name, value))
+        let moved_paths = match moved_place_map.get(&local) {
+          Some(moves) => moves
+            .iter()
+            .map(|place| {
+              place
+                .projection
+                .iter()
+                .map(|elem| self.place_elem_to_path_segment(elem))
+                .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>(),
+          None => Vec::new(),
+        };
+        Ok(MLocal {
+          name,
+          value,
+          moved_paths,
+        })
       })
       .collect::<InterpResult<'_, Vec<_>>>()?;
 
@@ -179,7 +281,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     })
   }
 
-  fn mem_is_initialized(
+  pub(super) fn mem_is_initialized(
     &self,
     layout: TyAndLayout<'tcx>,
     allocation: &miri::Allocation<miri::Provenance, miri::AllocExtra>,
@@ -212,7 +314,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
   fn test_local(
     &self,
-    frame: &Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
+    frame: &MiriFrame<'mir, 'tcx>,
     frame_index: usize,
     local: Local,
     state: &LocalState<'tcx, miri::Provenance>,
@@ -308,16 +410,22 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   fn find_locals(&self) -> InterpResult<'tcx, Vec<FrameLocals<'tcx>>> {
     self
       .local_frames()
-      .enumerate()
-      .map(|(index, (_, frame))| {
-        frame
-          .locals
-          .iter_enumerated()
-          .filter_map(|(local, state)| {
-            self.test_local(frame, index, local, state).transpose()
-          })
-          .collect::<InterpResult<'tcx, Vec<_>>>()
-      })
+      .map(
+        |LocalFrame {
+           local_index, frame, ..
+         }| {
+          frame
+            .locals
+            .iter_enumerated()
+            .filter_map(|(local, state)| {
+              let local_data_res = self
+                .test_local(frame, local_index, local, state)
+                .transpose()?;
+              Some(local_data_res.map(|(name, op)| (local, name, op)))
+            })
+            .collect::<InterpResult<'tcx, Vec<_>>>()
+        },
+      )
       .collect()
   }
 
@@ -328,11 +436,8 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     let locals = self.find_locals()?;
     let frames = self
       .local_frames()
-      .enumerate()
       .zip(locals)
-      .map(|((index, (is_last, frame)), locals)| {
-        self.build_frame(frame, index, is_last.then_some(current_loc), locals)
-      })
+      .map(|(frame, locals)| self.build_frame(frame, current_loc, locals))
       .collect::<InterpResult<'_, _>>()?;
     Ok(MStack { frames })
   }
@@ -361,64 +466,129 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   }
 
   /// Get the stack frames for functions defined in the local crate
-  fn local_frames(
-    &self,
-  ) -> impl Iterator<
-    Item = (
-      bool,
-      &miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>,
-    ),
-  > {
+  fn local_frames(&self) -> impl Iterator<Item = LocalFrame<'_, 'mir, 'tcx>> {
     let stack = Machine::stack(&self.ecx);
     let n = stack.len();
-    stack.iter().enumerate().filter_map(move |(i, frame)| {
-      frame
-        .instance
-        .def_id()
-        .is_local()
-        .then_some((i == n - 1, frame))
-    })
+    stack
+      .iter()
+      .enumerate()
+      .filter(|(_, frame)| frame.instance.def_id().is_local())
+      .enumerate()
+      .map(move |(local_index, (global_index, frame))| LocalFrame {
+        current: global_index == n - 1,
+        local_index,
+        global_index,
+        frame,
+      })
+  }
+
+  fn collect_moves(&self) -> InterpResult<'tcx, Vec<Place<'tcx>>> {
+    let stack = Machine::stack(&self.ecx);
+    let Some(frame) = stack.last() else { return Ok(Vec::new()) };
+    let Either::Left(loc) = frame.current_loc() else { return Ok(Vec::new()) };
+
+    struct CollectMoves<'tcx> {
+      places: Vec<Place<'tcx>>,
+    }
+
+    impl<'tcx> Visitor<'tcx> for CollectMoves<'tcx> {
+      fn visit_operand(
+        &mut self,
+        operand: &mir::Operand<'tcx>,
+        _location: Location,
+      ) {
+        if let mir::Operand::Move(place) = operand {
+          self.places.push(*place);
+        }
+      }
+    }
+
+    let mut collector = CollectMoves { places: Vec::new() };
+    collector.visit_location(frame.body, loc);
+
+    Ok(collector.places)
+  }
+
+  fn handle_moves(
+    &mut self,
+    n_frames: usize,
+    moves: Vec<Place<'tcx>>,
+  ) -> InterpResult<'tcx, ()> {
+    let n_frames_after = Machine::stack(&self.ecx).len();
+    let mut moved_places = self.moved_places.borrow_mut();
+    match n_frames_after.cmp(&n_frames) {
+      Ordering::Greater => moved_places.push_frame(),
+      Ordering::Less => moved_places.pop_frame(),
+      Ordering::Equal => {
+        for place in moves {
+          let place_ty = self.ecx.eval_place(place)?;
+          match place_ty.as_mplace_or_local() {
+            Either::Left(_mplace) => {
+              // todo!()
+            }
+            Either::Right((frame, local)) => {
+              moved_places
+                .add_place(frame, Place::from_local(local, self.ecx.tcx()));
+            }
+          }
+        }
+      }
+    }
+
+    Ok(())
   }
 
   /// Take a single (local) step, internally stepping until we reach a serialization point
   fn step(
     &mut self,
   ) -> InterpResult<'tcx, (Option<MStep<MirLoc<'tcx>>>, bool)> {
+    let get_current_local_loc =
+      |local_frames: &[LocalFrame<'_, 'mir, 'tcx>]| {
+        let LocalFrame { frame, .. } = local_frames.last()?;
+        let loc = frame.current_loc();
+        Some((frame.instance.def, loc))
+      };
+
     loop {
       let local_frames = self.local_frames().collect::<Vec<_>>();
-      let current_loc = local_frames
-        .last()
-        .map(|(_, frame)| (frame.instance.def, frame.current_loc()));
-      let caller_frame_loc = (local_frames.len() >= 2).then(|| {
-        let (_, frame) = &local_frames[local_frames.len() - 2];
-        frame.current_loc()
-      });
-      let n_frames = local_frames.len();
+      let n_local_frames = local_frames.len();
 
-      let more_work = self.ecx.step()?;
+      let current_loc_opt = get_current_local_loc(&local_frames);
 
-      if let Some(mut current_loc) = current_loc {
-        let local_frames = self.local_frames().collect::<Vec<_>>();
-        let frame_change = local_frames.len().cmp(&n_frames);
-        match frame_change {
-          Ordering::Greater => {
-            let (_, frame) = local_frames.last().unwrap();
-            let span = body_span(
-              *self.ecx.tcx,
-              frame.instance.def_id(),
-              BodySpanType::Header,
-            );
-            current_loc = (frame.instance.def, Either::Right(span));
-          }
-          Ordering::Less => {
-            if let Some(caller_frame_loc) = caller_frame_loc {
-              let (_, frame) = local_frames.last().unwrap();
-              current_loc = (frame.instance.def, caller_frame_loc);
-            }
-          }
-          _ => {}
+      let caller_frame_loc = local_frames
+        .get(local_frames.len().wrapping_sub(2))
+        .map(|LocalFrame { frame, .. }| frame.current_loc());
+
+      let moves = self.collect_moves()?;
+      let n_all_frames: usize = Machine::stack(&self.ecx).len();
+      let more_work: bool = self.ecx.step()?;
+      self.handle_moves(n_all_frames, moves)?;
+
+      let local_frames_after = self.local_frames().collect::<Vec<_>>();
+      let current_loc_opt = match local_frames_after.len().cmp(&n_local_frames)
+      {
+        Ordering::Greater => {
+          let LocalFrame { frame, .. } = local_frames_after.last().unwrap();
+          let span = body_span(
+            *self.ecx.tcx,
+            frame.instance.def_id(),
+            BodySpanType::Header,
+          );
+
+          Some((frame.instance.def, Either::Right(span)))
         }
+        Ordering::Less => {
+          if let Some(caller_frame_loc) = caller_frame_loc {
+            let LocalFrame { frame, .. } = local_frames_after.last().unwrap();
+            Some((frame.instance.def, caller_frame_loc))
+          } else {
+            current_loc_opt
+          }
+        }
+        Ordering::Equal => current_loc_opt,
+      };
 
+      if let Some(current_loc) = current_loc_opt {
         if let Some(step) = self.build_step(current_loc)? {
           return Ok((Some(step), more_work));
         }
@@ -463,6 +633,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
           }
         }
         Err(e) => {
+          // e.print_backtrace();
           break MResult::Error(self.beautify_error(e)?);
         }
       }

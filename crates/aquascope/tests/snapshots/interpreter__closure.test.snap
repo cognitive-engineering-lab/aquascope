@@ -12,14 +12,32 @@ steps:
             filename:
               private: 0
           location:
+            start: 0
+            end: 9
+            filename:
+              private: 0
+          locals: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start: 0
+            end: 59
+            filename:
+              private: 0
+          location:
             start: 14
             end: 24
             filename:
               private: 0
           locals:
-            - - x
-              - type: Int
+            - name: x
+              value:
+                type: Int
                 value: 0
+              moved_paths: []
     heap:
       locations: []
   - stack:
@@ -36,11 +54,14 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Int
+            - name: x
+              value:
+                type: Int
                 value: 0
-            - - f
-              - type: Adt
+              moved_paths: []
+            - name: f
+              value:
+                type: Adt
                 value:
                   name: "main::{closure#0}"
                   variant: ~
@@ -57,6 +78,7 @@ steps:
                             parts: []
                           range: ~
                   alloc_kind: ~
+              moved_paths: []
     heap:
       locations: []
   - stack:
@@ -73,11 +95,14 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Int
+            - name: x
+              value:
+                type: Int
                 value: 0
-            - - f
-              - type: Adt
+              moved_paths: []
+            - name: f
+              value:
+                type: Adt
                 value:
                   name: "main::{closure#0}"
                   variant: ~
@@ -94,6 +119,7 @@ steps:
                             parts: []
                           range: ~
                   alloc_kind: ~
+              moved_paths: []
     heap:
       locations: []
   - stack:
@@ -110,11 +136,14 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Int
+            - name: x
+              value:
+                type: Int
                 value: 0
-            - - f
-              - type: Adt
+              moved_paths: []
+            - name: f
+              value:
+                type: Adt
                 value:
                   name: "main::{closure#0}"
                   variant: ~
@@ -131,6 +160,7 @@ steps:
                             parts: []
                           range: ~
                   alloc_kind: ~
+              moved_paths: []
         - name: "main::{closure#0}"
           body_span:
             start: 35
@@ -159,11 +189,14 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Int
+            - name: x
+              value:
+                type: Int
                 value: 0
-            - - f
-              - type: Adt
+              moved_paths: []
+            - name: f
+              value:
+                type: Adt
                 value:
                   name: "main::{closure#0}"
                   variant: ~
@@ -180,6 +213,7 @@ steps:
                             parts: []
                           range: ~
                   alloc_kind: ~
+              moved_paths: []
         - name: "main::{closure#0}"
           body_span:
             start: 35
@@ -192,9 +226,11 @@ steps:
             filename:
               private: 0
           locals:
-            - - (return)
-              - type: Int
+            - name: (return)
+              value:
+                type: Int
                 value: 0
+              moved_paths: []
     heap:
       locations: []
   - stack:
@@ -211,11 +247,14 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Int
+            - name: x
+              value:
+                type: Int
                 value: 0
-            - - f
-              - type: Adt
+              moved_paths: []
+            - name: f
+              value:
+                type: Adt
                 value:
                   name: "main::{closure#0}"
                   variant: ~
@@ -232,9 +271,12 @@ steps:
                             parts: []
                           range: ~
                   alloc_kind: ~
-            - - y
-              - type: Int
+              moved_paths: []
+            - name: y
+              value:
+                type: Int
                 value: 0
+              moved_paths: []
     heap:
       locations: []
   - stack:

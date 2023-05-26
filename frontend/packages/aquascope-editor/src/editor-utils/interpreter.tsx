@@ -17,6 +17,7 @@ import {
   InterpAnnotations,
   MFrame,
   MHeap,
+  MLocal,
   MStack,
   MStep,
   MTrace,
@@ -327,23 +328,21 @@ let ValueView = ({ value }: { value: MValue }) => {
   );
 };
 
-let LocalsView = ({
-  index,
-  locals,
-}: {
-  index: number;
-  locals: [string, MValue][];
-}) =>
+let LocalsView = ({ index, locals }: { index: number; locals: MLocal[] }) =>
   locals.length == 0 ? (
     <div className="locals empty-frame">(empty frame)</div>
   ) : (
     <table className="locals">
       <tbody>
-        {locals.map(([key, value], i) => {
-          let path = ["stack", index.toString(), key];
+        {locals.map(({ name, value, moved_paths }, i) => {
+          let path = ["stack", index.toString(), name];
+          
+          // TODO: implement support for move paths length > 0
+          let isMoved = moved_paths.some(p => p.length == 0);
+
           return (
-            <tr key={i}>
-              <td>{key}</td>
+            <tr key={i} className={classNames({ moved: isMoved })}>
+              <td>{name}</td>
               <td className={path.join("-")} data-connector="right">
                 <PathContext.Provider value={path}>
                   <ValueView value={value} />
@@ -789,7 +788,7 @@ export function renderInterpreter(
 ) {
   let root = ReactDOM.createRoot(container);
   let marks = annotations?.state_locations || [];
-  let widgetRanges;  
+  let widgetRanges;
   if (marks.length > 0) {
     let [sortedMarks, filteredSteps] = filterSteps(trace.steps, marks);
     widgetRanges = sortedMarks;
