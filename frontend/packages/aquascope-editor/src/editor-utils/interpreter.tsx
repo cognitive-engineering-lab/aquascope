@@ -336,7 +336,7 @@ let LocalsView = ({ index, locals }: { index: number; locals: MLocal[] }) =>
       <tbody>
         {locals.map(({ name, value, moved_paths }, i) => {
           let path = ["stack", index.toString(), name];
-          
+
           // TODO: implement support for move paths length > 0
           let isMoved = moved_paths.some(p => p.length == 0);
 
@@ -418,11 +418,26 @@ let HeapView = ({ heap }: { heap: MHeap }) => (
 
 (LeaderLine as any).positionByWindowResize = false;
 
+// to_rgb = lambda p: [f'rgba({int(r*255)}, {int(g*255)}, {int(b*255)}, 1)' for (r, g, b) in p]
 const PALETTE = {
-  // sns.color_palette("rocket", 15)[:6]
-  light: ["#221331", "#451c47", "#691f55", "#921c5b", "#b91657", "#d92847"],
-  // sns.color_palette("rocket_r", 20, desat=0.5).as_hex()[:6]
-  dark: ["#ebdbd0", "#e3cbbc", "#dcbca9", "#d6ac98", "#d19d88", "#cb8c7a"],
+  // to_rgb(sns.color_palette("rocket", 15)[:6])
+  light: [
+    "rgba(24, 15, 41, 1)",
+    "rgba(47, 23, 57, 1)",
+    "rgba(71, 28, 72, 1)",
+    "rgba(97, 30, 82, 1)",
+    "rgba(123, 30, 89, 1)",
+    "rgba(150, 27, 91, 1)",
+  ],
+  // to_rgb(sns.color_palette("rocket_r", 20, desat=0.5)[:6])
+  dark: [
+    "rgba(234, 219, 207, 1)",
+    "rgba(227, 203, 187, 1)",
+    "rgba(220, 187, 168, 1)",
+    "rgba(214, 172, 151, 1)",
+    "rgba(208, 156, 136, 1)",
+    "rgba(202, 140, 121, 1)",
+  ],
 };
 
 let renderArrows = (
@@ -559,6 +574,10 @@ let renderArrows = (
         let theme: "dark" | "light" = isDark ? "dark" : "light";
         let palette = PALETTE[theme];
         let color = palette[i % palette.length];
+        
+        let srcIsMoved = ptr.src.closest(".moved") !== null;
+        let moveOpacity = isDark ? 0.5 : 0.3;
+        if (srcIsMoved) color = color.replace(", 1)", `, ${moveOpacity})`);
 
         let startSocketGravity = undefined;
         let endSocketGravity = undefined;

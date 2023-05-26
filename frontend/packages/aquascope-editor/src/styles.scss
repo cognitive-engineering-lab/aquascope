@@ -628,6 +628,8 @@ $perm-animation-duration: 0.5s;
       border: 2px solid var(--aq-step-table-border);
 
       tr.moved {
+        opacity: 0.3;
+        
         background: repeating-linear-gradient(
           45deg, 
           var(--aq-step-table-border), 
