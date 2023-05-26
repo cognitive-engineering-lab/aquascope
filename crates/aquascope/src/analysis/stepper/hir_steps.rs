@@ -1,10 +1,21 @@
-//! Experimental algorithm for creating permissions steps.
+//! HIR-level stepper (and entry point) for computing permissions steps.
 //!
-//! It's main goals are to be:
-//! 1. Easier to understand and describe than the previous.
-//! 2. Disallow internal panics (something that causes UX problems).
-//! 3. Successfuly analyze a larger set of Rust feautres. Loosening the
-//!    restriction of multiple returns and infinite loops.
+//! The permissions stepper computes the differences in permissions
+//! between two "states". These differences are computed per [`mir::Place`],
+//! to read how they are aggregated and displayed see [super::table_builder].
+//!
+//! Computing these permissions steps takes a surprising amount of coordination
+//! between the HIR and the MIR. Fundamentally, the HIR has the information we
+//! need about the _source program_ while the MIR holds the information
+//! about control-flow and code points. Because permissions steps are associated
+//! with a source span, we need the HIR to communicate this down to the MIR, but
+//! we need the MIR to ensure that created steps are valid. To understand
+//! the validation of creating permissions steps see [`super::segmented_mir`].
+//!
+//! TODO: points to touch on:
+//! - when do we insert a step
+//! - handling branches and how the HIR (in this case) knows
+//!   more location information than the MIR.
 
 use anyhow::{anyhow, Result};
 use rustc_data_structures::{self, fx::FxHashMap as HashMap};
@@ -87,47 +98,6 @@ macro_rules! report_unexpected {
   }
 }
 
-impl<'a, 'tcx> HirPermissionStepper<'tcx> for HirStepPoints<'a, 'tcx> {
-  fn get_unsupported_feature(&self) -> Option<String> {
-    self.unsupported_encounter.as_ref().map(|(_, s)| s.clone())
-  }
-
-  fn get_internal_error(&self) -> Option<String> {
-    use itertools::Itertools;
-    if self.fatal_errors.is_empty() {
-      return None;
-    }
-
-    Some(
-      self
-        .fatal_errors
-        .iter()
-        .map(|e: &anyhow::Error| e.to_string())
-        .join("\n"),
-    )
-  }
-
-  fn finalize(
-    self,
-    analysis: &AquascopeAnalysis<'_, 'tcx>,
-    mode: PermIncludeMode,
-  ) -> Result<Vec<PermissionsLineDisplay>> {
-    let body_hir_id = self.body_value_id();
-    let body_span = self.span_of(body_hir_id);
-
-    let mir_segments = self.mir_segments.freeze()?;
-
-    let finalizer = TableBuilder {
-      analysis,
-      ctxt: &analysis.permissions,
-      mir: &mir_segments,
-      locals_at_scope: self.locals_at_scope,
-    };
-
-    Ok(finalizer.finalize_body(self.start_loc, body_span, mode))
-  }
-}
-
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   pub(super) fn make(
     ctxt: &'a PermissionsCtxt<'a, 'tcx>,
@@ -146,6 +116,50 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       current_branch_start: Vec::default(),
       mir_segments,
     })
+  }
+
+  pub(super) fn get_unsupported_feature(&self) -> Option<String> {
+    self.unsupported_encounter.as_ref().map(|(_, s)| s.clone())
+  }
+
+  pub(super) fn get_internal_error(&self) -> Option<String> {
+    use itertools::Itertools;
+    if self.fatal_errors.is_empty() {
+      return None;
+    }
+
+    Some(
+      self
+        .fatal_errors
+        .iter()
+        .map(|e: &anyhow::Error| e.to_string())
+        .join("\n"),
+    )
+  }
+
+  pub(super) fn finalize(
+    self,
+    analysis: &AquascopeAnalysis<'_, 'tcx>,
+    mode: PermIncludeMode,
+  ) -> Result<Vec<PermissionsLineDisplay>> {
+    let body_hir_id = self.body_value_id();
+    let body_span = self.span_of(body_hir_id);
+
+    let mir_segments = self.mir_segments.freeze()?;
+
+    log::debug!(
+      "Steps analysis found these steps: {:#?}",
+      mir_segments.segments().collect::<Vec<_>>()
+    );
+
+    let finalizer = TableBuilder {
+      analysis,
+      ctxt: &analysis.permissions,
+      mir: &mir_segments,
+      locals_at_scope: self.locals_at_scope,
+    };
+
+    Ok(finalizer.finalize_body(self.start_loc, body_span, mode))
   }
 
   // Used for tracking path hints of the current branches.
@@ -267,8 +281,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       self.prettify_node(hir_id)
     );
 
-    let ss = self.span_of(hir_id).shrink_to_hi();
-    invoke_internal!(self, close_branch, bid, |_| ss);
+    invoke_internal!(self, close_branch, bid);
   }
 
   /// Inserts a step point after the specified `HirId`. This
@@ -330,6 +343,11 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
         };
 
     let mapper = self.ir_mapper;
+    // We use this default span because an ExprKind::If can produce branches
+    // that "don't exist" at the HIR-level. This happens when no else-branch
+    // is provided, therefore we chose this default span to match the end
+    // of the If expression itself.
+    let default_span = self.span_of(expr_id).shrink_to_hi();
     let branch_id = invoke_internal!(
       self,
       open_branch,
@@ -345,7 +363,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
               None
             }
           })
-          .unwrap_or_default()
+          .unwrap_or(default_span)
       }
     );
 

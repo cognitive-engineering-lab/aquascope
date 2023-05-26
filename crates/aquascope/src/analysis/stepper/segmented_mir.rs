@@ -1,4 +1,12 @@
-//! Basic relaxation of MIR fragmentation storage.
+//! Internal state for managing permissions steps.
+//!
+//! TODO: points to touch on:
+//! - the recursive structure of the data
+//! - branches
+//! - inserting into linear segments
+//! - managing "builders"
+//! - the various mini-analyses we need for
+//!   finding the right blocks.
 
 use anyhow::{anyhow, bail, ensure, Result};
 use rustc_data_structures::{
@@ -118,7 +126,8 @@ struct CollectionBuilder {
   current_location: Location,
 }
 
-type BuilderIdx = usize;
+#[derive(Copy, Clone, Debug)]
+struct BuilderIdx(usize);
 
 #[derive(Copy, Clone)]
 enum FindResult {
@@ -183,6 +192,19 @@ impl OpenCollections {
     self.0.iter().rev()
   }
 
+  pub fn enumerate(
+    &self,
+  ) -> impl Iterator<Item = (BuilderIdx, &CollectionBuilder)> + '_ {
+    // Open collections are pushed on the end, but we want to search
+    // in the most recently pushed by reverse the Vec::iter
+    self
+      .0
+      .iter()
+      .enumerate()
+      .map(|(i, o)| (BuilderIdx(i), o))
+      .rev()
+  }
+
   pub fn iter_mut(
     &mut self,
   ) -> impl Iterator<Item = &mut CollectionBuilder> + '_ {
@@ -203,13 +225,11 @@ impl OpenCollections {
   }
 
   pub fn get(&self, i: BuilderIdx) -> &CollectionBuilder {
-    let l = self.0.len();
-    &self.0[l - 1 - i]
+    &self.0[i.0]
   }
 
   pub fn get_mut(&mut self, i: BuilderIdx) -> &mut CollectionBuilder {
-    let l = self.0.len();
-    &mut self.0[l - 1 - i]
+    &mut self.0[i.0]
   }
 }
 
@@ -220,6 +240,10 @@ impl std::fmt::Debug for SegmentedMirBuilder<'_, '_> {
 }
 
 impl SegmentedMir {
+  pub(super) fn segments(&self) -> impl Iterator<Item = MirSegment> + '_ {
+    self.segments.iter().map(|sd| sd.segment)
+  }
+
   pub fn get_branch_scope(&self, bid: BranchId) -> ScopeId {
     let branch = self.get_branch(bid);
     let sid = branch.splits[0];
@@ -359,46 +383,79 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     log::debug!("Finding the least post-dominator for root {root:?}");
     let mapper = &self.mapper;
 
-    let open_blocks = mapper.cleaned_graph.successors(root).collect::<Vec<_>>();
-
-    log::debug!("Successors: {open_blocks:?}");
-
-    let bb = open_blocks.first()?;
-
-    mapper
+    let reachable = mapper
       .cleaned_graph
-      .depth_first_search(*bb)
-      .find(|&can_pdom| {
-        open_blocks
-          .iter()
-          .all(|&node| mapper.post_dominates(can_pdom, node))
+      .depth_first_search(root)
+      .filter(|&to| mapper.dominates(root, to))
+      .collect::<HashSet<_>>();
+    log::debug!("reachable from {root:?} {reachable:#?}");
+
+    let most_post_dominating = reachable
+      .iter()
+      .find(|&can| reachable.iter().all(|&n| mapper.post_dominates(*can, n)))?;
+
+    log::debug!("Most post-dominating {most_post_dominating:?}");
+
+    let candidate_leasts = reachable
+      .iter()
+      .filter(|&can| {
+        *can != root
+          && !mapper.cleaned_graph.is_false_edge(*can)
+          && mapper.dominates(*can, *most_post_dominating)
       })
+      .collect::<Vec<_>>();
 
-    // let reachable_blocks = open_blocks
-    //   .iter()
-    //   .flat_map(|&bb| )
+    log::debug!("Candidate least-post-dominators {candidate_leasts:#?}");
+
+    candidate_leasts
+      .iter()
+      .find(|&can| {
+        candidate_leasts
+          .iter()
+          .all(|&n| mapper.dominates(**can, *n))
+      })
+      .copied()
+      .copied()
+
+    // let open_blocks = mapper.cleaned_graph.successors(root).collect::<Vec<_>>();
+
+    // log::debug!("Successors: {open_blocks:?}");
+
+    // // Those blocks that are reachable from each successor.
+    // let mut reachable_from_successors = open_blocks.iter().map(|&bb| {
+    //   let reachable = mapper
+    //     .cleaned_graph
+    //     .depth_first_search(bb)
+    //     .filter(|&to| mapper.dominates(bb, to))
+    //     .collect::<HashSet<_>>();
+
+    //   log::debug!("reachable from {bb:?} {reachable:#?}");
+
+    //   reachable
+    // });
+
+    // let first_set: HashSet<BasicBlock> = reachable_from_successors.next()?;
+
+    // let reachable_from_successors =
+    //   reachable_from_successors.collect::<Vec<_>>();
+
+    // // Take the intersection of all reachable sets.
+    // let reachable_from_all_successors = first_set
+    //   .into_iter()
+    //   .filter(|e| reachable_from_successors.iter().all(|s| s.contains(e)))
     //   .collect::<Vec<_>>();
 
-    // log::debug!("Reachable blocks: {reachable_blocks:?}");
+    // log::debug!(
+    //   "These BasicBlocks are reachable from all successors: {:#?}",
+    //   reachable_from_all_successors
+    // );
 
-    // let potential_joins = reachable_blocks
+    // reachable_from_all_successors
     //   .iter()
-    //   .filter_map(|&can_pdom| {
-    //     open_blocks
+    //   .find(|&can_pdom| {
+    //     reachable_from_all_successors
     //       .iter()
-    //       .all(|open| mapper.post_dominates(can_pdom, *open))
-    //       .then_some(can_pdom)
-    //   })
-    //   .collect::<Vec<_>>();
-
-    // log::debug!("Potential join blocks: {potential_joins:#?}");
-
-    // potential_joins
-    //   .iter()
-    //   .find(|&before| {
-    //     potential_joins
-    //       .iter()
-    //       .all(|after| mapper.dominates(*before, *after))
+    //       .all(|&node| mapper.post_dominates(*can_pdom, node))
     //   })
     //   .copied()
   }
@@ -420,6 +477,8 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     let phi_opt = self
       .least_post_dominator(location.block)
       .map(|bb| bb.start_location());
+
+    log::debug!("Chosen least-post-dominator: {phi_opt:?}");
 
     let builder_opt = self
       .processing
@@ -535,13 +594,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   ///
   /// The function implicitly adds a new segment for all split steps
   /// and `get_span` should return the associated Span for these split steps.
-  pub fn close_branch(
-    &mut self,
-    bid: BranchId,
-    get_span: impl Fn(MirSegment) -> Span + Clone,
-  ) -> Result<()> {
-    let scope = self.current_scope();
-
+  pub fn close_branch(&mut self, bid: BranchId) -> Result<()> {
     let table_root = self.branches[bid].table_id;
 
     let branches_to_close = self
@@ -558,22 +611,13 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       let nested_collections =
         branch.nested.iter().copied().collect::<HashSet<_>>();
 
-      // We need to close out the steps of each nested collection.
-      for builder in self.processing.drain_collections(&nested_collections) {
-        log::debug!("Closing builder: {builder:?}");
-        let collection = &self.collections[builder.collection];
-        if let LengthKind::Bounded { phi, .. } = collection.kind {
-          let from = builder.current_location;
-          let segment = MirSegment::new(from, phi);
-          let span = get_span(segment);
-          let sid = self.segments.push(SegmentData {
-            segment,
-            span,
-            scope,
-          });
-          branch.joins.push(sid);
-        }
-      }
+      let closed_builders =
+        self.processing.drain_collections(&nested_collections);
+
+      log::debug!(
+        "closing builders: {:#?}",
+        closed_builders.collect::<Vec<_>>()
+      );
     }
 
     log::debug!("State after closing branches {:#?}", self.processing);
@@ -593,7 +637,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
     // We can insert into a collection where the last location
     // was the dominates the new location to insert.
-    let builder_opt = self.processing.iter().enumerate().find_map(|(i, cb)| {
+    let builder_opt = self.processing.enumerate().find_map(|(i, cb)| {
       log::debug!("TRYING TO FIND OPEN COLLECTION: {cb:?}");
       mapper
         .ldominates(cb.current_location, location)
@@ -608,8 +652,9 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     // Easy case! We can use a linear insert.
     if mapper.lpost_dominates(location, builder.current_location) {
       log::debug!(
-        "location post-dominates builder: {location:?} {:?}",
-        builder.current_location
+        "location post-dominates builder: {location:?} {:?} {:?}",
+        builder.current_location,
+        builder_i
       );
       return FindResult::Linear(builder_i);
     }
@@ -664,14 +709,17 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
         let builder = self.processing.get_mut(builder_idx);
         let collection = &mut self.collections[builder.collection];
 
-        log::debug!("Inserting into builder {builder:?}");
-
         let mut insert_to = |to| {
+          let segment = MirSegment::new(builder.current_location, to);
           let segment_data = SegmentData {
-            segment: MirSegment::new(builder.current_location, to),
+            segment,
             span,
             scope,
           };
+          log::debug!(
+            "Inserting {segment:?} into builder {builder:?} {builder_idx:?}"
+          );
+
           let segid = self.segments.push(segment_data);
           collection.data.push(CFKind::Linear(segid));
           builder.current_location = to;

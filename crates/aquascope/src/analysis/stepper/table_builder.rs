@@ -1,3 +1,5 @@
+//! Convert permissions steps into tables viewable by the frontend.
+
 use rustc_data_structures::{
   self,
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
@@ -17,12 +19,15 @@ pub(super) struct Table<'tcx> {
   data: HashMap<Place<'tcx>, PermissionsDataDiff>,
 }
 
-/// An ending location should only contain a single table. Later, these
-/// tables can be collapsed based on the line location, though this
-/// isn't strictly necessary and _could_ be changed in the future.
+/// A series of tables, identified by the _ending location_ of the step.
+///
+/// Except in branchess, ending locations should only contains a
+/// single table. These tables are currently collapsed into a single
+/// larger table and shows per-line, though, this restriction could
+/// be relaxed in the future.
 ///
 /// See [`prettify_permission_steps`] for how tables get merged.
-pub(super) type Tables<'tcx> = HashMap<Location, Table<'tcx>>;
+pub(super) type Tables<'tcx> = HashMap<Location, Vec<Table<'tcx>>>;
 
 pub(super) struct TableBuilder<'a, 'tcx: 'a> {
   pub(super) analysis: &'a AquascopeAnalysis<'a, 'tcx>,
@@ -55,7 +60,7 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     // the segment from getting filtered because the
     // segment from and to locations are equal.
     let seg = MirSegment::new(start_loc, start_loc);
-    diffs.insert(seg.to, Table {
+    diffs.entry(seg.to).or_default().push(Table {
       segment: seg,
       span: body_open_brace,
       data: first_diff,
@@ -86,9 +91,7 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     }
   }
 
-  fn insert_segment(&self, result: &mut Tables<'tcx>, sid: SegmentId)
-  // -> ScopeId
-  {
+  fn insert_segment(&self, result: &mut Tables<'tcx>, sid: SegmentId) {
     let ctxt = &self.ctxt;
     let &SegmentData {
       segment,
@@ -112,11 +115,13 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
       .drain_filter(|place, _| to_filter.contains(&place.local))
       .collect::<Vec<_>>();
 
-    log::debug!(
-      "removed domain places due to attached filter at {:?} {:?}",
-      segment.to,
-      removed
-    );
+    if !removed.is_empty() {
+      log::debug!(
+        "removed domain places due to attached filter at {:?} {:?}",
+        segment.to,
+        removed
+      );
+    }
 
     let table = Table {
       segment,
@@ -124,14 +129,8 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
       data: diff,
     };
 
-    result
-      .entry(segment.to)
-      .and_modify(|o| {
-        log::error!(
-          "Inserting table at {segment:?} but end location occupied {o:?}"
-        );
-      })
-      .or_insert(table);
+    log::info!("saving segment diff {segment:?}");
+    result.entry(segment.to).or_default().push(table);
   }
 
   fn insert_branch(&self, result: &mut Tables<'tcx>, bid: BranchId) {
@@ -158,7 +157,7 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
       self.insert_collection(&mut temp_middle, cid);
     }
 
-    for &sid in splits.iter() {
+    for &sid in joins.iter() {
       self.insert_segment(&mut temp_joins, sid);
     }
 
@@ -181,7 +180,7 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     let diffs_in_tables = |tbls: &Tables| {
       tbls
         .iter()
-        .flat_map(|(_, tbl)| tbl.data.values())
+        .flat_map(|(_, v)| v.iter().flat_map(|tbl| tbl.data.values()))
         .copied()
         .collect::<HashSet<PermissionsDataDiff>>()
     };
@@ -190,12 +189,15 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     // that exist within them.
     let diffs_in_branches = diffs_in_tables(&mut temp_middle);
 
-    for (_, tbl) in temp_joins.iter_mut() {
-      // log::debug!("drained {drained:#?} because diff exists");
-      let _drained = tbl
-        .data
-        .drain_filter(|_, diff| diffs_in_branches.contains(diff))
-        .collect::<Vec<_>>();
+    for (_, v) in temp_joins.iter_mut() {
+      for tbl in v.iter_mut() {
+        let drained = tbl
+          .data
+          .drain_filter(|_, diff| diffs_in_branches.contains(diff))
+          .map(|(p, _)| p)
+          .collect::<Vec<_>>();
+        log::debug!("diffs at join loc removed for redundancy {drained:#?}");
+      }
     }
 
     result.extend(temp_middle);
@@ -206,11 +208,10 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     //       block end. Rarely, are the diffs on the join
     //       edge  so we might be able to get rid of soe of
     //       this weird logic.
-    // temp_joins.entry(reach.to).or_default().or_insert()
-    // insert!(temp_joins => result);
+    result.extend(temp_joins);
 
     // Attach filtered locals
-    result.insert(reach.to, Table {
+    result.entry(reach.to).or_default().push(Table {
       span: reach.span(self.ctxt),
       segment: *reach,
       data: attached_here,
@@ -222,6 +223,7 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
 // - Remove all places that are not source visible
 // - Remove all tables which are empty
 // - Convert Spans to Ranges
+#[allow(clippy::if_not_else)]
 pub(super) fn prettify_permission_steps<'tcx>(
   analysis: &AquascopeAnalysis<'_, 'tcx>,
   perm_steps: Tables<'tcx>,
@@ -253,49 +255,53 @@ pub(super) fn prettify_permission_steps<'tcx>(
     Vec<(MirSegment, Span, Vec<(Place<'tcx>, PermissionsDataDiff)>)>,
   >::default();
 
-  // First loop: filter out differences for Places that
+  // Goal: filter out differences for Places that
   // aren't source-visible. As well as those that come
   // after the first error span.
-  // Group these intermediate tables by "line numbers" so we can
-  // collapse them into a single table.
-  for (
-    _,
-    Table {
+  // Group these intermediate tables by line numbers to make
+  // collapsing them easier.
+  for (_, v) in perm_steps.into_iter() {
+    for Table {
       segment,
       span,
       data,
-    },
-  ) in perm_steps.into_iter()
-  {
-    // Attach the span to the end of the line. Later, all permission
-    // steps appearing on the same line will be combined.
-    let span = source_map.span_extend_to_line(span).shrink_to_hi();
-    let entries = data
-      .into_iter()
-      .filter(|(place, diff)| {
-        place.is_source_visible(tcx, body) && should_keep(diff)
-      })
-      .collect::<Vec<_>>();
-
-    // This could be a little more graceful. The idea is that
-    // we want to remove all permission steps which occur after
-    // the first error, but the steps involved with the first
-    // error could still be helpful. This is why we filter all
-    // spans with a LO BytePos greater than the error
-    // span HI BytePos.
-    if !(entries.is_empty()
-      || first_error_span_opt.is_some_and(|err_span| err_span.hi() < span.lo()))
+    } in v.into_iter()
     {
-      // We'll store things by line number
-      let line_num = source_map.lookup_line(span.hi()).unwrap().line;
-      semi_filtered
-        .entry(line_num)
-        .or_default()
-        .push((segment, span, entries));
+      // Attach the span to the end of the line. Later, all permission
+      // steps appearing on the same line will be combined.
+      let span = source_map.span_extend_to_line(span).shrink_to_hi();
+      let entries = data
+        .into_iter()
+        .filter(|(place, diff)| {
+          place.is_source_visible(tcx, body) && should_keep(diff)
+        })
+        .collect::<Vec<_>>();
+
+      // This could be a little more graceful. The idea is that
+      // we want to remove all permission steps which occur after
+      // the first error, but the steps involved with the first
+      // error could still be helpful. This is why we filter all
+      // spans with a LO BytePos greater than the error
+      // span HI BytePos.
+      if !(entries.is_empty()
+        || first_error_span_opt
+          .is_some_and(|err_span| err_span.hi() < span.lo()))
+      {
+        // We'll store things by line number
+        let line_num = source_map.lookup_line(span.hi()).unwrap().line;
+        semi_filtered
+          .entry(line_num)
+          .or_default()
+          .push((segment, span, entries));
+      } else {
+        log::debug!(
+          "segment diff at {segment:?} was empty or follows an error"
+        );
+      }
     }
   }
 
-  // HACK FIXME: we're at odds with the multi-table setup. This quick
+  // NOTE: we're at odds with the multi-table setup. This quick
   // hack combines table entries into a single table until the
   // visual explanation gets up-to-speed.
   // Another weird thing about this is that you can have a single
@@ -314,23 +320,7 @@ pub(super) fn prettify_permission_steps<'tcx>(
 
   semi_filtered
     .into_iter()
-    .filter_map(|(_, entries)| {
-
-      // let state = entries
-      //   .into_iter()
-      //   .map(|(MirSegment { from, to }, diffs)| {
-      //     let state = diffs
-      //       .into_iter()
-      //       .map(|(place, diff)| {
-      //         let s = place_to_string!(place);
-      //         (s, diff)
-      //       })
-      //       .collect::<Vec<_>>();
-      //     let from = analysis.span_to_range(ctxt.location_to_span(from));
-      //     let to = analysis.span_to_range(ctxt.location_to_span(to));
-      //     PermissionsStepTable { from, to, state }
-      //   })
-      //   .collect::<Vec<_>>();
+    .filter_map(|(line, entries)| {
 
       // Conforming to the above HACK this just takes any (from, to) pair.
       let dummy_char_range = DUMMY_CHAR_RANGE.with(|range| *range);
@@ -344,44 +334,27 @@ pub(super) fn prettify_permission_steps<'tcx>(
         },
       );
 
-      let mut master_table =
+      let mut combined_table =
         HashMap::<Place<'tcx>, PermissionsDataDiff>::default();
-
-      let is_symmetric_diff =
-        |diff1: &PermissionsDataDiff, diff2: &PermissionsDataDiff| -> bool {
-          macro_rules! is_symmetric {
-            ($v1:expr, $v2:expr) => {
-              matches!(
-                (&$v1, &$v2),
-                (ValueStep::High { .. }, ValueStep::Low { .. })
-                  | (ValueStep::Low { .. }, ValueStep::High { .. })
-                  | (ValueStep::None { .. }, ValueStep::None { .. })
-              )
-            };
-          }
-          let p1 = &diff1.permissions;
-          let p2 = &diff2.permissions;
-          is_symmetric!(p1.read, p2.read)
-            && is_symmetric!(p1.write, p2.write)
-            && is_symmetric!(p1.drop, p2.drop)
-        };
 
       // For all tables which fall on the same line, we combine them into a single table
       // and remove all *SYMMETRIC* differences. That is, if you have permission changes such as:
       // - path: +R+O
       // - path: -R-O
       // these are exactly symmetric, and will be removed.
-      for (_, _, diffs) in entries.into_iter() {
+      log::debug!("Finishing the combined table for line {line}");
+      for (segment, _, diffs) in entries.into_iter() {
         for (place, diff) in diffs.into_iter() {
-          match master_table.entry(place) {
+          match combined_table.entry(place) {
             Entry::Vacant(o) => {
+              log::debug!("- Place: {place:?} Segment {segment:?}\n\t\t{diff:?}");
               o.insert(diff);
             }
             Entry::Occupied(o) => {
               let old_diff = o.get();
-              if is_symmetric_diff(&diff, old_diff) {
+              if diff.is_symmetric_diff(old_diff) {
                 log::debug!(
-                  "REMOVING place {place:?} with diff {diff:?} into the MT."
+                  "X Place {place:?} had a symmetric difference."
                 );
                 o.remove();
                 // master_table.remove(idx);
@@ -395,11 +368,11 @@ pub(super) fn prettify_permission_steps<'tcx>(
       }
 
       // This means the tables were symmetric and all were removed.
-      if master_table.is_empty() {
+      if combined_table.is_empty() {
         return None;
       }
 
-      let mut master_table_vec = master_table
+      let mut master_table_vec = combined_table
         .into_iter()
         .collect::<Vec<_>>();
 

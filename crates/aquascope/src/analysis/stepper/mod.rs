@@ -1,8 +1,6 @@
 //! Analysis for the “Missing-at” relations.
 
-mod find_steps;
 mod hir_steps;
-mod segment_tree;
 #[allow(clippy::similar_names)]
 mod segmented_mir;
 mod table_builder;
@@ -15,20 +13,15 @@ use rustc_data_structures::{self, fx::FxHashMap as HashMap};
 use rustc_hir::intravisit::Visitor as HirVisitor;
 use rustc_middle::mir::{Location, Place};
 use rustc_span::Span;
-use rustc_utils::{
-  source_map::range::CharRange, test_utils::DUMMY_CHAR_RANGE, PlaceExt,
-};
+use rustc_utils::source_map::range::CharRange;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{
-  analysis::{
-    permissions::{
-      Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
-    },
-    AquascopeAnalysis, LoanKey, MoveKey,
+use crate::analysis::{
+  permissions::{
+    Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
   },
-  errors,
+  AquascopeAnalysis, LoanKey, MoveKey,
 };
 
 fluid_let!(pub static INCLUDE_MODE: PermIncludeMode);
@@ -100,10 +93,7 @@ impl<A> Stepable for A where
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, TS)]
 #[serde(tag = "type")]
 #[ts(export)]
-pub enum ValueStep<A>
-where
-  A: Stepable,
-{
+pub enum ValueStep<A: Stepable> {
   High {
     value: A,
   },
@@ -114,10 +104,19 @@ where
   },
 }
 
-impl<A> std::fmt::Debug for ValueStep<A>
-where
-  A: Stepable,
-{
+impl<A: Stepable> ValueStep<A> {
+  // TODO: this is a loose surface-level notion of symmetry.
+  fn is_symmetric_diff(&self, rhs: &Self) -> bool {
+    matches!(
+      (self, rhs),
+      (ValueStep::High { .. }, ValueStep::Low { .. })
+        | (ValueStep::Low { .. }, ValueStep::High { .. })
+        | (ValueStep::None { .. }, ValueStep::None { .. })
+    )
+  }
+}
+
+impl<A: Stepable> std::fmt::Debug for ValueStep<A> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       ValueStep::High { .. } => write!(f, "↑"),
@@ -192,6 +191,15 @@ impl PermissionsDataDiff {
   fn is_empty(&self) -> bool {
     self.permissions.is_empty()
   }
+
+  fn is_symmetric_diff(&self, rhs: &PermissionsDataDiff) -> bool {
+    let p1 = &self.permissions;
+    let p2 = &rhs.permissions;
+
+    p1.read.is_symmetric_diff(&p2.read)
+      && p1.write.is_symmetric_diff(&p2.write)
+      && p1.drop.is_symmetric_diff(&p2.drop)
+  }
 }
 
 impl Difference for bool {
@@ -207,19 +215,13 @@ impl Difference for bool {
   }
 }
 
-impl<T> ValueStep<T>
-where
-  T: Stepable,
-{
+impl<T: Stepable> ValueStep<T> {
   fn is_empty(&self) -> bool {
     matches!(self, Self::None { .. })
   }
 }
 
-impl<A> Difference for Option<A>
-where
-  A: Stepable,
-{
+impl<A: Stepable> Difference for Option<A> {
   type Diff = ValueStep<A>;
 
   fn diff(&self, rhs: Option<A>) -> Self::Diff {
@@ -272,39 +274,24 @@ impl Difference for PermissionsData {
 impl<'tcx> Difference for &PermissionsDomain<'tcx> {
   type Diff = HashMap<Place<'tcx>, PermissionsDataDiff>;
   fn diff(&self, rhs: &PermissionsDomain<'tcx>) -> Self::Diff {
-    self
-      .iter()
-      .fold(HashMap::default(), |mut acc, (place, p1)| {
-        let p2 = rhs.get(place).unwrap();
-        let diff = p1.diff(*p2);
+    let mut diffs = HashMap::default();
 
-        match acc.entry(*place) {
-          Entry::Occupied(_) => {
-            panic!("Permissions step already in output for {place:?}");
-          }
-          Entry::Vacant(entry) => {
-            entry.insert(diff);
-          }
+    for (place, p1) in self.iter() {
+      let p2 = rhs.get(place).unwrap();
+      let diff = p1.diff(*p2);
+
+      match diffs.entry(*place) {
+        Entry::Occupied(_) => {
+          panic!("Permissions step already in output for {place:?}");
         }
+        Entry::Vacant(entry) => {
+          entry.insert(diff);
+        }
+      }
+    }
 
-        acc
-      })
+    diffs
   }
-}
-
-trait HirPermissionStepper<'tcx>: HirVisitor<'tcx> {
-  /// Get message explaining any encountered unsupported features, if any.
-  fn get_unsupported_feature(&self) -> Option<String>;
-
-  /// Get message explaining any internal errors that occurred.
-  fn get_internal_error(&self) -> Option<String>;
-
-  /// Finalize the computed steps consuming the visitor.
-  fn finalize(
-    self,
-    analysis: &AquascopeAnalysis<'_, 'tcx>,
-    mode: PermIncludeMode,
-  ) -> Result<Vec<PermissionsLineDisplay>>;
 }
 
 /// Represents a segment of the MIR control-flow graph.
@@ -333,6 +320,17 @@ impl MirSegment {
     let lo = ctxt.location_to_span(self.from);
     let hi = ctxt.location_to_span(self.to);
     lo.with_hi(hi.hi())
+  }
+
+  pub fn into_diff<'tcx>(
+    self,
+    ctxt: &PermissionsCtxt<'_, 'tcx>,
+  ) -> HashMap<Place<'tcx>, PermissionsDataDiff> {
+    let p0 = ctxt.location_to_point(self.from);
+    let p1 = ctxt.location_to_point(self.to);
+    let before = &ctxt.permissions_domain_at_point(p0);
+    let after = &ctxt.permissions_domain_at_point(p1);
+    before.diff(after)
   }
 }
 

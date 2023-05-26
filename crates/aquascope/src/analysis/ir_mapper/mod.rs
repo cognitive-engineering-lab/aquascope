@@ -27,8 +27,8 @@ pub struct IRMapper<'a, 'tcx> {
   body: &'a Body<'tcx>,
   hir_to_mir: HashMap<HirId, HashSet<Location>>,
   gather_mode: GatherMode,
-  dominators: Dominators<BasicBlock>,
-  post_dominators: AllPostDominators<BasicBlock>,
+  pub(crate) dominators: Dominators<BasicBlock>,
+  pub(crate) post_dominators: AllPostDominators<BasicBlock>,
 }
 
 // TODO: I want to decompose this into more specific regions.
@@ -229,8 +229,7 @@ where
       .find(|&&candidate_dom| {
         basic_blocks.iter().all(|&block| {
           self.dominators.is_reachable(block)
-            && (block == candidate_dom
-              || self.dominators.dominates(candidate_dom, block))
+            && self.dominators.dominates(candidate_dom, block)
         })
       })
       .copied();
@@ -240,10 +239,9 @@ where
         .iter()
         .find(|&&candidate_postdom| {
           basic_blocks.iter().all(|&block| {
-            block == candidate_postdom
-              || self
-                .post_dominators
-                .is_postdominated_by(block, candidate_postdom)
+            self
+              .post_dominators
+              .is_postdominated_by(block, candidate_postdom)
           })
         })
         .copied()
