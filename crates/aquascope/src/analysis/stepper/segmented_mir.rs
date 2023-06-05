@@ -217,6 +217,10 @@ impl OpenCollections {
     self.0.is_empty()
   }
 
+  pub fn len(&self) -> usize {
+    self.0.len()
+  }
+
   pub fn drain_collections<'a, 'this: 'a>(
     &'this mut self,
     cids: &'a HashSet<CollectionId>,
@@ -230,6 +234,10 @@ impl OpenCollections {
 
   pub fn get_mut(&mut self, i: BuilderIdx) -> &mut CollectionBuilder {
     &mut self.0[i.0]
+  }
+
+  pub fn clear(&mut self) {
+    self.0.clear()
   }
 }
 
@@ -284,9 +292,11 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     let mut collections = IndexVec::new();
 
     // We start with an empty linear collection.
-    // TODO: try to find the bound for the entire body
-    //       if it exists, only use LengthKind::Unbounded
-    //       as a default.
+    // XXX: we could also try to find the exit location for the
+    //      entire body but having this information isn't useful
+    //      for the end of the body. Phi nodes are used to make
+    //      sure we don't accidentally jump past the end of a
+    //      join but with the return there isn't anything after.
     let first_collection = collections.push(Collection {
       data: Vec::default(),
       kind: LengthKind::Unbounded { root: from },
@@ -317,7 +327,8 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   }
 
   fn finish_first_collection(&mut self) -> Result<()> {
-    // TODO: make sure that the only open collection is the first collection.
+    ensure!(self.processing.len() == 1, "More than one collection open");
+    self.processing.clear();
     Ok(())
   }
 
@@ -377,25 +388,29 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   // -----------------
   // Branch operations
 
-  // TODO: we can use the post-dominating tree to get this information.
   /// Finds the basic block that is the last post-dominator of the successors of `root`.
   fn least_post_dominator(&self, root: BasicBlock) -> Option<BasicBlock> {
     log::debug!("Finding the least post-dominator for root {root:?}");
     let mapper = &self.mapper;
 
+    // Find all basic blocks that are reachable from the root.
     let reachable = mapper
       .cleaned_graph
       .depth_first_search(root)
       .filter(|&to| mapper.dominates(root, to))
       .collect::<HashSet<_>>();
-    log::debug!("reachable from {root:?} {reachable:#?}");
 
+    // Find the blocks that is the _most_ post-dominating,
+    // this is a point that must post-dominate everything else.
     let most_post_dominating = reachable
       .iter()
       .find(|&can| reachable.iter().all(|&n| mapper.post_dominates(*can, n)))?;
 
-    log::debug!("Most post-dominating {most_post_dominating:?}");
-
+    // If a block dominates the "most post-dominator" that means that this
+    // block also post-dominates all branches that occur after the root.
+    // We exclude the (1) root itself, and (2) any false edges. False edges
+    // are common in loop lowering but the borrowck semantics indicate that
+    // we should consider points  *after* the false edges as having left the branches.
     let candidate_leasts = reachable
       .iter()
       .filter(|&can| {
@@ -405,8 +420,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       })
       .collect::<Vec<_>>();
 
-    log::debug!("Candidate least-post-dominators {candidate_leasts:#?}");
-
+    // The least post-dominator dominates all the other post-dominators.
     candidate_leasts
       .iter()
       .find(|&can| {
@@ -416,48 +430,6 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       })
       .copied()
       .copied()
-
-    // let open_blocks = mapper.cleaned_graph.successors(root).collect::<Vec<_>>();
-
-    // log::debug!("Successors: {open_blocks:?}");
-
-    // // Those blocks that are reachable from each successor.
-    // let mut reachable_from_successors = open_blocks.iter().map(|&bb| {
-    //   let reachable = mapper
-    //     .cleaned_graph
-    //     .depth_first_search(bb)
-    //     .filter(|&to| mapper.dominates(bb, to))
-    //     .collect::<HashSet<_>>();
-
-    //   log::debug!("reachable from {bb:?} {reachable:#?}");
-
-    //   reachable
-    // });
-
-    // let first_set: HashSet<BasicBlock> = reachable_from_successors.next()?;
-
-    // let reachable_from_successors =
-    //   reachable_from_successors.collect::<Vec<_>>();
-
-    // // Take the intersection of all reachable sets.
-    // let reachable_from_all_successors = first_set
-    //   .into_iter()
-    //   .filter(|e| reachable_from_successors.iter().all(|s| s.contains(e)))
-    //   .collect::<Vec<_>>();
-
-    // log::debug!(
-    //   "These BasicBlocks are reachable from all successors: {:#?}",
-    //   reachable_from_all_successors
-    // );
-
-    // reachable_from_all_successors
-    //   .iter()
-    //   .find(|&can_pdom| {
-    //     reachable_from_all_successors
-    //       .iter()
-    //       .all(|&node| mapper.post_dominates(*can_pdom, node))
-    //   })
-    //   .copied()
   }
 
   fn mk_branch(
@@ -468,10 +440,10 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     let mapper = &self.mapper;
     let scope = self.current_scope();
 
-    ensure!(
-      self.mapper.is_terminator_switchint(location),
-      "terminator in block {location:?} is not a `switchInt`"
-    );
+    // ensure!(
+    //   self.mapper.is_terminator_switchint(location),
+    //   "terminator in block {location:?} is not a `switchInt`"
+    // );
 
     // The convergence of all branching paths.
     let phi_opt = self
@@ -690,10 +662,19 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
     match self.find_suitable_collection(location) {
       // BAD case, no dominating locations where we can insert.
-      FindResult::None => bail!(
-        "no suitable collection for location {location:?} {:#?}",
-        self.processing
-      ),
+      // XXX: returning an internal error here is too limiting. It seems
+      //      that if control-flow constructs are (mis)-used, then the MIR
+      //      is already more simplified than we would expect. This approach
+      //      siliently ignores these insertions, but we leave a log warning
+      //      to help debugging if something bad happens.
+      FindResult::None => {
+        log::warn!(
+          "no suitable collection for location {location:?} {:#?}",
+          self.processing
+        );
+
+        Ok(())
+      }
 
       // RARE case:
       // Spawn a new child branch and retry the insert.
@@ -729,6 +710,10 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
           LengthKind::Bounded { phi, .. }
             if self.mapper.ldominates(phi, location) =>
           {
+            log::error!(
+              "Linear insert is stepping past the join point {location:?} {phi:?}"
+            );
+
             insert_to(phi)
           }
           // All other cases can use the given location as the `to` location.
@@ -737,6 +722,228 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
         Ok(())
       }
+    }
+  }
+}
+
+#[cfg(test)]
+pub(crate) mod test_exts {
+  use super::*;
+
+  pub trait SegmentedMirTestExt {
+    fn validate(&self, mapper: &IRMapper) -> Result<(), InvalidReason>;
+  }
+
+  #[derive(Debug)]
+  pub enum InvalidReason {
+    // DuplicateLocation {
+    //   at: Location,
+    // },
+    InvalidSegment {
+      segment: MirSegment,
+      kind: BadSegmentKind,
+    },
+  }
+
+  #[derive(Debug)]
+  #[allow(clippy::enum_variant_names)]
+  pub enum BadSegmentKind {
+    SplitNoDom,
+    JoinNoPostDom,
+    LinearNoDom,
+    LinearNoPostDom,
+  }
+
+  // impl MirSegment {
+  //   fn explode(
+  //     &self,
+  //     mapper: &IRMapper,
+  //   ) -> impl Iterator<Item = Location> + '_ {
+  //     let sb = self.from.block;
+  //     let eb = self.to.block;
+  //     let basic_blocks = &mapper.cleaned_graph.0.basic_blocks;
+
+  //     if sb == eb {
+  //       return (self.from.statement_index .. self.to.statement_index)
+  //         .map(|i| Location {
+  //           block: sb,
+  //           statement_index: i,
+  //         })
+  //         .collect::<Vec<_>>()
+  //         .into_iter();
+  //     }
+
+  //     let mut paths = Vec::default();
+
+  //     let mut curr = sb;
+
+  //     while curr != eb {
+  //       paths.push(curr);
+  //       let scs = mapper.cleaned_graph.successors(curr).collect::<Vec<_>>();
+  //       assert!(scs.len() == 1);
+  //       curr = scs[0];
+  //     }
+
+  //     paths.push(eb);
+
+  //     paths
+  //       .into_iter()
+  //       .flat_map(|bb| {
+  //         let bbd = &basic_blocks[bb];
+  //         let from = if bb == self.from.block {
+  //           self.from.statement_index
+  //         } else {
+  //           0
+  //         };
+
+  //         let to = if bb == self.to.block {
+  //           self.to.statement_index
+  //         } else {
+  //           bbd.statements.len()
+  //         };
+
+  //         (from ..= to).map(move |idx| Location {
+  //           block: bb,
+  //           statement_index: idx,
+  //         })
+  //       })
+  //       .collect::<Vec<_>>()
+  //       .into_iter()
+  //   }
+  // }
+
+  impl SegmentedMir {
+    fn is_valid_collection(
+      &self,
+      cid: CollectionId,
+      ssf: &mut HashSet<Location>,
+      mapper: &IRMapper,
+    ) -> Result<(), InvalidReason> {
+      let collection = self.get_collection(cid);
+      for kind in collection.data.iter() {
+        match kind {
+          CFKind::Linear(sid) => self.is_valid_segment(*sid, ssf, mapper)?,
+          CFKind::Branch(bid) => self.is_valid_branch(*bid, ssf, mapper)?,
+        }
+      }
+
+      Ok(())
+    }
+
+    fn is_valid_split_segment(
+      &self,
+      sid: SegmentId,
+      _ssf: &mut HashSet<Location>,
+      mapper: &IRMapper,
+    ) -> Result<(), InvalidReason> {
+      let SegmentData { segment: s, .. } = self.get_segment(sid);
+
+      if !mapper.ldominates(s.from, s.to) {
+        return Err(InvalidReason::InvalidSegment {
+          segment: *s,
+          kind: BadSegmentKind::SplitNoDom,
+        });
+      }
+
+      Ok(())
+    }
+
+    fn is_valid_join_segment(
+      &self,
+      sid: SegmentId,
+      _ssf: &mut HashSet<Location>,
+      mapper: &IRMapper,
+    ) -> Result<(), InvalidReason> {
+      let SegmentData { segment: s, .. } = self.get_segment(sid);
+
+      if !mapper.lpost_dominates(s.to, s.from) {
+        return Err(InvalidReason::InvalidSegment {
+          segment: *s,
+          kind: BadSegmentKind::JoinNoPostDom,
+        });
+      }
+
+      Ok(())
+    }
+
+    fn is_valid_segment(
+      &self,
+      sid: SegmentId,
+      _ssf: &mut HashSet<Location>,
+      mapper: &IRMapper,
+    ) -> Result<(), InvalidReason> {
+      let SegmentData { segment: s, .. } = self.get_segment(sid);
+      if !mapper.ldominates(s.from, s.to) {
+        return Err(InvalidReason::InvalidSegment {
+          segment: *s,
+          kind: BadSegmentKind::LinearNoDom,
+        });
+      }
+
+      if !mapper.lpost_dominates(s.to, s.from) {
+        return Err(InvalidReason::InvalidSegment {
+          segment: *s,
+          kind: BadSegmentKind::LinearNoPostDom,
+        });
+      }
+
+      // for at in s.explode(mapper) {
+      //   if !ssf.insert(at) {
+      //     return Err(InvalidReason::DuplicateLocation { at });
+      //   }
+      // }
+
+      Ok(())
+    }
+
+    fn is_valid_branch(
+      &self,
+      bid: BranchId,
+      ssf: &mut HashSet<Location>,
+      mapper: &IRMapper,
+    ) -> Result<(), InvalidReason> {
+      let branch = self.get_branch(bid);
+
+      for &sid in branch.splits.iter() {
+        self.is_valid_split_segment(sid, ssf, mapper)?;
+      }
+
+      for &sid in branch.joins.iter() {
+        self.is_valid_join_segment(sid, ssf, mapper)?;
+      }
+
+      for &cid in branch.nested.iter() {
+        self.is_valid_collection(cid, ssf, mapper)?;
+      }
+
+      Ok(())
+    }
+  }
+
+  impl SegmentedMirTestExt for SegmentedMir {
+    /// The computed `SegmentedMir` must follow a few rules for its structure
+    /// to be considered valid.
+    ///
+    /// 1. For evey segment that is part of a linear collection, the segment
+    ///    `from` must dominate the segment `to`, and the `to` must post-dominate
+    ///    the `from`.
+    ///
+    /// 2. Every point on the Body graph must be included in the segmented mir.
+    ///
+    /// 3. A segment `to` location cannot appear in the structure more than once
+    ///    _unless_ the segment is part of a branch `join` set.
+    ///
+    /// 4. A segment must never traverse accross branches, loops, etc. They are
+    ///    single units of control flow that must never be conditional.
+    ///
+    /// 5. At each branch location (`switchInt`) there must exist a split segment
+    ///    for each possible branch target.
+    fn validate(&self, mapper: &IRMapper) -> Result<(), InvalidReason> {
+      let seen_so_far = &mut HashSet::default();
+
+      self.is_valid_collection(self.first_collection, seen_so_far, mapper)
+
+      // TODO check the seen locations against the CleanedGraph body
     }
   }
 }

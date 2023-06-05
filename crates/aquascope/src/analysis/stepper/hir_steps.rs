@@ -22,20 +22,18 @@ use rustc_data_structures::{self, fx::FxHashMap as HashMap};
 use rustc_hir::{
   self as hir,
   intravisit::{self, Visitor as HirVisitor},
-  HirId,
+  BodyId, HirId,
 };
 use rustc_middle::{
   hir::nested_filter,
-  mir::{self, Local, Location},
+  mir::{self, Body, Local, Location},
+  ty::TyCtxt,
 };
 use rustc_span::Span;
 use rustc_utils::SpanExt;
 
 use super::{segmented_mir::*, table_builder::*, *};
-use crate::analysis::{
-  ir_mapper::{GatherDepth, IRMapper},
-  permissions::PermissionsCtxt,
-};
+use crate::analysis::ir_mapper::{GatherDepth, IRMapper};
 
 /// Visitor for creating permission steps in the HIR.
 ///
@@ -44,7 +42,9 @@ pub(super) struct HirStepPoints<'a, 'tcx>
 where
   'tcx: 'a,
 {
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  tcx: &'a TyCtxt<'tcx>,
+  body: &'a Body<'tcx>,
+  body_id: BodyId,
   ir_mapper: &'a IRMapper<'a, 'tcx>,
 
   // Error reporting counters
@@ -100,14 +100,18 @@ macro_rules! report_unexpected {
 
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   pub(super) fn make(
-    ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+    tcx: &'a TyCtxt<'tcx>,
+    body: &'a Body<'tcx>,
+    body_id: BodyId,
     ir_mapper: &'a IRMapper<'a, 'tcx>,
   ) -> Result<Self> {
     let mir_segments = SegmentedMirBuilder::make(ir_mapper);
     let start_loc = mir::START_BLOCK.start_location();
 
     Ok(HirStepPoints {
-      ctxt,
+      tcx,
+      body,
+      body_id,
       ir_mapper,
       unsupported_encounter: None,
       fatal_errors: Vec::default(),
@@ -190,16 +194,14 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   }
 
   fn span_of(&self, id: HirId) -> Span {
-    let hir = self.ctxt.tcx.hir();
+    let hir = self.tcx.hir();
     let span = hir.span(id);
-    span
-      .as_local(self.ctxt.body_with_facts.body.span)
-      .unwrap_or(span)
+    span.as_local(self.body.span).unwrap_or(span)
   }
 
   fn body_value_id(&self) -> HirId {
-    let hir = self.ctxt.tcx.hir();
-    hir.body(self.ctxt.body_id).value.hir_id
+    let hir = self.tcx.hir();
+    hir.body(self.body_id).value.hir_id
   }
 
   fn get_node_entry(&self, hir_id: HirId) -> Option<Location> {
@@ -232,7 +234,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   }
 
   fn prettify_node(&self, hir_id: HirId) -> String {
-    let hir = self.ctxt.tcx.hir();
+    let hir = self.tcx.hir();
     hir.node_to_string(hir_id)
   }
 
@@ -372,8 +374,12 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       self.visit_expr(then);
       self.pop_branch_start(then_entry);
     } else {
-      report_unexpected!(
-        self,
+      // What we learned from weird-exprs is that _anything_
+      // is possible. Instead of throwing an error in these
+      // cases we will log a warning to help debug but we
+      // shouldn't automatically assume that something bad
+      // happened.
+      log::warn!(
         "then-branch doesn't have entry {}",
         self.prettify_node(then.hir_id)
       );
@@ -385,8 +391,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
         self.visit_expr(els);
         self.pop_branch_start(els_entry);
       } else {
-        report_unexpected!(
-          self,
+        log::warn!(
           "else-branch doesn't have entry {}",
           self.prettify_node(els.hir_id)
         );
@@ -440,7 +445,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   type NestedFilter = nested_filter::All;
 
   fn nested_visit_map(&mut self) -> Self::Map {
-    self.ctxt.tcx.hir()
+    self.tcx.hir()
   }
 
   fn visit_body(&mut self, body: &'tcx hir::Body) {
@@ -680,9 +685,16 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   }
 
   // NOTE: it's impotant that arms handle path hinting
-  //
-  // TODO: handle arm guards!
   fn visit_arm(&mut self, arm: &'tcx hir::Arm) {
+    if arm.guard.is_some() {
+      // TODO: NYI.
+      report_unexpected!(
+        self,
+        "match arm guards are not yet supported {}",
+        self.prettify_node(arm.hir_id)
+      );
+    }
+
     // We use the arm_entry for path hinting, because it's
     // closer the the `switchInt`.
     if let Some(arm_entry) = self.get_node_entry(arm.hir_id) {
@@ -701,11 +713,440 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
       self.pop_branch_start(arm_entry);
     } else {
-      report_unexpected!(
-        self,
+      log::warn!(
         "match-arm doesn't have entry {}",
         self.prettify_node(arm.hir_id)
       );
     }
   }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::{super::segmented_mir::test_exts::SegmentedMirTestExt, *};
+  use crate::{analysis::ir_mapper::GatherMode, test_utils as tu};
+
+  // Compile a piece of Rust code and assert that the generated SegmentedMir
+  // structure is valid. See `is_valid` for more details on what that means.
+  macro_rules! test_valid_segmented_mir {
+    ($name:ident, $code:expr) => {
+      #[test]
+      fn $name() {
+        tu::compile_normal($code, |tcx| {
+          tu::for_each_body(tcx, |body_id, wfacts| {
+            let body = &wfacts.body;
+            let mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
+            let mut visitor = HirStepPoints::make(&tcx, body, body_id, &mapper)
+              .expect("Failed to create stepper");
+            visitor.visit_nested_body(body_id);
+
+            if let Some(uf) = visitor.get_unsupported_feature() {
+              panic!("encountered unsupported feature {uf:?}");
+            }
+
+            if let Some(ie) = visitor.get_internal_error() {
+              panic!("whoops! internal error: {ie:?}");
+            }
+
+            let smir = visitor
+              .mir_segments
+              .freeze()
+              .expect("Failed to freeze SegmentedMirBuilder");
+
+            if let Err(invalid) = smir.validate(&mapper) {
+              panic!("SegmentedMir failed to validate {invalid:?}");
+            }
+          })
+        })
+      }
+    };
+  }
+
+  test_valid_segmented_mir!(
+    linear_stmts,
+    r#"
+fn test() {
+  let a = String::from("");
+  let b = &a;
+  let c = &&b;
+  println!("{c}");
+  let d = &&&&&&c;
+  println!("{d} {}", 1 + 1 + 1 + 1 + 1 + 1);
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    branch_simple,
+    r#"
+fn test() {
+  let s = String::from("");
+
+  if true {
+    let b1 = &mut s;
+    b1.push_str("No!");
+  } else {
+    let b1 = &mut s;
+    b1.push_str("Never!");
+  }
+
+  println!("{s}");
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    match_simple,
+    r#"
+fn test(n: Option<i32>) -> i32 {
+  match n {
+      Some(n) => 1,
+      None => 0,
+  }
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    match_with_child,
+    r#"
+fn test(n: Option<i32>) -> i32 {
+  match n {
+      Some(0) => 1,
+      Some(n) => test(Some(n - 1)) * n,
+      None => 0,
+  }
+}
+"#
+  );
+
+  // -----------------------------------
+  // Functions taken from weird_exprs.rs
+
+  test_valid_segmented_mir!(
+    weird_exprs_strange,
+    r#"
+fn strange() -> bool { let _x: bool = return true; }
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_funny,
+    r#"
+fn funny() {
+    fn f(_x: ()) { }
+    f(return);
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_what,
+    r#"
+use std::cell::Cell;
+fn what() {
+    fn the(x: &Cell<bool>) {
+        return while !x.get() { x.set(true); };
+    }
+    let i = &Cell::new(false);
+    let dont = {||the(i)};
+    dont();
+    assert!((i.get()));
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_zombiejesus,
+    r#"
+fn zombiejesus() {
+    loop {
+        while (return) {
+            if (return) {
+                match (return) {
+                    1 => {
+                        if (return) {
+                            return
+                        } else {
+                            return
+                        }
+                    }
+                    _ => { return }
+                };
+            } else if (return) {
+                return;
+            }
+        }
+        if (return) { break; }
+    }
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_notsure,
+    r#"
+use std::mem::swap;
+fn notsure() {
+    let mut _x: isize;
+    let mut _y = (_x = 0) == (_x = 0);
+    let mut _z = (_x = 0) < (_x = 0);
+    let _a = (_x += 0) == (_x = 0);
+    let _b = swap(&mut _y, &mut _z) == swap(&mut _y, &mut _z);
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_canttouchthis,
+    r#"
+fn canttouchthis() -> usize {
+    fn p() -> bool { true }
+    let _a = (assert!((true)) == (assert!(p())));
+    let _c = (assert!((p())) == ());
+    let _b: bool = (println!("{}", 0) == (return 0));
+}
+"#
+  );
+
+  //   test_valid_segmented_mir!(
+  //     weird_exprs_angrydome,
+  //     r#"
+  // fn angrydome() {
+  //     loop { if break { } }
+  //     let mut i = 0;
+  //     loop { i += 1; if i == 1 { match (continue) { 1 => { }, _ => panic!("wat") } }
+  //       break; }
+  // }
+  // "#
+  //   );
+
+  test_valid_segmented_mir!(
+    weird_exprs_evil_lincoln,
+    r#"
+fn evil_lincoln() { let _evil = println!("lincoln"); }
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_dots,
+    r#"
+fn dots() {
+    assert_eq!(String::from(".................................................."),
+                format!("{:?}", .. .. .. .. .. .. .. .. .. .. .. .. ..
+                                .. .. .. .. .. .. .. .. .. .. .. ..));
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_u8,
+    r#"
+fn u8(u8: u8) {
+    if u8 != 0u8 {
+        assert_eq!(8u8, {
+            macro_rules! u8 {
+                (u8) => {
+                    mod u8 {
+                        pub fn u8<'u8: 'u8 + 'u8>(u8: &'u8 u8) -> &'u8 u8 {
+                            "u8";
+                            u8
+                        }
+                    }
+                };
+            }
+
+            u8!(u8);
+            let &u8: &u8 = u8::u8(&8u8);
+            ::u8(0u8);
+            u8
+        });
+    }
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_fishy,
+    r#"
+fn fishy() {
+    assert_eq!(String::from("><>"),
+                String::<>::from::<>("><>").chars::<>().rev::<>().collect::<String>());
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_union,
+    r#"
+fn union() {
+    union union<'union> { union: &'union union<'union>, }
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_punch_card,
+    r#"
+fn punch_card() -> impl std::fmt::Debug {
+    ..=..=.. ..    .. .. .. ..    .. .. .. ..    .. ..=.. ..
+    ..=.. ..=..    .. .. .. ..    .. .. .. ..    ..=..=..=..
+    ..=.. ..=..    ..=.. ..=..    .. ..=..=..    .. ..=.. ..
+    ..=..=.. ..    ..=.. ..=..    ..=.. .. ..    .. ..=.. ..
+    ..=.. ..=..    ..=.. ..=..    .. ..=.. ..    .. ..=.. ..
+    ..=.. ..=..    ..=.. ..=..    .. .. ..=..    .. ..=.. ..
+    ..=.. ..=..    .. ..=..=..    ..=..=.. ..    .. ..=.. ..
+}
+"#
+  );
+
+  //   test_valid_segmented_mir!(
+  //     weird_exprs_r#match,
+  //     r#"
+  // fn r#match() {
+  //     let val = match match match match match () {
+  //         () => ()
+  //     } {
+  //         () => ()
+  //     } {
+  //         () => ()
+  //     } {
+  //         () => ()
+  //     } {
+  //         () => ()
+  //     };
+  //     assert_eq!(val, ());
+  // }
+  // "#
+  //   );
+
+  test_valid_segmented_mir!(
+    weird_exprs_i_yield,
+    r#"
+fn i_yield() {
+    static || {
+        yield yield yield yield yield yield yield yield yield;
+    };
+}
+"#
+  );
+
+  //   test_valid_segmented_mir!(
+  //     weird_exprs_match_nested_if,
+  //     r#"
+  // fn match_nested_if() {
+  //     let val = match () {
+  //         () if if if if true {true} else {false} {true} else {false} {true} else {false} => true,
+  //         _ => false,
+  //     };
+  //     assert!(val);
+  // }
+  // "#
+  //   );
+
+  test_valid_segmented_mir!(
+    weird_exprs_monkey_barrel,
+    r#"
+fn monkey_barrel() {
+    let val = ()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=()=();
+    assert_eq!(val, ());
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_𝚌𝚘𝚗𝚝𝚒𝚗𝚞𝚎,
+    r#"
+fn 𝚌𝚘𝚗𝚝𝚒𝚗𝚞𝚎() {
+    type 𝚕𝚘𝚘𝚙 = i32;
+    fn 𝚋𝚛𝚎𝚊𝚔() -> 𝚕𝚘𝚘𝚙 {
+        let 𝚛𝚎𝚝𝚞𝚛𝚗 = 42;
+        return 𝚛𝚎𝚝𝚞𝚛𝚗;
+    }
+    assert_eq!(loop {
+        break 𝚋𝚛𝚎𝚊𝚔 ();
+    }, 42);
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_function,
+    r#"
+fn function() {
+    struct foo;
+    impl FnOnce<()> for foo {
+        type Output = foo;
+        extern "rust-call" fn call_once(self, _args: ()) -> Self::Output {
+            foo
+        }
+    }
+    let foo = foo () ()() ()()() ()()()() ()()()()();
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_bathroom_stall,
+    r#"
+fn bathroom_stall() {
+    let mut i = 1;
+    matches!(2, _|_|_|_|_|_ if (i+=1) != (i+=1));
+    assert_eq!(i, 13);
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_closure_matching,
+    r#"
+fn closure_matching() {
+    let x = |_| Some(1);
+    let (|x| x) = match x(..) {
+        |_| Some(2) => |_| Some(3),
+        |_| _ => unreachable!(),
+    };
+    assert!(matches!(x(..), |_| Some(4)));
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_semisemisemisemisemi,
+    r#"
+fn semisemisemisemisemi() {
+    ;;;;;;; ;;;;;;; ;;;    ;;; ;;
+    ;;      ;;      ;;;;  ;;;; ;;
+    ;;;;;;; ;;;;;   ;; ;;;; ;; ;;
+         ;; ;;      ;;  ;;  ;; ;;
+    ;;;;;;; ;;;;;;; ;;      ;; ;;
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_useful_syntax,
+    r#"
+fn useful_syntax() {
+    use {{std::{{collections::{{HashMap}}}}}};
+    use ::{{{{core}, {std}}}};
+    use {{::{{core as core2}}}};
+}
+"#
+  );
+
+  test_valid_segmented_mir!(
+    weird_exprs_infcx,
+    r#"
+fn infcx() {
+    pub mod cx {
+        pub mod cx {
+            pub use super::cx;
+            pub struct Cx;
+        }
+    }
+    let _cx: cx::cx::Cx = cx::cx::cx::cx::cx::Cx;
+}
+"#
+  );
 }
