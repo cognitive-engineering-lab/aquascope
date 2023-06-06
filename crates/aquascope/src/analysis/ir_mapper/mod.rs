@@ -27,8 +27,8 @@ pub struct IRMapper<'a, 'tcx> {
   body: &'a Body<'tcx>,
   hir_to_mir: HashMap<HirId, HashSet<Location>>,
   gather_mode: GatherMode,
-  dominators: Dominators<BasicBlock>,
-  post_dominators: AllPostDominators<BasicBlock>,
+  pub(crate) dominators: Dominators<BasicBlock>,
+  pub(crate) post_dominators: AllPostDominators<BasicBlock>,
 }
 
 // TODO: I want to decompose this into more specific regions.
@@ -105,6 +105,36 @@ where
     }
 
     ir_map
+  }
+
+  pub fn ldominates(&self, dom: Location, node: Location) -> bool {
+    if dom.block == node.block {
+      return dom.statement_index <= node.statement_index;
+    }
+    self.dominates(dom.block, node.block)
+  }
+
+  pub fn lpost_dominates(&self, pdom: Location, node: Location) -> bool {
+    if pdom.block == node.block {
+      return pdom.statement_index >= node.statement_index;
+    }
+    self.post_dominates(pdom.block, node.block)
+  }
+
+  pub fn dominates(&self, dom: BasicBlock, node: BasicBlock) -> bool {
+    self.dominators.is_reachable(node) && self.dominators.dominates(dom, node)
+  }
+
+  pub fn post_dominates(&self, pdom: BasicBlock, node: BasicBlock) -> bool {
+    self.post_dominators.is_postdominated_by(node, pdom)
+  }
+
+  /// Returns true if the terminator in the location's block is a `switchInt`.
+  pub fn is_terminator_switchint(&self, location: Location) -> bool {
+    matches!(
+      self.cleaned_graph.terminator_in_block(location.block).kind,
+      mir::TerminatorKind::SwitchInt { .. }
+    )
   }
 
   pub fn local_assigned_place(&self, local: &hir::Local) -> Vec<Place<'tcx>> {
@@ -192,20 +222,34 @@ where
       idxs.sort_unstable();
     }
 
-    let basic_blocks = total_location_map.keys().collect::<Vec<_>>();
+    let basic_blocks = total_location_map.keys().copied().collect::<Vec<_>>();
 
-    let entry_block = basic_blocks.iter().find(|&&&b1| {
-      basic_blocks.iter().all(|&&b2| {
-        self.dominators.is_reachable(b2)
-          && (b1 == b2 || self.dominators.dominates(b1, b2))
+    let entry_block = basic_blocks
+      .iter()
+      .find(|&&candidate_dom| {
+        basic_blocks.iter().all(|&block| {
+          self.dominators.is_reachable(block)
+            && self.dominators.dominates(candidate_dom, block)
+        })
       })
-    });
+      .copied();
 
-    let exit_block = basic_blocks.iter().find(|&&&b1| {
-      basic_blocks.iter().all(|&&b2| {
-        b1 == b2 || self.post_dominators.is_postdominated_by(b2, b1)
-      })
-    });
+    let find_exit_from = |basic_blocks: &[BasicBlock]| -> Option<BasicBlock> {
+      basic_blocks
+        .iter()
+        .find(|&&candidate_postdom| {
+          basic_blocks.iter().all(|&block| {
+            self
+              .post_dominators
+              .is_postdominated_by(block, candidate_postdom)
+          })
+        })
+        .copied()
+    };
+
+    let exit_block = find_exit_from(&basic_blocks);
+
+    log::debug!("Gathering MIR location entry / exit blocks: {entry_block:?}{exit_block:?}");
 
     if exit_block.is_none() {
       log::debug!("Found locations: {total_location_map:#?}");
@@ -215,8 +259,8 @@ where
     }
 
     Some(MirOrderedLocations {
-      entry_block: entry_block.map(|b| **b),
-      exit_block: exit_block.map(|b| **b),
+      entry_block,
+      exit_block,
       locations: total_location_map,
     })
   }

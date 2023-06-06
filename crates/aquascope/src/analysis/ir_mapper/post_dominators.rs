@@ -40,3 +40,145 @@ impl<Node: Idx> AllPostDominators<Node> {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use rustc_data_structures::graph::{vec_graph::VecGraph, *};
+
+  use super::*;
+
+  struct VG<N: Idx> {
+    source: N,
+    forward: VecGraph<N>,
+    backward: VecGraph<N>,
+  }
+
+  impl<N: Idx + Ord> VG<N> {
+    fn make(size: usize, source: N, edges: Vec<(N, N)>) -> Self {
+      let rev = edges.iter().map(|&(f, s)| (s, f)).collect::<Vec<_>>();
+      VG {
+        source,
+        forward: VecGraph::new(size, edges),
+        backward: VecGraph::new(size, rev),
+      }
+    }
+  }
+
+  impl<N: Idx> DirectedGraph for VG<N> {
+    type Node = N;
+  }
+
+  impl<'graph, N: Idx> GraphSuccessors<'graph> for VG<N> {
+    type Item = N;
+    type Iter = smallvec::IntoIter<[N; 10]>;
+  }
+
+  impl<'graph, N: Idx> GraphPredecessors<'graph> for VG<N> {
+    type Item = N;
+    type Iter = smallvec::IntoIter<[N; 10]>;
+  }
+
+  impl<N: Idx> WithStartNode for VG<N> {
+    fn start_node(&self) -> N {
+      self.source
+    }
+  }
+
+  impl<N: Idx> WithNumNodes for VG<N> {
+    fn num_nodes(&self) -> usize {
+      self.forward.num_nodes()
+    }
+  }
+
+  impl<N: Idx + Ord> WithSuccessors for VG<N> {
+    fn successors(
+      &self,
+      node: Self::Node,
+    ) -> <Self as GraphSuccessors<'_>>::Iter {
+      self
+        .forward
+        .successors(node)
+        .iter()
+        .copied()
+        .collect::<smallvec::SmallVec<[N; 10]>>()
+        .into_iter()
+    }
+  }
+
+  impl<N: Idx + Ord> WithPredecessors for VG<N> {
+    fn predecessors(
+      &self,
+      node: Self::Node,
+    ) -> <Self as GraphSuccessors<'_>>::Iter {
+      self
+        .backward
+        .successors(node)
+        .iter()
+        .copied()
+        .collect::<smallvec::SmallVec<[N; 10]>>()
+        .into_iter()
+    }
+  }
+
+  #[test]
+  fn pdom_diamond() {
+    let diamond = VG::<usize>::make(4, 0, vec![(0, 1), (0, 2), (1, 3), (2, 3)]);
+    let post_doms = AllPostDominators::build(&diamond, std::iter::once(3));
+    for b in 0 ..= 2 {
+      assert!(post_doms.is_postdominated_by(b, 3));
+    }
+  }
+
+  #[test]
+  fn pdom_linear() {
+    let nodes = 100;
+    let edges = (0 .. nodes).zip(1 ..).collect::<Vec<_>>();
+    let line = VG::<usize>::make(nodes, 0, edges);
+    let post_doms = AllPostDominators::build(&line, std::iter::once(nodes - 1));
+    for i in 0 .. nodes {
+      for j in i + 1 .. nodes {
+        assert!(
+          post_doms.is_postdominated_by(i, j),
+          "{j} should post-dominate {i}"
+        );
+      }
+    }
+  }
+
+  #[test]
+  fn pdom_double_diamond() {
+    //         2     5
+    // 0 -> 1     4     7 ->
+    //         3     6
+    let dd = VG::<usize>::make(8, 0, vec![
+      (0, 1),
+      (1, 2),
+      (1, 3),
+      (2, 4),
+      (3, 4),
+      (4, 5),
+      (4, 6),
+      (5, 7),
+      (6, 7),
+    ]);
+    let post_doms = AllPostDominators::build(&dd, std::iter::once(7));
+
+    assert!(post_doms.is_postdominated_by(0, 1));
+    assert!(post_doms.is_postdominated_by(0, 4));
+    assert!(post_doms.is_postdominated_by(0, 7));
+    assert!(post_doms.is_postdominated_by(1, 4));
+    assert!(post_doms.is_postdominated_by(1, 7));
+    assert!(post_doms.is_postdominated_by(4, 7));
+
+    for i in 0 .. 8 {
+      for &bad in &[2, 3, 5, 6] {
+        if i != bad {
+          assert!(
+            !post_doms.is_postdominated_by(i, bad),
+            "{bad} should NOT post-dominate {i}"
+          );
+        }
+      }
+    }
+  }
+}

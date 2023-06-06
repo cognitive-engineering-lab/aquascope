@@ -49,6 +49,9 @@
   clippy::option_option,
   clippy::similar_names
 )]
+// Only used for testing purposes, can we dissallow
+// uncommon codepoints when not testing?
+#![allow(uncommon_codepoints)]
 
 extern crate datafrog;
 extern crate either;
@@ -61,7 +64,6 @@ extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_error_messages;
 extern crate rustc_errors;
-extern crate rustc_graphviz;
 extern crate rustc_hir;
 extern crate rustc_hir_pretty;
 extern crate rustc_index;

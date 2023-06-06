@@ -109,7 +109,7 @@ description: reverse@vec_0.test
           type: None
           value: false
         path_moved:
-          type: None
+          type: Low
         path_uninitialized:
           type: Low
         loan_read_refined:

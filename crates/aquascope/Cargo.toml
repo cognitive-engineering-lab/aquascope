@@ -15,7 +15,7 @@ publish = false
 rustc_private = true
 
 [features]
-testing = ["lazy_static"]
+testing = []
 
 [dependencies]
 anyhow = "1.0.0"
@@ -32,7 +32,7 @@ miri = {git = "https://github.com/rust-lang/miri.git", rev = "35d6927663065d7fde
 aquascope_workspace_utils = { version = "0.2", path = "../aquascope_workspace_utils" }
 
 # testing utils
-lazy_static = { version = "1.4", optional = true }
+lazy_static = { version = "1.4" }
 
 [dev-dependencies]
 insta = { version = "1.22.0", features = ["json", "yaml", "redactions"] }
