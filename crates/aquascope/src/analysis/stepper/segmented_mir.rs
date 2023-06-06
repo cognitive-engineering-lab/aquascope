@@ -995,22 +995,13 @@ pub(crate) mod test_exts {
   }
 
   impl SegmentedMirTestExt for SegmentedMir {
-    /// The computed `SegmentedMir` must follow a few rules for its structure
-    /// to be considered valid.
+    /// See the module documentation for a sense of what valid means. Here
+    /// the below three basic things are checked. In the future, these guarantees
+    /// will hopefully only ever get stronger, and never weaker.
     ///
-    /// 1. For evey segment that is part of a linear collection, the segment
-    ///    `from` must dominate the segment `to`, and the `to` must post-dominate
-    ///    the `from`.
-    ///
-    /// 2. Every point on the Body graph must be included in the segmented mir.
-    ///
-    /// 3. A segment `to` location cannot appear in the structure more than once
-    ///    _unless_ the segment is part of a branch `join` set.
-    ///
-    /// 4. A segment must never traverse accross branches, loops, etc. They are
-    ///    single units of control flow that must never be conditional.
-    ///
-    /// 5. At each branch location (`switchInt`) there must exist a split segment
+    /// 1. All segments are valid regarding where they appear in the collection.
+    /// 2. The segments form a total cover of the body.
+    /// 3. At each branch location (`switchInt`) there must exist a split segment
     ///    for each possible branch target.
     fn validate(&self, mapper: &IRMapper) -> Result<(), InvalidReason> {
       let body = &mapper.cleaned_graph.body();
@@ -1020,12 +1011,7 @@ pub(crate) mod test_exts {
         .cleaned_graph
         .blocks()
         .flat_map(|block| {
-          (0 ..= body.basic_blocks[block].statements.len()).map(move |i| {
-            Location {
-              block,
-              statement_index: i,
-            }
-          })
+          explode_block(block, &body.basic_blocks[block], None, None)
         })
         .collect::<HashSet<_>>();
 
