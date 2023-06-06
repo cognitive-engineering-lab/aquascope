@@ -33,7 +33,7 @@ pub struct IRMapper<'a, 'tcx> {
 
 // TODO: I want to decompose this into more specific regions.
 // E.g. we really want to only ever group locations together
-// which have a total order. Example, an IF expr whould have
+// which have a total order. Example, an IF expr would have
 // a pseudo location as such:
 // ```
 //            : { locations associated with setup }

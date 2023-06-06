@@ -33,6 +33,7 @@ export { MMemorySegment } from "./bindings/MMemorySegment";
 export { MPathSegment } from "./bindings/MPathSegment";
 export { MPath } from "./bindings/MPath";
 export { MValue } from "./bindings/MValue";
+export { MLocal } from "./bindings/MLocal";
 export { MFrame } from "./bindings/MFrame";
 export { MStack } from "./bindings/MStack";
 export { MHeap } from "./bindings/MHeap";

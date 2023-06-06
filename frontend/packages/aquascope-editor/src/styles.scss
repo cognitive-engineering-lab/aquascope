@@ -627,6 +627,17 @@ $perm-animation-duration: 0.5s;
     .heap > table {
       border: 2px solid var(--aq-step-table-border);
 
+      tr.moved {
+        opacity: 0.3;
+        
+        background: repeating-linear-gradient(
+          45deg, 
+          var(--aq-step-table-border), 
+          var(--aq-step-table-border) 5px, 
+          var(--aq-bg) 5px, 
+          var(--aq-bg) 10px)
+      }
+
       > tbody > tr > td {
         border-width: 2px;
         padding: 2px 4px;

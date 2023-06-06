@@ -12,13 +12,30 @@ steps:
             filename:
               private: 0
           location:
+            start: 0
+            end: 9
+            filename:
+              private: 0
+          locals: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start: 0
+            end: 64
+            filename:
+              private: 0
+          location:
             start: 14
             end: 38
             filename:
               private: 0
           locals:
-            - - x
-              - type: Adt
+            - name: x
+              value:
+                type: Adt
                 value:
                   name: Box
                   variant: ~
@@ -49,6 +66,7 @@ steps:
                           alloc_kind: ~
                   alloc_kind:
                     type: Box
+              moved_paths: []
     heap:
       locations:
         - type: Int
@@ -67,8 +85,9 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Adt
+            - name: x
+              value:
+                type: Adt
                 value:
                   name: Box
                   variant: ~
@@ -99,6 +118,7 @@ steps:
                           alloc_kind: ~
                   alloc_kind:
                     type: Box
+              moved_paths: []
     heap:
       locations:
         - type: Int
@@ -117,8 +137,9 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Adt
+            - name: x
+              value:
+                type: Adt
                 value:
                   name: Box
                   variant: ~
@@ -149,8 +170,11 @@ steps:
                           alloc_kind: ~
                   alloc_kind:
                     type: Box
-            - - y
-              - type: Adt
+              moved_paths:
+                - []
+            - name: y
+              value:
+                type: Adt
                 value:
                   name: Box
                   variant: ~
@@ -181,6 +205,7 @@ steps:
                           alloc_kind: ~
                   alloc_kind:
                     type: Box
+              moved_paths: []
     heap:
       locations:
         - type: Int

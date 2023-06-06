@@ -20,7 +20,7 @@ fn main() {
   *x += 1; // ERROR: *x doesn't have 'W' permissions
 
   // NOTE: after the error, the generated facts say that
-  // we would have 'W' permision because the above statement
+  // we would have 'W' permission because the above statement
   // was "executed". The permissions below show that an error
   // occurred because there exists both read and write permission
   // to the same place in memory.

@@ -97,7 +97,7 @@ pub struct PermissionsData {
   /// Is this place uninitialized?
   pub path_uninitialized: bool,
 
-  /// Is the [`Place`] currently uninitialzed due to a move?
+  /// Is the [`Place`] currently uninitialized due to a move?
   #[serde(skip_serializing_if = "Option::is_none")]
   pub path_moved: Option<MoveKey>,
 

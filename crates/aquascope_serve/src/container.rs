@@ -201,7 +201,7 @@ impl Container {
     // Returns (Stdout, Stderr)
     #[cfg(not(feature = "no-docker"))]
     pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
-        // Convert back to std::process::Command for acess to get_XXX functions.
+        // Convert back to std::process::Command for access to get_XXX functions.
         let cmd = cmd.as_std();
         let args = iter::once(cmd.get_program())
             .chain(cmd.get_args())
@@ -383,7 +383,7 @@ impl Container {
 
         Ok(ServerResponse {
             // XXX: we'll assume that if there was anything on `stdout`
-            // then there's something successful to report. Thid does not
+            // then there's something successful to report. This does not
             // mean that `stderr` was empty and all things there shouldn't
             // go unreported.
             success: !stdout.trim().is_empty(),
@@ -401,7 +401,7 @@ impl Container {
 
         Ok(ServerResponse {
             // XXX: we'll assume that if there was anything on `stdout`
-            // then there's something successful to report. Thid does not
+            // then there's something successful to report. This does not
             // mean that `stderr` was empty and all things there shouldn't
             // go unreported.
             success: !stdout.trim().is_empty(),

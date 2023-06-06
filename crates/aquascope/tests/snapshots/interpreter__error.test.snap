@@ -12,13 +12,30 @@ steps:
             filename:
               private: 0
           location:
+            start: 0
+            end: 9
+            filename:
+              private: 0
+          locals: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start: 0
+            end: 86
+            filename:
+              private: 0
+          location:
             start: 14
             end: 40
             filename:
               private: 0
           locals:
-            - - v
-              - type: Adt
+            - name: v
+              value:
+                type: Adt
                 value:
                   name: Vec
                   variant: ~
@@ -66,6 +83,7 @@ steps:
                     type: Vec
                     value:
                       len: 3
+              moved_paths: []
     heap:
       locations:
         - type: Array
@@ -92,8 +110,9 @@ steps:
             filename:
               private: 0
           locals:
-            - - v
-              - type: Adt
+            - name: v
+              value:
+                type: Adt
                 value:
                   name: Vec
                   variant: ~
@@ -141,8 +160,10 @@ steps:
                     type: Vec
                     value:
                       len: 3
-            - - y
-              - type: Pointer
+              moved_paths: []
+            - name: y
+              value:
+                type: Pointer
                 value:
                   path:
                     segment:
@@ -153,6 +174,7 @@ steps:
                       - type: Index
                         value: 0
                   range: ~
+              moved_paths: []
     heap:
       locations:
         - type: Array
@@ -179,8 +201,9 @@ steps:
             filename:
               private: 0
           locals:
-            - - v
-              - type: Adt
+            - name: v
+              value:
+                type: Adt
                 value:
                   name: Vec
                   variant: ~
@@ -228,10 +251,13 @@ steps:
                     type: Vec
                     value:
                       len: 4
-            - - y
-              - type: Unallocated
+              moved_paths: []
+            - name: y
+              value:
+                type: Unallocated
                 value:
                   alloc_id: 0
+              moved_paths: []
     heap:
       locations:
         - type: Array
@@ -260,8 +286,9 @@ steps:
             filename:
               private: 0
           locals:
-            - - v
-              - type: Adt
+            - name: v
+              value:
+                type: Adt
                 value:
                   name: Vec
                   variant: ~
@@ -309,10 +336,13 @@ steps:
                     type: Vec
                     value:
                       len: 4
-            - - y
-              - type: Unallocated
+              moved_paths: []
+            - name: y
+              value:
+                type: Unallocated
                 value:
                   alloc_id: 0
+              moved_paths: []
     heap:
       locations:
         - type: Array

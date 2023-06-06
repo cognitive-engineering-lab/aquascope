@@ -12,13 +12,30 @@ steps:
             filename:
               private: 0
           location:
+            start: 0
+            end: 9
+            filename:
+              private: 0
+          locals: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start: 0
+            end: 67
+            filename:
+              private: 0
+          location:
             start: 14
             end: 53
             filename:
               private: 0
           locals:
-            - - x
-              - type: Tuple
+            - name: x
+              value:
+                type: Tuple
                 value:
                   - type: Int
                     value: 0
@@ -77,6 +94,7 @@ steps:
                         type: String
                         value:
                           len: 5
+              moved_paths: []
     heap:
       locations:
         - type: Array
@@ -107,8 +125,9 @@ steps:
             filename:
               private: 0
           locals:
-            - - x
-              - type: Tuple
+            - name: x
+              value:
+                type: Tuple
                 value:
                   - type: Int
                     value: 1
@@ -167,6 +186,7 @@ steps:
                         type: String
                         value:
                           len: 5
+              moved_paths: []
     heap:
       locations:
         - type: Array

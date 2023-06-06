@@ -20,7 +20,7 @@ describe("Aquascope Standalone", () => {
     //   slowMo: 250,
     // });
     browser = await puppeteer.launch();
-    // there seems to be a discrepency between headless and headed modes.
+    // there seems to be a discrepancy between headless and headed modes.
     // See: https://github.com/puppeteer/puppeteer/issues/665
     //
     // In a headless mode the browser seems to skip rendering visual

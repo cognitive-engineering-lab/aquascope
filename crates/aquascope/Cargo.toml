@@ -25,6 +25,7 @@ serde = { version = "1.0", features = ["derive"] }
 ts-rs = "6.2"
 regex = "1"
 fluid-let = "1.0"
+rustc_utils = {version = "0.6.0-nightly-2023-04-12", features = ["graphviz", "ts-rs", "serde", "test"]}
 
 # interpret module
 miri = {git = "https://github.com/rust-lang/miri.git", rev = "35d6927663065d7fdeeaed45dda7e7748fc9f222"}
@@ -32,11 +33,6 @@ aquascope_workspace_utils = { version = "0.2", path = "../aquascope_workspace_ut
 
 # testing utils
 lazy_static = { version = "1.4" }
-
-[dependencies.rustc-utils]
-git = "https://github.com/cognitive-engineering-lab/rustc-plugin"
-tag = "nightly-2023-04-12-v0.1.4"
-features = ["graphviz", "ts-rs", "serde", "test"]
 
 [dev-dependencies]
 insta = { version = "1.22.0", features = ["json", "yaml", "redactions"] }

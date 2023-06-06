@@ -332,7 +332,7 @@ export class Editor {
       }      
     } else if (operation == "permissions") {
       // The permissions analysis results are sent as an array of
-      // body analyses. Each body could have analyzed successfuly,
+      // body analyses. Each body could have analyzed successfully,
       // or had a
       // 1. analysis error
       // 2. build error
