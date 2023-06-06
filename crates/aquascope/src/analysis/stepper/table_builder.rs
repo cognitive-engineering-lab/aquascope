@@ -133,21 +133,34 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     result.entry(segment.to).or_default().push(table);
   }
 
+  // NOTE: when inserting a branch we currently ignore join steps. Within the
+  //       function the previous code is left commented out. It was left in case
+  //       we need to quickly bring it back, but through testing I found
+  //       it was a lot of complex logic that removed all join steps, every time.
+  //       Therefore, to save time, we just ignore them! We did this filtering
+  //       to remove any weird permissions changes that were branch sensitive in
+  //       order to avoid showing the same change in permissions multiple times.
+  //       Should we decide to change this then this code will become relevant again.
   fn insert_branch(&self, result: &mut Tables<'tcx>, bid: BranchId) {
     let BranchData {
       reach,
       splits,
-      joins,
+      // joins,
       nested,
       ..
     } = self.mir.get_branch(bid);
 
     let mut entire_diff = reach.into_diff(self.ctxt);
 
-    log::debug!("Inserting Branched Collection {:?}:\n\tsplits: {:?}\n\tmiddle: {:?}\n\tjoins: {:?}", reach, splits, nested, joins);
+    log::debug!(
+      "Inserting Branched Collection {:?}:\n\tsplits: {:?}\n\tmiddle: {:?}",
+      reach,
+      splits,
+      nested
+    );
 
     let mut temp_middle = Tables::default();
-    let mut temp_joins = Tables::default();
+    // let mut temp_joins = Tables::default();
 
     for &sid in splits.iter() {
       self.insert_segment(&mut temp_middle, sid);
@@ -157,9 +170,9 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
       self.insert_collection(&mut temp_middle, cid);
     }
 
-    for &sid in joins.iter() {
-      self.insert_segment(&mut temp_joins, sid);
-    }
+    // for &sid in joins.iter() {
+    //   self.insert_segment(&mut temp_joins, sid);
+    // }
 
     // Find the locals which were filtered from all scopes. In theory,
     // `all_scopes` should contains the same scope, copied over,
@@ -177,38 +190,31 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
       .drain_filter(|place: &Place, _| all_attached.contains(&place.local))
       .collect::<HashMap<_, _>>();
 
-    let diffs_in_tables = |tbls: &Tables| {
-      tbls
-        .iter()
-        .flat_map(|(_, v)| v.iter().flat_map(|tbl| tbl.data.values()))
-        .copied()
-        .collect::<HashSet<PermissionsDataDiff>>()
-    };
+    // let diffs_in_tables = |tbls: &Tables| {
+    //   tbls
+    //     .iter()
+    //     .flat_map(|(_, v)| v.iter().flat_map(|tbl| tbl.data.values()))
+    //     .copied()
+    //     .collect::<HashSet<PermissionsDataDiff>>()
+    // };
 
     // Flatten all tables to the unique `PermissionsDataDiff`s
     // that exist within them.
-    let diffs_in_branches = diffs_in_tables(&mut temp_middle);
 
-    for (_, v) in temp_joins.iter_mut() {
-      for tbl in v.iter_mut() {
-        let drained = tbl
-          .data
-          .drain_filter(|_, diff| diffs_in_branches.contains(diff))
-          .map(|(p, _)| p)
-          .collect::<Vec<_>>();
-        log::debug!("diffs at join loc removed for redundancy {drained:#?}");
-      }
-    }
+    // let diffs_in_branches = diffs_in_tables(&mut temp_middle);
+    // for (_, v) in temp_joins.iter_mut() {
+    //   for tbl in v.iter_mut() {
+    //     let drained = tbl
+    //       .data
+    //       .drain_filter(|_, diff| diffs_in_branches.contains(diff))
+    //       .map(|(p, _)| p)
+    //       .collect::<Vec<_>>();
+    //     log::debug!("diffs at join loc removed for redundancy {drained:#?}");
+    //   }
+    // }
 
     result.extend(temp_middle);
-
-    // TODO: do we actually need to do this computation
-    //       for the join segments? From my tests, the
-    //       permisison changes all happen _before_ the
-    //       block end. Rarely, are the diffs on the join
-    //       edge  so we might be able to get rid of soe of
-    //       this weird logic.
-    result.extend(temp_joins);
+    // result.extend(temp_joins);
 
     // Attach filtered locals
     result.entry(reach.to).or_default().push(Table {

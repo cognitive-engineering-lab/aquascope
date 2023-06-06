@@ -12,10 +12,49 @@
 //! we need the MIR to ensure that created steps are valid. To understand
 //! the validation of creating permissions steps see [`super::segmented_mir`].
 //!
-//! TODO: points to touch on:
-//! - when do we insert a step
-//! - handling branches and how the HIR (in this case) knows
-//!   more location information than the MIR.
+//! At a (very) high-level, we insert steps after anything interesting
+//! could happen. Interesting in this case means (1) it's visible at the source-
+//! level, and (2) a change in permissions could be captured. The three main places
+//! where this could happen are:
+//!
+//! 1. After statements.
+//! 2. After the final expression in blocks.
+//! 3. Entering a block, potentially from a conditional branch
+//!    which can cause liveness permissions changes.
+//!
+//! For most of the process, the [`SegmentedMirBuilder`] handles all the
+//! tough work of making sure steps are valid. There are a few cases when
+//! the HIR knows more about the structure of a program and they all have to
+//! do with placing spans. Life would be much better if we didn't have to
+//! place spans, or if the rust compiler had a richer model for tracking spans
+//! but that's not the case (_stares longingly out the window_). The main places
+//! where this happens is for loop desugaring, and branches. The reason why is
+//! touched on briefly.
+//!
+//! Several constructs as they appear in the HIR are desugared compared to the
+//! language constructs one uses in Rust source code. For example a `while cnd { ... }`
+//! loop, will get desugared into `loop { if cnd { ... } else { break; }}`. These
+//! desugarings have to be special cased by the stepper so that we get the span
+//! place _just right_.
+//!
+//! Branches again require the HIR to make some decisions about step locations.
+//! When a match expression is encountered, it might look like the following:
+//!
+//! ```ignore
+//! match Some(10) {
+//!   None    => 0,
+//!   Some(n) => {
+//!     n * 2
+//!  },
+//! }
+//! ```
+//!
+//! When computing steps over the arms of the match, the `SegmentedMirBuilder` would
+//! insert a step at the very beginning of each branch target. However, that's not
+//! quite what we want, if the user things of the opening curly brace as the beginning
+//! of the branch, then in the `Some` case `n` is _already bound_. We can use info
+//! at the HIR level to find this micro adjustment which computes the branch target
+//! as being after the code initializing all bound variables in a match pattern.
 
 use anyhow::{anyhow, Result};
 use rustc_data_structures::{self, fx::FxHashMap as HashMap};
@@ -48,7 +87,7 @@ where
   ir_mapper: &'a IRMapper<'a, 'tcx>,
 
   // Error reporting counters
-  unsupported_encounter: Option<(Span, String)>,
+  unsupported_features: Vec<anyhow::Error>,
   fatal_errors: Vec<anyhow::Error>,
 
   // Actual state of the analysis
@@ -98,6 +137,12 @@ macro_rules! report_unexpected {
   }
 }
 
+macro_rules! report_unsupported {
+  ($this:ident, $($param:expr),*) => {
+    $this.unsupported_features.push(anyhow!($( $param ),*))
+  }
+}
+
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   pub(super) fn make(
     tcx: &'a TyCtxt<'tcx>,
@@ -113,7 +158,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       body,
       body_id,
       ir_mapper,
-      unsupported_encounter: None,
+      unsupported_features: Vec::default(),
       fatal_errors: Vec::default(),
       start_loc,
       locals_at_scope: HashMap::default(),
@@ -122,23 +167,26 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     })
   }
 
-  pub(super) fn get_unsupported_feature(&self) -> Option<String> {
-    self.unsupported_encounter.as_ref().map(|(_, s)| s.clone())
-  }
-
-  pub(super) fn get_internal_error(&self) -> Option<String> {
+  fn process_error(stack: &[anyhow::Error]) -> Option<String> {
     use itertools::Itertools;
-    if self.fatal_errors.is_empty() {
+    if stack.is_empty() {
       return None;
     }
 
     Some(
-      self
-        .fatal_errors
+      stack
         .iter()
         .map(|e: &anyhow::Error| e.to_string())
         .join("\n"),
     )
+  }
+
+  pub(super) fn get_unsupported_feature(&self) -> Option<String> {
+    Self::process_error(&self.unsupported_features)
+  }
+
+  pub(super) fn get_internal_error(&self) -> Option<String> {
+    Self::process_error(&self.fatal_errors)
   }
 
   pub(super) fn finalize(
@@ -186,13 +234,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   ///
   /// This method is a sort of HACK to avoid picking apart nodes expanded from
   /// macros, while visiting nodes expanded from expected desugarings (e.g. for / while loops).
-  fn should_visit_nested(&self, _id: HirId, span: Span) -> bool {
-    use rustc_span::hygiene::DesugaringKind as DK;
-    !span.from_expansion()
-      || span.is_desugaring(DK::ForLoop)
-      || span.is_desugaring(DK::WhileLoop)
-  }
-
   fn span_of(&self, id: HirId) -> Span {
     let hir = self.tcx.hir();
     let span = hir.span(id);
@@ -248,17 +289,20 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   fn expr_condition_prelude(
     &mut self,
     cnd: &'tcx hir::Expr,
+    expr: &'tcx hir::Expr,
   ) -> Option<Location> {
     // NOTE: first we need to walk and split the condition. In the
     // case of a more complex condition expression, splitting this
     // first will result in a split location closest to the `SwitchInt`.
     self.visit_expr(cnd);
-    let Some(cnd_exit) = self.get_node_exit(cnd.hir_id) else {
+    let Some(cnd_exit) = self.get_node_exit(cnd.hir_id).or_else(|| {
       log::warn!(
-        "Skipping EXPR, condition has no exit {}",
+        "EXPR condition has no exit {} looking at expr entry",
         self.prettify_node(cnd.hir_id)
       );
-
+      self.get_node_entry(expr.hir_id)
+    }) else {
+      log::warn!("cannot do EXPR prelude, aborting");
       return None;
     };
 
@@ -327,7 +371,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   // to span mapping.
   fn handle_expr_if(
     &mut self,
-    expr_id: HirId,
+    expr: &'tcx hir::Expr,
     cnd: &'tcx hir::Expr,
     then: &'tcx hir::Expr,
     else_opt: Option<&'tcx hir::Expr>,
@@ -339,10 +383,10 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       self.prettify_node(then.hir_id),
       else_opt.map_or(String::from("<NONE>"), |e| self.prettify_node(e.hir_id))
     );
-
-    let Some(cnd_exit) = self.expr_condition_prelude(cnd) else {
-          return;
-        };
+    let expr_id = expr.hir_id;
+    let Some(cnd_exit) = self.expr_condition_prelude(cnd, expr) else {
+      return;
+    };
 
     let mapper = self.ir_mapper;
     // We use this default span because an ExprKind::If can produce branches
@@ -374,11 +418,6 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
       self.visit_expr(then);
       self.pop_branch_start(then_entry);
     } else {
-      // What we learned from weird-exprs is that _anything_
-      // is possible. Instead of throwing an error in these
-      // cases we will log a warning to help debug but we
-      // shouldn't automatically assume that something bad
-      // happened.
       log::warn!(
         "then-branch doesn't have entry {}",
         self.prettify_node(then.hir_id)
@@ -403,15 +442,15 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 
   fn handle_expr_match(
     &mut self,
-    expr_id: HirId,
+    expr: &'tcx hir::Expr,
     cnd: &'tcx hir::Expr,
     arms: &'tcx [hir::Arm],
     entry_locs_to_spans: HashMap<Location, Span>,
   ) {
-    let Some(cnd_exit) = self.expr_condition_prelude(cnd) else {
+    let expr_id = expr.hir_id;
+    let Some(cnd_exit) = self.expr_condition_prelude(cnd, expr) else {
       return;
     };
-
     let mapper = self.ir_mapper;
     let branch_id = invoke_internal!(
       self,
@@ -486,9 +525,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
       }
     }
 
-    if self.should_visit_nested(stmt.hir_id, stmt.span) {
-      intravisit::walk_stmt(self, stmt);
-    }
+    intravisit::walk_stmt(self, stmt);
 
     // Close the scope before inserting the final steps.
     invoke_internal!(self, close_scope, scope);
@@ -516,7 +553,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
           entry_to_spans.insert(else_entry, else_span);
         }
 
-        self.handle_expr_if(expr.hir_id, cnd, then, else_opt, entry_to_spans);
+        self.handle_expr_if(expr, cnd, then, else_opt, entry_to_spans);
       }
 
       // HACK: Special cases for ForLoop and While desugarings.
@@ -577,7 +614,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
           entry_to_spans.insert(else_entry, else_span);
         }
 
-        self.handle_expr_if(expr.hir_id, cnd, then, Some(els), entry_to_spans);
+        self.handle_expr_if(expr, cnd, then, Some(els), entry_to_spans);
       }
 
       EK::Loop(
@@ -614,7 +651,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
         }
 
         #[allow(clippy::needless_borrow)]
-        self.handle_expr_match(expr.hir_id, cnd, &arms, entry_to_spans);
+        self.handle_expr_match(expr, cnd, &arms, entry_to_spans);
       }
 
       // NOTE: if a match condition doesn't produce a `switchInt`, there
@@ -676,7 +713,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
           })
           .collect::<HashMap<_, _>>();
 
-        self.handle_expr_match(expr.hir_id, cnd, arms, entry_to_spans);
+        self.handle_expr_match(expr, cnd, arms, entry_to_spans);
       }
       _ => {
         intravisit::walk_expr(self, expr);
@@ -688,7 +725,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   fn visit_arm(&mut self, arm: &'tcx hir::Arm) {
     if arm.guard.is_some() {
       // TODO: NYI.
-      report_unexpected!(
+      report_unsupported!(
         self,
         "match arm guards are not yet supported {}",
         self.prettify_node(arm.hir_id)
@@ -726,38 +763,61 @@ mod tests {
   use super::{super::segmented_mir::test_exts::SegmentedMirTestExt, *};
   use crate::{analysis::ir_mapper::GatherMode, test_utils as tu};
 
+  macro_rules! compile_and_run {
+    ($code:expr) => {
+      tu::compile_normal($code, |tcx| {
+        tu::for_each_body(tcx, |body_id, wfacts| {
+          let body = &wfacts.body;
+          let mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
+          let mut visitor = HirStepPoints::make(&tcx, body, body_id, &mapper)
+            .expect("Failed to create stepper");
+          visitor.visit_nested_body(body_id);
+
+          if let Some(uf) = visitor.get_unsupported_feature() {
+            eprintln!("unsupported feature: {uf:?}");
+            panic!("unsupported feature");
+          }
+
+          if let Some(ie) = visitor.get_internal_error() {
+            eprintln!("internal error: {ie:?}");
+            panic!("internal error");
+          }
+
+          let smir = visitor
+            .mir_segments
+            .freeze()
+            .expect("Failed to freeze SegmentedMirBuilder");
+
+          if let Err(invalid) = smir.validate(&mapper) {
+            eprintln!("invalid reason: {invalid:?}");
+            panic!("invalid smir");
+          }
+        })
+      })
+    };
+  }
+
   // Compile a piece of Rust code and assert that the generated SegmentedMir
   // structure is valid. See `is_valid` for more details on what that means.
   macro_rules! test_valid_segmented_mir {
+    (panics_with $s:expr => $name:ident, $code:expr) => {
+      #[test]
+      #[should_panic(expected = $s)]
+      fn $name() {
+        compile_and_run!($code);
+      }
+    };
+    (should_panic => $name:ident, $code:expr) => {
+      #[test]
+      #[should_panic]
+      fn $name() {
+        compile_and_run!($code);
+      }
+    };
     ($name:ident, $code:expr) => {
       #[test]
       fn $name() {
-        tu::compile_normal($code, |tcx| {
-          tu::for_each_body(tcx, |body_id, wfacts| {
-            let body = &wfacts.body;
-            let mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
-            let mut visitor = HirStepPoints::make(&tcx, body, body_id, &mapper)
-              .expect("Failed to create stepper");
-            visitor.visit_nested_body(body_id);
-
-            if let Some(uf) = visitor.get_unsupported_feature() {
-              panic!("encountered unsupported feature {uf:?}");
-            }
-
-            if let Some(ie) = visitor.get_internal_error() {
-              panic!("whoops! internal error: {ie:?}");
-            }
-
-            let smir = visitor
-              .mir_segments
-              .freeze()
-              .expect("Failed to freeze SegmentedMirBuilder");
-
-            if let Err(invalid) = smir.validate(&mapper) {
-              panic!("SegmentedMir failed to validate {invalid:?}");
-            }
-          })
-        })
+        compile_and_run!($code);
       }
     };
   }
@@ -822,6 +882,11 @@ fn test(n: Option<i32>) -> i32 {
 
   // -----------------------------------
   // Functions taken from weird_exprs.rs
+  //
+  // These merely test the resilience of
+  // the stepper, and none of them have
+  // been inspected to see if the visual
+  // output is worth anything.
 
   test_valid_segmented_mir!(
     weird_exprs_strange,
@@ -909,17 +974,21 @@ fn canttouchthis() -> usize {
 "#
   );
 
-  //   test_valid_segmented_mir!(
-  //     weird_exprs_angrydome,
-  //     r#"
-  // fn angrydome() {
-  //     loop { if break { } }
-  //     let mut i = 0;
-  //     loop { i += 1; if i == 1 { match (continue) { 1 => { }, _ => panic!("wat") } }
-  //       break; }
-  // }
-  // "#
-  //   );
+  // XXX: The HIR constructs that turn into NOPs, e.g., the
+  //      `loop { if break {} }` are not present in the
+  //      simplified MIR, which currently causes a few issues.
+  test_valid_segmented_mir!(
+    panics_with "invalid smir" =>
+    weird_exprs_angrydome,
+    r#"
+fn angrydome() {
+    loop { if break { } }
+    let mut i = 0;
+    loop { i += 1; if i == 1 { match (continue) { 1 => { }, _ => panic!("wat") } }
+      break; }
+}
+"#
+  );
 
   test_valid_segmented_mir!(
     weird_exprs_evil_lincoln,
@@ -1000,25 +1069,25 @@ fn punch_card() -> impl std::fmt::Debug {
 "#
   );
 
-  //   test_valid_segmented_mir!(
-  //     weird_exprs_r#match,
-  //     r#"
-  // fn r#match() {
-  //     let val = match match match match match () {
-  //         () => ()
-  //     } {
-  //         () => ()
-  //     } {
-  //         () => ()
-  //     } {
-  //         () => ()
-  //     } {
-  //         () => ()
-  //     };
-  //     assert_eq!(val, ());
-  // }
-  // "#
-  //   );
+  test_valid_segmented_mir!(
+    weird_exprs_rmatch,
+    r#"
+  fn r#match() {
+      let val = match match match match match () {
+          () => ()
+      } {
+          () => ()
+      } {
+          () => ()
+      } {
+          () => ()
+      } {
+          () => ()
+      };
+      assert_eq!(val, ());
+  }
+  "#
+  );
 
   test_valid_segmented_mir!(
     weird_exprs_i_yield,
@@ -1031,18 +1100,20 @@ fn i_yield() {
 "#
   );
 
-  //   test_valid_segmented_mir!(
-  //     weird_exprs_match_nested_if,
-  //     r#"
-  // fn match_nested_if() {
-  //     let val = match () {
-  //         () if if if if true {true} else {false} {true} else {false} {true} else {false} => true,
-  //         _ => false,
-  //     };
-  //     assert!(val);
-  // }
-  // "#
-  //   );
+  // XXX: arm guards are not currently supported.
+  test_valid_segmented_mir!(
+    panics_with "unsupported feature" =>
+    weird_exprs_match_nested_if,
+    r#"
+fn match_nested_if() {
+    let val = match () {
+        () if if if if true {true} else {false} {true} else {false} {true} else {false} => true,
+        _ => false,
+    };
+    assert!(val);
+}
+"#
+  );
 
   test_valid_segmented_mir!(
     weird_exprs_monkey_barrel,
@@ -1086,7 +1157,10 @@ fn function() {
 "#
   );
 
+  // The match will desugar to something with an
+  // arm guard which are NYI.
   test_valid_segmented_mir!(
+    panics_with "unsupported feature" =>
     weird_exprs_bathroom_stall,
     r#"
 fn bathroom_stall() {

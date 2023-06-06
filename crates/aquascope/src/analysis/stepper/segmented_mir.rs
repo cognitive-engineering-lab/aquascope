@@ -1,12 +1,76 @@
 //! Internal state for managing permissions steps.
 //!
-//! TODO: points to touch on:
-//! - the recursive structure of the data
-//! - branches
-//! - inserting into linear segments
-//! - managing "builders"
-//! - the various mini-analyses we need for
-//!   finding the right blocks.
+//! The `SegmentedMir` aids the stepper in making sure that
+//! steps made are always _valid_. In this context a step is defined
+//! as a `MirSegment`, a simple struct that contains a `from` and `to`
+//! location defining the step. The finished segmented mir is valid if
+//! it satisfies the following criteria:
+//!
+//! 1. All segments are valid (more on this later).
+//! 2. Segments form a total cover of the body under analysis.
+//! 3. No location is included in multiple steps (see exceptions to this below).
+//!
+//! Segment validity is the main crux of the above definition and this is
+//! split into three separate definitions. There exist three different kinds
+//! of segments (spiritually, they are the same in the code):
+//!
+//! - Linear segments: a segment representing a linear piece of control flow.
+//!   A linear segment has a single point of entry and a single exit. Formally,
+//!   this is defined as:
+//!       Given a `MirSegment { from, to }`, it is linear iff:
+//!       `from` dominates `to` and `to` post-dominates `from`
+//!   These segments are what we ultimately want.
+//!
+//! - Split segments: a segment representing the start of conditional control-flow.
+//!   These segments relax the definition of a linear segment, in that the `to`
+//!   location *does not* post-dominate `from`. These segments are important when
+//!   representing control-flow given by a `switchInt`. In brief, a `switchInt`
+//!   will have multiple jump targets based on its argument, and each one of these
+//!   targets will be made into a split segment, stepping `from` the `switchInt`
+//!   and stepping `to` the target location.
+//!
+//! - Join segments: a segment representing the close of conditional control-flow.
+//!   These segments are the opposite of split segments, and relax the definition
+//!   of a linear segment by lifting the requirement that `from` dominates `to`. After
+//!   control-flow has been split (by say, a `switchInt`) join segments represent the
+//!   steps needed to unify the control-flow again.
+//!
+//! Unless specified, the word "segment" or "step" always refers to a linear segment.
+//! Whenever the stepper says "insert a step ending at location L", this will _always_
+//! result in a linear step as the other two variants need to be explicitly handled.
+//!
+//! To maintain validity we use a recursive tree that incrementally builds up sequences
+//! of linear steps. The tree layout looks (roughly) as follows:
+//!
+//! ```text
+//! type LinearSegment = MirSegment
+//! type SplitSegment  = MirSegment
+//! type JoinSegment   = MirSegment
+//!
+//! data ControlFlow = Linear LinearSegment
+//!                  | Branch
+//!                      { splits :: [SplitSegment]
+//!                      , joins  :: [JoinSegment]
+//!                      , nested :: Collection
+//!                      }
+//!
+//! data Collection = [ControlFlow]
+//! ```
+//!
+//! To build this tree we manage a set of `CollectionBuilder`s, these
+//! store the last `Location` from a step, and only allow inserting a
+//! linear step into a collection. The exact process won't be outlined here,
+//! but the stepper will open a branch when it encounters an `if` or `match`,
+//! this opening will then create a new builder for each branch target. Builders
+//! are then destroyed when either (1) it has reached a stopping point as
+//! previously specified by the stepper, or (2) the branch that spawned the builder
+//! is being closed.
+//!
+//! There is a little more to the process than this, for example: making sure that
+//! branches and segments are created within the natural structure of the MIR and only
+//! inserting steps in previously "unstepped" areas. But for those really curious
+//! feel free to start at the [`SegmentedMirBuilder::insert`] function and explore
+//! from there.
 
 use anyhow::{anyhow, bail, ensure, Result};
 use rustc_data_structures::{
@@ -99,12 +163,21 @@ pub(super) struct SegmentData {
 pub(super) struct BranchData {
   table_id: TableId,
   pub(super) reach: MirSegment,
-  /// Split segments, `from` dominates `to` but
-  /// `to` does not post-dominate `from`.
+
+  /// Split segments, `from` dominates `to` but `to` does not post-dominate `from`.
   pub(super) splits: Vec<SegmentId>,
-  /// Join segments, `to` post-dominates `from` but
-  /// `from` does not post-dominate `to`.
+
+  // NOTE: join segments aren't currently used for anything. Previously we
+  //       had lots of complex logic dictating when the join steps should be
+  //       included but through lots of testing it seemed that the visual results
+  //       we wanted _never_ used the join steps. We still keep them around in
+  //       case a counterexample to that is found, or until I(gavinleroy) can
+  //       come up with a sufficient formal reason why we don't need them.
+  //       See the documentation in `table_builder` for more details.
+  /// Join segments, `to` post-dominates `from` but `from` does not post-dominate `to`.
+  #[allow(dead_code)]
   pub(super) joins: Vec<SegmentId>,
+
   pub(super) nested: Vec<CollectionId>,
 }
 
@@ -209,7 +282,7 @@ impl OpenCollections {
     &mut self,
   ) -> impl Iterator<Item = &mut CollectionBuilder> + '_ {
     // Open collections are pushed on the end, but we want to search
-    // in the most recently pushed by reverse the Vec::iter
+    // in the most recently pushed, thus using reversing.
     self.0.iter_mut().rev()
   }
 
@@ -440,11 +513,6 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     let mapper = &self.mapper;
     let scope = self.current_scope();
 
-    // ensure!(
-    //   self.mapper.is_terminator_switchint(location),
-    //   "terminator in block {location:?} is not a `switchInt`"
-    // );
-
     // The convergence of all branching paths.
     let phi_opt = self
       .least_post_dominator(location.block)
@@ -564,8 +632,8 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
   /// Closes a branch of control flow with an origin root of `location`.
   ///
-  /// The function implicitly adds a new segment for all split steps
-  /// and `get_span` should return the associated Span for these split steps.
+  /// Contrary to previous implementations, the function does not implicitly
+  /// add a new segment for all split steps.
   pub fn close_branch(&mut self, bid: BranchId) -> Result<()> {
     let table_root = self.branches[bid].table_id;
 
@@ -604,13 +672,15 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       .find_map(|(bid, branch)| branch.nested.contains(&cid).then_some(bid))
   }
 
+  /// Search through the list of open builders and return the one that can
+  /// be used to insert a new step ending at `location`.
   fn find_suitable_collection(&mut self, location: Location) -> FindResult {
     let mapper = &self.mapper;
 
     // We can insert into a collection where the last location
     // was the dominates the new location to insert.
     let builder_opt = self.processing.enumerate().find_map(|(i, cb)| {
-      log::debug!("TRYING TO FIND OPEN COLLECTION: {cb:?}");
+      log::debug!("Trying to find open collection: {cb:?}");
       mapper
         .ldominates(cb.current_location, location)
         .then_some((i, cb))
@@ -621,7 +691,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       return FindResult::None;
     };
 
-    // Easy case! We can use a linear insert.
+    // Return the found builder to create a new linear step.
     if mapper.lpost_dominates(location, builder.current_location) {
       log::debug!(
         "location post-dominates builder: {location:?} {:?} {:?}",
@@ -631,6 +701,8 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       return FindResult::Linear(builder_i);
     }
 
+    // Fallback case for when we  want to open an implicit branch. However,
+    // if there doesn't exist a parent branch, this is just an internal error.
     match self.find_containing_branch(builder.collection) {
       None => {
         log::error!("couldn't find branch containing {:?}", builder.collection);
@@ -662,11 +734,17 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
     match self.find_suitable_collection(location) {
       // BAD case, no dominating locations where we can insert.
+      //
       // XXX: returning an internal error here is too limiting. It seems
       //      that if control-flow constructs are (mis)-used, then the MIR
       //      is already more simplified than we would expect. This approach
       //      siliently ignores these insertions, but we leave a log warning
       //      to help debugging if something bad happens.
+      //
+      //      This was changed from an Error with the introduction
+      //      of the weird expr test cases. Making this change has not
+      //      knowingly made previously failing test cases pass, nor has it
+      //      affected the steps produced by the test suite.
       FindResult::None => {
         log::warn!(
           "no suitable collection for location {location:?} {:#?}",
@@ -676,15 +754,15 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
         Ok(())
       }
 
-      // RARE case:
-      // Spawn a new child branch and retry the insert.
+      // RARE case: spawn a new child branch and retry the insert.
+      //      These automatic branches are used to handle match expressions
+      //      that compile to a series of `switchInt`s.
       FindResult::NonLinear(parent, branch_loc) => {
         self.open_child_branch(parent, branch_loc)?;
         self.insert(location, path_hint, span)
       }
 
-      // EASY case:
-      // We can insert a segment _linearly_ into the list of segments,
+      // COMMON case: we can insert a linear segment into the found builder.
       FindResult::Linear(builder_idx) => {
         let scope = self.current_scope();
         let builder = self.processing.get_mut(builder_idx);
@@ -707,6 +785,10 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
         };
 
         match collection.kind {
+          // If the step attempts to go past its previously computed bound
+          // we will cut it short. I(gavinleroy) haven't yet seen this happen,
+          // but in theory it's possible and is bad because it bypasses the
+          // branching mechanisms.
           LengthKind::Bounded { phi, .. }
             if self.mapper.ldominates(phi, location) =>
           {
@@ -716,7 +798,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
             insert_to(phi)
           }
-          // All other cases can use the given location as the `to` location.
+
           _ => insert_to(location),
         }
 
@@ -728,6 +810,11 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
 #[cfg(test)]
 pub(crate) mod test_exts {
+  use rustc_data_structures::{
+    captures::Captures, graph::iterate::post_order_from_to,
+  };
+  use rustc_middle::mir::BasicBlockData;
+
   use super::*;
 
   pub trait SegmentedMirTestExt {
@@ -736,6 +823,9 @@ pub(crate) mod test_exts {
 
   #[derive(Debug)]
   pub enum InvalidReason {
+    MissingLocations {
+      missing: Vec<Location>,
+    },
     // DuplicateLocation {
     //   at: Location,
     // },
@@ -754,63 +844,41 @@ pub(crate) mod test_exts {
     LinearNoPostDom,
   }
 
-  // impl MirSegment {
-  //   fn explode(
-  //     &self,
-  //     mapper: &IRMapper,
-  //   ) -> impl Iterator<Item = Location> + '_ {
-  //     let sb = self.from.block;
-  //     let eb = self.to.block;
-  //     let basic_blocks = &mapper.cleaned_graph.0.basic_blocks;
+  fn explode_block<'a, 'tcx: 'a>(
+    bb: BasicBlock,
+    block: &'a BasicBlockData<'tcx>,
+    from: Option<usize>,
+    to: Option<usize>,
+  ) -> impl Iterator<Item = Location> + Captures<'tcx> + 'a {
+    // End is an inclusive index.
+    let start = from.unwrap_or(0);
+    let end = to.unwrap_or(block.statements.len());
+    (start ..= end).map(move |i| Location {
+      block: bb,
+      statement_index: i,
+    })
+  }
 
-  //     if sb == eb {
-  //       return (self.from.statement_index .. self.to.statement_index)
-  //         .map(|i| Location {
-  //           block: sb,
-  //           statement_index: i,
-  //         })
-  //         .collect::<Vec<_>>()
-  //         .into_iter();
-  //     }
+  impl MirSegment {
+    fn explode<'a, 'tcx: 'a>(
+      self,
+      mapper: &'a IRMapper<'a, 'tcx>,
+    ) -> impl Iterator<Item = Location> + Captures<'tcx> + 'a {
+      let sb = self.from.block;
+      let eb = self.to.block;
+      let graph = &mapper.cleaned_graph;
+      let mut block_path = post_order_from_to(graph, sb, Some(eb));
+      // The target block is never added in the post-order.
+      block_path.push(eb);
 
-  //     let mut paths = Vec::default();
-
-  //     let mut curr = sb;
-
-  //     while curr != eb {
-  //       paths.push(curr);
-  //       let scs = mapper.cleaned_graph.successors(curr).collect::<Vec<_>>();
-  //       assert!(scs.len() == 1);
-  //       curr = scs[0];
-  //     }
-
-  //     paths.push(eb);
-
-  //     paths
-  //       .into_iter()
-  //       .flat_map(|bb| {
-  //         let bbd = &basic_blocks[bb];
-  //         let from = if bb == self.from.block {
-  //           self.from.statement_index
-  //         } else {
-  //           0
-  //         };
-
-  //         let to = if bb == self.to.block {
-  //           self.to.statement_index
-  //         } else {
-  //           bbd.statements.len()
-  //         };
-
-  //         (from ..= to).map(move |idx| Location {
-  //           block: bb,
-  //           statement_index: idx,
-  //         })
-  //       })
-  //       .collect::<Vec<_>>()
-  //       .into_iter()
-  //   }
-  // }
+      block_path.into_iter().flat_map(move |bb| {
+        let body = &mapper.cleaned_graph.body();
+        let from = (bb == sb).then_some(self.from.statement_index);
+        let to = (bb == eb).then_some(self.to.statement_index);
+        explode_block(bb, &body.basic_blocks[bb], from, to)
+      })
+    }
+  }
 
   impl SegmentedMir {
     fn is_valid_collection(
@@ -833,7 +901,7 @@ pub(crate) mod test_exts {
     fn is_valid_split_segment(
       &self,
       sid: SegmentId,
-      _ssf: &mut HashSet<Location>,
+      ssf: &mut HashSet<Location>,
       mapper: &IRMapper,
     ) -> Result<(), InvalidReason> {
       let SegmentData { segment: s, .. } = self.get_segment(sid);
@@ -845,13 +913,17 @@ pub(crate) mod test_exts {
         });
       }
 
+      for at in s.explode(mapper) {
+        ssf.insert(at);
+      }
+
       Ok(())
     }
 
     fn is_valid_join_segment(
       &self,
       sid: SegmentId,
-      _ssf: &mut HashSet<Location>,
+      ssf: &mut HashSet<Location>,
       mapper: &IRMapper,
     ) -> Result<(), InvalidReason> {
       let SegmentData { segment: s, .. } = self.get_segment(sid);
@@ -863,13 +935,17 @@ pub(crate) mod test_exts {
         });
       }
 
+      for at in s.explode(mapper) {
+        ssf.insert(at);
+      }
+
       Ok(())
     }
 
     fn is_valid_segment(
       &self,
       sid: SegmentId,
-      _ssf: &mut HashSet<Location>,
+      ssf: &mut HashSet<Location>,
       mapper: &IRMapper,
     ) -> Result<(), InvalidReason> {
       let SegmentData { segment: s, .. } = self.get_segment(sid);
@@ -887,11 +963,9 @@ pub(crate) mod test_exts {
         });
       }
 
-      // for at in s.explode(mapper) {
-      //   if !ssf.insert(at) {
-      //     return Err(InvalidReason::DuplicateLocation { at });
-      //   }
-      // }
+      for at in s.explode(mapper) {
+        ssf.insert(at);
+      }
 
       Ok(())
     }
@@ -939,11 +1013,32 @@ pub(crate) mod test_exts {
     /// 5. At each branch location (`switchInt`) there must exist a split segment
     ///    for each possible branch target.
     fn validate(&self, mapper: &IRMapper) -> Result<(), InvalidReason> {
+      let body = &mapper.cleaned_graph.body();
       let seen_so_far = &mut HashSet::default();
 
-      self.is_valid_collection(self.first_collection, seen_so_far, mapper)
+      let all_locations = mapper
+        .cleaned_graph
+        .blocks()
+        .flat_map(|block| {
+          (0 ..= body.basic_blocks[block].statements.len()).map(move |i| {
+            Location {
+              block,
+              statement_index: i,
+            }
+          })
+        })
+        .collect::<HashSet<_>>();
 
-      // TODO check the seen locations against the CleanedGraph body
+      self.is_valid_collection(self.first_collection, seen_so_far, mapper)?;
+      let missing = all_locations
+        .difference(&*seen_so_far)
+        .copied()
+        .collect::<Vec<_>>();
+      if missing.is_empty() {
+        Ok(())
+      } else {
+        Err(InvalidReason::MissingLocations { missing })
+      }
     }
   }
 }
