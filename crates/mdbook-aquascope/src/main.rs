@@ -1,4 +1,3 @@
-#![feature(iter_intersperse)]
 #![allow(clippy::comparison_to_empty)]
 
 use std::path::Path;
