@@ -8,7 +8,7 @@ use mdbook_preprocessor_utils::{
   mdbook::preprocess::PreprocessorContext, Asset, SimplePreprocessor,
 };
 
-mdbook_preprocessor_utils::asset_generator!("../dist/");
+mdbook_preprocessor_utils::asset_generator!("../../../frontend/packages/quiz-embed/dist/");
 
 const FRONTEND_ASSETS: [Asset; 2] =
   [make_asset!("lib.js"), make_asset!("lib.css")];
