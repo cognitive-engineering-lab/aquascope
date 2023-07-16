@@ -28,7 +28,7 @@ cp crates/**/bindings/* frontend/packages/aquascope-editor/src/bindings"""
 [tasks.install-mdbook]
 dependencies = ["init-bindings"]
 script = """
-cd frontend && graco prepare && cd ..
+cd frontend && depot build && cd ..
 cargo miri setup
 cargo install --path crates/mdbook-aquascope        
 cargo install --path crates/aquascope_front

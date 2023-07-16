@@ -14,7 +14,9 @@ runs:
     - name: Gen bindings
       run: cargo make init-bindings
       shell: bash
-
+    - name: Install Depot
+      run: curl https://raw.githubusercontent.com/cognitive-engineering-lab/depot/main/scripts/install.sh | sh
+      shell: bash
     - name: Prepare frontend
-      run: npm install -g graco && cd frontend && graco prepare
+      run: cd frontend && depot build
       shell: bash

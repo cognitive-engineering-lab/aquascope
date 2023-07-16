@@ -1,4 +1,9 @@
 {
+  "name": "aquascope-standalone",
+  "version": "0.1.0",
+  "depot": {
+    "platform": "browser"
+  },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.3.0",
     "@codemirror/commands": "^6.1.2",
@@ -8,12 +13,14 @@
     "@codemirror/state": "^6.1.2",
     "@codemirror/view": "^6.4.0",
     "@replit/codemirror-vim": "^6.0.3",
-    "aquascope-editor": "workspace:^",
+    "@vitejs/plugin-react": "^4.0.3",
+    "aquascope-editor": "workspace:*",
     "font-awesome": "^4.7.0",
     "jest-puppeteer": "^6.2.0",
     "normalize.css": "^8.0.1",
     "puppeteer": "^19.6.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "sass": "^1.63.6"
   }
 }

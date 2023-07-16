@@ -1,6 +1,5 @@
 import puppeteer, { Browser, Page } from "puppeteer";
-
-jest.setTimeout(30000);
+import { describe, beforeAll, afterAll, it, expect, } from "vitest";
 
 describe("Aquascope Embed", () => {
   let browser: Browser;
@@ -17,7 +16,7 @@ describe("Aquascope Embed", () => {
 
   it("launches crates/mdbook-aquascope/test-book/", async () => {
     await page.goto(
-      `file://${__dirname}../../../../../../crates/mdbook-aquascope/test-book/book/index.html`,
+      `file://${__dirname}../../../../../crates/mdbook-aquascope/test-book/book/index.html`,
       {
         waitUntil: "domcontentloaded",
       }
@@ -42,5 +41,5 @@ describe("Aquascope Embed", () => {
     // There must have been an editor on the screen.
     expect(editors).not.toBeNull();
     expect(editors.length).toBeGreaterThan(0);
-  });
+  }, 30_000);
 });
