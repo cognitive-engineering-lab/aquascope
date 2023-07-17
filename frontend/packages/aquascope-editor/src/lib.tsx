@@ -31,9 +31,9 @@ import {
   AnalysisOutput,
   AquascopeAnnotations,
   BackendError,
+  CharRange,
   InterpAnnotations,
   MTrace,
-  CharRange,
 } from "./types";
 
 export * as types from "./types";
@@ -329,7 +329,7 @@ export class Editor {
         this.renderInterpreter(response.Ok, config as any, annotations?.interp);
       } else {
         this.reportStdErr(response!.Err);
-      }      
+      }
     } else if (operation == "permissions") {
       // The permissions analysis results are sent as an array of
       // body analyses. Each body could have analyzed successfully,

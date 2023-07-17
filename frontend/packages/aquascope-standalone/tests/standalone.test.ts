@@ -1,16 +1,18 @@
 import puppeteer, { Browser, Page } from "puppeteer";
+import { preview, PreviewServer } from 'vite'
+import { describe, beforeEach, beforeAll, afterAll, it, expect } from "vitest";
 
 const permStackSelector = ".permission-stack";
 const permStepSelector = ".step-widget-container";
 const interpSelector = ".interpreter";
 
-jest.setTimeout(50000);
-
 describe("Aquascope Standalone", () => {
   let browser: Browser;
   let page: Page;
+  let server: PreviewServer;
 
   beforeAll(async () => {
+    server = await preview({ preview: { port: 8000 } })
     // NOTE: here's a good way to debug a puppeteer test.
     // browser = await puppeteer.launch({
     //   headless: false,
@@ -19,7 +21,7 @@ describe("Aquascope Standalone", () => {
     //   defaultViewport: { width: 1700, height: 800 },
     //   slowMo: 250,
     // });
-    browser = await puppeteer.launch();
+    browser = await puppeteer.launch({});
     // there seems to be a discrepancy between headless and headed modes.
     // See: https://github.com/puppeteer/puppeteer/issues/665
     //
@@ -37,6 +39,9 @@ describe("Aquascope Standalone", () => {
 
   afterAll(async () => {
     await browser.close();
+    await new Promise<void>((resolve, reject) => {
+      server.httpServer.close(error => error ? reject(error) : resolve())
+    })
   });
 
   beforeEach(async () => {
@@ -46,8 +51,9 @@ describe("Aquascope Standalone", () => {
   });
 
   it("runs permissions", async () => {
-    await page.waitForSelector("#showPermissions");
-    await page.click("#showPermissions");
+    let permBtn = await page.$("#showPermissions");  
+    expect(permBtn).toBeDefined();
+    await permBtn!.click();
 
     await page.waitForSelector(permStackSelector);
     let stackWidgets = await page.$$(permStackSelector);
@@ -60,7 +66,7 @@ describe("Aquascope Standalone", () => {
     let crashedElement = await page.$(".aquascope-crash");
     // No crashed elements
     expect(crashedElement).toBeNull();
-  });
+  }, 60_000);
 
   // it("runs the interpreter", async () => {
   //   await page.click("#showInterpret");

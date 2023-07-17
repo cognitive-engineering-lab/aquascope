@@ -32,9 +32,9 @@ If you want to install from source, you will first need Cargo and [npm](https://
 ```sh
 git clone https://github.com/cognitive-engineering-lab/aquascope.git
 cd aquascope
-npm install -g graco
+curl https://raw.githubusercontent.com/cognitive-engineering-lab/depot/main/scripts/install.sh | sh
 cargo make init-bindings
-cd frontend && graco prepare
+cd frontend && depot build
 cargo install --path crates/aquascope_front
 cargo install --path crates/mdbook-aquascope
 ```

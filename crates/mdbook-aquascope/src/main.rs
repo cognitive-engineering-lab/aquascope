@@ -1,4 +1,3 @@
-#![feature(iter_intersperse)]
 #![allow(clippy::comparison_to_empty)]
 
 use std::path::Path;
@@ -9,10 +8,14 @@ use mdbook_preprocessor_utils::{
   mdbook::preprocess::PreprocessorContext, Asset, SimplePreprocessor,
 };
 
-mdbook_preprocessor_utils::asset_generator!("../dist/");
+mdbook_preprocessor_utils::asset_generator!(
+  "../../../frontend/packages/aquascope-embed/dist/"
+);
 
-const FRONTEND_ASSETS: [Asset; 2] =
-  [make_asset!("lib.js"), make_asset!("lib.css")];
+const FRONTEND_ASSETS: [Asset; 2] = [
+  make_asset!("aquascope-embed.iife.js"),
+  make_asset!("style.css"),
+];
 
 struct AquascopePreprocessorWrapper(AquascopePreprocessor);
 

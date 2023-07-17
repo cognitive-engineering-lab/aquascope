@@ -1,0 +1,11 @@
+{
+  "name": "frontend",
+  "validation": {
+    "invalidLink": true,
+    "notExported": true
+  },
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "packages/aquascope-editor"
+  ]
+}

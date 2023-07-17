@@ -179,7 +179,7 @@ let PermStack = ({
   let triggerAnimation = () => {
     setAnimating(true);
     if (timer !== 0) clearTimeout(timer);
-    setTimer(setTimeout(() => setAnimating(false), 500));
+    setTimer(window.setTimeout(() => setAnimating(false), 500));
   };
 
   return (

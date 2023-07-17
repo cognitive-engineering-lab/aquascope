@@ -1,9 +1,25 @@
 {
   "name": "aquascope-editor",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
+  "files": [
+    "dist"
+  ],
   "main": "dist/lib.js",
+  "exports": {
+    ".": {
+      "default": "./dist/lib.js"
+    },
+    "./*": {
+      "default": "./dist/*.js"
+    }
+  },
+  "type": "module",
+  "depot": {
+    "platform": "browser"
+  },
+  "typedoc": {
+    "entryPoint": "./src/lib.ts"
+  },
   "dependencies": {
     "@codemirror/lang-rust": "^6.0.1",
     "@codemirror/language": "^6.3.0",
@@ -12,15 +28,16 @@
     "leader-line-new": "^1.1.9",
     "lodash": "^4.17.21"
   },
-  "peerDependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
   "devDependencies": {
     "@types/lodash": "^4.14.191",
     "@types/react": "^18.0.26",
     "@types/react-dom": "^18.0.9",
+    "@vitejs/plugin-react": "^4.0.3",
     "classnames": "^2.3.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "peerDependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   }

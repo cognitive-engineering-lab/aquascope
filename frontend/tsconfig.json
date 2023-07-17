@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "target": "es2022",
+    "declaration": true,
+    "jsx": "react",
+    "esModuleInterop": true,
+    "allowJs": true
+  }
+}
