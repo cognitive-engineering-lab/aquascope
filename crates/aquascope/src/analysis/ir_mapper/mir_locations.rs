@@ -26,24 +26,24 @@ impl MirOrderedLocations {
   }
 
   pub fn exit_location(&self) -> Option<Location> {
-    self.exit_block.map(|block| {
-      let statement_index = *self
-        .locations
-        .get(&block)
-        .expect("Block with no associated locations")
-        .last()
-        .unwrap();
-      Location {
-        block,
-        statement_index,
-      }
-    })
+    let block = self.exit_block?;
+    self.locations.get(&block).map_or_else(
+      // Block has no associated index then default to the start
+      || Some(block.start_location()),
+      // Get the last associated index of the block
+      |vs| {
+        vs.last().map(|&statement_index| Location {
+          block,
+          statement_index,
+        })
+      },
+    )
   }
 
   pub fn get_entry_exit_locations(&self) -> Option<(Location, Location)> {
-    self
-      .entry_location()
-      .and_then(|mn| self.exit_location().map(|mx| (mn, mx)))
+    let entry = self.entry_location()?;
+    let exit = self.exit_location()?;
+    Some((entry, exit))
   }
 
   pub fn values(&self) -> impl Iterator<Item = Location> + Captures<'_> {

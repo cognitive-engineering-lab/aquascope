@@ -429,6 +429,28 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     body.all_places(tcx, def_id).collect::<HashSet<_>>()
   }
 
+  pub fn domain_bottom(&self) -> PermissionsDomain<'tcx> {
+    self
+      .domain_places()
+      .into_iter()
+      .map(|place| {
+        (place, PermissionsData {
+          is_live: false,
+          type_droppable: false,
+          type_writeable: false,
+          type_copyable: false,
+          path_moved: None,
+          path_uninitialized: false,
+          loan_read_refined: None,
+          loan_write_refined: None,
+          loan_drop_refined: None,
+          permissions: Permissions::bottom(),
+        })
+      })
+      .collect::<HashMap<_, _>>()
+      .into()
+  }
+
   pub fn permissions_domain_at_point(
     &self,
     point: Point,
