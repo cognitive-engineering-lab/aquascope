@@ -27,7 +27,4 @@ jobs:
       - name: Frontend tests
         run: |
           cargo run -p aquascope_serve --features=no-docker &
-          cd frontend/packages/aquascope-standalone/dist
-          python3 -m http.server 8000 &
-          cd ../../../
           depot test
