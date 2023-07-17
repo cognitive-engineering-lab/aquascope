@@ -27,4 +27,4 @@ jobs:
       - name: Frontend tests
         run: |
           cargo run -p aquascope_serve --features=no-docker &
-          depot test
+          cd frontend && depot test
