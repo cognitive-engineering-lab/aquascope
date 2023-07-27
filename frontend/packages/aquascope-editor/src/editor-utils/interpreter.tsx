@@ -574,7 +574,7 @@ let renderArrows = (
         let theme: "dark" | "light" = isDark ? "dark" : "light";
         let palette = PALETTE[theme];
         let color = palette[i % palette.length];
-        
+
         let srcIsMoved = ptr.src.closest(".moved") !== null;
         let moveOpacity = isDark ? 0.5 : 0.3;
         if (srcIsMoved) color = color.replace(", 1)", `, ${moveOpacity})`);

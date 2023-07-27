@@ -1,5 +1,5 @@
 import puppeteer, { Browser, Page } from "puppeteer";
-import { describe, beforeAll, afterAll, it, expect, } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 describe("Aquascope Embed", () => {
   let browser: Browser;
