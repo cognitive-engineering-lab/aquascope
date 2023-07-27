@@ -8,9 +8,7 @@ use mdbook_preprocessor_utils::{
   mdbook::preprocess::PreprocessorContext, Asset, SimplePreprocessor,
 };
 
-mdbook_preprocessor_utils::asset_generator!(
-  "../../../frontend/packages/aquascope-embed/dist/"
-);
+mdbook_preprocessor_utils::asset_generator!("../js/");
 
 const FRONTEND_ASSETS: [Asset; 2] = [
   make_asset!("aquascope-embed.iife.js"),
