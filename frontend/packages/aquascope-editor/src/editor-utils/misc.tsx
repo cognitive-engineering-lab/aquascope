@@ -47,8 +47,7 @@ export let permName = (c: PermLetter): string => {
     return "read";
   } else if (c === "W") {
     return "write";
-  }
-  if (c == "O") {
+  } else if (c == "O") {
     return "own";
   } else {
     return "flow";
