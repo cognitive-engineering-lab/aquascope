@@ -27,16 +27,24 @@ Note that `cargo-aquascope` is installed via `aquascope_front` and must be insta
 
 ### From Source
 
-If you want to install from source, you will first need Cargo and [npm](https://www.npmjs.com/) installed, then you can run:
+If you want to install from source, you first need to install [cargo-make](https://github.com/sagiegurari/cargo-make), a Rust build tool, like this:
+
+```
+cargo install cargo-make --locked
+```
+
+Then you need to install [Depot](https://github.com/cognitive-engineering-lab/depot/), a Javascript build tool, like this:
+
+```
+curl https://raw.githubusercontent.com/cognitive-engineering-lab/depot/main/scripts/install.sh | sh
+```
+
+Then you can install Aquascope from source like this:
 
 ```sh
 git clone https://github.com/cognitive-engineering-lab/aquascope.git
 cd aquascope
-curl https://raw.githubusercontent.com/cognitive-engineering-lab/depot/main/scripts/install.sh | sh
-cargo make init-bindings
-cd frontend && depot build
-cargo install --path crates/aquascope_front
-cargo install --path crates/mdbook-aquascope
+cargo make install-mdbook
 ```
 
 ## Usage

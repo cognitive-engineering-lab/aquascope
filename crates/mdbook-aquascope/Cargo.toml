@@ -11,7 +11,7 @@ edition = "2021"
 include = [
   "src/**/*",
   "Cargo.toml",
-  "dist/**/*"
+  "js/**/*"
 ]
 repository = "https://github.com/cognitive-engineering-lab/aquascope"
 
@@ -39,3 +39,6 @@ lazy_static = "1"
 [dev-dependencies]
 mdbook-aquascope = { path = ".", features = ["dev"] }
 maplit = "1.0"
+
+[build-dependencies]
+anyhow = "1"

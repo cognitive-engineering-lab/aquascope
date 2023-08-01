@@ -7,6 +7,7 @@
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.45.0",
     "eslint-plugin-prettier": "^4.2.1",
+    "eslint-plugin-react": "^7.32.2",
     "prettier": "^2.8.8",
     "typedoc": "^0.24.8",
     "typescript": "^5.1.6",

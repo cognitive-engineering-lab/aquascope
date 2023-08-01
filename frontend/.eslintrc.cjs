@@ -12,7 +12,8 @@ module.exports = {
   },
   "plugins": [
     "@typescript-eslint",
-    "prettier"
+    "prettier",
+    "react"
   ],
   "ignorePatterns": [
     "*.d.ts"
@@ -35,6 +36,13 @@ module.exports = {
         "checkLoops": false
       }
     ],
-    "prettier/prettier": "error"
+    "prettier/prettier": "error",
+    "react/prop-types": "off",
+    "react/no-unescaped-entities": "off"
+  },
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
   }
 }

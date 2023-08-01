@@ -1,6 +1,6 @@
 import puppeteer, { Browser, Page } from "puppeteer";
-import { preview, PreviewServer } from 'vite'
-import { describe, beforeEach, beforeAll, afterAll, it, expect } from "vitest";
+import { PreviewServer, preview } from "vite";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const permStackSelector = ".permission-stack";
 const permStepSelector = ".step-widget-container";
@@ -12,7 +12,7 @@ describe("Aquascope Standalone", () => {
   let server: PreviewServer;
 
   beforeAll(async () => {
-    server = await preview({ preview: { port: 8000 } })
+    server = await preview({ preview: { port: 8000 } });
     // NOTE: here's a good way to debug a puppeteer test.
     // browser = await puppeteer.launch({
     //   headless: false,
@@ -40,8 +40,8 @@ describe("Aquascope Standalone", () => {
   afterAll(async () => {
     await browser.close();
     await new Promise<void>((resolve, reject) => {
-      server.httpServer.close(error => error ? reject(error) : resolve())
-    })
+      server.httpServer.close(error => (error ? reject(error) : resolve()));
+    });
   });
 
   beforeEach(async () => {
@@ -51,7 +51,7 @@ describe("Aquascope Standalone", () => {
   });
 
   it("runs permissions", async () => {
-    let permBtn = await page.$("#showPermissions");  
+    let permBtn = await page.$("#showPermissions");
     expect(permBtn).toBeDefined();
     await permBtn!.click();
 

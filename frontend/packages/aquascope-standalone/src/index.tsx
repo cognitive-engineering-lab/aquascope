@@ -71,10 +71,10 @@ window.addEventListener("load", () => {
         if (err.type === "FileNotFound") {
           alert("A backend problem occurred!");
         } else if (err.type === "ServerStderr") {
-          stdErr.textContent = err.error;          
+          stdErr.textContent = err.error;
         } else if (err.type === "BuildError") {
-        changeTab(tabs[1]);
-        console.debug("showing the build error card");
+          changeTab(tabs[1]);
+          console.debug("showing the build error card");
           buildErrorCard.classList.add("live");
           window.setTimeout(() => {
             console.debug("removing the build error card");

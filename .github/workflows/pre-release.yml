@@ -117,4 +117,5 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: ws
-          args: publish --from-git --yes
+          # --allow-dirty is for JS files packaged w/ mdbook-aquascope
+          args: publish --from-git --allow-dirty --yes
