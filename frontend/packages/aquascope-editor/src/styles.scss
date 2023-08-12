@@ -633,14 +633,22 @@ $perm-animation-duration: 0.5s;
         background: repeating-linear-gradient(
           45deg, 
           var(--aq-step-table-border), 
-          var(--aq-step-table-border) 5px, 
-          var(--aq-bg) 5px, 
+          var(--aq-step-table-border) 3px, 
+          var(--aq-bg) 3px, 
           var(--aq-bg) 10px)
       }
 
       > tbody > tr > td {
         border-width: 2px;
         padding: 2px 4px;
+
+        &:nth-child(1) {
+          border-right-width: 1.5px;
+        }
+
+        &:nth-child(2) {
+          border-left-width: 1.5px;
+        }
       }
     }
 

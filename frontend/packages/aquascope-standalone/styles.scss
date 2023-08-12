@@ -1,6 +1,6 @@
 @import "normalize.css/normalize.css";
 @import "font-awesome/css/font-awesome.css";
-@import "aquascope-editor/dist/styles.scss";
+@use "aquascope-editor/dist/styles.scss";
 
 $monospace: "Source Code Pro", monospace;
 $color-lightest: white;
