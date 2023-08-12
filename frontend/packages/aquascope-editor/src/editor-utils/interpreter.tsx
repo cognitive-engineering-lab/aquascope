@@ -445,7 +445,6 @@ let renderArrows = (
   stepContainerRef: React.RefObject<HTMLDivElement>,
   arrowContainerRef: React.RefObject<HTMLDivElement>
 ) => {
-  let config = useContext(ConfigContext);
   useEffect(() => {
     let container = containerRef.current!;
     let stepContainer = stepContainerRef.current!;

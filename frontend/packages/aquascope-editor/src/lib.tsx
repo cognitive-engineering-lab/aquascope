@@ -64,13 +64,7 @@ fn main() {
 let readOnly = new Compartment();
 let mainKeybinding = new Compartment();
 
-interface Button {
-  icon: string;
-  index: number;
-}
-
 type ButtonName = "copy" | "eye";
-const BUTTON_ORDER: ButtonName[] = ["copy", "eye"];
 
 let CopyButton = ({ view }: { view: EditorView }) => (
   <button
