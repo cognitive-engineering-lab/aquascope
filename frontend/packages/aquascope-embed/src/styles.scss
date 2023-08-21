@@ -1,4 +1,4 @@
-@import "aquascope-editor/dist/styles.scss";
+@use "aquascope-editor/dist/styles.scss";
 
 .light, .rust {
   --code-bg: #f6f7f6;

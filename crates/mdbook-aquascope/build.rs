@@ -6,6 +6,8 @@ const SRC_DIR: &str = "../../frontend/packages/aquascope-embed/dist/";
 const DST_DIR: &str = "./js";
 
 fn main() -> Result<()> {
+  println!("cargo:rerun-if-changed={SRC_DIR}");
+
   let dst_dir = Path::new(DST_DIR);
   fs::create_dir_all(dst_dir)?;
 

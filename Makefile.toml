@@ -3,13 +3,13 @@ skip_core_tasks = true
 default_to_workspace = false
 
 [tasks.watch-front]
-script = "cargo watch -x 'install --path crates/aquascope_front --offline'"
+script = "cargo watch -i frontend -x 'install --path crates/aquascope_front --offline'"
 
 [tasks.watch-front-debug]
-script = "cargo watch -x 'install --path crates/aquascope_front --offline --debug'"
+script = "cargo watch -i frontend -x 'install --path crates/aquascope_front --offline --debug'"
 
 [tasks.watch-mdbook]
-script = "cargo watch -x 'install --path crates/mdbook-aquascope --debug --offline'"
+script = "cargo watch -w crates/mdbook-aquascope/src -w frontend/packages/aquascope-embed/dist --no-vcs-ignores -x 'install --path crates/mdbook-aquascope --debug --offline'"
 
 [tasks.watch-server]
 script = "cargo run --features=no-docker"
