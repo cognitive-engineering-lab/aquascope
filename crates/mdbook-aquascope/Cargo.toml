@@ -19,6 +19,7 @@ repository = "https://github.com/cognitive-engineering-lab/aquascope"
 dev = ["mdbook-preprocessor-utils/testing"]
 
 [dependencies]
+clap = "=4.3.24"
 mdbook-preprocessor-utils = "0.1"
 nom = "7"
 nom_locate = "4"
