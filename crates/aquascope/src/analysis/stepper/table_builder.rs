@@ -112,7 +112,7 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     let mut diff = before.diff(after);
 
     let removed = diff
-      .drain_filter(|place, _| to_filter.contains(&place.local))
+      .extract_if(|place, _| to_filter.contains(&place.local))
       .collect::<Vec<_>>();
 
     if !removed.is_empty() {
@@ -187,7 +187,7 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
       .collect::<HashSet<_>>();
 
     let attached_here = entire_diff
-      .drain_filter(|place: &Place, _| all_attached.contains(&place.local))
+      .extract_if(|place: &Place, _| all_attached.contains(&place.local))
       .collect::<HashMap<_, _>>();
 
     // let diffs_in_tables = |tbls: &Tables| {

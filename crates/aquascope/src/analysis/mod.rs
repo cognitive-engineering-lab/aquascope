@@ -459,7 +459,7 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
               .filter(|point| ctxt.is_point_operational(*point)),
           )
           .into_iter()
-          .filter_map(|span| (lo <= span.lo()).then_some(span))
+          .filter(|span| lo <= span.lo())
           .collect::<Vec<_>>();
         let smoothed = smooth_elements(points);
         let refined_ranges = smoothed
@@ -528,12 +528,11 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
     // is included in the returned ranges.
     let spans = spans
       .into_iter()
-      .filter_map(|span| {
-        (min_span.lo() <= span.lo() && span.hi() <= max_span.hi()).then(|| {
-          span
-            .as_local(self.permissions.body_with_facts.body.span)
-            .unwrap_or(span)
-        })
+      .filter(|span| (min_span.lo() <= span.lo() && span.hi() <= max_span.hi()))
+      .map(|span| {
+        span
+          .as_local(self.permissions.body_with_facts.body.span)
+          .unwrap_or(span)
       })
       .collect::<Vec<_>>();
 

@@ -15,6 +15,7 @@ use miri::{
   MiriMachine, OpTy, Operand, UndefinedBehaviorInfo,
 };
 use rustc_abi::{FieldsShape, Size};
+use rustc_const_eval::ReportErrorExt;
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{
@@ -176,7 +177,9 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       borrow_tracker: None,
       ..Default::default()
     })
-    .map_err(|e| anyhow!("{e}"))?;
+    .map_err(|e| {
+      anyhow!("{}", e.into_kind().diagnostic_message().as_str().unwrap())
+    })?;
 
     // Ensures we get nice backtraces from miri evaluation errors
     *tcx.sess.ctfe_backtrace.borrow_mut() = CtfeBacktrace::Capture;
@@ -364,7 +367,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     // Ignore dead locals
     let LocalValue::Live(op) = state.value else {
       log::trace!("Ignoring local {local:?} because it's not live");
-      return Ok(None)
+      return Ok(None);
     };
 
     match op {
@@ -484,8 +487,12 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
   fn collect_moves(&self) -> InterpResult<'tcx, Vec<Place<'tcx>>> {
     let stack = Machine::stack(&self.ecx);
-    let Some(frame) = stack.last() else { return Ok(Vec::new()) };
-    let Either::Left(loc) = frame.current_loc() else { return Ok(Vec::new()) };
+    let Some(frame) = stack.last() else {
+      return Ok(Vec::new());
+    };
+    let Either::Left(loc) = frame.current_loc() else {
+      return Ok(Vec::new());
+    };
 
     struct CollectMoves<'tcx> {
       places: Vec<Place<'tcx>>,
@@ -526,7 +533,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
             Either::Left(_mplace) => {
               // todo!()
             }
-            Either::Right((frame, local)) => {
+            Either::Right((frame, local, _)) => {
               moved_places
                 .add_place(frame, Place::from_local(local, self.ecx.tcx()));
             }
@@ -608,14 +615,16 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
     Ok(match e.into_kind() {
       InterpError::UndefinedBehavior(ub) => match ub {
-        PointerUseAfterFree(alloc_id) => {
+        PointerUseAfterFree(alloc_id, _) => {
           MUndefinedBehavior::PointerUseAfterFree {
             alloc_id: self.remap_alloc_id(alloc_id),
           }
         }
-        ub => MUndefinedBehavior::Other(ub.to_string()),
+        ub => MUndefinedBehavior::Other(
+          ub.diagnostic_message().as_str().unwrap().to_string(),
+        ),
       },
-      err => bail!("{err}"),
+      err => bail!("{}", err.diagnostic_message().as_str().unwrap()),
     })
   }
 

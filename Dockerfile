@@ -2,10 +2,10 @@ FROM rustlang/rust:nightly-alpine
 ENV CARGO_UNSTABLE_SPARSE_REGISTRY=true
 
 RUN rustup set profile minimal                                  && \
-    rustup default nightly-2023-04-12-x86_64-unknown-linux-musl && \
+    rustup default nightly-2023-08-25-x86_64-unknown-linux-musl && \
     rustup toolchain uninstall nightly                          && \
     rustup toolchain uninstall stable                           && \
-    rustup component add --toolchain nightly-2023-04-12            \
+    rustup component add --toolchain nightly-2023-08-25            \
                          --target x86_64-unknown-linux-musl        \
                          rust-src rustc-dev llvm-tools-preview
 

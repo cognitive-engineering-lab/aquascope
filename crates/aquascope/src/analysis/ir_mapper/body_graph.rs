@@ -63,7 +63,7 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
     self
       .0
       .basic_blocks
-      .postorder()
+      .reverse_postorder()
       .iter()
       .filter(|bb| CleanedBody::keep_block(&self.0.basic_blocks[**bb]))
       .copied()
@@ -84,7 +84,10 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
     from_data: &BasicBlockData,
     target: BasicBlock,
   ) -> bool {
-    let TerminatorKind::FalseEdge { imaginary_target, .. } = from_data.terminator().kind else {
+    let TerminatorKind::FalseEdge {
+      imaginary_target, ..
+    } = from_data.terminator().kind
+    else {
       return false;
     };
 

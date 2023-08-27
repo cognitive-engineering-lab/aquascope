@@ -5,7 +5,7 @@ use std::{
 use anyhow::{bail, Context, Result};
 use fluid_let::fluid_set;
 use itertools::Itertools;
-use rustc_borrowck::BodyWithBorrowckFacts;
+use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_errors::Handler;
 use rustc_hir::{BodyId, ItemKind};
 use rustc_middle::{
@@ -533,7 +533,7 @@ where
       // Create a new emitter writer which consumes *silently* all
       // errors. There most certainly is a *better* way to do this,
       // if you, the reader, know what that is, please open an issue :)
-      let handler = Handler::with_emitter(false, None, Box::new(SilentEmitter));
+      let handler = Handler::with_emitter(Box::new(SilentEmitter));
       sess.span_diagnostic = handler;
     }));
 

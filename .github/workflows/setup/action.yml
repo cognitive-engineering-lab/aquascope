@@ -40,6 +40,6 @@ runs:
 
     - name: Build test book
       run: |
-        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$($(rustup which --toolchain nightly-2023-04-12 rustc) --print target-libdir)
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$($(rustup which --toolchain nightly-2023-08-25 rustc) --print target-libdir)
         cd crates/mdbook-aquascope/test-book && mdbook build
       shell: bash

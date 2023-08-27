@@ -13,7 +13,7 @@ use polonius_engine::{Algorithm, FactTypes, Output as PEOutput};
 use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, Mutability};
-use rustc_index::vec::IndexVec;
+use rustc_index::IndexVec;
 use rustc_middle::{
   mir::{Place, ProjectionElem},
   ty::TyCtxt,
@@ -514,7 +514,7 @@ pub fn compute<'a, 'tcx>(
   };
   log::debug!("computing body permissions {:?}", name);
 
-  let polonius_input_facts = &body_with_facts.input_facts;
+  let polonius_input_facts = body_with_facts.input_facts.as_ref().unwrap();
   let polonius_output =
     PEOutput::compute(polonius_input_facts, Algorithm::Naive, true);
 
@@ -522,7 +522,7 @@ pub fn compute<'a, 'tcx>(
     tcx.hir().body_owner_kind(def_id).is_fn_or_closure();
   let move_data = match MoveData::gather_moves(body, tcx, tcx.param_env(def_id))
   {
-    Ok((_, move_data)) => move_data,
+    Ok(move_data) => move_data,
     Err((move_data, _illegal_moves)) => {
       log::debug!("illegal moves found {_illegal_moves:?}");
       move_data

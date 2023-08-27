@@ -80,7 +80,7 @@ use rustc_data_structures::{
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
   unify::{InPlaceUnificationTable, UnifyKey},
 };
-use rustc_index::vec::{Idx, IndexVec};
+use rustc_index::{Idx, IndexVec};
 use rustc_middle::mir::{BasicBlock, Location};
 use rustc_span::Span;
 
@@ -298,7 +298,7 @@ impl OpenCollections {
     &'this mut self,
     cids: &'a HashSet<CollectionId>,
   ) -> impl Iterator<Item = CollectionBuilder> + 'a {
-    self.0.drain_filter(|cb| cids.contains(&cb.collection))
+    self.0.extract_if(|cb| cids.contains(&cb.collection))
   }
 
   pub fn get(&self, i: BuilderIdx) -> &CollectionBuilder {

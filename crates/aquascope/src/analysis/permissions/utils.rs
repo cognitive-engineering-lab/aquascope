@@ -3,7 +3,7 @@
 use std::collections::hash_map::Entry;
 
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_middle::mir::Location;
+use rustc_middle::mir::{Location, TerminatorEdges};
 use rustc_mir_dataflow::{
   fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice,
 };
@@ -22,20 +22,22 @@ pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
 
   // Only print the analysis on a specific function
   let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-  let Some(name) = ctxt.tcx.hir().opt_name(owner) else { return };
+  let Some(name) = ctxt.tcx.hir().opt_name(owner) else {
+    return;
+  };
   if name.as_str() != "dump_me" {
     return;
   }
 
   let analysis = PAnalysis { ctxt };
-  let results = analysis
+  let mut results = analysis
     .into_engine(ctxt.tcx, &ctxt.body_with_facts.body)
     .iterate_to_fixpoint();
 
   log::debug!("Dumping results for {:?}", name.as_str());
 
   if let Err(e) = ctxt.body_with_facts.body.write_analysis_results(
-    &results,
+    &mut results,
     def_id.to_def_id(),
     ctxt.tcx,
   ) {
@@ -273,7 +275,7 @@ impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
 
 impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
   fn apply_statement_effect(
-    &self,
+    &mut self,
     state: &mut Self::Domain,
     _statement: &rustc_middle::mir::Statement<'tcx>,
     location: rustc_middle::mir::Location,
@@ -281,20 +283,21 @@ impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
     self.check_location(state, location);
   }
 
-  fn apply_terminator_effect(
-    &self,
+  fn apply_terminator_effect<'mir>(
+    &mut self,
     state: &mut Self::Domain,
-    _terminator: &rustc_middle::mir::Terminator<'tcx>,
+    terminator: &'mir rustc_middle::mir::Terminator<'tcx>,
     location: rustc_middle::mir::Location,
-  ) {
+  ) -> TerminatorEdges<'mir, 'tcx> {
     self.check_location(state, location);
+    terminator.edges()
   }
 
   fn apply_call_return_effect(
-    &self,
+    &mut self,
     _state: &mut Self::Domain,
     _block: rustc_middle::mir::BasicBlock,
-    _return_places: rustc_mir_dataflow::CallReturnPlaces<'_, 'tcx>,
+    _return_places: rustc_middle::mir::CallReturnPlaces<'_, 'tcx>,
   ) {
   }
 }

@@ -84,8 +84,8 @@ use rustc_data_structures::{
   },
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
 };
-use rustc_index::{bit_set::HybridBitSet, vec::Idx};
-use rustc_utils::{mir::places_conflict, BodyExt, RegionExt};
+use rustc_index::{bit_set::HybridBitSet, Idx};
+use rustc_utils::{mir::places_conflict, BodyExt};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -98,7 +98,7 @@ rustc_index::newtype_index! {
 
 impl polonius_engine::Atom for SccIdx {
   fn index(self) -> usize {
-    rustc_index::vec::Idx::index(self)
+    rustc_index::Idx::index(self)
   }
 }
 
@@ -395,7 +395,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     .placeholder
     .iter()
     .filter_map(|&(p, _)| vertices.contains(&p).then_some(p))
-    .chain(body.regions_in_return().map(|rg| rg.to_region_vid()))
+    .chain(body.regions_in_return().map(|rg| rg.as_var()))
     .map(|p| scc_constraints.scc(p))
     .collect::<Vec<_>>();
 

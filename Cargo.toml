@@ -1,6 +1,7 @@
 [workspace]
 members = [ "crates/*" ]
 exclude = [ "files" ]
+resolver = "2"
 
 # Make snapshot testing faster
 [profile.dev.package.insta]
