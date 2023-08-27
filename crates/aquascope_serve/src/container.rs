@@ -159,7 +159,7 @@ impl Container {
     pub async fn get_pid(&self, process: &str) -> Result<i64> {
         let mut cmd = Command::new("pidof");
         cmd.arg(process);
-        let (response, _) = self.exec_output(&cmd).await?;
+        let (response, _) = self.exec_output(&mut cmd).await?;
         Ok(response
             .split(' ')
             .next()
@@ -200,7 +200,8 @@ impl Container {
 
     // Returns (Stdout, Stderr)
     #[cfg(not(feature = "no-docker"))]
-    pub async fn exec_output(&self, cmd: &Command) -> Result<(String, String)> {
+    #[allow(clippy::needless_pass_by_ref_mut)]
+    pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
         // Convert back to std::process::Command for access to get_XXX functions.
         let cmd = cmd.as_std();
         let args = iter::once(cmd.get_program())
@@ -301,7 +302,7 @@ impl Container {
         let mut cmd = Command::new("cargo");
         cmd.args(["new", "--bin", pwd, "--quiet"]);
 
-        let (output_s, stderr) = self.exec_output(&cmd).await?;
+        let (output_s, stderr) = self.exec_output(&mut cmd).await?;
 
         if !stderr.trim().is_empty() {
             log::error!("{}", stderr);
@@ -377,9 +378,9 @@ impl Container {
     pub async fn permissions(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
         self.write_source_code(&req.code).await?;
 
-        let cmd = self.permissions_command();
+        let mut cmd = self.permissions_command();
 
-        let (stdout, stderr) = self.exec_output(&cmd).await?;
+        let (stdout, stderr) = self.exec_output(&mut cmd).await?;
 
         Ok(ServerResponse {
             // XXX: we'll assume that if there was anything on `stdout`
@@ -395,9 +396,9 @@ impl Container {
     pub async fn interpreter(&self, req: &SingleFileRequest) -> Result<ServerResponse> {
         self.write_source_code(&req.code).await?;
 
-        let cmd = self.interpreter_command(req);
+        let mut cmd = self.interpreter_command(req);
 
-        let (stdout, stderr) = self.exec_output(&cmd).await?;
+        let (stdout, stderr) = self.exec_output(&mut cmd).await?;
 
         Ok(ServerResponse {
             // XXX: we'll assume that if there was anything on `stdout`

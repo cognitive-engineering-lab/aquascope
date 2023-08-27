@@ -260,12 +260,10 @@ export class Editor {
       this.metaContainer.unmount();
     }
 
-    let contents = this.view.state.doc.toJSON().join("\n");
     renderInterpreter(
       this.view,
       this.interpreterContainer,
       trace,
-      contents,
       config,
       annotations
     );
