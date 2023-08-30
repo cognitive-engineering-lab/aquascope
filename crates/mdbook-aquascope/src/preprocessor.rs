@@ -117,12 +117,23 @@ impl AquascopePreprocessor {
 
       let response = String::from_utf8(output.stdout)?;
       let response_json: serde_json::Value = serde_json::from_str(&response)?;
-      if response_json.get("Err").is_some() {
+      let is_err = match (response_json.as_object(), response_json.as_array()) {
+        (Some(obj), _) => obj.get("Err").is_some(),
+        (_, Some(arr)) => arr.iter().any(|obj| obj.get("Err").is_some()),
+        _ => false,
+      };
+      if is_err {
         let stderr = String::from_utf8(output.stderr)?;
         bail!(
           "Aquascope failed for program:\n{}\nwith error:\n{stderr}",
           block.code,
         )
+      }
+
+      if let Some("BuildError") =
+        response_json.get("type").and_then(|ty| ty.as_str())
+      {
+        bail!("Aquascope failed for program:\n{}", block.code)
       }
 
       responses.insert(operation, response_json);
