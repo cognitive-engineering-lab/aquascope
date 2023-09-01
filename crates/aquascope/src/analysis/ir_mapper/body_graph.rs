@@ -65,6 +65,7 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
       .basic_blocks
       .reverse_postorder()
       .iter()
+      .rev()
       .filter(|bb| CleanedBody::keep_block(&self.0.basic_blocks[**bb]))
       .copied()
   }

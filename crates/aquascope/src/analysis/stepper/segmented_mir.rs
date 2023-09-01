@@ -260,16 +260,14 @@ impl OpenCollections {
   }
 
   pub fn iter(&self) -> impl Iterator<Item = &CollectionBuilder> + '_ {
-    // Open collections are pushed on the end, but we want to search
-    // in the most recently pushed by reverse the Vec::iter
+    // Open collections behaves like a stack, so we need to reverse the iterator.
     self.0.iter().rev()
   }
 
   pub fn enumerate(
     &self,
   ) -> impl Iterator<Item = (BuilderIdx, &CollectionBuilder)> + '_ {
-    // Open collections are pushed on the end, but we want to search
-    // in the most recently pushed by reverse the Vec::iter
+    // Open collections behaves like a stack, so we need to reverse the iterator.
     self
       .0
       .iter()
@@ -281,8 +279,7 @@ impl OpenCollections {
   pub fn iter_mut(
     &mut self,
   ) -> impl Iterator<Item = &mut CollectionBuilder> + '_ {
-    // Open collections are pushed on the end, but we want to search
-    // in the most recently pushed, thus using reversing.
+    // Open collections behaves like a stack, so we need to reverse the iterator.
     self.0.iter_mut().rev()
   }
 
@@ -400,7 +397,12 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   }
 
   fn finish_first_collection(&mut self) -> Result<()> {
-    ensure!(self.processing.len() == 1, "More than one collection open");
+    log::debug!("Finishing, open collections: {:#?}", self.processing);
+    ensure!(
+      self.processing.len() == 1,
+      "More than one collection open {:#?}",
+      self.processing
+    );
     self.processing.clear();
     Ok(())
   }
@@ -571,6 +573,8 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
     // For each of the target BasicBlocks of the switchInt:
     for sblock in mapper.cleaned_graph.successors(location.block) {
+      log::debug!("Adding segment to switch successor: {sblock:?}");
+
       // 1. insert the split segment into the branch
       let mut to = sblock.start_location();
       let span = get_span(&mut to);
@@ -612,7 +616,9 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   ) -> Result<BranchId> {
     log::debug!("opening user initiated branch at {location:?}");
     log::debug!("open branches BEFORE {:#?}", self.processing);
+
     let r = self.mk_branch(location, GetSpanner::InsertNew(Box::new(get_span)));
+
     log::debug!("open branches AFTER {:#?}", self.processing);
     r
   }
@@ -623,6 +629,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     root: Location,
   ) -> Result<()> {
     log::debug!("opening implicit branch at {root:?}");
+
     let child = self.mk_branch(root, GetSpanner::GetFrom(parent))?;
     let parent_tid = self.branches[parent].table_id;
     let child_tid = self.branches[child].table_id;
@@ -651,13 +658,15 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       let nested_collections =
         branch.nested.iter().copied().collect::<HashSet<_>>();
 
-      let closed_builders =
-        self.processing.drain_collections(&nested_collections);
+      let closed_builders = self
+        .processing
+        .drain_collections(&nested_collections)
+        // TODO: collecting the iterator is important, otherwise Rust removes
+        // the call to `drain_collections`. To me, this seems like a bug.
+        // I'll update a reference here if I file an issue.
+        .collect::<Vec<_>>();
 
-      log::debug!(
-        "closing builders: {:#?}",
-        closed_builders.collect::<Vec<_>>()
-      );
+      log::debug!("Closed builders {:#?}", closed_builders);
     }
 
     log::debug!("State after closing branches {:#?}", self.processing);

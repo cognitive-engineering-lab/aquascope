@@ -7,7 +7,7 @@ use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_errors::Handler;
-use rustc_hir::{BodyId, ItemKind};
+use rustc_hir::BodyId;
 use rustc_middle::{
   mir::{Rvalue, StatementKind},
   ty::TyCtxt,
@@ -16,6 +16,7 @@ use rustc_span::source_map::FileLoader;
 use rustc_utils::{
   mir::borrowck_facts,
   source_map::{
+    find_bodies::find_bodies,
     range::{self, CharRange, ToSpan},
     spanner::{LocationOrArg, Spanner},
   },
@@ -69,8 +70,8 @@ impl From<&str> for Permissions {
     Permissions {
       read: l.contains('r'),
       write: l.contains('w'),
-      // we keep 'd' for backwards compatibility from a
-      // time when the front-end permissions showd 'D' for drop.
+      // We keep 'd' for backwards compatibility from a
+      // time when the front-end permissions showed 'D' for drop.
       drop: l.contains('d') || l.contains('o'),
     }
   }
@@ -463,23 +464,16 @@ pub fn for_each_body<'tcx>(
   tcx: TyCtxt<'tcx>,
   mut f: impl FnMut(BodyId, &BodyWithBorrowckFacts<'tcx>),
 ) {
-  let hir = tcx.hir();
-  hir
-    .items()
-    .filter_map(|id| match hir.item(id).kind {
-      ItemKind::Fn(_, _, body) => Some(body),
-      _ => None,
-    })
-    .for_each(|body_id| {
-      let def_id = tcx.hir().body_owner_def_id(body_id);
-      errors::track_body_diagnostics(def_id);
-      let body_with_facts =
-        borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
+  find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
+    let def_id = tcx.hir().body_owner_def_id(body_id);
+    errors::track_body_diagnostics(def_id);
+    let body_with_facts =
+      borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
 
-      log::debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
+    log::debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
 
-      f(body_id, body_with_facts);
-    })
+    f(body_id, body_with_facts);
+  })
 }
 
 pub fn compile_normal(
@@ -506,7 +500,7 @@ pub fn compile(
     is_interpreter,
   };
   let args = format!(
-    "rustc {DUMMY_FILE_NAME} --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage --allow warnings {args}",
+    "rustc {DUMMY_FILE_NAME} --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage -A warnings {args}",
   );
   let args = args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
 
@@ -544,7 +538,7 @@ where
     });
   }
 
-  fn after_parsing<'tcx>(
+  fn after_expansion<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
     queries: &'tcx rustc_interface::Queries<'tcx>,
