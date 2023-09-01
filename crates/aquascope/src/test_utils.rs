@@ -14,11 +14,11 @@ use rustc_middle::{
 };
 use rustc_span::source_map::FileLoader;
 use rustc_utils::{
-  mir::borrowck_facts,
+  mir::{borrowck_facts, location_or_arg::LocationOrArg},
   source_map::{
     find_bodies::find_bodies,
     range::{self, CharRange, ToSpan},
-    spanner::{LocationOrArg, Spanner},
+    spanner::Spanner,
   },
   test_utils::{DUMMY_FILE, DUMMY_FILE_NAME},
   BodyExt, OperandExt,

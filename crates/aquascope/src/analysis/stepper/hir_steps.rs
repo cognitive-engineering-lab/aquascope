@@ -760,8 +760,6 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
 #[cfg(test)]
 mod tests {
-  use std::sync::Once;
-
   use super::{super::segmented_mir::test_exts::SegmentedMirTestExt, *};
   use crate::{analysis::ir_mapper::GatherMode, test_utils as tu};
 
