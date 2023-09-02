@@ -1,0 +1,384 @@
+---
+source: crates/aquascope/tests/stepper.rs
+description: apply_curve@apply_curve.test
+---
+- - 10
+  - - - (*self).curve
+      - is_live:
+          type: High
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: High
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+            value: true
+          write:
+            type: High
+            value: true
+          drop:
+            type: None
+            value: false
+    - - (*self).curve@Some.0
+      - is_live:
+          type: High
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: High
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+            value: true
+          write:
+            type: High
+            value: true
+          drop:
+            type: None
+            value: false
+    - - (*self).scores
+      - is_live:
+          type: High
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: High
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+            value: true
+          write:
+            type: High
+            value: true
+          drop:
+            type: None
+            value: false
+    - - "*self"
+      - is_live:
+          type: High
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: High
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+            value: true
+          write:
+            type: High
+            value: true
+          drop:
+            type: None
+            value: false
+    - - self
+      - is_live:
+          type: High
+          value: true
+        type_droppable:
+          type: High
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+            value: true
+          write:
+            type: None
+            value: false
+          drop:
+            type: High
+            value: true
+- - 11
+  - - - (*self).curve
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: High
+          value: 0
+        loan_drop_refined:
+          type: High
+          value: 0
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: Low
+          drop:
+            type: None
+            value: false
+    - - (*self).curve@Some.0
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: High
+          value: 0
+        loan_drop_refined:
+          type: High
+          value: 0
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: Low
+          drop:
+            type: None
+            value: false
+    - - (*self).scores
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: High
+          value: 0
+        loan_drop_refined:
+          type: High
+          value: 0
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: Low
+          drop:
+            type: None
+            value: false
+    - - "*curve"
+      - is_live:
+          type: High
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+            value: true
+          write:
+            type: None
+            value: false
+          drop:
+            type: None
+            value: false
+    - - "*self"
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: false
+        type_writeable:
+          type: None
+          value: true
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: High
+          value: 0
+        loan_drop_refined:
+          type: High
+          value: 0
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: Low
+          drop:
+            type: None
+            value: false
+    - - curve
+      - is_live:
+          type: High
+          value: true
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: None
+        loan_drop_refined:
+          type: None
+        permissions:
+          read:
+            type: High
+            value: true
+          write:
+            type: None
+            value: false
+          drop:
+            type: High
+            value: true
+    - - self
+      - is_live:
+          type: None
+          value: true
+        type_droppable:
+          type: None
+          value: true
+        type_writeable:
+          type: None
+          value: false
+        path_moved:
+          type: None
+        path_uninitialized:
+          type: None
+          value: false
+        loan_read_refined:
+          type: None
+        loan_write_refined:
+          type: High
+          value: 0
+        loan_drop_refined:
+          type: High
+          value: 0
+        permissions:
+          read:
+            type: None
+            value: true
+          write:
+            type: None
+            value: false
+          drop:
+            type: Low
+

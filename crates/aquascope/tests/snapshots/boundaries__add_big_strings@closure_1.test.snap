@@ -2,7 +2,9 @@
 source: crates/aquascope/tests/boundaries.rs
 description: add_big_strings@closure_1.test
 ---
-- location: 96
+- location:
+    line: 2
+    column: 9
   expected:
     read: true
     write: false
@@ -17,7 +19,9 @@ description: add_big_strings@closure_1.test
       read: true
       write: true
       drop: false
-- location: 120
+- location:
+    line: 2
+    column: 33
   expected:
     read: true
     write: false
@@ -32,7 +36,9 @@ description: add_big_strings@closure_1.test
       read: true
       write: true
       drop: false
-- location: 151
+- location:
+    line: 3
+    column: 13
   expected:
     read: true
     write: false
@@ -47,7 +53,9 @@ description: add_big_strings@closure_1.test
       read: true
       write: false
       drop: true
-- location: 169
+- location:
+    line: 4
+    column: 12
   expected:
     read: true
     write: false
@@ -62,7 +70,9 @@ description: add_big_strings@closure_1.test
       read: true
       write: false
       drop: false
-- location: 185
+- location:
+    line: 4
+    column: 28
   expected:
     read: true
     write: false
@@ -77,7 +87,9 @@ description: add_big_strings@closure_1.test
       read: true
       write: false
       drop: false
-- location: 209
+- location:
+    line: 5
+    column: 15
   expected:
     read: true
     write: true
@@ -94,7 +106,9 @@ description: add_big_strings@closure_1.test
       read: true
       write: false
       drop: false
-- location: 216
+- location:
+    line: 5
+    column: 22
   expected:
     read: true
     write: false

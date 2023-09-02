@@ -2,7 +2,9 @@
 source: crates/aquascope/tests/boundaries.rs
 description: dangling_pointer@dangling_pointer.test
 ---
-- location: 94
+- location:
+    line: 3
+    column: 3
   expected:
     read: true
     write: false
@@ -20,8 +22,12 @@ description: dangling_pointer@dangling_pointer.test
   expecting_flow:
     is_violation: true
     flow_context:
-      start: 93
-      end: 95
+      start:
+        line: 3
+        column: 2
+      end:
+        line: 3
+        column: 4
       filename:
         private: 0
     kind: LocalOutlivesUniversal

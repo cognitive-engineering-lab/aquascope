@@ -2,7 +2,9 @@
 source: crates/aquascope/tests/boundaries.rs
 description: mut_slice@array.test
 ---
-- location: 192
+- location:
+    line: 17
+    column: 2
   expected:
     read: true
     write: true

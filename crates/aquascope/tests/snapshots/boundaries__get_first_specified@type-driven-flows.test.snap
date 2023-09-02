@@ -2,7 +2,9 @@
 source: crates/aquascope/tests/boundaries.rs
 description: get_first_specified@type-driven-flows.test
 ---
-- location: 487
+- location:
+    line: 21
+    column: 15
   expected:
     read: true
     write: false
@@ -20,12 +22,18 @@ description: get_first_specified@type-driven-flows.test
   expecting_flow:
     is_violation: false
     flow_context:
-      start: 474
-      end: 492
+      start:
+        line: 21
+        column: 2
+      end:
+        line: 21
+        column: 20
       filename:
         private: 0
     kind: Ok
-- location: 495
+- location:
+    line: 22
+    column: 2
   expected:
     read: true
     write: false
@@ -43,8 +51,12 @@ description: get_first_specified@type-driven-flows.test
   expecting_flow:
     is_violation: false
     flow_context:
-      start: 495
-      end: 500
+      start:
+        line: 22
+        column: 2
+      end:
+        line: 22
+        column: 7
       filename:
         private: 0
     kind: Ok

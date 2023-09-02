@@ -360,7 +360,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     } else {
       // If the IRMapper can't determine a single exit location that
       // is most often caused by branching, in this case we just assume
-      // that a switchInt was procued. We could do something more robust
+      // that a switchInt was produced. We can do something more robust
       // if we see the need for it.
       true
     }
@@ -500,6 +500,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
     if let Some(expr) = block.expr {
       log::debug!("BLOCK contains final EXPR");
+
       self.visit_expr(expr);
       self.insert_step_at_node_exit(expr.hir_id);
     }
@@ -760,10 +761,21 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
 #[cfg(test)]
 mod tests {
+  use std::sync::Once;
+
   use super::{super::segmented_mir::test_exts::SegmentedMirTestExt, *};
   use crate::{analysis::ir_mapper::GatherMode, test_utils as tu};
 
+  static INIT: Once = Once::new();
+
+  fn init_testing() {
+    INIT.call_once(|| {
+      env_logger::init();
+    });
+  }
+
   fn compile_and_run(code: impl Into<String>) {
+    init_testing();
     tu::compile_normal(code, |tcx| {
       tu::for_each_body(tcx, |body_id, wfacts| {
         fluid_let::fluid_set!(INCLUDE_MODE, PermIncludeMode::Changes);
@@ -978,7 +990,7 @@ fn canttouchthis() -> usize {
   //      `loop { if break {} }` are not present in the
   //      simplified MIR, which currently causes a few issues.
   test_valid_segmented_mir!(
-    panics_with "invalid smir" =>
+    panics_with "internal error" =>
     weird_exprs_angrydome,
     r#"
 fn angrydome() {

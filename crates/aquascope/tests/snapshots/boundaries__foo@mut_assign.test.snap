@@ -2,7 +2,9 @@
 source: crates/aquascope/tests/boundaries.rs
 description: foo@mut_assign.test
 ---
-- location: 27
+- location:
+    line: 1
+    column: 2
   expected:
     read: true
     write: true

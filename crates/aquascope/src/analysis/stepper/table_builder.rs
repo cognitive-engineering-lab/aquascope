@@ -190,31 +190,9 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
       .extract_if(|place: &Place, _| all_attached.contains(&place.local))
       .collect::<HashMap<_, _>>();
 
-    // let diffs_in_tables = |tbls: &Tables| {
-    //   tbls
-    //     .iter()
-    //     .flat_map(|(_, v)| v.iter().flat_map(|tbl| tbl.data.values()))
-    //     .copied()
-    //     .collect::<HashSet<PermissionsDataDiff>>()
-    // };
-
     // Flatten all tables to the unique `PermissionsDataDiff`s
     // that exist within them.
-
-    // let diffs_in_branches = diffs_in_tables(&mut temp_middle);
-    // for (_, v) in temp_joins.iter_mut() {
-    //   for tbl in v.iter_mut() {
-    //     let drained = tbl
-    //       .data
-    //       .drain_filter(|_, diff| diffs_in_branches.contains(diff))
-    //       .map(|(p, _)| p)
-    //       .collect::<Vec<_>>();
-    //     log::debug!("diffs at join loc removed for redundancy {drained:#?}");
-    //   }
-    // }
-
     result.extend(temp_middle);
-    // result.extend(temp_joins);
 
     // Attach filtered locals
     result.entry(reach.to).or_default().push(Table {
@@ -284,11 +262,11 @@ pub(super) fn prettify_permission_steps<'tcx>(
         .collect::<Vec<_>>();
 
       // This could be a little more graceful. The idea is that
-      // we want to remove all permission steps which occur after
+      // we want to remove all permission steps that occur after
       // the first error, but the steps involved with the first
       // error could still be helpful. This is why we filter all
       // spans with a LO BytePos greater than the error
-      // span HI BytePos.
+      // span's HI BytePos.
       if !(entries.is_empty()
         || first_error_span_opt
           .is_some_and(|err_span| err_span.hi() < span.lo()))

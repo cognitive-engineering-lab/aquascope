@@ -7,13 +7,21 @@ steps:
       frames:
         - name: main
           body_span:
-            start: 0
-            end: 60
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           location:
-            start: 0
-            end: 9
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 0
+              column: 9
             filename:
               private: 0
           locals: []
@@ -23,13 +31,21 @@ steps:
       frames:
         - name: main
           body_span:
-            start: 0
-            end: 60
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           location:
-            start: 14
-            end: 39
+            start:
+              line: 1
+              column: 2
+            end:
+              line: 1
+              column: 27
             filename:
               private: 0
           locals:
@@ -58,13 +74,21 @@ steps:
       frames:
         - name: main
           body_span:
-            start: 0
-            end: 60
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           location:
-            start: 42
-            end: 58
+            start:
+              line: 2
+              column: 2
+            end:
+              line: 2
+              column: 18
             filename:
               private: 0
           locals:
@@ -110,13 +134,21 @@ steps:
       frames:
         - name: main
           body_span:
-            start: 0
-            end: 60
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           location:
-            start: 59
-            end: 60
+            start:
+              line: 3
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           locals: []

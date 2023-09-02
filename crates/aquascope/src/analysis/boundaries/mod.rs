@@ -288,6 +288,14 @@ impl ExpectedPermissions {
       drop: false,
     })
   }
+
+  pub fn from_discriminant() -> Self {
+    Self(Permissions {
+      read: true,
+      write: false,
+      drop: false,
+    })
+  }
 }
 
 impl From<ExpectedPermissions> for Permissions {

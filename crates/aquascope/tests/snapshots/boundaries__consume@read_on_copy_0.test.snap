@@ -1,0 +1,6 @@
+---
+source: crates/aquascope/tests/boundaries.rs
+description: consume@read_on_copy_0.test
+---
+[]
+

@@ -2,11 +2,13 @@
 source: crates/aquascope/tests/boundaries.rs
 description: main@match_0.test
 ---
-- location: 88
+- location:
+    line: 4
+    column: 11
   expected:
     read: true
     write: false
-    drop: true
+    drop: false
   actual:
     type_droppable: true
     type_writeable: false
@@ -17,7 +19,9 @@ description: main@match_0.test
       read: true
       write: false
       drop: true
-- location: 171
+- location:
+    line: 9
+    column: 7
   expected:
     read: true
     write: false
