@@ -1,0 +1,27 @@
+fn refit() {
+  let opt: Option<String> =
+    Some(String::from("Hello world"));
+
+  match opt {
+    Some(_) => (),
+    None => (),
+  };
+
+  drop(opt);
+}
+
+fn moveit() {
+  let opt: Option<String> =
+    Some(String::from("Hello world"));
+
+  match &opt {
+    // NOTE: this is an error, but Aquascope does not place
+    // RWO boundaries on patterns. This test serves to mark this
+    // inconsistency and it should be updated in the future
+    // (should that feature get implemented).
+    Some(mut s) => {
+        println!("{s}");
+    },
+    None => (),
+  };
+}
