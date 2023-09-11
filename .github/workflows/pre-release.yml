@@ -80,7 +80,7 @@ jobs:
       - name: Build docs
         run: |
           cargo doc --lib
-          mv ../target/doc packages/aquascope-standalone/dist/doc
+          mv ./target/doc ./frontend/packages/aquascope-standalone/dist/doc
       - uses: JamesIves/github-pages-deploy-action@v4.3.0
         with:
           branch: gh-pages
