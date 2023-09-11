@@ -2,7 +2,9 @@
 source: crates/aquascope/tests/boundaries.rs
 description: missing_constraint@missing_constraint.test
 ---
-- location: 86
+- location:
+    line: 2
+    column: 2
   expected:
     read: true
     write: false
@@ -20,8 +22,12 @@ description: missing_constraint@missing_constraint.test
   expecting_flow:
     is_violation: true
     flow_context:
-      start: 86
-      end: 87
+      start:
+        line: 2
+        column: 2
+      end:
+        line: 2
+        column: 3
       filename:
         private: 0
     kind: MissingUniversalConstraint

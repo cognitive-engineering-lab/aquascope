@@ -2,7 +2,7 @@
 
 use miri::{
   AllocKind, AllocMap, Immediate, InterpError, InterpErrorInfo, InterpResult,
-  MPlaceTy, MemPlaceMeta, MemoryKind, OpTy, UndefinedBehaviorInfo, Value,
+  MPlaceTy, MemPlaceMeta, MemoryKind, OpTy, Projectable, UndefinedBehaviorInfo,
 };
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
@@ -151,11 +151,14 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
     &mut self,
     base: miri::MPlaceTy<'tcx, miri::Provenance>,
   ) -> InterpResult<'tcx, MValue> {
+    let el_ty = base.layout.ty;
+    let stride = base.layout.size;
     Ok(match self.heap_alloc_kinds.last() {
       Some(MHeapAllocKind::String { len }) => {
-        let array =
-          self.read_array(base, base.layout.size, *len, base.layout.ty)?;
-        let MValue::Array(values) = array else { unreachable!() };
+        let array = self.read_array(base, stride, *len, el_ty)?;
+        let MValue::Array(values) = array else {
+          unreachable!()
+        };
         let chars = values.map(|el| {
           let MValue::Uint(c) = el else { unreachable!() };
           MValue::Char(c as usize)
@@ -163,7 +166,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         MValue::Array(chars)
       }
       Some(MHeapAllocKind::Vec { len }) => {
-        self.read_array(base, base.layout.size, *len, base.layout.ty)?
+        self.read_array(base, stride, *len, el_ty)?
       }
       Some(MHeapAllocKind::Box) | None => self.read(&OpTy::from(base))?,
     })
@@ -193,7 +196,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
     if !alloc_discovered {
       // If we haven't seen this allocation, then use `postprocess` to convert
       // the raw memory value into an understandable MValue.
-      let mvalue = self.read_alloc(mplace)?;
+      let mvalue = self.read_alloc(mplace.clone())?;
 
       // Get the kind of memory we're looking at (either stack or heap)
       // from the allocation metadata.
@@ -240,11 +243,12 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
     // The pointer could point anywhere inside the allocation, so we use
     // `get_path_segments` to reverse-engineer a path from the memory location.
+    let meta = mplace.meta;
     let parts =
       self.get_path_segments(alloc_size, alloc_layout, mplace, offset);
     let path = MPath { segment, parts };
 
-    let range = match mplace.meta {
+    let range = match meta {
       MemPlaceMeta::Meta(meta) => Some(meta.to_u64()?),
       MemPlaceMeta::None => None,
     };
@@ -291,7 +295,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
     let result = match ty.kind() {
       _ if ty.is_box() => {
         self.heap_alloc_kinds.push(MHeapAllocKind::Box);
-        let unique = op.project_field(&self.ev.ecx, 0)?;
+        let unique = self.ev.ecx.project_field(op, 0)?;
         let result = self.read(&unique)?;
         self.heap_alloc_kinds.pop();
         MValue::Adt {
@@ -305,7 +309,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       TyKind::Tuple(tys) => {
         let fields = (0 .. tys.len())
           .map(|i| {
-            let field_op = op.project_field(&self.ev.ecx, i)?;
+            let field_op = self.ev.ecx.project_field(op, i)?;
             self.read(&field_op)
           })
           .collect::<InterpResult<'tcx, Vec<_>>>()?;
@@ -321,7 +325,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
           ($op:expr, $fields:expr) => {{
             let mut fields = Vec::new();
             for (i, field) in $fields.enumerate() {
-              let field_op = $op.project_field(&self.ev.ecx, i)?;
+              let field_op = self.ev.ecx.project_field($op, i)?;
 
               // Skip ZST fields since they don't exist at runtime
               if field_op.layout.is_zst() {
@@ -364,7 +368,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
             let fields = process_fields!(op, adt_def.all_fields());
 
-            if let Some(..) = alloc_kind {
+            if alloc_kind.is_some() {
               self.heap_alloc_kinds.pop();
             }
 
@@ -376,12 +380,12 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
             }
           }
           AdtKind::Enum => {
-            let (_, variant_idx) = self.ev.ecx.read_discriminant(op)?;
-            let casted = op.project_downcast(&self.ev.ecx, variant_idx)?;
+            let variant_idx = self.ev.ecx.read_discriminant(op)?;
+            let casted = self.ev.ecx.project_downcast(op, variant_idx)?;
             let variant_def = adt_def.variant(variant_idx);
             let variant = variant_def.name.to_ident_string();
 
-            let fields = process_fields!(casted, variant_def.fields.iter());
+            let fields = process_fields!(&casted, variant_def.fields.iter());
 
             MValue::Adt {
               name,
@@ -435,7 +439,10 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
       TyKind::Array(el_ty, _) => {
         let base = op.assert_mem_place();
-        let FieldsShape::Array { stride, count } = base.layout.layout.fields() else { unreachable!() };
+        let FieldsShape::Array { stride, count } = base.layout.layout.fields()
+        else {
+          unreachable!()
+        };
         self.read_array(base, *stride, *count, *el_ty)?
       }
 
@@ -447,7 +454,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       _ if ty.is_any_ptr() => {
         let val = self.ev.ecx.read_immediate(op)?;
         let mplace = self.ev.ecx.ref_to_mplace(&val)?;
-        if self.ev.ecx.check_mplace(mplace).is_err() {
+        if self.ev.ecx.check_mplace(&mplace).is_err() {
           let alloc_id = match self.ev.ecx.ptr_get_alloc_id(mplace.ptr) {
             Ok((alloc_id, _, _)) => Some(self.ev.remap_alloc_id(alloc_id)),
             Err(_) => None,
@@ -470,13 +477,15 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
               .map(|capture| capture.var_ident.to_string())
               .collect()
           }
-          None => vec![String::from("(tmp)"); closure.upvar_tys().count()],
+          None => vec![String::from("(tmp)"); closure.upvar_tys().len()],
         };
 
         let env_ty = closure.tupled_upvars_ty();
         let mut env_op = op.clone();
         env_op.layout.ty = env_ty;
-        let MValue::Tuple(env) = self.read(&env_op)? else { unreachable!() };
+        let MValue::Tuple(env) = self.read(&env_op)? else {
+          unreachable!()
+        };
         let fields = upvar_names.into_iter().zip(env).collect();
 
         MValue::Adt {

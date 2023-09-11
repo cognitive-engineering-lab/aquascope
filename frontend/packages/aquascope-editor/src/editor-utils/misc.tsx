@@ -4,10 +4,12 @@ import {
   StateEffect,
   StateEffectType,
   StateField,
+  Text,
 } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import _ from "lodash";
 
+import { CharPos } from "../bindings/CharPos";
 import {
   AnalysisFacts,
   AnalysisOutput,
@@ -88,7 +90,7 @@ export let makeTag = (length: number) => {
 
 export function genStateField<T>(
   ty: StateEffectType<T>,
-  transform: (t: T) => Array<Range<Decoration>>
+  transform: (t: T, text: Text) => Array<Range<Decoration>>
 ): StateField<DecorationSet> {
   return StateField.define<DecorationSet>({
     create: () => Decoration.none,
@@ -97,7 +99,7 @@ export function genStateField<T>(
       for (let e of transactions.effects) {
         if (e.is(ty)) {
           // Sort the values by default          vvvv
-          return RangeSet.of(transform(e.value), true);
+          return RangeSet.of(transform(e.value, transactions.newDoc), true);
         }
       }
 
@@ -119,28 +121,32 @@ export const loanFactsStateType = StateEffect.define<ActionFacts[]>();
 
 export const loanFactsField = genStateField<Array<ActionFacts>>(
   loanFactsStateType,
-  (ts: Array<ActionFacts>): Array<Range<Decoration>> =>
-    ts.flatMap(loanFactsToDecoration)
+  (ts: Array<ActionFacts>, text: Text): Array<Range<Decoration>> =>
+    ts.flatMap(t => loanFactsToDecoration(t, text))
 );
 
-function loanFactsToDecoration({
-  refinerTag,
-  regionTag,
-  refinerPoint,
-  region,
-}: ActionFacts): Array<Range<Decoration>> {
+function loanFactsToDecoration(
+  { refinerTag, regionTag, refinerPoint, region }: ActionFacts,
+  text: Text
+): Array<Range<Decoration>> {
   let loanDeco = Decoration.mark({
     class: "aquascope-loan",
     tagName: refinerTag,
-  }).range(refinerPoint.start, refinerPoint.end);
+  }).range(
+    linecolToPosition(refinerPoint.start, text),
+    linecolToPosition(refinerPoint.end, text)
+  );
 
   let regionDecos = region.refined_ranges
-    .filter(range => range.start != range.end)
+    .filter(range => !_.isEqual(range.start, range.end))
     .map(range => {
       let highlightedRange = Decoration.mark({
         class: "aquascope-live-region",
         tagName: regionTag,
-      }).range(range.start, range.end);
+      }).range(
+        linecolToPosition(range.start, text),
+        linecolToPosition(range.end, text)
+      );
       return highlightedRange;
     });
 
@@ -317,3 +323,6 @@ export let makeDecorationField = () => {
   });
   return { setEffect, field };
 };
+
+export let linecolToPosition = (p: CharPos, t: Text): number =>
+  t.line(p.line + 1).from + p.column;

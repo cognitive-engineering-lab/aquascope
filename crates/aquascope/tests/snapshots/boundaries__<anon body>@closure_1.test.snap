@@ -1,18 +1,18 @@
 ---
 source: crates/aquascope/tests/boundaries.rs
-description: bx@box.test
+description: "<anon body>@closure_1.test"
 ---
 - location:
     line: 2
-    column: 2
+    column: 33
   expected:
     read: true
-    write: true
+    write: false
     drop: false
   actual:
     type_droppable: false
     type_writeable: false
-    type_copyable: true
+    type_copyable: false
     is_live: true
     path_uninitialized: false
     permissions:

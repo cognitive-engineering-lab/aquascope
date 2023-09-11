@@ -2,7 +2,9 @@
 source: crates/aquascope/tests/boundaries.rs
 description: main@assignop_path_resolution.test
 ---
-- location: 181
+- location:
+    line: 6
+    column: 11
   expected:
     read: true
     write: false
@@ -17,7 +19,9 @@ description: main@assignop_path_resolution.test
       read: true
       write: true
       drop: true
-- location: 194
+- location:
+    line: 7
+    column: 10
   expected:
     read: true
     write: false
@@ -32,7 +36,9 @@ description: main@assignop_path_resolution.test
       read: true
       write: false
       drop: false
-- location: 200
+- location:
+    line: 8
+    column: 2
   expected:
     read: true
     write: true
@@ -47,7 +53,9 @@ description: main@assignop_path_resolution.test
       read: true
       write: true
       drop: true
-- location: 205
+- location:
+    line: 8
+    column: 7
   expected:
     read: true
     write: false
@@ -64,7 +72,9 @@ description: main@assignop_path_resolution.test
       read: true
       write: false
       drop: false
-- location: 209
+- location:
+    line: 8
+    column: 11
   expected:
     read: true
     write: false
@@ -79,7 +89,9 @@ description: main@assignop_path_resolution.test
       read: true
       write: false
       drop: true
-- location: 213
+- location:
+    line: 8
+    column: 15
   expected:
     read: true
     write: false

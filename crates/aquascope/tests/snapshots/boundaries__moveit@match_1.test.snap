@@ -1,22 +1,22 @@
 ---
 source: crates/aquascope/tests/boundaries.rs
-description: bx@box.test
+description: moveit@match_1.test
 ---
 - location:
-    line: 2
-    column: 2
+    line: 16
+    column: 9
   expected:
     read: true
-    write: true
+    write: false
     drop: false
   actual:
-    type_droppable: false
+    type_droppable: true
     type_writeable: false
-    type_copyable: true
+    type_copyable: false
     is_live: true
     path_uninitialized: false
     permissions:
       read: true
       write: false
-      drop: false
+      drop: true
 

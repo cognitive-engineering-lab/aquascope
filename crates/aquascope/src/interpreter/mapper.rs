@@ -23,7 +23,9 @@ struct FindSteppableNodes {
 
 impl Visitor<'_> for FindSteppableNodes {
   fn visit_body(&mut self, b: &Body) {
-    let ExprKind::Block(block, _) = b.value.kind else { return };
+    let ExprKind::Block(block, _) = b.value.kind else {
+      return;
+    };
     self.visit_block(block);
   }
 

@@ -24,7 +24,11 @@ import {
   MUndefinedBehavior,
   MValue,
 } from "../types";
-import { evenlySpaceAround, makeDecorationField } from "./misc";
+import {
+  evenlySpaceAround,
+  linecolToPosition,
+  makeDecorationField,
+} from "./misc";
 
 const DEBUG: boolean = false;
 
@@ -35,14 +39,16 @@ export interface InterpreterConfig {
 }
 
 let ConfigContext = React.createContext<InterpreterConfig>({});
-let CodeContext = React.createContext("");
+let CodeContext = React.createContext<EditorView | undefined>(undefined);
 let PathContext = React.createContext<string[]>([]);
 let ErrorContext = React.createContext<MUndefinedBehavior | undefined>(
   undefined
 );
 
-let codeRange = (code: string, range: CharRange) => {
-  return code.slice(range.start, range.end);
+let codeRange = (view: EditorView, range: CharRange) => {
+  let start = linecolToPosition(range.start, view.state.doc);
+  let end = linecolToPosition(range.end, view.state.doc);
+  return view.state.doc.sliceString(start, end);
 };
 
 let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) => {
@@ -747,6 +753,7 @@ let InterpreterView = ({
 };
 
 let filterSteps = (
+  view: EditorView,
   steps: MStep<CharRange>[],
   marks: number[]
 ): [number[], MStep<CharRange>[]] => {
@@ -755,8 +762,10 @@ let filterSteps = (
     let stepRevIdx = stepsRev.findIndex(step => {
       let frame = _.last(step.stack.frames)!;
       let markInFrame =
-        frame.body_span.start <= idx && idx <= frame.body_span.end;
-      let markAfterLoc = idx > frame.location.start;
+        linecolToPosition(frame.body_span.start, view.state.doc) <= idx &&
+        idx <= linecolToPosition(frame.body_span.end, view.state.doc);
+      let markAfterLoc =
+        idx > linecolToPosition(frame.location.start, view.state.doc);
       return markInFrame && markAfterLoc;
     });
     if (stepRevIdx == -1)
@@ -800,7 +809,6 @@ export function renderInterpreter(
   view: EditorView,
   container: HTMLDivElement,
   trace: MTrace<CharRange>,
-  contents: string,
   config?: InterpreterConfig,
   annotations?: InterpAnnotations
 ) {
@@ -808,7 +816,7 @@ export function renderInterpreter(
   let marks = annotations?.state_locations || [];
   let widgetRanges;
   if (marks.length > 0) {
-    let [sortedMarks, filteredSteps] = filterSteps(trace.steps, marks);
+    let [sortedMarks, filteredSteps] = filterSteps(view, trace.steps, marks);
     widgetRanges = sortedMarks;
     trace.steps = filteredSteps;
   } else {
@@ -831,7 +839,7 @@ export function renderInterpreter(
   });
 
   root.render(
-    <CodeContext.Provider value={contents}>
+    <CodeContext.Provider value={view}>
       <InterpreterView trace={trace} config={config} />
     </CodeContext.Provider>
   );

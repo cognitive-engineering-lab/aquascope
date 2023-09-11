@@ -1,7 +1,7 @@
 use rustc_data_structures::graph::*;
 use rustc_index::{
   bit_set::{HybridBitSet, SparseBitMatrix},
-  vec::Idx,
+  Idx,
 };
 use rustc_utils::mir::control_dependencies::PostDominators;
 

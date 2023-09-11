@@ -5,6 +5,7 @@ import _ from "lodash";
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
+import { CharPos } from "../bindings/CharPos";
 import {
   AnalysisFacts,
   LoanKey,
@@ -18,6 +19,7 @@ import {
 import {
   hideLoanRegion,
   hideMoveRegion,
+  linecolToPosition,
   makeDecorationField,
   ownChar,
   permName,
@@ -271,7 +273,7 @@ let PermDiffRow = ({
   );
 };
 
-let stepLocation = (step: PermissionsLineDisplay): number => {
+let stepLocation = (step: PermissionsLineDisplay): CharPos => {
   return step.location.end;
 };
 
@@ -389,7 +391,9 @@ class PermissionStepLineWidget extends WidgetType {
     readonly annotations?: StepperAnnotations
   ) {
     super();
-    this.line = view.state.doc.lineAt(stepLocation(step));
+    this.line = view.state.doc.lineAt(
+      linecolToPosition(stepLocation(step), view.state.doc)
+    );
   }
 
   eq(other: PermissionStepLineWidget): boolean {
@@ -458,6 +462,6 @@ export function makeStepDecorations(
     Decoration.widget({
       widget: new PermissionStepLineWidget(view, step, facts, annotations),
       side: 1,
-    }).range(stepLocation(step))
+    }).range(linecolToPosition(stepLocation(step), view.state.doc))
   );
 }

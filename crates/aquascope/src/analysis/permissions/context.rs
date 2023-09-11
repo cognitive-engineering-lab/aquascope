@@ -13,11 +13,11 @@
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
 use rustc_borrowck::{
   borrow_set::{BorrowData, BorrowSet},
-  consumers::{BodyWithBorrowckFacts, RichLocation, RustcFacts},
+  consumers::{BodyWithBorrowckFacts, LocationTable, RichLocation, RustcFacts},
 };
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{def_id::DefId, BodyId, Mutability};
-use rustc_index::vec::IndexVec;
+use rustc_index::IndexVec;
 use rustc_middle::{
   mir::{BorrowKind, Local, Location, Place, ProjectionElem},
   ty::{self, ParamEnv, Ty, TyCtxt},
@@ -102,19 +102,23 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     self.place_data[p]
   }
 
+  fn location_table(&self) -> &LocationTable {
+    self.body_with_facts.location_table.as_ref().unwrap()
+  }
+
   pub fn location_to_point(&self, l: Location) -> Point {
-    self.body_with_facts.location_table.start_index(l)
+    self.location_table().start_index(l)
   }
 
   pub fn location_to_points(&self, l: Location) -> SmallVec<[Point; 2]> {
     smallvec![
-      self.body_with_facts.location_table.start_index(l),
-      self.body_with_facts.location_table.mid_index(l)
+      self.location_table().start_index(l),
+      self.location_table().mid_index(l)
     ]
   }
 
   pub fn point_to_location(&self, p: Point) -> Location {
-    match self.body_with_facts.location_table.to_location(p) {
+    match self.location_table().to_location(p) {
       RichLocation::Start(l) | RichLocation::Mid(l) => l,
     }
   }
@@ -188,9 +192,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   pub fn is_mutable_borrow(&self, brw: &BorrowData<'tcx>) -> bool {
-    matches!(brw.kind, BorrowKind::Mut {
-      allow_two_phase_borrow: _,
-    })
+    matches!(brw.kind, BorrowKind::Mut { .. })
   }
 
   pub fn is_mutable_loan(&self, loan: Loan) -> bool {

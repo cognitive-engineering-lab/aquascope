@@ -360,7 +360,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
     } else {
       // If the IRMapper can't determine a single exit location that
       // is most often caused by branching, in this case we just assume
-      // that a switchInt was procued. We could do something more robust
+      // that a switchInt was produced. We can do something more robust
       // if we see the need for it.
       true
     }
@@ -500,6 +500,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
     if let Some(expr) = block.expr {
       log::debug!("BLOCK contains final EXPR");
+
       self.visit_expr(expr);
       self.insert_step_at_node_exit(expr.hir_id);
     }
@@ -760,41 +761,52 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
 #[cfg(test)]
 mod tests {
+  use std::sync::Once;
+
   use super::{super::segmented_mir::test_exts::SegmentedMirTestExt, *};
   use crate::{analysis::ir_mapper::GatherMode, test_utils as tu};
 
-  macro_rules! compile_and_run {
-    ($code:expr) => {
-      tu::compile_normal($code, |tcx| {
-        tu::for_each_body(tcx, |body_id, wfacts| {
-          let body = &wfacts.body;
-          let mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
-          let mut visitor = HirStepPoints::make(&tcx, body, body_id, &mapper)
-            .expect("Failed to create stepper");
-          visitor.visit_nested_body(body_id);
+  static INIT: Once = Once::new();
 
-          if let Some(uf) = visitor.get_unsupported_feature() {
-            eprintln!("unsupported feature: {uf:?}");
-            panic!("unsupported feature");
-          }
+  fn init_testing() {
+    INIT.call_once(|| {
+      env_logger::init();
+    });
+  }
 
-          if let Some(ie) = visitor.get_internal_error() {
-            eprintln!("internal error: {ie:?}");
-            panic!("internal error");
-          }
+  fn compile_and_run(code: impl Into<String>) {
+    init_testing();
+    tu::compile_normal(code, |tcx| {
+      tu::for_each_body(tcx, |body_id, wfacts| {
+        fluid_let::fluid_set!(INCLUDE_MODE, PermIncludeMode::Changes);
+        let body = &wfacts.body;
+        let mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
 
-          let smir = visitor
-            .mir_segments
-            .freeze()
-            .expect("Failed to freeze SegmentedMirBuilder");
+        let mut visitor = HirStepPoints::make(&tcx, body, body_id, &mapper)
+          .expect("Failed to create stepper");
+        visitor.visit_nested_body(body_id);
 
-          if let Err(invalid) = smir.validate(&mapper) {
-            eprintln!("invalid reason: {invalid:?}");
-            panic!("invalid smir");
-          }
-        })
+        if let Some(uf) = visitor.get_unsupported_feature() {
+          eprintln!("unsupported feature: {uf:?}");
+          panic!("unsupported feature");
+        }
+
+        if let Some(ie) = visitor.get_internal_error() {
+          eprintln!("internal error: {ie:?}");
+          panic!("internal error");
+        }
+
+        let smir = visitor
+          .mir_segments
+          .freeze()
+          .expect("Failed to freeze SegmentedMirBuilder");
+
+        if let Err(invalid) = smir.validate(&mapper) {
+          eprintln!("invalid reason: {invalid:?}");
+          panic!("invalid smir");
+        }
       })
-    };
+    })
   }
 
   // Compile a piece of Rust code and assert that the generated SegmentedMir
@@ -804,20 +816,20 @@ mod tests {
       #[test]
       #[should_panic(expected = $s)]
       fn $name() {
-        compile_and_run!($code);
+        compile_and_run($code);
       }
     };
     (should_panic => $name:ident, $code:expr) => {
       #[test]
       #[should_panic]
       fn $name() {
-        compile_and_run!($code);
+        compile_and_run($code);
       }
     };
     ($name:ident, $code:expr) => {
       #[test]
       fn $name() {
-        compile_and_run!($code);
+        compile_and_run($code);
       }
     };
   }
@@ -840,7 +852,7 @@ fn test() {
     branch_simple,
     r#"
 fn test() {
-  let s = String::from("");
+  let mut s = String::from("");
 
   if true {
     let b1 = &mut s;
@@ -978,7 +990,7 @@ fn canttouchthis() -> usize {
   //      `loop { if break {} }` are not present in the
   //      simplified MIR, which currently causes a few issues.
   test_valid_segmented_mir!(
-    panics_with "invalid smir" =>
+    panics_with "internal error" =>
     weird_exprs_angrydome,
     r#"
 fn angrydome() {
@@ -1090,8 +1102,10 @@ fn punch_card() -> impl std::fmt::Debug {
   );
 
   test_valid_segmented_mir!(
+    panics_with "invalid smir" =>
     weird_exprs_i_yield,
     r#"
+#![feature(generators)]
 fn i_yield() {
     static || {
         yield yield yield yield yield yield yield yield yield;

@@ -105,6 +105,25 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
       // Method calls are a form of type-deref coercion which can
       // rely on the adjusted permissions rather than needing to
       // inspect the function signature.
+      ExprKind::Match(discr, arms, _)
+        if discr.is_place_expr(|e| !matches!(e.kind, ExprKind::Lit(_))) =>
+      {
+        let expected = ExpectedPermissions::from_discriminant();
+        let pb = PathBoundary {
+          location: discr.span,
+          hir_id: discr.hir_id,
+          flow_context,
+          conflicting_node: None,
+          expected,
+        };
+
+        self.data.push(pb);
+
+        for a in arms.iter() {
+          self.visit_arm(a);
+        }
+      }
+
       ExprKind::MethodCall(_, rcvr, args, fn_span)
         if !fn_span.from_expansion()
           && rcvr.is_place_expr(|e| !matches!(e.kind, ExprKind::Lit(_))) =>

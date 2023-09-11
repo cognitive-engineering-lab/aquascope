@@ -1,6 +1,6 @@
 use miri::{
   interpret::Provenance, InterpCx, InterpResult, MPlaceTy, Machine,
-  MemPlaceMeta, OpTy, Value,
+  MemPlaceMeta, OpTy,
 };
 use rustc_abi::FieldsShape;
 use rustc_middle::{
@@ -9,7 +9,7 @@ use rustc_middle::{
 };
 use rustc_target::abi::{FieldIdx, Size};
 
-pub trait OpTyExt<'mir, 'tcx, M: Machine<'mir, 'tcx>>: Sized {
+pub trait OpTyExt<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>>: Sized {
   fn field_by_name(
     &self,
     name: &str,
@@ -17,7 +17,7 @@ pub trait OpTyExt<'mir, 'tcx, M: Machine<'mir, 'tcx>>: Sized {
   ) -> InterpResult<'tcx, (&FieldDef, Self)>;
 }
 
-impl<'mir, 'tcx, M, Prov: Provenance> OpTyExt<'mir, 'tcx, M>
+impl<'mir, 'tcx, M, Prov: Provenance + 'static> OpTyExt<'mir, 'tcx, M>
   for OpTy<'tcx, Prov>
 where
   M: Machine<'mir, 'tcx, Provenance = Prov>,
@@ -42,7 +42,7 @@ where
             .collect::<Vec<_>>()
         )
       });
-    Ok((field, self.project_field(ecx, i)?))
+    Ok((field, ecx.project_field(self, i)?))
   }
 }
 
@@ -88,7 +88,9 @@ impl<'tcx> AddressLocator<'_, '_, 'tcx> {
 
       TyKind::Array(_, _) => {
         // dbg!(("array", offset, target));
-        let FieldsShape::Array { stride, .. } = layout.layout.fields() else { unreachable!() };
+        let FieldsShape::Array { stride, .. } = layout.layout.fields() else {
+          unreachable!()
+        };
         let stride = stride.bytes();
         let array_offset = (self.target - offset) / stride * stride;
         let elem = layout.field(self.ecx, 0);

@@ -200,6 +200,7 @@ impl Container {
 
     // Returns (Stdout, Stderr)
     #[cfg(not(feature = "no-docker"))]
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub async fn exec_output(&self, cmd: &mut Command) -> Result<(String, String)> {
         // Convert back to std::process::Command for access to get_XXX functions.
         let cmd = cmd.as_std();

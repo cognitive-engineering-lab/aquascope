@@ -7,13 +7,21 @@ steps:
       frames:
         - name: main
           body_span:
-            start: 0
-            end: 67
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           location:
-            start: 0
-            end: 9
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 0
+              column: 9
             filename:
               private: 0
           locals: []
@@ -23,13 +31,21 @@ steps:
       frames:
         - name: main
           body_span:
-            start: 0
-            end: 67
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           location:
-            start: 14
-            end: 53
+            start:
+              line: 1
+              column: 2
+            end:
+              line: 1
+              column: 41
             filename:
               private: 0
           locals:
@@ -115,13 +131,21 @@ steps:
       frames:
         - name: main
           body_span:
-            start: 0
-            end: 67
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           location:
-            start: 56
-            end: 65
+            start:
+              line: 2
+              column: 2
+            end:
+              line: 2
+              column: 11
             filename:
               private: 0
           locals:
@@ -207,13 +231,21 @@ steps:
       frames:
         - name: main
           body_span:
-            start: 0
-            end: 67
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           location:
-            start: 66
-            end: 67
+            start:
+              line: 3
+              column: 0
+            end:
+              line: 3
+              column: 1
             filename:
               private: 0
           locals: []

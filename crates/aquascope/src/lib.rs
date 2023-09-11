@@ -8,9 +8,9 @@
   let_chains,
   unboxed_closures,
   exact_size_is_empty,
-  hash_drain_filter,
-  drain_filter,
-  type_changing_struct_update
+  type_changing_struct_update,
+  extract_if,
+  hash_extract_if
 )]
 // NOTE: these come from the clippy::pedantic group. Eventually, we'd like to deny
 // the entire group (or most of it), but these are cherry picked for the time being.

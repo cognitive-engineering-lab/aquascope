@@ -1,0 +1,6 @@
+---
+source: crates/aquascope/tests/stepper.rs
+description: drop@struct_with_dtor.test
+---
+[]
+

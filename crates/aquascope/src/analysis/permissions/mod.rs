@@ -44,7 +44,7 @@ rustc_index::newtype_index! {
 
 impl polonius_engine::Atom for PathIndex {
   fn index(self) -> usize {
-    rustc_index::vec::Idx::index(self)
+    rustc_index::Idx::index(self)
   }
 }
 

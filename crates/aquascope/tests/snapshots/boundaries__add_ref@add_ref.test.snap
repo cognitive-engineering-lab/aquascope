@@ -2,7 +2,9 @@
 source: crates/aquascope/tests/boundaries.rs
 description: add_ref@add_ref.test
 ---
-- location: 68
+- location:
+    line: 2
+    column: 11
   expected:
     read: true
     write: false
@@ -17,7 +19,9 @@ description: add_ref@add_ref.test
       read: true
       write: false
       drop: true
-- location: 74
+- location:
+    line: 3
+    column: 3
   expected:
     read: true
     write: true
@@ -35,12 +39,18 @@ description: add_ref@add_ref.test
   expecting_flow:
     is_violation: false
     flow_context:
-      start: 73
-      end: 83
+      start:
+        line: 3
+        column: 2
+      end:
+        line: 3
+        column: 12
       filename:
         private: 0
     kind: Ok
-- location: 80
+- location:
+    line: 3
+    column: 9
   expected:
     read: true
     write: false
@@ -58,8 +68,12 @@ description: add_ref@add_ref.test
   expecting_flow:
     is_violation: true
     flow_context:
-      start: 73
-      end: 83
+      start:
+        line: 3
+        column: 2
+      end:
+        line: 3
+        column: 12
       filename:
         private: 0
     kind: LocalOutlivesUniversal

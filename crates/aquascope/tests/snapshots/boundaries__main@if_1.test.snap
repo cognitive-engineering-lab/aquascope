@@ -2,7 +2,9 @@
 source: crates/aquascope/tests/boundaries.rs
 description: main@if_1.test
 ---
-- location: 114
+- location:
+    line: 7
+    column: 13
   expected:
     read: true
     write: true
@@ -17,7 +19,9 @@ description: main@if_1.test
       read: true
       write: true
       drop: true
-- location: 142
+- location:
+    line: 9
+    column: 13
   expected:
     read: true
     write: true
@@ -32,7 +36,9 @@ description: main@if_1.test
       read: true
       write: true
       drop: true
-- location: 154
+- location:
+    line: 12
+    column: 3
   expected:
     read: true
     write: true
@@ -47,7 +53,9 @@ description: main@if_1.test
       read: true
       write: true
       drop: false
-- location: 176
+- location:
+    line: 14
+    column: 4
   expected:
     read: true
     write: true
@@ -62,7 +70,9 @@ description: main@if_1.test
       read: true
       write: true
       drop: true
-- location: 199
+- location:
+    line: 15
+    column: 4
   expected:
     read: true
     write: true

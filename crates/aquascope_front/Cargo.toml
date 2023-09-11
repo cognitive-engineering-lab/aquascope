@@ -23,8 +23,8 @@ serde_json = "1"
 ts-rs = "6.2"
 itertools = "0.10.5"
 fluid-let = "1.0"
-rustc_plugin = "0.6.0-nightly-2023-04-12"
-rustc_utils = "0.6.0-nightly-2023-04-12"
+rustc_plugin = "0.7.0-nightly-2023-08-25"
+rustc_utils = "0.7.0-nightly-2023-08-25"
 
 # For binaries
 env_logger = {version = "0.9", default-features = false}

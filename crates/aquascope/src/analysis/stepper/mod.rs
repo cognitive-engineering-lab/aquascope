@@ -347,9 +347,9 @@ where
   let ctxt = &analysis.permissions;
   let ir_mapper = &analysis.ir_mapper;
   let body = &ctxt.body_with_facts.body;
-  let _basic_blocks = body.basic_blocks.indices();
   let mut hir_visitor =
     hir_steps::HirStepPoints::make(&ctxt.tcx, body, ctxt.body_id, ir_mapper)?;
+
   hir_visitor.visit_nested_body(ctxt.body_id);
 
   if let Some(msg) = hir_visitor.get_unsupported_feature() {

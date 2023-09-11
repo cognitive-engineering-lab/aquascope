@@ -15,6 +15,7 @@ import {
   flowChar,
   hideLoanRegion,
   hideMoveRegion,
+  linecolToPosition,
   makeDecorationField,
   ownChar,
   permName,
@@ -212,7 +213,9 @@ class BoundaryPointWidget extends WidgetType {
       toi(this.boundary.expected.drop),
       toi(this.boundary.expecting_flow !== undefined),
     ].reduce((a, b) => a + b, 0);
-    this.line = view.state.doc.lineAt(boundary.location);
+    this.line = view.state.doc.lineAt(
+      linecolToPosition(boundary.location, view.state.doc)
+    );
   }
 
   eq(other: BoundaryPointWidget): boolean {
@@ -221,10 +224,8 @@ class BoundaryPointWidget extends WidgetType {
   }
 
   toDOM(view: EditorView): HTMLElement {
-    let precedingText = view.state.sliceDoc(
-      this.boundary.location - 1,
-      this.boundary.location
-    );
+    let location = linecolToPosition(this.boundary.location, view.state.doc);
+    let precedingText = view.state.sliceDoc(location - 1, location);
     let container = document.createElement("div");
     container.classList.add("permission-stack");
     container.classList.add(`stack-size-${this.numDisplayed}`);
@@ -254,6 +255,6 @@ export function makeBoundaryDecorations(
   return boundaries.map(b =>
     Decoration.widget({
       widget: new BoundaryPointWidget(view, facts, b, annotations),
-    }).range(b.location)
+    }).range(linecolToPosition(b.location, view.state.doc))
   );
 }

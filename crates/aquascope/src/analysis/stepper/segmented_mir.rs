@@ -35,7 +35,7 @@
 //!   control-flow has been split (by say, a `switchInt`) join segments represent the
 //!   steps needed to unify the control-flow again.
 //!
-//! Unless specified, the word "segment" or "step" always refers to a linear segment.
+//! Unless specified, the word 'segment' or 'step' always refers to a linear segment.
 //! Whenever the stepper says "insert a step ending at location L", this will _always_
 //! result in a linear step as the other two variants need to be explicitly handled.
 //!
@@ -80,7 +80,7 @@ use rustc_data_structures::{
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
   unify::{InPlaceUnificationTable, UnifyKey},
 };
-use rustc_index::vec::{Idx, IndexVec};
+use rustc_index::{Idx, IndexVec};
 use rustc_middle::mir::{BasicBlock, Location};
 use rustc_span::Span;
 
@@ -260,16 +260,14 @@ impl OpenCollections {
   }
 
   pub fn iter(&self) -> impl Iterator<Item = &CollectionBuilder> + '_ {
-    // Open collections are pushed on the end, but we want to search
-    // in the most recently pushed by reverse the Vec::iter
+    // Open collections behaves like a stack, so we need to reverse the iterator.
     self.0.iter().rev()
   }
 
   pub fn enumerate(
     &self,
   ) -> impl Iterator<Item = (BuilderIdx, &CollectionBuilder)> + '_ {
-    // Open collections are pushed on the end, but we want to search
-    // in the most recently pushed by reverse the Vec::iter
+    // Open collections behaves like a stack, so we need to reverse the iterator.
     self
       .0
       .iter()
@@ -281,8 +279,7 @@ impl OpenCollections {
   pub fn iter_mut(
     &mut self,
   ) -> impl Iterator<Item = &mut CollectionBuilder> + '_ {
-    // Open collections are pushed on the end, but we want to search
-    // in the most recently pushed, thus using reversing.
+    // Open collections behaves like a stack, so we need to reverse the iterator.
     self.0.iter_mut().rev()
   }
 
@@ -298,7 +295,7 @@ impl OpenCollections {
     &'this mut self,
     cids: &'a HashSet<CollectionId>,
   ) -> impl Iterator<Item = CollectionBuilder> + 'a {
-    self.0.drain_filter(|cb| cids.contains(&cb.collection))
+    self.0.extract_if(|cb| cids.contains(&cb.collection))
   }
 
   pub fn get(&self, i: BuilderIdx) -> &CollectionBuilder {
@@ -366,10 +363,10 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
     // We start with an empty linear collection.
     // XXX: we could also try to find the exit location for the
-    //      entire body but having this information isn't useful
-    //      for the end of the body. Phi nodes are used to make
-    //      sure we don't accidentally jump past the end of a
-    //      join but with the return there isn't anything after.
+    // entire body but having this information isn't useful
+    // for the end of the body. Phi nodes are used to make
+    // sure we don't accidentally jump past the end of a
+    // join but with the return there isn't anything after.
     let first_collection = collections.push(Collection {
       data: Vec::default(),
       kind: LengthKind::Unbounded { root: from },
@@ -386,7 +383,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       branch_roots: InPlaceUnificationTable::default(),
       scope_graph: TransitiveRelationBuilder::default(),
       // NOTE: this maintains that there is always
-      //       an open scope that the visitor cannot close.
+      // an open scope that the visitor cannot close.
       open_scopes: vec![*BASE_SCOPE],
       next_scope: BASE_SCOPE.plus(1),
     };
@@ -400,7 +397,12 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   }
 
   fn finish_first_collection(&mut self) -> Result<()> {
-    ensure!(self.processing.len() == 1, "More than one collection open");
+    log::debug!("Finishing, open collections: {:#?}", self.processing);
+    ensure!(
+      self.processing.len() == 1,
+      "More than one collection open {:#?}",
+      self.processing
+    );
     self.processing.clear();
     Ok(())
   }
@@ -429,9 +431,9 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   // Scope operations
   //
   // NOTE: scopes are controlled by the HIR Visitor
-  //       so we don't need to sanitize them at all.
-  //       They return Results to match the interface
-  //       of everything else though.
+  // so we don't need to sanitize them at all.
+  // They return Results to match the interface
+  // of everything else though.
 
   // NOTE: After starting a body analysis this should never be None.
   fn current_scope(&self) -> ScopeId {
@@ -455,6 +457,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     );
 
     self.open_scopes.pop();
+
     Ok(())
   }
 
@@ -464,6 +467,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   /// Finds the basic block that is the last post-dominator of the successors of `root`.
   fn least_post_dominator(&self, root: BasicBlock) -> Option<BasicBlock> {
     log::debug!("Finding the least post-dominator for root {root:?}");
+
     let mapper = &self.mapper;
 
     // Find all basic blocks that are reachable from the root.
@@ -505,6 +509,37 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       .copied()
   }
 
+  fn find_next_switchint(&self, current: Location) -> Option<Location> {
+    use rustc_middle::mir::{Terminator, TerminatorKind as TK};
+    let body = self.mapper.cleaned_graph.body();
+
+    log::debug!("Locating switchInt after {current:?}");
+
+    let has_switchint = |b: &BasicBlock| {
+      matches!(body.basic_blocks[*b].terminator(), Terminator {
+        kind: TK::SwitchInt { .. },
+        ..
+      })
+    };
+
+    let mut current = Some(current.block);
+    let mut linear_blocks = std::iter::from_fn(move || {
+      let previous = current?;
+      let ss = self
+        .mapper
+        .cleaned_graph
+        .successors(previous)
+        .collect::<Vec<_>>();
+      current = if ss.len() == 1 { Some(ss[0]) } else { None };
+      Some(previous)
+    });
+
+    linear_blocks.find(has_switchint).map(|block| Location {
+      block,
+      statement_index: body.basic_blocks[block].statements.len(),
+    })
+  }
+
   fn mk_branch(
     &mut self,
     location: Location,
@@ -513,9 +548,14 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     let mapper = &self.mapper;
     let scope = self.current_scope();
 
+    let switch_location =
+      self.find_next_switchint(location).unwrap_or(location);
+
+    log::debug!("switchInt located at: {switch_location:?}");
+
     // The convergence of all branching paths.
     let phi_opt = self
-      .least_post_dominator(location.block)
+      .least_post_dominator(switch_location.block)
       .map(|bb| bb.start_location());
 
     log::debug!("Chosen least-post-dominator: {phi_opt:?}");
@@ -538,7 +578,10 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
     // Make a new branch
     let tid = self.branch_roots.new_key(());
-    let bid = self.branches.push(BranchData::new(tid, location, phi_opt));
+    let bid =
+      self
+        .branches
+        .push(BranchData::new(tid, switch_location, phi_opt));
     let branch = &mut self.branches[bid];
 
     // Save the Location -> Span mappings under this root BranchId.
@@ -564,13 +607,15 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       }
     } else {
       // TODO: how should we update the collection if there
-      //       isn't a phi? My current feeling is that we should
-      //       just close the collection.
+      // isn't a phi? My current feeling is that we should
+      // just close the collection.
       LengthKind::Unbounded { root: location }
     };
 
     // For each of the target BasicBlocks of the switchInt:
-    for sblock in mapper.cleaned_graph.successors(location.block) {
+    for sblock in mapper.cleaned_graph.successors(switch_location.block) {
+      log::debug!("Adding segment to switch successor: {sblock:?}");
+
       // 1. insert the split segment into the branch
       let mut to = sblock.start_location();
       let span = get_span(&mut to);
@@ -612,7 +657,9 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
   ) -> Result<BranchId> {
     log::debug!("opening user initiated branch at {location:?}");
     log::debug!("open branches BEFORE {:#?}", self.processing);
+
     let r = self.mk_branch(location, GetSpanner::InsertNew(Box::new(get_span)));
+
     log::debug!("open branches AFTER {:#?}", self.processing);
     r
   }
@@ -623,6 +670,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     root: Location,
   ) -> Result<()> {
     log::debug!("opening implicit branch at {root:?}");
+
     let child = self.mk_branch(root, GetSpanner::GetFrom(parent))?;
     let parent_tid = self.branches[parent].table_id;
     let child_tid = self.branches[child].table_id;
@@ -651,13 +699,12 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       let nested_collections =
         branch.nested.iter().copied().collect::<HashSet<_>>();
 
-      let closed_builders =
-        self.processing.drain_collections(&nested_collections);
+      let closed_builders = self
+        .processing
+        .drain_collections(&nested_collections)
+        .collect::<Vec<_>>();
 
-      log::debug!(
-        "closing builders: {:#?}",
-        closed_builders.collect::<Vec<_>>()
-      );
+      log::debug!("Closed builders {:#?}", closed_builders);
     }
 
     log::debug!("State after closing branches {:#?}", self.processing);
@@ -705,7 +752,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     // if there doesn't exist a parent branch, this is just an internal error.
     match self.find_containing_branch(builder.collection) {
       None => {
-        log::error!("couldn't find branch containing {:?}", builder.collection);
+        log::warn!("couldn't find branch containing {:?}", builder.collection);
         FindResult::None
       }
       Some(bid) => FindResult::NonLinear(bid, builder.current_location),
@@ -792,7 +839,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
           LengthKind::Bounded { phi, .. }
             if self.mapper.ldominates(phi, location) =>
           {
-            log::error!(
+            log::warn!(
               "Linear insert is stepping past the join point {location:?} {phi:?}"
             );
 
