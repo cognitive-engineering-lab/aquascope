@@ -111,9 +111,11 @@ jobs:
           crate: cargo-workspaces
           version: latest
           use-tool-cache: true
+      - uses: davidB/rust-cargo-make@v1
+        with:
+          version: '0.36.4'
+      - run: cargo make install-mdbook
       - run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
-      - name: Quick Setup
-        uses: ./.github/workflows/quick-setup
       - uses: actions-rs/cargo@v1
         with:
           command: ws
