@@ -35,4 +35,4 @@ jobs:
         with:
           tag_name: ${{ github.event.pull_request.title }}
           files: |
-            target/release/maquascope-x86_64-unknown-linux-gnu.tar.gz
+            target/release/aquascope-x86_64-unknown-linux-gnu.tar.gz
