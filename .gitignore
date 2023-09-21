@@ -20,4 +20,3 @@ sample-book/
 # Rust things
 target/
 debug/
-Cargo.lock
