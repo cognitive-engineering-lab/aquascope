@@ -101,26 +101,8 @@ jobs:
           project-id: ${{ secrets.GOOGLE_PROJECT_ID }}
           ssh-key: ${{ secrets.GOOGLE_SSH_PRIVATE_KEY }}
 
-  release-artifact:
-    if: contains(github.event.pull_request.labels.*.name, 'release')
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v3
-      - name: Quick Setup
-        uses: ./.github/workflows/quick-setup
-      - name: Build artifact
-        run: cargo build --release -p mdbook-aquascope -p aquascope_front
-      - name: Package artifact
-        run: tar -czf aquascope-x86_64-unknown-linux-gnu.tar.gz mdbook-aquascope cargo-aquascope aquascope-driver
-        working-directory: target/release
-      - name: Release artifact
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            target/release/maquascope-x86_64-unknown-linux-gnu.tar.gz
-
   publish-crates:
-    needs: [update-frontend,update-server,release-artifact]
+    needs: [update-frontend,update-server]
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3

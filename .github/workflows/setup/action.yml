@@ -3,14 +3,17 @@ runs:
   using: composite
   steps:
     - uses: actions/checkout@v3
+    
     - uses: davidB/rust-cargo-make@v1
       with:
         version: '0.36.4'
+
     - uses: actions-rs/install@v0.1
       with:
         crate: cargo-insta
         version: latest
         use-tool-cache: true
+
     - name: Gen bindings
       run: cargo make init-bindings
       shell: bash
@@ -31,11 +34,11 @@ runs:
       shell: bash
 
     - name: Install aquascope
-      run: cargo install --path crates/aquascope_front --debug
+      run: cargo install --path crates/aquascope_front --debug --locked
       shell: bash
 
     - name: Install mdbook-aquascope
-      run: cargo install --path crates/mdbook-aquascope --debug
+      run: cargo install --path crates/mdbook-aquascope --debug --locked
       shell: bash
 
     - name: Build test book
