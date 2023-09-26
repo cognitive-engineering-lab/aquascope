@@ -814,14 +814,14 @@ export function renderInterpreter(
 ) {
   let root = ReactDOM.createRoot(container);
   let marks = annotations?.state_locations || [];
-  let widgetRanges;
+  let widgetRanges: number[];
   if (marks.length > 0) {
     let [sortedMarks, filteredSteps] = filterSteps(view, trace.steps, marks);
     widgetRanges = sortedMarks;
     trace.steps = filteredSteps;
   } else {
     widgetRanges = trace.steps.map(
-      step => _.last(step.stack.frames)!.location.end
+      step => linecolToPosition(_.last(step.stack.frames)!.location.end, view.state.doc)
     );
   }
 
