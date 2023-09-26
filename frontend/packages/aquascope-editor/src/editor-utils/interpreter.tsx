@@ -379,7 +379,7 @@ let FrameView = ({
   frame: MFrame<CharRange>;
 }) => {
   let code = useContext(CodeContext);
-  let snippet = codeRange(code, frame.location);
+  let snippet = codeRange(code!, frame.location);
   return (
     <div className="frame">
       <Header className="frame-header">{frame.name}</Header>
@@ -814,14 +814,14 @@ export function renderInterpreter(
 ) {
   let root = ReactDOM.createRoot(container);
   let marks = annotations?.state_locations || [];
-  let widgetRanges: number[];
+  let widgetRanges;
   if (marks.length > 0) {
     let [sortedMarks, filteredSteps] = filterSteps(view, trace.steps, marks);
     widgetRanges = sortedMarks;
     trace.steps = filteredSteps;
   } else {
-    widgetRanges = trace.steps.map(
-      step => linecolToPosition(_.last(step.stack.frames)!.location.end, view.state.doc)
+    widgetRanges = trace.steps.map(step =>
+      linecolToPosition(_.last(step.stack.frames)!.location.end, view.state.doc)
     );
   }
 

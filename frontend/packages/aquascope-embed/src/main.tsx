@@ -111,7 +111,7 @@ let BugReporter = () => (
   <ContextProvider title={"Report a bug"} buttonText={"🐞"}>
     {close => {
       let code = useContext(CodeContext);
-      let onSubmit: React.FormEventHandler<HTMLFormElement> = event => {
+      let onSubmit: React.FormEventHandler<HTMLFormElement> = (event: any) => {
         let data = new FormData(event.target as any);
         let feedback = data.get("feedback")!.toString();
         window.telemetry!.log("aquascopeBug", { code, feedback });

@@ -5,6 +5,7 @@
     "declaration": true,
     "jsx": "react",
     "esModuleInterop": true,
-    "allowJs": true
+    "allowJs": true,
+    "strict": true
   }
 }
