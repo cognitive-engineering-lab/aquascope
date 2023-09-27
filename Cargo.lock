@@ -163,7 +163,7 @@ dependencies = [
 
 [[package]]
 name = "aquascope_workspace_utils"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "toml 0.5.11",
@@ -1289,7 +1289,7 @@ dependencies = [
 
 [[package]]
 name = "mdbook-aquascope"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "aquascope_workspace_utils",
