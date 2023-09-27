@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const permStackSelector = ".permission-stack";
 const permStepSelector = ".step-widget-container";
-const interpSelector = ".interpreter";
+const _interpSelector = ".interpreter";
 
 describe("Aquascope Standalone", () => {
   let browser: Browser;
