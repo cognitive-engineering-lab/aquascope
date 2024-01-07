@@ -191,14 +191,16 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
     let initialCode = maybeParseJson<string>(elem.dataset.code);
     if (!initialCode) throw new Error("Missing data-code attribute");
 
-    let extraInfo = document.createElement("div");
-    elem.appendChild(extraInfo);
-    ReactDOM.createRoot(extraInfo).render(
-      <CodeContext.Provider value={initialCode}>
-        <ExtraInfo />
-      </CodeContext.Provider>
-    );
-
+    if (window.telemetry) {
+      let extraInfo = document.createElement("div");
+      elem.appendChild(extraInfo);
+      ReactDOM.createRoot(extraInfo).render(
+        <CodeContext.Provider value={initialCode}>
+          <ExtraInfo />
+        </CodeContext.Provider>
+      );
+    }
+   
     let serverUrl = elem.dataset.serverUrl
       ? new URL(elem.dataset.serverUrl)
       : undefined;
