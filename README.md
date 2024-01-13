@@ -69,7 +69,7 @@ Further documentation on the syntax and configuration of Aquascope blocks will b
 
 ### Local Playground
 
-Running the provided [playground](https://cognitive-engineering-lab.github.io/aquascope/) locally is also easy. First, you'll need to follow the above *from source* installation instructions. Then, you can launch the server by running `cargo make playground` and navigate to `localhost:5173` to explore.
+Running the provided [playground](https://cognitive-engineering-lab.github.io/aquascope/) locally is also easy. First, you'll need to follow the above *from source* installation instructions. Then, you can launch the server by running `cargo make playground` and navigate to [`localhost:5173`](http://localhost:5173/) to explore.
 
 > Note, the local playground **does not** run the tool within a sandbox. This makes the local version quicker, but don't run any malicious programs.
 
