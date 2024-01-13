@@ -1,6 +1,6 @@
 ---
 source: crates/aquascope/tests/boundaries.rs
-description: "<anon body>@closure_1.test"
+description: (anon.body)@closure_1.test
 ---
 - location:
     line: 2

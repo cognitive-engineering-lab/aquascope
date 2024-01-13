@@ -313,7 +313,7 @@ fn analysis_snapshot_tag(ctxt: &AquascopeAnalysis) -> String {
     .tcx
     .hir()
     .opt_name(owner)
-    .map_or_else(|| String::from("<anon body>"), |n| String::from(n.as_str()))
+    .map_or_else(|| String::from("(anon.body)"), |n| String::from(n.as_str()))
 }
 
 pub fn test_boundaries_in_file(
