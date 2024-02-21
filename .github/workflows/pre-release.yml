@@ -12,7 +12,7 @@ env:
 jobs:
   test-authentication:
     if: contains(github.event.pull_request.labels.*.name, 'release')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Ping remote
@@ -46,7 +46,7 @@ jobs:
 
   build-backend:
     needs: [check-publishable-versions,test-authentication]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Build and save docker image
@@ -70,7 +70,7 @@ jobs:
 
   update-frontend:
     needs: build-backend
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       AQUASCOPE_SERVER: "https://aquascope.willcrichton.net"
     steps:
@@ -90,7 +90,7 @@ jobs:
 
   update-server:
     needs: update-frontend
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Restart server
@@ -103,7 +103,7 @@ jobs:
 
   publish-crates:
     needs: [update-frontend,update-server]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/install@v0.1

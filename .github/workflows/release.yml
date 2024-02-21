@@ -19,7 +19,7 @@ jobs:
 
   release-artifact:
     needs: tag
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release')
     steps:
       - uses: actions/checkout@v3

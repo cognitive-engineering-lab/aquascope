@@ -67,6 +67,12 @@ Then add an Aquascope code block to one of your Markdown source files like this:
 
 Further documentation on the syntax and configuration of Aquascope blocks will be provided once the interface is more stable.
 
+### Local Playground
+
+Running the provided [playground](https://cognitive-engineering-lab.github.io/aquascope/) locally is also easy. First, you'll need to follow the above *from source* installation instructions. Then, you can launch the server by running `cargo make playground` and navigate to [`localhost:5173`](http://localhost:5173/) to explore.
+
+> Note, the local playground **does not** run the tool within a sandbox. This makes the local version quicker, but don't run any malicious programs.
+
 <!--
 ### Available visualizations
 
@@ -188,4 +194,4 @@ Visualizing permission steps can be quite intrusive but oftentimes you may want 
 
 ## Having trouble?
 
-If you want to use Aquascope but are having trouble finding the relevant information, please leave an issue or email us at <wcrichto@brown.edu> and <gagray@ethz.ch>.
+If you want to use Aquascope but are having trouble finding the relevant information, please leave an issue or email us at <wcrichto@brown.edu> and <gavin.gray@inf.ethz.ch>.

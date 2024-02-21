@@ -26,11 +26,22 @@ mkdir -p frontend/packages/aquascope-editor/src/bindings
 cp crates/**/bindings/* frontend/packages/aquascope-editor/src/bindings
 """
 
-[tasks.install-mdbook]
+[tasks.install-aquascope]
 dependencies = ["init-bindings"]
 script = """
 cd frontend && depot build && cd ..
 cargo miri setup
-cargo install --path crates/mdbook-aquascope --locked
 cargo install --path crates/aquascope_front --locked
 """
+
+[tasks.install-mdbook]
+dependencies = ["install-aquascope"]
+script = "cargo install --path crates/mdbook-aquascope --locked"
+
+[tasks.playground-front]
+script = "cd frontend && depot build -w"
+
+[tasks.playground.run_task]
+dependencies = ["install-aquascope"]
+name = ["watch-server", "playground-front"]
+parallel = true
