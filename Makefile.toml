@@ -39,7 +39,10 @@ dependencies = ["install-aquascope"]
 script = "cargo install --path crates/mdbook-aquascope --locked"
 
 [tasks.playground-front]
-script = "cd frontend && depot build -w"
+script = """
+export MIRI_SYROOT=$(cargo miri setup --print-sysroot)
+cd frontend && depot build -w
+"""
 
 [tasks.playground.run_task]
 dependencies = ["install-aquascope"]
