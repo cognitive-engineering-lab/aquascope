@@ -40,7 +40,7 @@ script = "cargo install --path crates/mdbook-aquascope --locked"
 
 [tasks.playground-front]
 script = """
-export MIRI_SYROOT=$(cargo miri setup --print-sysroot)
+export MIRI_SYSROOT=$(cargo miri setup --print-sysroot)
 cd frontend && depot build -w
 """
 
