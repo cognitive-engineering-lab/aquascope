@@ -1,12 +1,12 @@
-import { Line, Range } from "@codemirror/state";
-import { Decoration, EditorView, WidgetType } from "@codemirror/view";
+import type { Line, Range } from "@codemirror/state";
+import { Decoration, type EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
 import _ from "lodash";
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
-import { CharPos } from "../bindings/CharPos";
-import {
+import type { CharPos } from "../bindings/CharPos";
+import type {
   AnalysisFacts,
   LoanKey,
   MoveKey,
@@ -14,7 +14,7 @@ import {
   PermissionsLineDisplay,
   PermissionsStepTable,
   StepperAnnotations,
-  ValueStep,
+  ValueStep
 } from "../types";
 import {
   hideLoanRegion,
@@ -26,7 +26,7 @@ import {
   readChar,
   showLoanRegion,
   showMoveRegion,
-  writeChar,
+  writeChar
 } from "./misc";
 
 interface PermInStep {
@@ -38,7 +38,7 @@ interface PermInStep {
 
 let PermChar = ({
   perm,
-  facts,
+  facts
 }: {
   perm: PermInStep;
   facts: AnalysisFacts;
@@ -68,7 +68,7 @@ let PermChar = ({
           <Perm>‒</Perm>
         </div>
       );
-    } else if (perm.step.type == "Low") {
+    } else if (perm.step.type === "Low") {
       return (
         <div
           className="perm-diff-sub-container"
@@ -110,7 +110,7 @@ let PermChar = ({
 let PermDiffRow = ({
   path,
   diffs,
-  facts,
+  facts
 }: {
   path: string;
   diffs: PermissionsDataDiff;
@@ -146,14 +146,14 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "sign-out",
-          desc: "Path is moved here",
+          desc: "Path is moved here"
         },
         {
           value: { type: "Low" },
           icon: "recycle",
-          desc: "Path is re-initialized after move here",
-        },
-      ],
+          desc: "Path is re-initialized after move here"
+        }
+      ]
     },
     {
       fact: "loan_read_refined",
@@ -161,14 +161,14 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "arrow-right",
-          desc: "Path is borrowed here",
+          desc: "Path is borrowed here"
         },
         {
           value: { type: "Low" },
           icon: "rotate-left",
-          desc: "Borrow on path is dropped here",
-        },
-      ],
+          desc: "Borrow on path is dropped here"
+        }
+      ]
     },
     {
       fact: "loan_write_refined",
@@ -176,14 +176,14 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "arrow-right",
-          desc: "Path is borrowed here",
+          desc: "Path is borrowed here"
         },
         {
           value: { type: "Low" },
           icon: "rotate-left",
-          desc: "Borrow on path is no longer used here",
-        },
-      ],
+          desc: "Borrow on path is no longer used here"
+        }
+      ]
     },
     {
       fact: "is_live",
@@ -191,14 +191,14 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "level-up",
-          desc: "Path is initialized here",
+          desc: "Path is initialized here"
         },
         {
           value: { type: "Low" },
           icon: "level-down",
-          desc: "Path is no longer used here",
-        },
-      ],
+          desc: "Path is no longer used here"
+        }
+      ]
     },
     {
       fact: "path_uninitialized",
@@ -206,15 +206,15 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "sign-out",
-          desc: "Path contains uninitialized data",
+          desc: "Path contains uninitialized data"
         },
         {
           value: { type: "Low" },
           icon: "recycle",
-          desc: "Path data is initialized after move here",
-        },
-      ],
-    },
+          desc: "Path data is initialized after move here"
+        }
+      ]
+    }
   ];
 
   let ico = null;
@@ -234,9 +234,8 @@ let PermDiffRow = ({
     }
   }
 
-  let unwrap = function <T>(v: ValueStep<T>): T | undefined {
-    return v.type === "None" || v.type === "High" ? v.value : undefined;
-  };
+  let unwrap = <T,>(v: ValueStep<T>): T | undefined =>
+    v.type === "None" || v.type === "High" ? v.value : undefined;
 
   let moveKey = unwrap(diffs.path_moved);
   let perms: PermInStep[] = [
@@ -244,20 +243,20 @@ let PermDiffRow = ({
       perm: readChar,
       step: diffs.permissions.read,
       loanKey: unwrap(diffs.loan_read_refined),
-      moveKey,
+      moveKey
     },
     {
       perm: writeChar,
       step: diffs.permissions.write,
       loanKey: unwrap(diffs.loan_write_refined),
-      moveKey,
+      moveKey
     },
     {
       perm: ownChar,
       step: diffs.permissions.drop,
       loanKey: unwrap(diffs.loan_drop_refined),
-      moveKey,
-    },
+      moveKey
+    }
   ];
 
   let pathCol = <td className="perm-step-path">{path}</td>;
@@ -279,7 +278,7 @@ let stepLocation = (step: PermissionsLineDisplay): CharPos => {
 
 let StepTable = ({
   rows,
-  facts,
+  facts
 }: {
   rows: [string, PermissionsDataDiff][];
   facts: AnalysisFacts;
@@ -298,7 +297,7 @@ let StepTable = ({
 let StepTableIndividual = ({
   focused,
   hidden,
-  facts,
+  facts
 }: {
   focused: [string, PermissionsDataDiff][];
   hidden: [string, PermissionsDataDiff][];
@@ -317,9 +316,10 @@ let StepTableIndividual = ({
     ) : null;
 
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: TODO
     <div
       className={classNames("step-table-container", {
-        "contains-hidden": hidden.length > 0,
+        "contains-hidden": hidden.length > 0
       })}
       onClick={() => setDisplayAll(!displayAll)}
     >
@@ -336,7 +336,7 @@ let StepLine = ({
   focusedRegex,
   tables,
   init,
-  facts,
+  facts
 }: {
   spaces: string;
   focusedRegex: RegExp;
@@ -366,12 +366,13 @@ let StepLine = ({
 
   return (
     <div className="perm-step-widget">
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: TODO */}
       <span className="step-widget-toggle" onClick={() => setDisplay(!display)}>
         {display ? arrowIn : arrowOut}
       </span>
       <div
         className={classNames("step-widget-container", {
-          "hidden-width": !display,
+          "hidden-width": !display
         })}
       >
         <div className="step-widget-spacer">{spaces}</div>
@@ -422,7 +423,7 @@ class PermissionStepLineWidget extends WidgetType {
     let matchers = this.annotations?.focused_paths[currLine.number];
     let rx = matchers
       ?.map(matcher =>
-        matcher.type == "Literal"
+        matcher.type === "Literal"
           ? _.escapeRegExp(matcher.value)
           : matcher.value
       )
@@ -461,7 +462,7 @@ export function makeStepDecorations(
   return stateSteps.map(step =>
     Decoration.widget({
       widget: new PermissionStepLineWidget(view, step, facts, annotations),
-      side: 1,
+      side: 1
     }).range(linecolToPosition(stepLocation(step), view.state.doc))
   );
 }

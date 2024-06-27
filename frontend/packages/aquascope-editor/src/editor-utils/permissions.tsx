@@ -1,13 +1,13 @@
-import { Range } from "@codemirror/state";
-import { Decoration, EditorView } from "@codemirror/view";
+import type { Range } from "@codemirror/state";
+import type { Decoration, EditorView } from "@codemirror/view";
 import _ from "lodash";
 
-import { AnalysisOutput, AquascopeAnnotations } from "../types";
+import type { AnalysisOutput, AquascopeAnnotations } from "../types";
 import { boundariesField, makeBoundaryDecorations } from "./boundaries";
 import {
-  ActionFacts,
+  type ActionFacts,
   generateAnalysisDecorationFacts,
-  loanFactsStateType,
+  loanFactsStateType
 } from "./misc";
 import { makeStepDecorations, stepField } from "./stepper";
 
@@ -49,7 +49,7 @@ export function makePermissionsDecorations(
   return {
     stepper: stepDecos.flat(),
     boundaries: _.uniqBy(boundaryDecos.flat(), d => d.from),
-    facts: actionDecos.flat(),
+    facts: actionDecos.flat()
   };
 }
 
@@ -68,8 +68,8 @@ export function renderPermissions(
         stepField.setEffect.of(useSteps ? decorations.stepper : []),
         boundariesField.setEffect.of(
           useBoundaries ? decorations.boundaries : []
-        ),
-      ],
+        )
+      ]
     });
   }
 }

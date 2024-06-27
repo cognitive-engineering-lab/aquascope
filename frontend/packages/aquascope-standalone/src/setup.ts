@@ -2,7 +2,7 @@ import {
   autocompletion,
   closeBrackets,
   closeBracketsKeymap,
-  completionKeymap,
+  completionKeymap
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
@@ -11,11 +11,11 @@ import {
   foldGutter,
   foldKeymap,
   indentOnInput,
-  syntaxHighlighting,
+  syntaxHighlighting
 } from "@codemirror/language";
 import { lintKeymap } from "@codemirror/lint";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { EditorState, Extension } from "@codemirror/state";
+import { EditorState, type Extension } from "@codemirror/state";
 import {
   crosshairCursor,
   drawSelection,
@@ -25,7 +25,7 @@ import {
   highlightSpecialChars,
   keymap,
   lineNumbers,
-  rectangularSelection,
+  rectangularSelection
 } from "@codemirror/view";
 
 // NOTE (gavinleroy) this file was copied from @codemirror so I can play around
@@ -95,8 +95,8 @@ export const basicSetup: Extension = (() => [
     ...historyKeymap,
     ...foldKeymap,
     ...completionKeymap,
-    ...lintKeymap,
-  ]),
+    ...lintKeymap
+  ])
 ])();
 
 /// A minimal set of extensions to create a functional editor. Only
@@ -110,7 +110,7 @@ export const minimalSetup: Extension = (() => [
   history(),
   drawSelection(),
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-  keymap.of([...defaultKeymap, ...historyKeymap]),
+  keymap.of([...defaultKeymap, ...historyKeymap])
 ])();
 
 export { EditorView } from "@codemirror/view";

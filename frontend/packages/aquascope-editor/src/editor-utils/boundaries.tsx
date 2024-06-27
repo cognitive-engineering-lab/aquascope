@@ -1,17 +1,16 @@
-import { Line, Range } from "@codemirror/state";
-import { Decoration, EditorView, WidgetType } from "@codemirror/view";
+import type { Line, Range } from "@codemirror/state";
+import { Decoration, type EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
-import _ from "lodash";
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
-import {
+import type {
   AnalysisFacts,
   BoundariesAnnotations,
-  PermissionsBoundary,
+  PermissionsBoundary
 } from "../types";
 import {
-  PermLetter,
+  type PermLetter,
   flowChar,
   hideLoanRegion,
   hideMoveRegion,
@@ -22,7 +21,7 @@ import {
   readChar,
   showLoanRegion,
   showMoveRegion,
-  writeChar,
+  writeChar
 } from "./misc";
 
 // FIXME: the tooltips are not currently being used. The tooltips
@@ -111,7 +110,7 @@ let PermChar = ({ content, names, act, showit, hideit }: PermCharProps) => {
 
 let PermStack = ({
   facts,
-  boundary,
+  boundary
 }: {
   facts: AnalysisFacts;
   boundary: PermissionsBoundary;
@@ -131,7 +130,7 @@ let PermStack = ({
       hideit: () => {
         hideLoanRegion(facts, data.loan_read_refined, ["read"]);
         hideMoveRegion(facts, data.path_moved, ["read"]);
-      },
+      }
     },
     {
       content: writeChar,
@@ -145,7 +144,7 @@ let PermStack = ({
       hideit: () => {
         hideLoanRegion(facts, data.loan_write_refined, ["write"]);
         hideMoveRegion(facts, data.path_moved, ["write"]);
-      },
+      }
     },
     {
       content: ownChar,
@@ -159,7 +158,7 @@ let PermStack = ({
       hideit: () => {
         hideLoanRegion(facts, data.loan_drop_refined, ["own"]);
         hideMoveRegion(facts, data.path_moved, ["own"]);
-      },
+      }
     },
     {
       content: flowChar,
@@ -167,8 +166,8 @@ let PermStack = ({
       exp: boundary.expecting_flow !== undefined,
       act: !boundary.expecting_flow?.is_violation ?? false,
       showit: () => void null,
-      hideit: () => void null,
-    },
+      hideit: () => void null
+    }
   ];
 
   let icons = allIcons.filter(i => i.exp);
@@ -211,7 +210,7 @@ class BoundaryPointWidget extends WidgetType {
       toi(this.boundary.expected.read),
       toi(this.boundary.expected.write),
       toi(this.boundary.expected.drop),
-      toi(this.boundary.expecting_flow !== undefined),
+      toi(this.boundary.expecting_flow !== undefined)
     ].reduce((a, b) => a + b, 0);
     this.line = view.state.doc.lineAt(
       linecolToPosition(boundary.location, view.state.doc)
@@ -254,7 +253,7 @@ export function makeBoundaryDecorations(
 ): Range<Decoration>[] {
   return boundaries.map(b =>
     Decoration.widget({
-      widget: new BoundaryPointWidget(view, facts, b, annotations),
+      widget: new BoundaryPointWidget(view, facts, b, annotations)
     }).range(linecolToPosition(b.location, view.state.doc))
   );
 }

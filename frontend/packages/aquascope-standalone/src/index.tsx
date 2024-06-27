@@ -53,7 +53,7 @@ window.addEventListener("load", () => {
 
   // Insert support for multiple tabs
   let changeTab = (el: HTMLElement) => {
-    var data = el.getAttribute("data-tab");
+    const data = el.getAttribute("data-tab");
     document.querySelectorAll(".tab-pane.active")[0].classList.remove("active");
     document
       .querySelectorAll(`.tab-pane[data-pane="${data}"]`)[0]
@@ -90,7 +90,7 @@ window.addEventListener("load", () => {
       },
       Ed.defaultCodeExample,
       new URL(SERVER_URL)
-    ),
+    )
   };
 
   // let toggleVim = (_: any) => {
@@ -126,7 +126,7 @@ window.addEventListener("load", () => {
     withLoadingButton(showPermissionsButton, () =>
       globals.editor.renderPermissions({
         stepper: showStepsChck.checked,
-        boundaries: showBoundariesChck.checked,
+        boundaries: showBoundariesChck.checked
       })
     );
 
@@ -134,8 +134,8 @@ window.addEventListener("load", () => {
     withLoadingButton(interpretButton, () =>
       globals.editor.renderOperation("interpreter", {
         config: {
-          shouldFail: !passesBorrowCheckerButton.checked,
-        },
+          shouldFail: !passesBorrowCheckerButton.checked
+        }
       })
     );
 

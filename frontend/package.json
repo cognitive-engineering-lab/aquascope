@@ -1,6 +1,10 @@
 {
   "private": true,
+  "depot": {
+    "depot-version": "0.2.16"
+  },
   "devDependencies": {
+    "@biomejs/biome": "^1.8.3",
     "@trivago/prettier-plugin-sort-imports": "^4.1.1",
     "@types/node": "^20.4.2",
     "@typescript-eslint/eslint-plugin": "^6.0.0",

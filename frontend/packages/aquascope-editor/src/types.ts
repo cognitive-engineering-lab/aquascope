@@ -1,6 +1,6 @@
-import { AquascopeError } from "./bindings/AquascopeError";
-import { LoanKey } from "./bindings/LoanKey";
-import { MoveKey } from "./bindings/MoveKey";
+import type { AquascopeError } from "./bindings/AquascopeError";
+import type { LoanKey } from "./bindings/LoanKey";
+import type { MoveKey } from "./bindings/MoveKey";
 
 // Re-export auto-generated types
 
@@ -77,7 +77,7 @@ export type AnalysisFacts = {
 
 export let ok = <T>(value: T): BackendResult<T> => ({
   type: "output",
-  value,
+  value
 });
 
 export const is_ok = <T>(res: BackendResult<T>): res is BackendOutput<T> =>

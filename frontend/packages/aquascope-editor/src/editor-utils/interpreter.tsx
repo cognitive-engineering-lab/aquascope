@@ -1,17 +1,17 @@
-import { Decoration, EditorView, WidgetType } from "@codemirror/view";
+import { Decoration, type EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
 import LeaderLine from "leader-line-new";
 import _ from "lodash";
 import React, {
-  CSSProperties,
+  type CSSProperties,
   useContext,
   useEffect,
   useRef,
-  useState,
+  useState
 } from "react";
 import ReactDOM from "react-dom/client";
 
-import {
+import type {
   Abbreviated,
   CharRange,
   InterpAnnotations,
@@ -22,12 +22,12 @@ import {
   MStep,
   MTrace,
   MUndefinedBehavior,
-  MValue,
+  MValue
 } from "../types";
 import {
   evenlySpaceAround,
   linecolToPosition,
-  makeDecorationField,
+  makeDecorationField
 } from "./misc";
 
 const DEBUG: boolean = false;
@@ -71,7 +71,7 @@ let AbbreviatedView = ({ value }: { value: Abbreviated<MValue> }) => {
     <table className="array">
       <tbody>
         <tr>
-          {value.type == "All" ? (
+          {value.type === "All" ? (
             value.value.map((el, i) => (
               <IndexedContainer key={i} index={i}>
                 <ValueView value={el} />
@@ -103,7 +103,7 @@ type MValuePointer = MValue & { type: "Pointer" };
 type MPointer = MValuePointer["value"];
 
 let read_field = (v: MAdt, k: string): MAdt => {
-  let field = v.fields.find(([k2]) => k == k2);
+  let field = v.fields.find(([k2]) => k === k2);
   if (!field) {
     let v_pretty = JSON.stringify(v, undefined, 2);
     throw new Error(`Could not find field "${k}" in struct: ${v_pretty}`);
@@ -127,12 +127,12 @@ let specialPtr = (value: MAdt): MValue | undefined => {
 
   let alloc_type = value.alloc_kind.type;
   let non_null: MAdt;
-  if (alloc_type == "String") {
+  if (alloc_type === "String") {
     let vec = read_field(value, "vec");
     non_null = read_vec(vec);
-  } else if (alloc_type == "Vec") {
+  } else if (alloc_type === "Vec") {
     non_null = read_vec(value);
-  } else if (alloc_type == "Box") {
+  } else if (alloc_type === "Box") {
     let unique = read_field(value, "0");
     non_null = read_unique(unique);
   } else {
@@ -150,7 +150,7 @@ let AdtView = ({ value }: { value: MAdt }) => {
   let ptr = specialPtr(value);
   if (ptr && !config.concreteTypes) return <ValueView value={ptr} />;
 
-  if (value.name == "Iter" && !config.concreteTypes) {
+  if (value.name === "Iter" && !config.concreteTypes) {
     let non_null = read_field(value, "ptr");
     let ptr = non_null.fields[0][1];
     return <ValueView value={ptr} />;
@@ -158,9 +158,9 @@ let AdtView = ({ value }: { value: MAdt }) => {
 
   let adtName = value.variant ?? value.name;
 
-  let isTuple = value.fields.length > 0 && value.fields[0][0] == "0";
+  let isTuple = value.fields.length > 0 && value.fields[0][0] === "0";
 
-  if (isTuple && value.fields.length == 1) {
+  if (isTuple && value.fields.length === 1) {
     let path = [...pathCtx, "field", "0"];
     let field = value.fields[0][1];
     let inner = (
@@ -169,7 +169,7 @@ let AdtView = ({ value }: { value: MAdt }) => {
       </PathContext.Provider>
     );
     let smallInside =
-      field.type == "Adt" &&
+      field.type === "Adt" &&
       !config.concreteTypes &&
       specialPtr(field.value) !== undefined;
     return (
@@ -224,33 +224,34 @@ let PointerView = ({ value: { path, range } }: { value: MPointer }) => {
   let config = useContext(ConfigContext);
 
   let segment =
-    path.segment.type == "Heap"
+    path.segment.type === "Heap"
       ? `heap-${path.segment.value.index}`
       : `stack-${path.segment.value.frame}-${path.segment.value.local}`;
 
   let parts = [...path.parts];
   let lastPart = _.last(parts);
   let slice =
-    lastPart && lastPart.type == "Subslice" ? lastPart.value : undefined;
-  if (lastPart && lastPart.type == "Index" && lastPart.value == 0) parts.pop();
+    lastPart && lastPart.type === "Subslice" ? lastPart.value : undefined;
+  if (lastPart && lastPart.type === "Index" && lastPart.value === 0)
+    parts.pop();
   let partClass = parts.map(part =>
-    part.type == "Index"
+    part.type === "Index"
       ? `index-${part.value}`
-      : part.type == "Field"
-      ? `field-${part.value}`
-      : part.type == "Subslice"
-      ? `index-${part.value[0]}`
-      : ""
+      : part.type === "Field"
+        ? `field-${part.value}`
+        : part.type === "Subslice"
+          ? `index-${part.value[0]}`
+          : ""
   );
 
   let attrs: { [key: string]: string } = {
-    ["data-point-to"]: [segment, ...partClass].join("-"),
+    "data-point-to": [segment, ...partClass].join("-")
   };
   if (slice) {
     attrs["data-point-to-range"] = [
       segment,
       ...partClass.slice(0, -1),
-      `index-${slice[1]}`,
+      `index-${slice[1]}`
     ].join("-");
   }
 
@@ -283,14 +284,14 @@ let ValueView = ({ value }: { value: MValue }) => {
   let error = useContext(ErrorContext);
   return (
     <>
-      {value.type == "Bool" ||
-      value.type == "Uint" ||
-      value.type == "Int" ||
-      value.type == "Float" ? (
+      {value.type === "Bool" ||
+      value.type === "Uint" ||
+      value.type === "Int" ||
+      value.type === "Float" ? (
         value.value.toString()
-      ) : value.type == "Char" ? (
+      ) : value.type === "Char" ? (
         String.fromCharCode(value.value).replace(" ", "\u00A0")
-      ) : value.type == "Tuple" ? (
+      ) : value.type === "Tuple" ? (
         <>
           <table>
             <tbody>
@@ -309,18 +310,18 @@ let ValueView = ({ value }: { value: MValue }) => {
             </tbody>
           </table>
         </>
-      ) : value.type == "Adt" ? (
+      ) : value.type === "Adt" ? (
         <AdtView value={value.value} />
-      ) : value.type == "Pointer" ? (
+      ) : value.type === "Pointer" ? (
         <PointerView value={value.value} />
-      ) : value.type == "Array" ? (
+      ) : value.type === "Array" ? (
         <AbbreviatedView value={value.value} />
-      ) : value.type == "Unallocated" ? (
+      ) : value.type === "Unallocated" ? (
         (() => {
           let isError =
             error &&
-            error.type == "PointerUseAfterFree" &&
-            error.value.alloc_id == value.value.alloc_id;
+            error.type === "PointerUseAfterFree" &&
+            error.value.alloc_id === value.value.alloc_id;
           return (
             <span className={classNames("unallocated", { error: isError })}>
               ⦻
@@ -335,7 +336,7 @@ let ValueView = ({ value }: { value: MValue }) => {
 };
 
 let LocalsView = ({ index, locals }: { index: number; locals: MLocal[] }) =>
-  locals.length == 0 ? (
+  locals.length === 0 ? (
     <div className="locals empty-frame">(empty frame)</div>
   ) : (
     <table className="locals">
@@ -344,7 +345,7 @@ let LocalsView = ({ index, locals }: { index: number; locals: MLocal[] }) =>
           let path = ["stack", index.toString(), name];
 
           // TODO: implement support for move paths length > 0
-          let isMoved = moved_paths.some(p => p.length == 0);
+          let isMoved = moved_paths.some(p => p.length === 0);
 
           return (
             <tr key={i} className={classNames({ moved: isMoved })}>
@@ -363,7 +364,7 @@ let LocalsView = ({ index, locals }: { index: number; locals: MLocal[] }) =>
 
 let Header: React.FC<React.PropsWithChildren<{ className: string }>> = ({
   children,
-  className,
+  className
 }) => (
   <div className={`header ${className ?? ""}`}>
     <div className="header-text">{children}</div>
@@ -373,7 +374,7 @@ let Header: React.FC<React.PropsWithChildren<{ className: string }>> = ({
 
 let FrameView = ({
   index,
-  frame,
+  frame
 }: {
   index: number;
   frame: MFrame<CharRange>;
@@ -433,7 +434,7 @@ const PALETTE = {
     "rgba(71, 28, 72, 1)",
     "rgba(97, 30, 82, 1)",
     "rgba(123, 30, 89, 1)",
-    "rgba(150, 27, 91, 1)",
+    "rgba(150, 27, 91, 1)"
   ],
   // to_rgb(sns.color_palette("rocket_r", 20, desat=0.5)[:6])
   dark: [
@@ -442,8 +443,8 @@ const PALETTE = {
     "rgba(220, 187, 168, 1)",
     "rgba(214, 172, 151, 1)",
     "rgba(208, 156, 136, 1)",
-    "rgba(202, 140, 121, 1)",
-  ],
+    "rgba(202, 140, 121, 1)"
+  ]
 };
 
 let renderArrows = (
@@ -465,7 +466,7 @@ let renderArrows = (
     );
 
     let query = (sel: string): HTMLElement => {
-      let dst = stepContainer.querySelector<HTMLElement>("." + CSS.escape(sel));
+      let dst = stepContainer.querySelector<HTMLElement>(`.${CSS.escape(sel)}`);
       if (!dst)
         throw new Error(
           `Could not find endpoint for pointer selector: ${CSS.escape(sel)}`
@@ -503,7 +504,7 @@ let renderArrows = (
       let endSocket = dst.dataset.connector as LeaderLine.SocketType;
       let group = {
         srcRegion: getMemoryRegion(src),
-        dstRegion: getMemoryRegion(dst),
+        dstRegion: getMemoryRegion(dst)
       };
 
       if (!(dstSel in dstCounts)) dstCounts[dstSel] = 0;
@@ -531,7 +532,7 @@ let renderArrows = (
         // Heap -> stack pointers should start on the left and
         // everything else starts on the right
         let startSocket: LeaderLine.SocketType =
-          srcRegion == "heap" && dstRegion == "stack" ? "left" : "right";
+          srcRegion === "heap" && dstRegion === "stack" ? "left" : "right";
 
         let dstAnchor: LeaderLine.AnchorAttachment;
         if (ptr.dstRange) {
@@ -546,16 +547,16 @@ let renderArrows = (
               ptr.dst.offsetLeft,
             height: 2,
             y: "100%",
-            fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red",
+            fillColor: mdbookEmbed ? "var(--search-mark-bg)" : "red"
           });
-        } else if (srcRegion == "stack" && dstRegion == "stack") {
+        } else if (srcRegion === "stack" && dstRegion === "stack") {
           // Stack -> stack pointers should point a little below the middle
           // to avoid conflicting with outgoing pointers.
           dstAnchor = LeaderLine.pointAnchor(ptr.dst, { x: "100%", y: "75%" });
-        } else if (ptr.endSocket == "bottom") {
+        } else if (ptr.endSocket === "bottom") {
           dstAnchor = ptr.dst;
         } else {
-          let x = dstRegion == "stack" ? 100 : 0;
+          let x = dstRegion === "stack" ? 100 : 0;
 
           // Everything else should get evenly spaced around the
           // middle of the endpoint
@@ -563,12 +564,12 @@ let renderArrows = (
             center: 50,
             spacing: 30,
             index: ptr.dstIndex,
-            total: dstCounts[ptr.dstSel] - 1,
+            total: dstCounts[ptr.dstSel] - 1
           });
 
           dstAnchor = LeaderLine.pointAnchor(ptr.dst, {
             x: `${x}%`,
-            y: `${y}%`,
+            y: `${y}%`
           });
         }
 
@@ -586,7 +587,7 @@ let renderArrows = (
 
         let startSocketGravity = undefined;
         let endSocketGravity = undefined;
-        if (ptr.group.srcRegion == "stack" && ptr.group.dstRegion == "heap") {
+        if (ptr.group.srcRegion === "stack" && ptr.group.dstRegion === "heap") {
           startSocketGravity = 60;
           endSocketGravity = 100 - i * 10;
         }
@@ -598,7 +599,7 @@ let renderArrows = (
           startSocket,
           endSocket: ptr.endSocket,
           startSocketGravity,
-          endSocketGravity,
+          endSocketGravity
         });
 
         // Make arrows local to the diagram rather than global in the body
@@ -642,7 +643,7 @@ let renderArrows = (
 
     let interval = setInterval(() => {
       let newCoords = curCoords();
-      if (newCoords[0] != lastCoords[0] || newCoords[1] != lastCoords[1]) {
+      if (newCoords[0] !== lastCoords[0] || newCoords[1] !== lastCoords[1]) {
         positionArrowContainer(...newCoords);
       }
       lastCoords = newCoords;
@@ -664,7 +665,7 @@ let renderArrows = (
 let StepView = ({
   step,
   index,
-  containerRef,
+  containerRef
 }: {
   step: MStep<CharRange>;
   index: number;
@@ -682,7 +683,7 @@ let StepView = ({
         {error !== undefined ? (
           <span className="undefined-behavior">
             undefined behavior:{" "}
-            {error.type == "PointerUseAfterFree" ? (
+            {error.type === "PointerUseAfterFree" ? (
               <>pointer used after its pointee is freed</>
             ) : (
               error.value
@@ -705,7 +706,7 @@ let StepView = ({
 
 let InterpreterView = ({
   trace,
-  config,
+  config
 }: {
   trace: MTrace<CharRange>;
   config?: InterpreterConfig;
@@ -730,6 +731,7 @@ let InterpreterView = ({
         onMouseLeave={() => setButtonVisible(false)}
       >
         <button
+          type="button"
           className={classNames("concrete-types", { active: concreteTypes })}
           onClick={() => setConcreteTypes(!concreteTypes)}
           style={{ opacity: buttonVisible ? "1" : "0" }}
@@ -738,7 +740,7 @@ let InterpreterView = ({
         </button>
         {trace.steps.map((step, i) => {
           let error =
-            i == trace.steps.length - 1 && trace.result.type == "Error"
+            i === trace.steps.length - 1 && trace.result.type === "Error"
               ? trace.result.value
               : undefined;
           return (
@@ -768,7 +770,7 @@ let filterSteps = (
         idx > linecolToPosition(frame.location.start, view.state.doc);
       return markInFrame && markAfterLoc;
     });
-    if (stepRevIdx == -1)
+    if (stepRevIdx === -1)
       throw new Error(
         `Could not find step for range: ${JSON.stringify(idx, undefined, 2)}`
       );
@@ -777,7 +779,7 @@ let filterSteps = (
   let sortedMarks = _.sortBy(indexedMarks, ([idx]) => idx);
   return [
     sortedMarks.map(([_stepIdx, mark]) => mark),
-    sortedMarks.map(([_stepIdx, _mark, step]) => step),
+    sortedMarks.map(([_stepIdx, _mark, step]) => step)
   ];
 };
 
@@ -790,7 +792,10 @@ let StepMarkerView = ({ index, fail }: { index: number; fail: boolean }) => {
 };
 
 class StepMarkerWidget extends WidgetType {
-  constructor(readonly index: number, readonly fail: boolean) {
+  constructor(
+    readonly index: number,
+    readonly fail: boolean
+  ) {
     super();
   }
 
@@ -829,13 +834,13 @@ export function renderInterpreter(
     Decoration.widget({
       widget: new StepMarkerWidget(
         i,
-        i == trace.steps.length - 1 && trace.result.type == "Error"
-      ),
+        i === trace.steps.length - 1 && trace.result.type === "Error"
+      )
     }).range(mark)
   );
 
   view.dispatch({
-    effects: [markerField.setEffect.of(decos)],
+    effects: [markerField.setEffect.of(decos)]
   });
 
   root.render(

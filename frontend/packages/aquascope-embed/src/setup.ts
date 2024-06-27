@@ -1,13 +1,13 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { Extension } from "@codemirror/state";
+import type { Extension } from "@codemirror/state";
 import {
   EditorView,
   drawSelection,
   highlightSpecialChars,
-  keymap,
+  keymap
 } from "@codemirror/view";
-import { Tag, tags as t } from "@lezer/highlight";
+import { type Tag, tags as t } from "@lezer/highlight";
 
 let tf = (tag: Tag, hljs: string) => ({ tag, class: `hljs-${hljs}` });
 let tt = (cm: keyof typeof t, hljs: string) => tf(t[cm] as any, hljs);
@@ -30,7 +30,7 @@ let highlightStyle = HighlightStyle.define([
   tt("keyword", "keyword"),
   tt("self", "variable.language"),
   tt("operator", "operator"),
-  tf(t.function(t.definition(t.variableName)), "title"),
+  tf(t.function(t.definition(t.variableName)), "title")
 ]);
 
 let suppressKeyEvents = () => {
@@ -49,7 +49,7 @@ let suppressKeyEvents = () => {
         captureKeyboard,
         false
       );
-    },
+    }
   });
 };
 
@@ -59,5 +59,5 @@ export let setup: Extension = (() => [
   drawSelection(),
   syntaxHighlighting(highlightStyle, { fallback: true }),
   keymap.of([...defaultKeymap, ...historyKeymap]),
-  suppressKeyEvents(),
+  suppressKeyEvents()
 ])();
