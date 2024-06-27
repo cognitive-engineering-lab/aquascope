@@ -1,22 +1,22 @@
 import {
-  Range,
+  type Range,
   RangeSet,
   StateEffect,
-  StateEffectType,
+  type StateEffectType,
   StateField,
-  Text,
+  type Text
 } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
+import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
 import _ from "lodash";
 
-import { CharPos } from "../bindings/CharPos";
-import {
+import type { CharPos } from "../bindings/CharPos";
+import type {
   AnalysisFacts,
   AnalysisOutput,
   CharRange,
   LoanKey,
   MoveKey,
-  RefinementRegion,
+  RefinementRegion
 } from "../types";
 
 // ---------
@@ -49,7 +49,7 @@ export let permName = (c: PermLetter): string => {
     return "read";
   } else if (c === "W") {
     return "write";
-  } else if (c == "O") {
+  } else if (c === "O") {
     return "own";
   } else {
     return "flow";
@@ -63,7 +63,7 @@ export let evenlySpaceAround = ({
   center,
   spacing,
   index,
-  total,
+  total
 }: {
   center: number;
   spacing: number;
@@ -78,14 +78,14 @@ export let evenlySpaceAround = ({
 };
 
 export let makeTag = (length: number) => {
-  var result = "";
-  var characters =
+  let result = "";
+  const characters =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  var charactersLength = characters.length;
-  for (var i = 0; i < length; i++) {
+  const charactersLength = characters.length;
+  for (let i = 0; i < length; i++) {
     result += characters.charAt(Math.floor(Math.random() * charactersLength));
   }
-  return "tag" + result;
+  return `tag${result}`;
 };
 
 export function genStateField<T>(
@@ -106,7 +106,7 @@ export function genStateField<T>(
       return transactions.docChanged ? RangeSet.of([]) : points;
     },
 
-    provide: f => EditorView.decorations.from(f),
+    provide: f => EditorView.decorations.from(f)
   });
 }
 
@@ -131,7 +131,7 @@ function loanFactsToDecoration(
 ): Array<Range<Decoration>> {
   let loanDeco = Decoration.mark({
     class: "aquascope-loan",
-    tagName: refinerTag,
+    tagName: refinerTag
   }).range(
     linecolToPosition(refinerPoint.start, text),
     linecolToPosition(refinerPoint.end, text)
@@ -142,7 +142,7 @@ function loanFactsToDecoration(
     .map(range => {
       let highlightedRange = Decoration.mark({
         class: "aquascope-live-region",
-        tagName: regionTag,
+        tagName: regionTag
       }).range(
         linecolToPosition(range.start, text),
         linecolToPosition(range.end, text)
@@ -174,7 +174,7 @@ export function generateAnalysisDecorationFacts(
       refinerTag: tag,
       regionTag: regionTag,
       refinerPoint: loanPoint,
-      region: refinedRegion,
+      region: refinedRegion
     };
     stateFacts.push(loanFacts);
   }
@@ -190,7 +190,7 @@ export function generateAnalysisDecorationFacts(
       refinerTag: tag,
       regionTag: regionTag,
       refinerPoint: loanPoint,
-      region: refinedRegion,
+      region: refinedRegion
     };
     stateFacts.push(loanFacts);
   }
@@ -199,7 +199,7 @@ export function generateAnalysisDecorationFacts(
     loanPoints: lPoints,
     loanRegions: lRegions,
     movePoints: mPoints,
-    moveRegions: mRegions,
+    moveRegions: mRegions
   };
 
   return [facts, stateFacts];
@@ -215,12 +215,12 @@ export let hiddenLines = StateField.define<DecorationSet>({
     for (let e of tr.effects)
       if (e.is(hideLine))
         decos = decos.update({
-          add: [hiddenLineClass.range(tr.state.doc.line(e.value.line).from)],
+          add: [hiddenLineClass.range(tr.state.doc.line(e.value.line).from)]
         });
 
     return decos;
   },
-  provide: f => EditorView.decorations.from(f),
+  provide: f => EditorView.decorations.from(f)
 });
 
 let forCustomTag = (tag: string, callback: (e: HTMLElement) => void) => {
@@ -319,7 +319,7 @@ export let makeDecorationField = () => {
           widgets = RangeSet.of(_.sortBy(e.value, range => range.from));
       return widgets;
     },
-    provide: f => EditorView.decorations.from(f),
+    provide: f => EditorView.decorations.from(f)
   });
   return { setEffect, field };
 };

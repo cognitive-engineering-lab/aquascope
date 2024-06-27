@@ -1,5 +1,5 @@
-import puppeteer, { Browser, Page } from "puppeteer";
-import { PreviewServer, preview } from "vite";
+import puppeteer, { type Browser, type Page } from "puppeteer";
+import { type PreviewServer, preview } from "vite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const permStackSelector = ".permission-stack";
@@ -30,7 +30,7 @@ describe("Aquascope Standalone", () => {
     // user agent seem to help keep things consistent.
     page = await browser.newPage();
     await page.setExtraHTTPHeaders({
-      "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+      "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8"
     });
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36"
@@ -45,8 +45,8 @@ describe("Aquascope Standalone", () => {
   });
 
   beforeEach(async () => {
-    await page.goto(`http://localhost:8000`, {
-      waitUntil: "networkidle0",
+    await page.goto("http://localhost:8000", {
+      waitUntil: "networkidle0"
     });
   });
 

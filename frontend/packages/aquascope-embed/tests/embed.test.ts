@@ -1,4 +1,4 @@
-import puppeteer, { Browser, Page } from "puppeteer";
+import puppeteer, { type Browser, type Page } from "puppeteer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 describe("Aquascope Embed", () => {
@@ -18,7 +18,7 @@ describe("Aquascope Embed", () => {
     await page.goto(
       `file://${__dirname}../../../../../crates/mdbook-aquascope/test-book/book/index.html`,
       {
-        waitUntil: "domcontentloaded",
+        waitUntil: "domcontentloaded"
       }
     );
 

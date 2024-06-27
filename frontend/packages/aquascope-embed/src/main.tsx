@@ -1,5 +1,5 @@
 import { useFloating } from "@floating-ui/react-dom";
-import { Editor, Result, types } from "aquascope-editor";
+import { Editor, type Result, type types } from "aquascope-editor";
 import React, { useContext, useLayoutEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
@@ -60,7 +60,7 @@ let useCaptureMdbookShortcuts = (capture: boolean) => {
 let ContextProvider = ({
   title,
   buttonText,
-  children,
+  children
 }: {
   title: string;
   buttonText: string;
@@ -69,7 +69,7 @@ let ContextProvider = ({
   let [open, setOpen] = useState(false);
   let { x, y, strategy, refs } = useFloating({
     placement: "bottom-end",
-    open,
+    open
   });
 
   // Disable mdbook shortcuts if the bug reporter is opened and we're not
@@ -81,6 +81,7 @@ let ContextProvider = ({
   return (
     <div className="context-provider">
       <button
+        type="button"
         title={title}
         onClick={() => setOpen(!open)}
         ref={refs.setReference}
@@ -94,10 +95,14 @@ let ContextProvider = ({
           style={{
             position: strategy,
             top: y ?? 0,
-            left: x ?? 0,
+            left: x ?? 0
           }}
         >
-          <button className="close" onClick={() => setOpen(false)}>
+          <button
+            type="button"
+            className="close"
+            onClick={() => setOpen(false)}
+          >
             ✕
           </button>
           {childEl}
@@ -127,7 +132,7 @@ let BugReporter = () => (
           </p>
           <form onSubmit={onSubmit}>
             <div>
-              <textarea name="feedback" aria-label="Bug feedback"></textarea>
+              <textarea name="feedback" aria-label="Bug feedback" />
             </div>
             <div>
               <input type="submit" aria-label="Submit bug feedback" />
@@ -147,7 +152,11 @@ let QuestionMark = () => (
         <p>
           This diagram is a new way of visualizing Rust programs. To learn more
           about what the symbols mean, you will need to read the updated{" "}
-          <a href="ch04-01-what-is-ownership.html" target="_blank">
+          <a
+            href="ch04-01-what-is-ownership.html"
+            target="_blank"
+            rel="noreferrer"
+          >
             Chapter 4: Understanding Ownership
           </a>
           .
@@ -165,11 +174,11 @@ let ExtraInfo = () => (
 );
 
 window.initAquascopeBlocks = (root: HTMLElement) => {
-  root.querySelectorAll<HTMLDivElement>("." + EMBED_NAME).forEach(elem => {
+  root.querySelectorAll<HTMLDivElement>(`.${EMBED_NAME}`).forEach(elem => {
     elem.classList.remove(EMBED_NAME);
     elem.classList.add(AQUASCOPE_NAME);
 
-    let readOnly = elem.dataset.noInteract! == "true";
+    let readOnly = elem.dataset.noInteract! === "true";
 
     let computePermBtn: HTMLButtonElement | undefined;
     if (!readOnly) {
@@ -200,7 +209,7 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
         </CodeContext.Provider>
       );
     }
-   
+
     let serverUrl = elem.dataset.serverUrl
       ? new URL(elem.dataset.serverUrl)
       : undefined;
@@ -246,7 +255,7 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
         ed.renderOperation(operation, {
           response: responses![operation],
           config,
-          annotations,
+          annotations
         });
       });
     }

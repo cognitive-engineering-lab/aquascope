@@ -1,39 +1,38 @@
 import { rust } from "@codemirror/lang-rust";
 import { indentUnit } from "@codemirror/language";
-import { Compartment, EditorState, Extension } from "@codemirror/state";
-import { EditorView, ViewUpdate } from "@codemirror/view";
-import _ from "lodash";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { EditorView, type ViewUpdate } from "@codemirror/view";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { boundariesField } from "./editor-utils/boundaries";
 import {
-  InterpreterConfig,
+  type InterpreterConfig,
   markerField,
-  renderInterpreter,
+  renderInterpreter
 } from "./editor-utils/interpreter";
 import {
-  IconField,
+  type IconField,
   hiddenLines,
   hideLine,
-  loanFactsField,
+  loanFactsField
 } from "./editor-utils/misc";
 import {
-  PermissionsCfg,
-  PermissionsDecorations,
+  type PermissionsCfg,
+  type PermissionsDecorations,
   makePermissionsDecorations,
-  renderPermissions,
+  renderPermissions
 } from "./editor-utils/permissions";
 import { stepField } from "./editor-utils/stepper";
 import "./styles.scss";
-import {
+import type {
   AnalysisFacts,
   AnalysisOutput,
   AquascopeAnnotations,
   BackendError,
   CharRange,
   InterpAnnotations,
-  MTrace,
+  MTrace
 } from "./types";
 
 export * as types from "./types";
@@ -68,6 +67,7 @@ type ButtonName = "copy" | "eye";
 
 let CopyButton = ({ view }: { view: EditorView }) => (
   <button
+    type="button"
     className="cm-button"
     onClick={() => {
       let contents = view.state.doc.toJSON().join("\n");
@@ -85,6 +85,7 @@ let HideButton = ({ container }: { container: HTMLDivElement }) => {
     else container.classList.remove("show-hidden");
   }, [hidden]);
   return (
+    // biome-ignore lint/a11y/useButtonType: TODO
     <button className="cm-button" onClick={() => setHidden(!hidden)}>
       <i className={`fa ${hidden ? "fa-eye" : "fa-eye-slash"}`} />
     </button>
@@ -98,8 +99,8 @@ let resetMarkedRangesOnEdit = EditorView.updateListener.of(
         effects: [
           boundariesField.setEffect.of([]),
           stepField.setEffect.of([]),
-          markerField.setEffect.of([]),
-        ],
+          markerField.setEffect.of([])
+        ]
       });
     }
   }
@@ -118,12 +119,12 @@ export class Editor {
   private permissionsDecos?: PermissionsDecorations;
   private metaContainer: ReactDOM.Root;
   private buttons: Set<ButtonName>;
-  private shouldFail: boolean = false;
+  private shouldFail = false;
 
   public constructor(
     dom: HTMLDivElement,
     readonly setup: Extension,
-    readonly reportStdErr: (err: BackendError) => void = function (err) {
+    readonly reportStdErr: (err: BackendError) => void = err => {
       console.error("An error occurred: ");
       console.error(err);
     },
@@ -149,14 +150,14 @@ export class Editor {
         loanFactsField,
         boundariesField.field,
         stepField.field,
-        markerField.field,
-      ],
+        markerField.field
+      ]
     });
 
     this.editorContainer = document.createElement("div");
     this.view = new EditorView({
       state: initialState,
-      parent: this.editorContainer,
+      parent: this.editorContainer
     });
 
     let buttonContainer = document.createElement("div");
@@ -176,15 +177,18 @@ export class Editor {
       <div className="meta-container">
         <div className="top-right">
           {Array.from(this.buttons).map((button, i) =>
-            button == "copy" ? (
+            button === "copy" ? (
               <CopyButton key={i} view={this.view} />
-            ) : button == "eye" ? (
+            ) : button === "eye" ? (
               <HideButton key={i} container={this.editorContainer} />
             ) : null
           )}
         </div>
         {this.shouldFail ? (
-          <div dangerouslySetInnerHTML={{ __html: this.shouldFailHtml }} />
+          <div
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: not user-configurable
+            dangerouslySetInnerHTML={{ __html: this.shouldFailHtml }}
+          />
         ) : null}
       </div>
     );
@@ -196,13 +200,13 @@ export class Editor {
 
   public reconfigure(extensions: Extension[]): void {
     this.view.dispatch({
-      effects: [mainKeybinding.reconfigure([...extensions, this.setup])],
+      effects: [mainKeybinding.reconfigure([...extensions, this.setup])]
     });
   }
 
   public removeIconField<B, T, F extends IconField<B, T>>(f: F) {
     this.view.dispatch({
-      effects: [f.effectType.of([])],
+      effects: [f.effectType.of([])]
     });
   }
 
@@ -213,18 +217,18 @@ export class Editor {
   ) {
     let newEffects = methodCallPoints.map(v => f.fromOutput(v, facts));
     this.view.dispatch({
-      effects: [f.effectType.of(newEffects)],
+      effects: [f.effectType.of(newEffects)]
     });
   }
 
   public async renderPermissions(cfg?: PermissionsCfg) {
     // TODO: the permissions Decos are no longer removed on update
     // so we have to recompute every time.
-    if (true || this.permissionsDecos === undefined) {
-      await this.renderOperation("permissions", {
-        config: cfg,
-      });
-    }
+    // if (this.permissionsDecos === undefined) {
+    await this.renderOperation("permissions", {
+      config: cfg
+    });
+    // }
 
     renderPermissions(this.view, this.permissionsDecos, cfg);
   }
@@ -239,12 +243,12 @@ export class Editor {
     let serverResponseRaw = await fetch(endpointUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         code: inEditor,
-        config,
-      }),
+        config
+      })
     });
     let serverResponse: ServerResponse = await serverResponseRaw.json();
     return serverResponse;
@@ -255,7 +259,7 @@ export class Editor {
     config?: InterpreterConfig,
     annotations?: InterpAnnotations
   ) {
-    if (config && config.hideCode) {
+    if (config?.hideCode) {
       this.view.destroy();
       this.metaContainer.unmount();
     }
@@ -274,7 +278,7 @@ export class Editor {
     {
       response,
       config,
-      annotations,
+      annotations
     }: {
       response?: Result<any>;
       config?: CommonConfig & object;
@@ -289,23 +293,19 @@ export class Editor {
         response = JSON.parse(serverResponse.stdout);
         this.reportStdErr({
           type: "ServerStderr",
-          error: serverResponse.stderr,
+          error: serverResponse.stderr
         });
       } else {
         return this.reportStdErr({
           type: "ServerStderr",
-          error: serverResponse.stderr,
+          error: serverResponse.stderr
         });
       }
     }
 
-    if (
-      annotations &&
-      annotations.hidden_lines &&
-      annotations.hidden_lines.length > 0
-    ) {
+    if (annotations?.hidden_lines && annotations.hidden_lines.length > 0) {
       this.view.dispatch({
-        effects: annotations.hidden_lines.map(line => hideLine.of({ line })),
+        effects: annotations.hidden_lines.map(line => hideLine.of({ line }))
       });
       this.buttons.add("eye");
     }
@@ -316,13 +316,13 @@ export class Editor {
 
     this.renderMeta();
 
-    if (operation == "interpreter") {
+    if (operation === "interpreter") {
       if ("Ok" in response!) {
         this.renderInterpreter(response.Ok, config as any, annotations?.interp);
       } else {
         this.reportStdErr(response!.Err);
       }
-    } else if (operation == "permissions") {
+    } else if (operation === "permissions") {
       // The permissions analysis results are sent as an array of
       // body analyses. Each body could have analyzed successfully,
       // or had a
@@ -339,7 +339,7 @@ export class Editor {
       let cast = response as any as Result<AnalysisOutput>[];
       let results: AnalysisOutput[] = [];
 
-      for (var res of cast) {
+      for (const res of cast) {
         if ("Ok" in res) {
           results.push(res.Ok);
         } else {
