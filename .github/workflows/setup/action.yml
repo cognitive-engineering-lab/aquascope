@@ -8,13 +8,13 @@ runs:
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
-        override: true
+        default: true
     
     - uses: davidB/rust-cargo-make@v1
       with:
         version: '0.36.4'
 
-    - uses: actions-rs/install@v0.1
+    - uses: baptiste0928/cargo-install@v3
       with:
         crate: cargo-insta
         version: latest
