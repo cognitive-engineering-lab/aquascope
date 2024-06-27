@@ -2,13 +2,17 @@ name: setup
 runs:
   using: composite
   steps:
+    - name: Stable rustc
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
     - uses: davidB/rust-cargo-make@v1
       with:
         version: '0.36.4'
     - uses: actions-rs/install@v0.1
       with:
         crate: cargo-insta
-        version: 1.38.0
+        version: latest
         use-tool-cache: true
     - name: Gen bindings
       run: cargo make init-bindings

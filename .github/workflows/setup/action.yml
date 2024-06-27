@@ -3,6 +3,11 @@ runs:
   using: composite
   steps:
     - uses: actions/checkout@v3
+
+    - name: Stable rustc
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
     
     - uses: davidB/rust-cargo-make@v1
       with:
