@@ -8,7 +8,7 @@ runs:
     - uses: actions-rs/install@v0.1
       with:
         crate: cargo-insta
-        version: latest
+        version: 1.38.0
         use-tool-cache: true
     - name: Gen bindings
       run: cargo make init-bindings
