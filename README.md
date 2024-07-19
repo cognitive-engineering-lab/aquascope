@@ -10,7 +10,7 @@ Aquascope is a tool that generates interactive visualizations of Rust programs. 
 
 [Click here for a live demo.](https://cognitive-engineering-lab.github.io/aquascope/) Want to learn more about what the diagram means? [Read the new ownership chapter in our Rust Book Experiment.](https://rust-book.cs.brown.edu/ch04-01-what-is-ownership.html)
 
-:warning: **Aquascope is research software and under active development!** :warning:
+⚠️🔬 **Aquascope is research software! If you encounter a bug, we welcome contributions!** 🧪⚠️
 
 ## Installation
 
@@ -195,3 +195,28 @@ Visualizing permission steps can be quite intrusive but oftentimes you may want 
 ## Having trouble?
 
 If you want to use Aquascope but are having trouble finding the relevant information, please leave an issue or email us at <wcrichto@brown.edu> and <gavin.gray@inf.ethz.ch>.
+
+## Citation
+
+Aquascope was developed as a part of our academic research on [how people learn Rust](https://dl.acm.org/doi/10.1145/3622841). If you use Aquascope as a part of your research, please cite this paper:
+
+```bibtex
+@article{cgk:aquascope,
+  author = {Crichton, Will and Gray, Gavin and Krishnamurthi, Shriram},
+  title = {A Grounded Conceptual Model for Ownership Types in Rust},
+  year = {2023},
+  issue_date = {October 2023},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  volume = {7},
+  number = {OOPSLA2},
+  url = {https://doi.org/10.1145/3622841},
+  doi = {10.1145/3622841},
+  journal = {Proc. ACM Program. Lang.},
+  month = {oct},
+  articleno = {265},
+  numpages = {29},
+  keywords = {Rust, concept inventory, ownership types, program state visualization}
+}
+```
+
