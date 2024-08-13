@@ -229,10 +229,10 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
     let ed = new Editor(
       elem,
       setup,
+      initialCode,
       err => {
         console.error(err);
-      },
-      initialCode,
+      },      
       serverUrl,
       readOnly,
       shouldFailHtml,

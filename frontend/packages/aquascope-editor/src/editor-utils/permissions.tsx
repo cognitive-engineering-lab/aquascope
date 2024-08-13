@@ -2,14 +2,14 @@ import type { Range } from "@codemirror/state";
 import type { Decoration, EditorView } from "@codemirror/view";
 import _ from "lodash";
 
-import type { AnalysisOutput, AquascopeAnnotations } from "../types";
-import { boundariesField, makeBoundaryDecorations } from "./boundaries";
+import type { AnalysisOutput, AquascopeAnnotations } from "../types.js";
+import { boundariesField, makeBoundaryDecorations } from "./boundaries.js";
 import {
   type ActionFacts,
   generateAnalysisDecorationFacts,
   loanFactsStateType
 } from "./misc";
-import { makeStepDecorations, stepField } from "./stepper";
+import { makeStepDecorations, stepField } from "./stepper.js";
 
 export interface PermissionsCfg {
   stepper?: any;

@@ -5,7 +5,7 @@ import _ from "lodash";
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
-import type { CharPos } from "../bindings/CharPos";
+import type { CharPos } from "../bindings/CharPos.js";
 import type {
   AnalysisFacts,
   LoanKey,
@@ -15,7 +15,7 @@ import type {
   PermissionsStepTable,
   StepperAnnotations,
   ValueStep
-} from "../types";
+} from "../types.js";
 import {
   hideLoanRegion,
   hideMoveRegion,
@@ -27,7 +27,7 @@ import {
   showLoanRegion,
   showMoveRegion,
   writeChar
-} from "./misc";
+} from "./misc.js";
 
 interface PermInStep {
   step: ValueStep<boolean>;

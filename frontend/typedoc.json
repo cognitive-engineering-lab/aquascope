@@ -6,6 +6,7 @@
   },
   "entryPointStrategy": "packages",
   "entryPoints": [
-    "packages/aquascope-editor"
+    "packages/aquascope-editor",
+    "packages/aquascope-react"
   ]
 }

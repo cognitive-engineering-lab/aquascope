@@ -194,7 +194,7 @@ Visualizing permission steps can be quite intrusive but oftentimes you may want 
 
 ## Having trouble?
 
-If you want to use Aquascope but are having trouble finding the relevant information, please leave an issue or email us at <wcrichto@brown.edu> and <gavin.gray@inf.ethz.ch>.
+If you want to use Aquascope but are having trouble finding the relevant information, please leave an issue or email us at <wcrichto@brown.edu> and <gavinleroy@brown.edu>.
 
 ## Citation
 

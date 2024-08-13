@@ -9,7 +9,7 @@ import {
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
 import _ from "lodash";
 
-import type { CharPos } from "../bindings/CharPos";
+import type { CharPos } from "../bindings/CharPos.js";
 import type {
   AnalysisFacts,
   AnalysisOutput,
@@ -17,7 +17,7 @@ import type {
   LoanKey,
   MoveKey,
   RefinementRegion
-} from "../types";
+} from "../types.js";
 
 // ---------
 // Constants
