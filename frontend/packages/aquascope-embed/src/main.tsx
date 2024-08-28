@@ -179,6 +179,7 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
     elem.classList.add(AQUASCOPE_NAME);
 
     let readOnly = elem.dataset.noInteract! === "true";
+    let showBugReporter = elem.dataset.showBugReporter! === "true";
 
     let computePermBtn: HTMLButtonElement | undefined;
     if (!readOnly) {
@@ -200,7 +201,7 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
     let initialCode = maybeParseJson<string>(elem.dataset.code);
     if (!initialCode) throw new Error("Missing data-code attribute");
 
-    if (window.telemetry) {
+    if (window.telemetry && showBugReporter) {
       let extraInfo = document.createElement("div");
       elem.appendChild(extraInfo);
       ReactDOM.createRoot(extraInfo).render(
@@ -232,7 +233,7 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
       initialCode,
       err => {
         console.error(err);
-      },      
+      },
       serverUrl,
       readOnly,
       shouldFailHtml,
