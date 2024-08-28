@@ -1,5 +1,5 @@
 // import { vim } from "@replit/codemirror-vim";
-import * as Ed from "aquascope-editor";
+import * as Ed from "@aquascope/editor";
 
 import { basicSetup } from "./setup";
 

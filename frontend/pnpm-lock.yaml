@@ -93,6 +93,9 @@ importers:
 
   packages/aquascope-embed:
     devDependencies:
+      '@aquascope/editor':
+        specifier: workspace:*
+        version: link:../aquascope-editor
       '@codemirror/commands':
         specifier: ^6.1.2
         version: 6.1.2
@@ -120,9 +123,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.0.3
         version: 4.0.3(vite@4.4.4(@types/node@20.4.2)(sass@1.63.6))
-      aquascope-editor:
-        specifier: workspace:*
-        version: link:../aquascope-editor
       puppeteer:
         specifier: ^19.6.0
         version: 19.6.0
@@ -135,6 +135,9 @@ importers:
 
   packages/aquascope-standalone:
     devDependencies:
+      '@aquascope/editor':
+        specifier: workspace:*
+        version: link:../aquascope-editor
       '@codemirror/autocomplete':
         specifier: ^6.3.0
         version: 6.3.0(@codemirror/language@6.8.0)(@codemirror/state@6.2.1)(@codemirror/view@6.14.1)(@lezer/common@1.0.3)
@@ -162,9 +165,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.0.3
         version: 4.0.3(vite@4.4.4(@types/node@20.4.2)(sass@1.63.6))
-      aquascope-editor:
-        specifier: workspace:*
-        version: link:../aquascope-editor
       font-awesome:
         specifier: ^4.7.0
         version: 4.7.0

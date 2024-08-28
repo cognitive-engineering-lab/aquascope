@@ -1,5 +1,5 @@
 {
-  "name": "aquascope-editor",
+  "name": "@aquascope/editor",
   "version": "0.1.0",
   "files": [
     "dist"
