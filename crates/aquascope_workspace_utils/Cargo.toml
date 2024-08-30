@@ -20,3 +20,4 @@ include = [
 [dependencies]
 toml = "0.5"
 anyhow = "1"
+serde = { workspace = true }
