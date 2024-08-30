@@ -56,7 +56,7 @@ jobs:
       - name: Build Aquascope serve
         run: cargo build -p aquascope_serve --release
       - name: Zip artifacts
-        run : zip artifacts.zip ./image.tar ./target/release/aquascope_serve
+        run : zip -j artifacts.zip ./image.tar ./target/release/aquascope_serve
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
