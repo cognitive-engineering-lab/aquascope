@@ -217,6 +217,9 @@
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
 <a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Parser for Aquascope code blocks within Markdown.
 
 </span><span class="kw">use </span>std::{
@@ -405,7 +408,10 @@
     <span class="comment">// TODO: make this configurable
     </span>add_data(<span class="string">&quot;no-interact&quot;</span>, <span class="string">&quot;true&quot;</span>)<span class="question-mark">?</span>;
 
-    <span class="macro">write!</span>(html, <span class="string">&quot;&gt;&lt;/div&gt;&quot;</span>)<span class="question-mark">?</span>;
+    <span class="comment">// TODO: add a code path to enable this from config
+    // add_data(&quot;show-bug-reporter&quot;, true)?;
+
+    </span><span class="macro">write!</span>(html, <span class="string">&quot;&gt;&lt;/div&gt;&quot;</span>)<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(html)
   }
