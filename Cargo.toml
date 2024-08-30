@@ -3,6 +3,9 @@ members = [ "crates/*" ]
 exclude = [ "files" ]
 resolver = "2"
 
+[workspace.dependencies]
+serde = { version = "=1.0.149", features = ["derive"] }
+
 # Make snapshot testing faster
 [profile.dev.package.insta]
 opt-level = 3

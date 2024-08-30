@@ -21,7 +21,7 @@ testing = []
 anyhow = "1.0.0"
 log = "0.4"
 itertools = "0.10.5"
-serde = { version = "1.0", features = ["derive"] }
+serde = { workspace = true }
 ts-rs = "6.2"
 regex = "1"
 fluid-let = "1.0"

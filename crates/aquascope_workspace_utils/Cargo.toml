@@ -4,7 +4,7 @@ authors = [
   "Will Crichton <wcrichto@cs.stanford.edu>",
   "Gavin Gray <gavinleroy6@gmail.com>"
 ]
-version = "0.3.2"
+version = "0.3.3"
 license = "MIT"
 edition = "2021"
 description = "Handy utilities for working in the Aquascope workspace"
@@ -20,3 +20,4 @@ include = [
 [dependencies]
 toml = "0.5"
 anyhow = "1"
+serde = { workspace = true }
