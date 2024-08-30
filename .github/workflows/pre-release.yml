@@ -105,12 +105,12 @@ jobs:
     needs: [update-frontend,update-server]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - uses: actions-rs/install@v0.1
         with:
           crate: cargo-workspaces
           version: latest
           use-tool-cache: true
+      - uses: actions/checkout@v3
       - name: Quick Setup
         uses: ./.github/workflows/quick-setup
       # Run cargo build to ensure crates/mdbook-aquascope/js is populated
