@@ -7,13 +7,13 @@ RUN rustup set profile minimal                                  && \
     rustup toolchain uninstall stable                           && \
     rustup component add --toolchain nightly-2023-08-25            \
                          --target x86_64-unknown-linux-musl        \
-                         rust-src rustc-dev llvm-tools-preview
+                         rust-src rustc-dev llvm-tools-preview miri
 
 RUN apk add --no-cache build-base musl-dev libc-dev linux-headers
 
 WORKDIR /aquascope
 
-COPY Cargo.toml rust-toolchain.toml ./
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
 
 ENV TARGET_CC=x86_64-linux-musl-gcc
