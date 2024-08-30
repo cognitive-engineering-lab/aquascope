@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_json-1.0.105/src/ser.rs`."><title>ser.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="serde_json" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../serde_json/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_json-1.0.99/src/ser.rs`."><title>ser.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="serde_json" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../serde_json/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -2181,70 +2181,6 @@
 <a href="#2181" id="2181">2181</a>
 <a href="#2182" id="2182">2182</a>
 <a href="#2183" id="2183">2183</a>
-<a href="#2184" id="2184">2184</a>
-<a href="#2185" id="2185">2185</a>
-<a href="#2186" id="2186">2186</a>
-<a href="#2187" id="2187">2187</a>
-<a href="#2188" id="2188">2188</a>
-<a href="#2189" id="2189">2189</a>
-<a href="#2190" id="2190">2190</a>
-<a href="#2191" id="2191">2191</a>
-<a href="#2192" id="2192">2192</a>
-<a href="#2193" id="2193">2193</a>
-<a href="#2194" id="2194">2194</a>
-<a href="#2195" id="2195">2195</a>
-<a href="#2196" id="2196">2196</a>
-<a href="#2197" id="2197">2197</a>
-<a href="#2198" id="2198">2198</a>
-<a href="#2199" id="2199">2199</a>
-<a href="#2200" id="2200">2200</a>
-<a href="#2201" id="2201">2201</a>
-<a href="#2202" id="2202">2202</a>
-<a href="#2203" id="2203">2203</a>
-<a href="#2204" id="2204">2204</a>
-<a href="#2205" id="2205">2205</a>
-<a href="#2206" id="2206">2206</a>
-<a href="#2207" id="2207">2207</a>
-<a href="#2208" id="2208">2208</a>
-<a href="#2209" id="2209">2209</a>
-<a href="#2210" id="2210">2210</a>
-<a href="#2211" id="2211">2211</a>
-<a href="#2212" id="2212">2212</a>
-<a href="#2213" id="2213">2213</a>
-<a href="#2214" id="2214">2214</a>
-<a href="#2215" id="2215">2215</a>
-<a href="#2216" id="2216">2216</a>
-<a href="#2217" id="2217">2217</a>
-<a href="#2218" id="2218">2218</a>
-<a href="#2219" id="2219">2219</a>
-<a href="#2220" id="2220">2220</a>
-<a href="#2221" id="2221">2221</a>
-<a href="#2222" id="2222">2222</a>
-<a href="#2223" id="2223">2223</a>
-<a href="#2224" id="2224">2224</a>
-<a href="#2225" id="2225">2225</a>
-<a href="#2226" id="2226">2226</a>
-<a href="#2227" id="2227">2227</a>
-<a href="#2228" id="2228">2228</a>
-<a href="#2229" id="2229">2229</a>
-<a href="#2230" id="2230">2230</a>
-<a href="#2231" id="2231">2231</a>
-<a href="#2232" id="2232">2232</a>
-<a href="#2233" id="2233">2233</a>
-<a href="#2234" id="2234">2234</a>
-<a href="#2235" id="2235">2235</a>
-<a href="#2236" id="2236">2236</a>
-<a href="#2237" id="2237">2237</a>
-<a href="#2238" id="2238">2238</a>
-<a href="#2239" id="2239">2239</a>
-<a href="#2240" id="2240">2240</a>
-<a href="#2241" id="2241">2241</a>
-<a href="#2242" id="2242">2242</a>
-<a href="#2243" id="2243">2243</a>
-<a href="#2244" id="2244">2244</a>
-<a href="#2245" id="2245">2245</a>
-<a href="#2246" id="2246">2246</a>
-<a href="#2247" id="2247">2247</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Serialize a Rust data structure into JSON data.
 
 </span><span class="kw">use </span><span class="kw">crate</span>::error::{Error, ErrorCode, <span class="prelude-ty">Result</span>};
@@ -2436,9 +2372,12 @@
 
     <span class="attr">#[inline]
     </span><span class="kw">fn </span>serialize_bytes(<span class="self">self</span>, value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.formatter
-            .write_byte_array(<span class="kw-2">&amp;mut </span><span class="self">self</span>.writer, value)
-            .map_err(Error::io)
+        <span class="kw">use </span>serde::ser::SerializeSeq;
+        <span class="kw">let </span><span class="kw-2">mut </span>seq = <span class="macro">tri!</span>(<span class="self">self</span>.serialize_seq(<span class="prelude-val">Some</span>(value.len())));
+        <span class="kw">for </span>byte <span class="kw">in </span>value {
+            <span class="macro">tri!</span>(seq.serialize_element(byte));
+        }
+        seq.end()
     }
 
     <span class="attr">#[inline]
@@ -2683,15 +2622,17 @@
             </span>.formatter
             .begin_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>.writer)
             .map_err(Error::io));
-        <span class="kw">let </span><span class="kw-2">mut </span>adapter = Adapter {
-            writer: <span class="kw-2">&amp;mut </span><span class="self">self</span>.writer,
-            formatter: <span class="kw-2">&amp;mut </span><span class="self">self</span>.formatter,
-            error: <span class="prelude-val">None</span>,
-        };
-        <span class="kw">match </span><span class="macro">write!</span>(adapter, <span class="string">&quot;{}&quot;</span>, value) {
-            <span class="prelude-val">Ok</span>(()) =&gt; <span class="macro">debug_assert!</span>(adapter.error.is_none()),
-            <span class="prelude-val">Err</span>(fmt::Error) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::io(adapter.error.expect(<span class="string">&quot;there should be an error&quot;</span>)));
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>adapter = Adapter {
+                writer: <span class="kw-2">&amp;mut </span><span class="self">self</span>.writer,
+                formatter: <span class="kw-2">&amp;mut </span><span class="self">self</span>.formatter,
+                error: <span class="prelude-val">None</span>,
+            };
+            <span class="kw">match </span><span class="macro">write!</span>(adapter, <span class="string">&quot;{}&quot;</span>, value) {
+                <span class="prelude-val">Ok</span>(()) =&gt; <span class="macro">debug_assert!</span>(adapter.error.is_none()),
+                <span class="prelude-val">Err</span>(fmt::Error) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(Error::io(adapter.error.expect(<span class="string">&quot;there should be an error&quot;</span>)));
+                }
             }
         }
         <span class="self">self</span>.formatter
@@ -3031,10 +2972,6 @@
     Error::syntax(ErrorCode::KeyMustBeAString, <span class="number">0</span>, <span class="number">0</span>)
 }
 
-<span class="kw">fn </span>float_key_must_be_finite() -&gt; Error {
-    Error::syntax(ErrorCode::FloatKeyMustBeFinite, <span class="number">0</span>, <span class="number">0</span>)
-}
-
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, W, F&gt; ser::Serializer <span class="kw">for </span>MapKeySerializer&lt;<span class="lifetime">&#39;a</span>, W, F&gt;
 <span class="kw">where
     </span>W: io::Write,
@@ -3074,21 +3011,8 @@
     <span class="kw">type </span>SerializeStruct = Impossible&lt;(), Error&gt;;
     <span class="kw">type </span>SerializeStructVariant = Impossible&lt;(), Error&gt;;
 
-    <span class="kw">fn </span>serialize_bool(<span class="self">self</span>, value: bool) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">tri!</span>(<span class="self">self
-            </span>.ser
-            .formatter
-            .begin_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>.ser.writer)
-            .map_err(Error::io));
-        <span class="macro">tri!</span>(<span class="self">self
-            </span>.ser
-            .formatter
-            .write_bool(<span class="kw-2">&amp;mut </span><span class="self">self</span>.ser.writer, value)
-            .map_err(Error::io));
-        <span class="self">self</span>.ser
-            .formatter
-            .end_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>.ser.writer)
-            .map_err(Error::io)
+    <span class="kw">fn </span>serialize_bool(<span class="self">self</span>, _value: bool) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="prelude-val">Err</span>(key_must_be_a_string())
     }
 
     <span class="kw">fn </span>serialize_i8(<span class="self">self</span>, value: i8) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -3261,46 +3185,12 @@
             .map_err(Error::io)
     }
 
-    <span class="kw">fn </span>serialize_f32(<span class="self">self</span>, value: f32) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">if </span>!value.is_finite() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(float_key_must_be_finite());
-        }
-
-        <span class="macro">tri!</span>(<span class="self">self
-            </span>.ser
-            .formatter
-            .begin_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>.ser.writer)
-            .map_err(Error::io));
-        <span class="macro">tri!</span>(<span class="self">self
-            </span>.ser
-            .formatter
-            .write_f32(<span class="kw-2">&amp;mut </span><span class="self">self</span>.ser.writer, value)
-            .map_err(Error::io));
-        <span class="self">self</span>.ser
-            .formatter
-            .end_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>.ser.writer)
-            .map_err(Error::io)
+    <span class="kw">fn </span>serialize_f32(<span class="self">self</span>, _value: f32) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="prelude-val">Err</span>(key_must_be_a_string())
     }
 
-    <span class="kw">fn </span>serialize_f64(<span class="self">self</span>, value: f64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">if </span>!value.is_finite() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(float_key_must_be_finite());
-        }
-
-        <span class="macro">tri!</span>(<span class="self">self
-            </span>.ser
-            .formatter
-            .begin_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>.ser.writer)
-            .map_err(Error::io));
-        <span class="macro">tri!</span>(<span class="self">self
-            </span>.ser
-            .formatter
-            .write_f64(<span class="kw-2">&amp;mut </span><span class="self">self</span>.ser.writer, value)
-            .map_err(Error::io));
-        <span class="self">self</span>.ser
-            .formatter
-            .end_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>.ser.writer)
-            .map_err(Error::io)
+    <span class="kw">fn </span>serialize_f64(<span class="self">self</span>, _value: f64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="prelude-val">Err</span>(key_must_be_a_string())
     }
 
     <span class="kw">fn </span>serialize_char(<span class="self">self</span>, value: char) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -4025,24 +3915,6 @@
         };
 
         writer.write_all(s)
-    }
-
-    <span class="doccomment">/// Writes the representation of a byte array. Formatters can choose whether
-    /// to represent bytes as a JSON array of integers (the default), or some
-    /// JSON string encoding like hex or base64.
-    </span><span class="kw">fn </span>write_byte_array&lt;W&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W, value: <span class="kw-2">&amp;</span>[u8]) -&gt; io::Result&lt;()&gt;
-    <span class="kw">where
-        </span>W: <span class="question-mark">?</span>Sized + io::Write,
-    {
-        <span class="macro">tri!</span>(<span class="self">self</span>.begin_array(writer));
-        <span class="kw">let </span><span class="kw-2">mut </span>first = <span class="bool-val">true</span>;
-        <span class="kw">for </span>byte <span class="kw">in </span>value {
-            <span class="macro">tri!</span>(<span class="self">self</span>.begin_array_value(writer, first));
-            <span class="macro">tri!</span>(<span class="self">self</span>.write_u8(writer, <span class="kw-2">*</span>byte));
-            <span class="macro">tri!</span>(<span class="self">self</span>.end_array_value(writer));
-            first = <span class="bool-val">false</span>;
-        }
-        <span class="self">self</span>.end_array(writer)
     }
 
     <span class="doccomment">/// Called before every array.  Writes a `[` to the specified

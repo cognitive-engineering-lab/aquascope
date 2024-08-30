@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_derive-1.0.188/src/internals/attr.rs`."><title>attr.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="serde_derive" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../serde_derive/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde_derive-1.0.149/src/internals/attr.rs`."><title>attr.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="serde_derive" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../serde_derive/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1876,17 +1876,93 @@
 <a href="#1876" id="1876">1876</a>
 <a href="#1877" id="1877">1877</a>
 <a href="#1878" id="1878">1878</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::internals::symbol::<span class="kw-2">*</span>;
-<span class="kw">use </span><span class="kw">crate</span>::internals::{ungroup, Ctxt};
+<a href="#1879" id="1879">1879</a>
+<a href="#1880" id="1880">1880</a>
+<a href="#1881" id="1881">1881</a>
+<a href="#1882" id="1882">1882</a>
+<a href="#1883" id="1883">1883</a>
+<a href="#1884" id="1884">1884</a>
+<a href="#1885" id="1885">1885</a>
+<a href="#1886" id="1886">1886</a>
+<a href="#1887" id="1887">1887</a>
+<a href="#1888" id="1888">1888</a>
+<a href="#1889" id="1889">1889</a>
+<a href="#1890" id="1890">1890</a>
+<a href="#1891" id="1891">1891</a>
+<a href="#1892" id="1892">1892</a>
+<a href="#1893" id="1893">1893</a>
+<a href="#1894" id="1894">1894</a>
+<a href="#1895" id="1895">1895</a>
+<a href="#1896" id="1896">1896</a>
+<a href="#1897" id="1897">1897</a>
+<a href="#1898" id="1898">1898</a>
+<a href="#1899" id="1899">1899</a>
+<a href="#1900" id="1900">1900</a>
+<a href="#1901" id="1901">1901</a>
+<a href="#1902" id="1902">1902</a>
+<a href="#1903" id="1903">1903</a>
+<a href="#1904" id="1904">1904</a>
+<a href="#1905" id="1905">1905</a>
+<a href="#1906" id="1906">1906</a>
+<a href="#1907" id="1907">1907</a>
+<a href="#1908" id="1908">1908</a>
+<a href="#1909" id="1909">1909</a>
+<a href="#1910" id="1910">1910</a>
+<a href="#1911" id="1911">1911</a>
+<a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
+<a href="#1921" id="1921">1921</a>
+<a href="#1922" id="1922">1922</a>
+<a href="#1923" id="1923">1923</a>
+<a href="#1924" id="1924">1924</a>
+<a href="#1925" id="1925">1925</a>
+<a href="#1926" id="1926">1926</a>
+<a href="#1927" id="1927">1927</a>
+<a href="#1928" id="1928">1928</a>
+<a href="#1929" id="1929">1929</a>
+<a href="#1930" id="1930">1930</a>
+<a href="#1931" id="1931">1931</a>
+<a href="#1932" id="1932">1932</a>
+<a href="#1933" id="1933">1933</a>
+<a href="#1934" id="1934">1934</a>
+<a href="#1935" id="1935">1935</a>
+<a href="#1936" id="1936">1936</a>
+<a href="#1937" id="1937">1937</a>
+<a href="#1938" id="1938">1938</a>
+<a href="#1939" id="1939">1939</a>
+<a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
+<a href="#1942" id="1942">1942</a>
+<a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
+<a href="#1945" id="1945">1945</a>
+<a href="#1946" id="1946">1946</a>
+<a href="#1947" id="1947">1947</a>
+<a href="#1948" id="1948">1948</a>
+<a href="#1949" id="1949">1949</a>
+<a href="#1950" id="1950">1950</a>
+<a href="#1951" id="1951">1951</a>
+<a href="#1952" id="1952">1952</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>internals::respan::respan;
+<span class="kw">use </span>internals::symbol::<span class="kw-2">*</span>;
+<span class="kw">use </span>internals::{ungroup, Ctxt};
 <span class="kw">use </span>proc_macro2::{Spacing, Span, TokenStream, TokenTree};
 <span class="kw">use </span>quote::ToTokens;
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::BTreeSet;
-<span class="kw">use </span>std::iter::FromIterator;
-<span class="kw">use </span>syn::meta::ParseNestedMeta;
-<span class="kw">use </span>syn::parse::ParseStream;
+<span class="kw">use </span>syn;
+<span class="kw">use </span>syn::parse::{<span class="self">self</span>, Parse, ParseStream};
 <span class="kw">use </span>syn::punctuated::Punctuated;
-<span class="kw">use </span>syn::{parse_quote, token, Ident, Lifetime, Token};
+<span class="kw">use </span>syn::Ident;
+<span class="kw">use </span>syn::Meta::{List, NameValue, Path};
+<span class="kw">use </span>syn::NestedMeta::{Lit, Meta};
 
 <span class="comment">// This module handles parsing of `#[serde(...)]` attributes. The entrypoints
 // are `attr::Container::from_ast`, `attr::Variant::from_ast`, and
@@ -1896,7 +1972,7 @@
 // user will see errors simultaneously for all bad attributes in the crate
 // rather than just the first.
 
-</span><span class="kw">pub use </span><span class="kw">crate</span>::internals::case::RenameRule;
+</span><span class="kw">pub use </span>internals::case::RenameRule;
 
 <span class="kw">struct </span>Attr&lt;<span class="lifetime">&#39;c</span>, T&gt; {
     cx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>Ctxt,
@@ -1919,8 +1995,8 @@
         <span class="kw">let </span>tokens = obj.into_token_stream();
 
         <span class="kw">if </span><span class="self">self</span>.value.is_some() {
-            <span class="kw">let </span>msg = <span class="macro">format!</span>(<span class="string">&quot;duplicate serde attribute `{}`&quot;</span>, <span class="self">self</span>.name);
-            <span class="self">self</span>.cx.error_spanned_by(tokens, msg);
+            <span class="self">self</span>.cx
+                .error_spanned_by(tokens, <span class="macro">format!</span>(<span class="string">&quot;duplicate serde attribute `{}`&quot;</span>, <span class="self">self</span>.name));
         } <span class="kw">else </span>{
             <span class="self">self</span>.tokens = tokens;
             <span class="self">self</span>.value = <span class="prelude-val">Some</span>(value);
@@ -1991,14 +2067,16 @@
         <span class="self">self</span>.values.push(value);
     }
 
-    <span class="kw">fn </span>at_most_one(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt; {
+    <span class="kw">fn </span>at_most_one(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;T&gt;, ()&gt; {
         <span class="kw">if </span><span class="self">self</span>.values.len() &gt; <span class="number">1 </span>{
             <span class="kw">let </span>dup_token = <span class="self">self</span>.first_dup_tokens;
-            <span class="kw">let </span>msg = <span class="macro">format!</span>(<span class="string">&quot;duplicate serde attribute `{}`&quot;</span>, <span class="self">self</span>.name);
-            <span class="self">self</span>.cx.error_spanned_by(dup_token, msg);
-            <span class="prelude-val">None
-        </span>} <span class="kw">else </span>{
-            <span class="self">self</span>.values.pop()
+            <span class="self">self</span>.cx.error_spanned_by(
+                dup_token,
+                <span class="macro">format!</span>(<span class="string">&quot;duplicate serde attribute `{}`&quot;</span>, <span class="self">self</span>.name),
+            );
+            <span class="prelude-val">Err</span>(())
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.values.pop())
         }
     }
 
@@ -2012,11 +2090,15 @@
     serialize_renamed: bool,
     deserialize: String,
     deserialize_renamed: bool,
-    deserialize_aliases: BTreeSet&lt;String&gt;,
+    deserialize_aliases: Vec&lt;String&gt;,
 }
 
-<span class="kw">fn </span>unraw(ident: <span class="kw-2">&amp;</span>Ident) -&gt; String {
-    ident.to_string().trim_start_matches(<span class="string">&quot;r#&quot;</span>).to_owned()
+<span class="attr">#[allow(deprecated)]
+</span><span class="kw">fn </span>unraw(ident: <span class="kw-2">&amp;</span>Ident) -&gt; String {
+    <span class="comment">// str::trim_start_matches was added in 1.30, trim_left_matches deprecated
+    // in 1.33. We currently support rustc back to 1.15 so we need to continue
+    // to use the deprecated one.
+    </span>ident.to_string().trim_left_matches(<span class="string">&quot;r#&quot;</span>).to_owned()
 }
 
 <span class="kw">impl </span>Name {
@@ -2026,12 +2108,16 @@
         de_name: Attr&lt;String&gt;,
         de_aliases: <span class="prelude-ty">Option</span>&lt;VecAttr&lt;String&gt;&gt;,
     ) -&gt; Name {
-        <span class="kw">let </span><span class="kw-2">mut </span>alias_set = BTreeSet::new();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(de_aliases) = de_aliases {
-            <span class="kw">for </span>alias_name <span class="kw">in </span>de_aliases.get() {
-                alias_set.insert(alias_name);
+        <span class="kw">let </span>deserialize_aliases = <span class="kw">match </span>de_aliases {
+            <span class="prelude-val">Some</span>(de_aliases) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>alias_list = BTreeSet::new();
+                <span class="kw">for </span>alias_name <span class="kw">in </span>de_aliases.get() {
+                    alias_list.insert(alias_name);
+                }
+                alias_list.into_iter().collect()
             }
-        }
+            <span class="prelude-val">None </span>=&gt; Vec::new(),
+        };
 
         <span class="kw">let </span>ser_name = ser_name.get();
         <span class="kw">let </span>ser_renamed = ser_name.is_some();
@@ -2042,40 +2128,33 @@
             serialize_renamed: ser_renamed,
             deserialize: de_name.unwrap_or(source_name),
             deserialize_renamed: de_renamed,
-            deserialize_aliases: alias_set,
+            deserialize_aliases,
         }
     }
 
     <span class="doccomment">/// Return the container name for the container when serializing.
-    </span><span class="kw">pub fn </span>serialize_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.serialize
+    </span><span class="kw">pub fn </span>serialize_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+        <span class="self">self</span>.serialize.clone()
     }
 
     <span class="doccomment">/// Return the container name for the container when deserializing.
-    </span><span class="kw">pub fn </span>deserialize_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.deserialize
+    </span><span class="kw">pub fn </span>deserialize_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+        <span class="self">self</span>.deserialize.clone()
     }
 
-    <span class="kw">fn </span>deserialize_aliases(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;String&gt; {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.deserialize_aliases
+    <span class="kw">fn </span>deserialize_aliases(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;String&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>aliases = <span class="self">self</span>.deserialize_aliases.clone();
+        <span class="kw">let </span>main_name = <span class="self">self</span>.deserialize_name();
+        <span class="kw">if </span>!aliases.contains(<span class="kw-2">&amp;</span>main_name) {
+            aliases.push(main_name);
+        }
+        aliases
     }
 }
 
-<span class="attr">#[derive(Copy, Clone)]
-</span><span class="kw">pub struct </span>RenameAllRules {
+<span class="kw">pub struct </span>RenameAllRules {
     serialize: RenameRule,
     deserialize: RenameRule,
-}
-
-<span class="kw">impl </span>RenameAllRules {
-    <span class="doccomment">/// Returns a new `RenameAllRules` with the individual rules of `self` and
-    /// `other_rules` joined by `RenameRules::or`.
-    </span><span class="kw">pub fn </span>or(<span class="self">self</span>, other_rules: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            serialize: <span class="self">self</span>.serialize.or(other_rules.serialize),
-            deserialize: <span class="self">self</span>.deserialize.or(other_rules.deserialize),
-        }
-    }
 }
 
 <span class="doccomment">/// Represents struct or enum attribute information.
@@ -2085,7 +2164,6 @@
     deny_unknown_fields: bool,
     default: Default,
     rename_all_rules: RenameAllRules,
-    rename_all_fields_rules: RenameAllRules,
     ser_bound: <span class="prelude-ty">Option</span>&lt;Vec&lt;syn::WherePredicate&gt;&gt;,
     de_bound: <span class="prelude-ty">Option</span>&lt;Vec&lt;syn::WherePredicate&gt;&gt;,
     tag: TagType,
@@ -2099,7 +2177,6 @@
     is_packed: bool,
     <span class="doccomment">/// Error message generated when type can&#39;t be deserialized
     </span>expecting: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    non_exhaustive: bool,
 }
 
 <span class="doccomment">/// Styles of representing an enum.
@@ -2170,8 +2247,6 @@
         <span class="kw">let </span><span class="kw-2">mut </span>default = Attr::none(cx, DEFAULT);
         <span class="kw">let </span><span class="kw-2">mut </span>rename_all_ser_rule = Attr::none(cx, RENAME_ALL);
         <span class="kw">let </span><span class="kw-2">mut </span>rename_all_de_rule = Attr::none(cx, RENAME_ALL);
-        <span class="kw">let </span><span class="kw-2">mut </span>rename_all_fields_ser_rule = Attr::none(cx, RENAME_ALL_FIELDS);
-        <span class="kw">let </span><span class="kw-2">mut </span>rename_all_fields_de_rule = Attr::none(cx, RENAME_ALL_FIELDS);
         <span class="kw">let </span><span class="kw-2">mut </span>ser_bound = Attr::none(cx, BOUND);
         <span class="kw">let </span><span class="kw-2">mut </span>de_bound = Attr::none(cx, BOUND);
         <span class="kw">let </span><span class="kw-2">mut </span>untagged = BoolAttr::none(cx, UNTAGGED);
@@ -2185,254 +2260,286 @@
         <span class="kw">let </span><span class="kw-2">mut </span>variant_identifier = BoolAttr::none(cx, VARIANT_IDENTIFIER);
         <span class="kw">let </span><span class="kw-2">mut </span>serde_path = Attr::none(cx, CRATE);
         <span class="kw">let </span><span class="kw-2">mut </span>expecting = Attr::none(cx, EXPECTING);
-        <span class="kw">let </span><span class="kw-2">mut </span>non_exhaustive = <span class="bool-val">false</span>;
 
-        <span class="kw">for </span>attr <span class="kw">in </span><span class="kw-2">&amp;</span>item.attrs {
-            <span class="kw">if </span>attr.path() != SERDE {
-                non_exhaustive |=
-                    <span class="macro">matches!</span>(<span class="kw-2">&amp;</span>attr.meta, syn::Meta::Path(path) <span class="kw">if </span>path == NON_EXHAUSTIVE);
-                <span class="kw">continue</span>;
-            }
-
-            <span class="kw">if let </span>syn::Meta::List(meta) = <span class="kw-2">&amp;</span>attr.meta {
-                <span class="kw">if </span>meta.tokens.is_empty() {
-                    <span class="kw">continue</span>;
+        <span class="kw">for </span>meta_item <span class="kw">in </span>item
+            .attrs
+            .iter()
+            .flat_map(|attr| get_serde_meta_items(cx, attr))
+            .flatten()
+        {
+            <span class="kw">match </span><span class="kw-2">&amp;</span>meta_item {
+                <span class="comment">// Parse `#[serde(rename = &quot;foo&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == RENAME =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, RENAME, <span class="kw-2">&amp;</span>m.lit) {
+                        ser_name.set(<span class="kw-2">&amp;</span>m.path, s.value());
+                        de_name.set(<span class="kw-2">&amp;</span>m.path, s.value());
+                    }
                 }
-            }
 
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = attr.parse_nested_meta(|meta| {
-                <span class="kw">if </span>meta.path == RENAME {
-                    <span class="comment">// #[serde(rename = &quot;foo&quot;)]
-                    // #[serde(rename(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]
-                    </span><span class="kw">let </span>(ser, de) = get_renames(cx, RENAME, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
-                    ser_name.set_opt(<span class="kw-2">&amp;</span>meta.path, ser.as_ref().map(syn::LitStr::value));
-                    de_name.set_opt(<span class="kw-2">&amp;</span>meta.path, de.as_ref().map(syn::LitStr::value));
-                } <span class="kw">else if </span>meta.path == RENAME_ALL {
-                    <span class="comment">// #[serde(rename_all = &quot;foo&quot;)]
-                    // #[serde(rename_all(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]
-                    </span><span class="kw">let </span>one_name = meta.input.peek(<span class="macro">Token!</span>[=]);
-                    <span class="kw">let </span>(ser, de) = get_renames(cx, RENAME_ALL, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(ser) = ser {
-                        <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>ser.value()) {
-                            <span class="prelude-val">Ok</span>(rename_rule) =&gt; rename_all_ser_rule.set(<span class="kw-2">&amp;</span>meta.path, rename_rule),
-                            <span class="prelude-val">Err</span>(err) =&gt; cx.error_spanned_by(ser, err),
-                        }
+                <span class="comment">// Parse `#[serde(rename(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]`
+                </span>Meta(List(m)) <span class="kw">if </span>m.path == RENAME =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>((ser, de)) = get_renames(cx, <span class="kw-2">&amp;</span>m.nested) {
+                        ser_name.set_opt(<span class="kw-2">&amp;</span>m.path, ser.map(syn::LitStr::value));
+                        de_name.set_opt(<span class="kw-2">&amp;</span>m.path, de.map(syn::LitStr::value));
                     }
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(de) = de {
-                        <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>de.value()) {
-                            <span class="prelude-val">Ok</span>(rename_rule) =&gt; rename_all_de_rule.set(<span class="kw-2">&amp;</span>meta.path, rename_rule),
-                            <span class="prelude-val">Err</span>(err) =&gt; {
-                                <span class="kw">if </span>!one_name {
-                                    cx.error_spanned_by(de, err);
-                                }
-                            }
-                        }
-                    }
-                } <span class="kw">else if </span>meta.path == RENAME_ALL_FIELDS {
-                    <span class="comment">// #[serde(rename_all_fields = &quot;foo&quot;)]
-                    // #[serde(rename_all_fields(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]
-                    </span><span class="kw">let </span>one_name = meta.input.peek(<span class="macro">Token!</span>[=]);
-                    <span class="kw">let </span>(ser, de) = get_renames(cx, RENAME_ALL_FIELDS, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
+                }
 
-                    <span class="kw">match </span>item.data {
-                        syn::Data::Enum(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(ser) = ser {
-                                <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>ser.value()) {
-                                    <span class="prelude-val">Ok</span>(rename_rule) =&gt; {
-                                        rename_all_fields_ser_rule.set(<span class="kw-2">&amp;</span>meta.path, rename_rule);
-                                    }
-                                    <span class="prelude-val">Err</span>(err) =&gt; cx.error_spanned_by(ser, err),
-                                }
+                <span class="comment">// Parse `#[serde(rename_all = &quot;foo&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == RENAME_ALL =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, RENAME_ALL, <span class="kw-2">&amp;</span>m.lit) {
+                        <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>s.value()) {
+                            <span class="prelude-val">Ok</span>(rename_rule) =&gt; {
+                                rename_all_ser_rule.set(<span class="kw-2">&amp;</span>m.path, rename_rule);
+                                rename_all_de_rule.set(<span class="kw-2">&amp;</span>m.path, rename_rule);
                             }
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(de) = de {
-                                <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>de.value()) {
-                                    <span class="prelude-val">Ok</span>(rename_rule) =&gt; {
-                                        rename_all_fields_de_rule.set(<span class="kw-2">&amp;</span>meta.path, rename_rule);
-                                    }
-                                    <span class="prelude-val">Err</span>(err) =&gt; {
-                                        <span class="kw">if </span>!one_name {
-                                            cx.error_spanned_by(de, err);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        syn::Data::Struct(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(rename_all_fields)] can only be used on enums&quot;</span>;
-                            cx.syn_error(meta.error(msg));
-                        }
-                        syn::Data::Union(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(rename_all_fields)] can only be used on enums&quot;</span>;
-                            cx.syn_error(meta.error(msg));
+                            <span class="prelude-val">Err</span>(err) =&gt; cx.error_spanned_by(s, err),
                         }
                     }
-                } <span class="kw">else if </span>meta.path == TRANSPARENT {
-                    <span class="comment">// #[serde(transparent)]
-                    </span>transparent.set_true(meta.path);
-                } <span class="kw">else if </span>meta.path == DENY_UNKNOWN_FIELDS {
-                    <span class="comment">// #[serde(deny_unknown_fields)]
-                    </span>deny_unknown_fields.set_true(meta.path);
-                } <span class="kw">else if </span>meta.path == DEFAULT {
-                    <span class="kw">if </span>meta.input.peek(<span class="macro">Token!</span>[=]) {
-                        <span class="comment">// #[serde(default = &quot;...&quot;)]
-                        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, DEFAULT, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                            <span class="kw">match </span><span class="kw-2">&amp;</span>item.data {
-                                syn::Data::Struct(syn::DataStruct { fields, .. }) =&gt; <span class="kw">match </span>fields {
-                                    syn::Fields::Named(<span class="kw">_</span>) | syn::Fields::Unnamed(<span class="kw">_</span>) =&gt; {
-                                        default.set(<span class="kw-2">&amp;</span>meta.path, Default::Path(path));
-                                    }
-                                    syn::Fields::Unit =&gt; {
-                                        <span class="kw">let </span>msg = <span class="string">&quot;#[serde(default = \&quot;...\&quot;)] can only be used on structs that have fields&quot;</span>;
-                                        cx.syn_error(meta.error(msg));
-                                    }
-                                },
-                                syn::Data::Enum(<span class="kw">_</span>) =&gt; {
-                                    <span class="kw">let </span>msg = <span class="string">&quot;#[serde(default = \&quot;...\&quot;)] can only be used on structs&quot;</span>;
-                                    cx.syn_error(meta.error(msg));
-                                }
-                                syn::Data::Union(<span class="kw">_</span>) =&gt; {
-                                    <span class="kw">let </span>msg = <span class="string">&quot;#[serde(default = \&quot;...\&quot;)] can only be used on structs&quot;</span>;
-                                    cx.syn_error(meta.error(msg));
-                                }
+                }
+
+                <span class="comment">// Parse `#[serde(rename_all(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]`
+                </span>Meta(List(m)) <span class="kw">if </span>m.path == RENAME_ALL =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>((ser, de)) = get_renames(cx, <span class="kw-2">&amp;</span>m.nested) {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(ser) = ser {
+                            <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>ser.value()) {
+                                <span class="prelude-val">Ok</span>(rename_rule) =&gt; rename_all_ser_rule.set(<span class="kw-2">&amp;</span>m.path, rename_rule),
+                                <span class="prelude-val">Err</span>(err) =&gt; cx.error_spanned_by(ser, err),
                             }
                         }
-                    } <span class="kw">else </span>{
-                        <span class="comment">// #[serde(default)]
-                        </span><span class="kw">match </span><span class="kw-2">&amp;</span>item.data {
-                            syn::Data::Struct(syn::DataStruct { fields, .. }) =&gt; <span class="kw">match </span>fields {
-                                syn::Fields::Named(<span class="kw">_</span>) | syn::Fields::Unnamed(<span class="kw">_</span>) =&gt; {
-                                    default.set(meta.path, Default::Default);
-                                }
-                                syn::Fields::Unit =&gt; {
-                                    <span class="kw">let </span>msg = <span class="string">&quot;#[serde(default)] can only be used on structs that have fields&quot;</span>;
-                                    cx.error_spanned_by(fields, msg);
-                                }
-                            },
-                            syn::Data::Enum(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">let </span>msg = <span class="string">&quot;#[serde(default)] can only be used on structs&quot;</span>;
-                                cx.syn_error(meta.error(msg));
-                            }
-                            syn::Data::Union(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">let </span>msg = <span class="string">&quot;#[serde(default)] can only be used on structs&quot;</span>;
-                                cx.syn_error(meta.error(msg));
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(de) = de {
+                            <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>de.value()) {
+                                <span class="prelude-val">Ok</span>(rename_rule) =&gt; rename_all_de_rule.set(<span class="kw-2">&amp;</span>m.path, rename_rule),
+                                <span class="prelude-val">Err</span>(err) =&gt; cx.error_spanned_by(de, err),
                             }
                         }
                     }
-                } <span class="kw">else if </span>meta.path == BOUND {
-                    <span class="comment">// #[serde(bound = &quot;T: SomeBound&quot;)]
-                    // #[serde(bound(serialize = &quot;...&quot;, deserialize = &quot;...&quot;))]
-                    </span><span class="kw">let </span>(ser, de) = get_where_predicates(cx, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
-                    ser_bound.set_opt(<span class="kw-2">&amp;</span>meta.path, ser);
-                    de_bound.set_opt(<span class="kw-2">&amp;</span>meta.path, de);
-                } <span class="kw">else if </span>meta.path == UNTAGGED {
-                    <span class="comment">// #[serde(untagged)]
-                    </span><span class="kw">match </span>item.data {
-                        syn::Data::Enum(<span class="kw">_</span>) =&gt; {
-                            untagged.set_true(<span class="kw-2">&amp;</span>meta.path);
+                }
+
+                <span class="comment">// Parse `#[serde(transparent)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == TRANSPARENT =&gt; {
+                    transparent.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(deny_unknown_fields)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == DENY_UNKNOWN_FIELDS =&gt; {
+                    deny_unknown_fields.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(default)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == DEFAULT =&gt; <span class="kw">match </span><span class="kw-2">&amp;</span>item.data {
+                    syn::Data::Struct(syn::DataStruct { fields, .. }) =&gt; <span class="kw">match </span>fields {
+                        syn::Fields::Named(<span class="kw">_</span>) =&gt; {
+                            default.set(word, Default::Default);
                         }
-                        syn::Data::Struct(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(untagged)] can only be used on enums&quot;</span>;
-                            cx.syn_error(meta.error(msg));
-                        }
-                        syn::Data::Union(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(untagged)] can only be used on enums&quot;</span>;
-                            cx.syn_error(meta.error(msg));
+                        syn::Fields::Unnamed(<span class="kw">_</span>) | syn::Fields::Unit =&gt; cx.error_spanned_by(
+                            fields,
+                            <span class="string">&quot;#[serde(default)] can only be used on structs with named fields&quot;</span>,
+                        ),
+                    },
+                    syn::Data::Enum(syn::DataEnum { enum_token, .. }) =&gt; cx.error_spanned_by(
+                        enum_token,
+                        <span class="string">&quot;#[serde(default)] can only be used on structs with named fields&quot;</span>,
+                    ),
+                    syn::Data::Union(syn::DataUnion { union_token, .. }) =&gt; cx.error_spanned_by(
+                        union_token,
+                        <span class="string">&quot;#[serde(default)] can only be used on structs with named fields&quot;</span>,
+                    ),
+                },
+
+                <span class="comment">// Parse `#[serde(default = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == DEFAULT =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, DEFAULT, <span class="kw-2">&amp;</span>m.lit) {
+                        <span class="kw">match </span><span class="kw-2">&amp;</span>item.data {
+                            syn::Data::Struct(syn::DataStruct { fields, .. }) =&gt; {
+                                <span class="kw">match </span>fields {
+                                    syn::Fields::Named(<span class="kw">_</span>) =&gt; {
+                                        default.set(<span class="kw-2">&amp;</span>m.path, Default::Path(path));
+                                    }
+                                    syn::Fields::Unnamed(<span class="kw">_</span>) | syn::Fields::Unit =&gt; cx
+                                        .error_spanned_by(
+                                            fields,
+                                            <span class="string">&quot;#[serde(default = \&quot;...\&quot;)] can only be used on structs with named fields&quot;</span>,
+                                        ),
+                                }
+                            }
+                            syn::Data::Enum(syn::DataEnum { enum_token, .. }) =&gt; cx
+                                .error_spanned_by(
+                                    enum_token,
+                                    <span class="string">&quot;#[serde(default = \&quot;...\&quot;)] can only be used on structs with named fields&quot;</span>,
+                                ),
+                            syn::Data::Union(syn::DataUnion {
+                                union_token, ..
+                            }) =&gt; cx.error_spanned_by(
+                                union_token,
+                                <span class="string">&quot;#[serde(default = \&quot;...\&quot;)] can only be used on structs with named fields&quot;</span>,
+                            ),
                         }
                     }
-                } <span class="kw">else if </span>meta.path == TAG {
-                    <span class="comment">// #[serde(tag = &quot;type&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(s) = get_lit_str(cx, TAG, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
+                }
+
+                <span class="comment">// Parse `#[serde(bound = &quot;T: SomeBound&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == BOUND =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(where_predicates) = parse_lit_into_where(cx, BOUND, BOUND, <span class="kw-2">&amp;</span>m.lit) {
+                        ser_bound.set(<span class="kw-2">&amp;</span>m.path, where_predicates.clone());
+                        de_bound.set(<span class="kw-2">&amp;</span>m.path, where_predicates);
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(bound(serialize = &quot;...&quot;, deserialize = &quot;...&quot;))]`
+                </span>Meta(List(m)) <span class="kw">if </span>m.path == BOUND =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>((ser, de)) = get_where_predicates(cx, <span class="kw-2">&amp;</span>m.nested) {
+                        ser_bound.set_opt(<span class="kw-2">&amp;</span>m.path, ser);
+                        de_bound.set_opt(<span class="kw-2">&amp;</span>m.path, de);
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(untagged)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == UNTAGGED =&gt; <span class="kw">match </span>item.data {
+                    syn::Data::Enum(<span class="kw">_</span>) =&gt; {
+                        untagged.set_true(word);
+                    }
+                    syn::Data::Struct(syn::DataStruct { struct_token, .. }) =&gt; {
+                        cx.error_spanned_by(
+                            struct_token,
+                            <span class="string">&quot;#[serde(untagged)] can only be used on enums&quot;</span>,
+                        );
+                    }
+                    syn::Data::Union(syn::DataUnion { union_token, .. }) =&gt; {
+                        cx.error_spanned_by(
+                            union_token,
+                            <span class="string">&quot;#[serde(untagged)] can only be used on enums&quot;</span>,
+                        );
+                    }
+                },
+
+                <span class="comment">// Parse `#[serde(tag = &quot;type&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == TAG =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, TAG, <span class="kw-2">&amp;</span>m.lit) {
                         <span class="kw">match </span><span class="kw-2">&amp;</span>item.data {
                             syn::Data::Enum(<span class="kw">_</span>) =&gt; {
-                                internal_tag.set(<span class="kw-2">&amp;</span>meta.path, s.value());
+                                internal_tag.set(<span class="kw-2">&amp;</span>m.path, s.value());
                             }
                             syn::Data::Struct(syn::DataStruct { fields, .. }) =&gt; <span class="kw">match </span>fields {
                                 syn::Fields::Named(<span class="kw">_</span>) =&gt; {
-                                    internal_tag.set(<span class="kw-2">&amp;</span>meta.path, s.value());
+                                    internal_tag.set(<span class="kw-2">&amp;</span>m.path, s.value());
                                 }
                                 syn::Fields::Unnamed(<span class="kw">_</span>) | syn::Fields::Unit =&gt; {
-                                    <span class="kw">let </span>msg = <span class="string">&quot;#[serde(tag = \&quot;...\&quot;)] can only be used on enums and structs with named fields&quot;</span>;
-                                    cx.syn_error(meta.error(msg));
+                                    cx.error_spanned_by(
+                                            fields,
+                                            <span class="string">&quot;#[serde(tag = \&quot;...\&quot;)] can only be used on enums and structs with named fields&quot;</span>,
+                                        );
                                 }
                             },
-                            syn::Data::Union(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">let </span>msg = <span class="string">&quot;#[serde(tag = \&quot;...\&quot;)] can only be used on enums and structs with named fields&quot;</span>;
-                                cx.syn_error(meta.error(msg));
+                            syn::Data::Union(syn::DataUnion { union_token, .. }) =&gt; {
+                                cx.error_spanned_by(
+                                    union_token,
+                                    <span class="string">&quot;#[serde(tag = \&quot;...\&quot;)] can only be used on enums and structs with named fields&quot;</span>,
+                                );
                             }
                         }
                     }
-                } <span class="kw">else if </span>meta.path == CONTENT {
-                    <span class="comment">// #[serde(content = &quot;c&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(s) = get_lit_str(cx, CONTENT, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
+                }
+
+                <span class="comment">// Parse `#[serde(content = &quot;c&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == CONTENT =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, CONTENT, <span class="kw-2">&amp;</span>m.lit) {
                         <span class="kw">match </span><span class="kw-2">&amp;</span>item.data {
                             syn::Data::Enum(<span class="kw">_</span>) =&gt; {
-                                content.set(<span class="kw-2">&amp;</span>meta.path, s.value());
+                                content.set(<span class="kw-2">&amp;</span>m.path, s.value());
                             }
-                            syn::Data::Struct(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">let </span>msg = <span class="string">&quot;#[serde(content = \&quot;...\&quot;)] can only be used on enums&quot;</span>;
-                                cx.syn_error(meta.error(msg));
+                            syn::Data::Struct(syn::DataStruct { struct_token, .. }) =&gt; {
+                                cx.error_spanned_by(
+                                    struct_token,
+                                    <span class="string">&quot;#[serde(content = \&quot;...\&quot;)] can only be used on enums&quot;</span>,
+                                );
                             }
-                            syn::Data::Union(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">let </span>msg = <span class="string">&quot;#[serde(content = \&quot;...\&quot;)] can only be used on enums&quot;</span>;
-                                cx.syn_error(meta.error(msg));
+                            syn::Data::Union(syn::DataUnion { union_token, .. }) =&gt; {
+                                cx.error_spanned_by(
+                                    union_token,
+                                    <span class="string">&quot;#[serde(content = \&quot;...\&quot;)] can only be used on enums&quot;</span>,
+                                );
                             }
                         }
                     }
-                } <span class="kw">else if </span>meta.path == FROM {
-                    <span class="comment">// #[serde(from = &quot;Type&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(from_ty) = parse_lit_into_ty(cx, FROM, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        type_from.set_opt(<span class="kw-2">&amp;</span>meta.path, <span class="prelude-val">Some</span>(from_ty));
+                }
+
+                <span class="comment">// Parse `#[serde(from = &quot;Type&quot;)]
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == FROM =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(from_ty) = parse_lit_into_ty(cx, FROM, <span class="kw-2">&amp;</span>m.lit) {
+                        type_from.set_opt(<span class="kw-2">&amp;</span>m.path, <span class="prelude-val">Some</span>(from_ty));
                     }
-                } <span class="kw">else if </span>meta.path == TRY_FROM {
-                    <span class="comment">// #[serde(try_from = &quot;Type&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(try_from_ty) = parse_lit_into_ty(cx, TRY_FROM, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        type_try_from.set_opt(<span class="kw-2">&amp;</span>meta.path, <span class="prelude-val">Some</span>(try_from_ty));
+                }
+
+                <span class="comment">// Parse `#[serde(try_from = &quot;Type&quot;)]
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == TRY_FROM =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(try_from_ty) = parse_lit_into_ty(cx, TRY_FROM, <span class="kw-2">&amp;</span>m.lit) {
+                        type_try_from.set_opt(<span class="kw-2">&amp;</span>m.path, <span class="prelude-val">Some</span>(try_from_ty));
                     }
-                } <span class="kw">else if </span>meta.path == INTO {
-                    <span class="comment">// #[serde(into = &quot;Type&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(into_ty) = parse_lit_into_ty(cx, INTO, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        type_into.set_opt(<span class="kw-2">&amp;</span>meta.path, <span class="prelude-val">Some</span>(into_ty));
+                }
+
+                <span class="comment">// Parse `#[serde(into = &quot;Type&quot;)]
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == INTO =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(into_ty) = parse_lit_into_ty(cx, INTO, <span class="kw-2">&amp;</span>m.lit) {
+                        type_into.set_opt(<span class="kw-2">&amp;</span>m.path, <span class="prelude-val">Some</span>(into_ty));
                     }
-                } <span class="kw">else if </span>meta.path == REMOTE {
-                    <span class="comment">// #[serde(remote = &quot;...&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_path(cx, REMOTE, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
+                }
+
+                <span class="comment">// Parse `#[serde(remote = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == REMOTE =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_path(cx, REMOTE, <span class="kw-2">&amp;</span>m.lit) {
                         <span class="kw">if </span>is_primitive_path(<span class="kw-2">&amp;</span>path, <span class="string">&quot;Self&quot;</span>) {
-                            remote.set(<span class="kw-2">&amp;</span>meta.path, item.ident.clone().into());
+                            remote.set(<span class="kw-2">&amp;</span>m.path, item.ident.clone().into());
                         } <span class="kw">else </span>{
-                            remote.set(<span class="kw-2">&amp;</span>meta.path, path);
+                            remote.set(<span class="kw-2">&amp;</span>m.path, path);
                         }
                     }
-                } <span class="kw">else if </span>meta.path == FIELD_IDENTIFIER {
-                    <span class="comment">// #[serde(field_identifier)]
-                    </span>field_identifier.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else if </span>meta.path == VARIANT_IDENTIFIER {
-                    <span class="comment">// #[serde(variant_identifier)]
-                    </span>variant_identifier.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else if </span>meta.path == CRATE {
-                    <span class="comment">// #[serde(crate = &quot;foo&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_path(cx, CRATE, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        serde_path.set(<span class="kw-2">&amp;</span>meta.path, path);
+                }
+
+                <span class="comment">// Parse `#[serde(field_identifier)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == FIELD_IDENTIFIER =&gt; {
+                    field_identifier.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(variant_identifier)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == VARIANT_IDENTIFIER =&gt; {
+                    variant_identifier.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(crate = &quot;foo&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == CRATE =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_path(cx, CRATE, <span class="kw-2">&amp;</span>m.lit) {
+                        serde_path.set(<span class="kw-2">&amp;</span>m.path, path);
                     }
-                } <span class="kw">else if </span>meta.path == EXPECTING {
-                    <span class="comment">// #[serde(expecting = &quot;a message&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(s) = get_lit_str(cx, EXPECTING, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        expecting.set(<span class="kw-2">&amp;</span>meta.path, s.value());
+                }
+
+                <span class="comment">// Parse `#[serde(expecting = &quot;a message&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == EXPECTING =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, EXPECTING, <span class="kw-2">&amp;</span>m.lit) {
+                        expecting.set(<span class="kw-2">&amp;</span>m.path, s.value());
                     }
-                } <span class="kw">else </span>{
-                    <span class="kw">let </span>path = meta.path.to_token_stream().to_string().replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;&quot;</span>);
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(
-                        meta.error(<span class="macro">format_args!</span>(<span class="string">&quot;unknown serde container attribute `{}`&quot;</span>, path))
+                }
+
+                Meta(meta_item) =&gt; {
+                    <span class="kw">let </span>path = meta_item
+                        .path()
+                        .into_token_stream()
+                        .to_string()
+                        .replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;&quot;</span>);
+                    cx.error_spanned_by(
+                        meta_item.path(),
+                        <span class="macro">format!</span>(<span class="string">&quot;unknown serde container attribute `{}`&quot;</span>, path),
                     );
                 }
-                <span class="prelude-val">Ok</span>(())
-            }) {
-                cx.syn_error(err);
+
+                Lit(lit) =&gt; {
+                    cx.error_spanned_by(lit, <span class="string">&quot;unexpected literal in serde container attribute&quot;</span>);
+                }
             }
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>is_packed = <span class="bool-val">false</span>;
         <span class="kw">for </span>attr <span class="kw">in </span><span class="kw-2">&amp;</span>item.attrs {
-            <span class="kw">if </span>attr.path() == REPR {
+            <span class="kw">if </span>attr.path.is_ident(<span class="string">&quot;repr&quot;</span>) {
                 <span class="kw">let _ </span>= attr.parse_args_with(|input: ParseStream| {
                     <span class="kw">while let </span><span class="prelude-val">Some</span>(token) = input.parse()<span class="question-mark">? </span>{
                         <span class="kw">if let </span>TokenTree::Ident(ident) = token {
@@ -2453,10 +2560,6 @@
                 serialize: rename_all_ser_rule.get().unwrap_or(RenameRule::None),
                 deserialize: rename_all_de_rule.get().unwrap_or(RenameRule::None),
             },
-            rename_all_fields_rules: RenameAllRules {
-                serialize: rename_all_fields_ser_rule.get().unwrap_or(RenameRule::None),
-                deserialize: rename_all_fields_de_rule.get().unwrap_or(RenameRule::None),
-            },
             ser_bound: ser_bound.get(),
             de_bound: de_bound.get(),
             tag: decide_tag(cx, item, untagged, internal_tag, content),
@@ -2469,7 +2572,6 @@
             serde_path: serde_path.get(),
             is_packed,
             expecting: expecting.get(),
-            non_exhaustive,
         }
     }
 
@@ -2477,12 +2579,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.name
     }
 
-    <span class="kw">pub fn </span>rename_all_rules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RenameAllRules {
-        <span class="self">self</span>.rename_all_rules
-    }
-
-    <span class="kw">pub fn </span>rename_all_fields_rules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RenameAllRules {
-        <span class="self">self</span>.rename_all_fields_rules
+    <span class="kw">pub fn </span>rename_all_rules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>RenameAllRules {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.rename_all_rules
     }
 
     <span class="kw">pub fn </span>transparent(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -2555,10 +2653,6 @@
     </span><span class="kw">pub fn </span>expecting(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
         <span class="self">self</span>.expecting.as_ref().map(String::as_ref)
     }
-
-    <span class="kw">pub fn </span>non_exhaustive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.non_exhaustive
-    }
 }
 
 <span class="kw">fn </span>decide_tag(
@@ -2583,9 +2677,10 @@
                         syn::Fields::Named(<span class="kw">_</span>) | syn::Fields::Unit =&gt; {}
                         syn::Fields::Unnamed(fields) =&gt; {
                             <span class="kw">if </span>fields.unnamed.len() != <span class="number">1 </span>{
-                                <span class="kw">let </span>msg =
-                                    <span class="string">&quot;#[serde(tag = \&quot;...\&quot;)] cannot be used with tuple variants&quot;</span>;
-                                cx.error_spanned_by(variant, msg);
+                                cx.error_spanned_by(
+                                    variant,
+                                    <span class="string">&quot;#[serde(tag = \&quot;...\&quot;)] cannot be used with tuple variants&quot;</span>,
+                                );
                                 <span class="kw">break</span>;
                             }
                         }
@@ -2594,29 +2689,49 @@
             }
             TagType::Internal { tag }
         }
-        (<span class="prelude-val">Some</span>((untagged_tokens, ())), <span class="prelude-val">Some</span>((tag_tokens, <span class="kw">_</span>)), <span class="prelude-val">None</span>) =&gt; {
-            <span class="kw">let </span>msg = <span class="string">&quot;enum cannot be both untagged and internally tagged&quot;</span>;
-            cx.error_spanned_by(untagged_tokens, msg);
-            cx.error_spanned_by(tag_tokens, msg);
+        (<span class="prelude-val">Some</span>((untagged_tokens, <span class="kw">_</span>)), <span class="prelude-val">Some</span>((tag_tokens, <span class="kw">_</span>)), <span class="prelude-val">None</span>) =&gt; {
+            cx.error_spanned_by(
+                untagged_tokens,
+                <span class="string">&quot;enum cannot be both untagged and internally tagged&quot;</span>,
+            );
+            cx.error_spanned_by(
+                tag_tokens,
+                <span class="string">&quot;enum cannot be both untagged and internally tagged&quot;</span>,
+            );
             TagType::External <span class="comment">// doesn&#39;t matter, will error
         </span>}
         (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>((content_tokens, <span class="kw">_</span>))) =&gt; {
-            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(tag = \&quot;...\&quot;, content = \&quot;...\&quot;)] must be used together&quot;</span>;
-            cx.error_spanned_by(content_tokens, msg);
+            cx.error_spanned_by(
+                content_tokens,
+                <span class="string">&quot;#[serde(tag = \&quot;...\&quot;, content = \&quot;...\&quot;)] must be used together&quot;</span>,
+            );
             TagType::External
         }
-        (<span class="prelude-val">Some</span>((untagged_tokens, ())), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>((content_tokens, <span class="kw">_</span>))) =&gt; {
-            <span class="kw">let </span>msg = <span class="string">&quot;untagged enum cannot have #[serde(content = \&quot;...\&quot;)]&quot;</span>;
-            cx.error_spanned_by(untagged_tokens, msg);
-            cx.error_spanned_by(content_tokens, msg);
+        (<span class="prelude-val">Some</span>((untagged_tokens, <span class="kw">_</span>)), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>((content_tokens, <span class="kw">_</span>))) =&gt; {
+            cx.error_spanned_by(
+                untagged_tokens,
+                <span class="string">&quot;untagged enum cannot have #[serde(content = \&quot;...\&quot;)]&quot;</span>,
+            );
+            cx.error_spanned_by(
+                content_tokens,
+                <span class="string">&quot;untagged enum cannot have #[serde(content = \&quot;...\&quot;)]&quot;</span>,
+            );
             TagType::External
         }
         (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>((<span class="kw">_</span>, tag)), <span class="prelude-val">Some</span>((<span class="kw">_</span>, content))) =&gt; TagType::Adjacent { tag, content },
-        (<span class="prelude-val">Some</span>((untagged_tokens, ())), <span class="prelude-val">Some</span>((tag_tokens, <span class="kw">_</span>)), <span class="prelude-val">Some</span>((content_tokens, <span class="kw">_</span>))) =&gt; {
-            <span class="kw">let </span>msg = <span class="string">&quot;untagged enum cannot have #[serde(tag = \&quot;...\&quot;, content = \&quot;...\&quot;)]&quot;</span>;
-            cx.error_spanned_by(untagged_tokens, msg);
-            cx.error_spanned_by(tag_tokens, msg);
-            cx.error_spanned_by(content_tokens, msg);
+        (<span class="prelude-val">Some</span>((untagged_tokens, <span class="kw">_</span>)), <span class="prelude-val">Some</span>((tag_tokens, <span class="kw">_</span>)), <span class="prelude-val">Some</span>((content_tokens, <span class="kw">_</span>))) =&gt; {
+            cx.error_spanned_by(
+                untagged_tokens,
+                <span class="string">&quot;untagged enum cannot have #[serde(tag = \&quot;...\&quot;, content = \&quot;...\&quot;)]&quot;</span>,
+            );
+            cx.error_spanned_by(
+                tag_tokens,
+                <span class="string">&quot;untagged enum cannot have #[serde(tag = \&quot;...\&quot;, content = \&quot;...\&quot;)]&quot;</span>,
+            );
+            cx.error_spanned_by(
+                content_tokens,
+                <span class="string">&quot;untagged enum cannot have #[serde(tag = \&quot;...\&quot;, content = \&quot;...\&quot;)]&quot;</span>,
+            );
             TagType::External
         }
     }
@@ -2634,33 +2749,45 @@
         variant_identifier.<span class="number">0</span>.get_with_tokens(),
     ) {
         (<span class="kw">_</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>) =&gt; Identifier::No,
-        (<span class="kw">_</span>, <span class="prelude-val">Some</span>((field_identifier_tokens, ())), <span class="prelude-val">Some</span>((variant_identifier_tokens, ()))) =&gt; {
-            <span class="kw">let </span>msg =
-                <span class="string">&quot;#[serde(field_identifier)] and #[serde(variant_identifier)] cannot both be set&quot;</span>;
-            cx.error_spanned_by(field_identifier_tokens, msg);
-            cx.error_spanned_by(variant_identifier_tokens, msg);
+        (<span class="kw">_</span>, <span class="prelude-val">Some</span>((field_identifier_tokens, <span class="kw">_</span>)), <span class="prelude-val">Some</span>((variant_identifier_tokens, <span class="kw">_</span>))) =&gt; {
+            cx.error_spanned_by(
+                field_identifier_tokens,
+                <span class="string">&quot;#[serde(field_identifier)] and #[serde(variant_identifier)] cannot both be set&quot;</span>,
+            );
+            cx.error_spanned_by(
+                variant_identifier_tokens,
+                <span class="string">&quot;#[serde(field_identifier)] and #[serde(variant_identifier)] cannot both be set&quot;</span>,
+            );
             Identifier::No
         }
         (syn::Data::Enum(<span class="kw">_</span>), <span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; Identifier::Field,
         (syn::Data::Enum(<span class="kw">_</span>), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; Identifier::Variant,
         (syn::Data::Struct(syn::DataStruct { struct_token, .. }), <span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; {
-            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(field_identifier)] can only be used on an enum&quot;</span>;
-            cx.error_spanned_by(struct_token, msg);
+            cx.error_spanned_by(
+                struct_token,
+                <span class="string">&quot;#[serde(field_identifier)] can only be used on an enum&quot;</span>,
+            );
             Identifier::No
         }
         (syn::Data::Union(syn::DataUnion { union_token, .. }), <span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; {
-            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(field_identifier)] can only be used on an enum&quot;</span>;
-            cx.error_spanned_by(union_token, msg);
+            cx.error_spanned_by(
+                union_token,
+                <span class="string">&quot;#[serde(field_identifier)] can only be used on an enum&quot;</span>,
+            );
             Identifier::No
         }
         (syn::Data::Struct(syn::DataStruct { struct_token, .. }), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; {
-            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(variant_identifier)] can only be used on an enum&quot;</span>;
-            cx.error_spanned_by(struct_token, msg);
+            cx.error_spanned_by(
+                struct_token,
+                <span class="string">&quot;#[serde(variant_identifier)] can only be used on an enum&quot;</span>,
+            );
             Identifier::No
         }
         (syn::Data::Union(syn::DataUnion { union_token, .. }), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; {
-            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(variant_identifier)] can only be used on an enum&quot;</span>;
-            cx.error_spanned_by(union_token, msg);
+            cx.error_spanned_by(
+                union_token,
+                <span class="string">&quot;#[serde(variant_identifier)] can only be used on an enum&quot;</span>,
+            );
             Identifier::No
         }
     }
@@ -2677,13 +2804,7 @@
     other: bool,
     serialize_with: <span class="prelude-ty">Option</span>&lt;syn::ExprPath&gt;,
     deserialize_with: <span class="prelude-ty">Option</span>&lt;syn::ExprPath&gt;,
-    borrow: <span class="prelude-ty">Option</span>&lt;BorrowAttribute&gt;,
-    untagged: bool,
-}
-
-<span class="kw">struct </span>BorrowAttribute {
-    path: syn::Path,
-    lifetimes: <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;syn::Lifetime&gt;&gt;,
+    borrow: <span class="prelude-ty">Option</span>&lt;syn::Meta&gt;,
 }
 
 <span class="kw">impl </span>Variant {
@@ -2701,135 +2822,169 @@
         <span class="kw">let </span><span class="kw-2">mut </span>serialize_with = Attr::none(cx, SERIALIZE_WITH);
         <span class="kw">let </span><span class="kw-2">mut </span>deserialize_with = Attr::none(cx, DESERIALIZE_WITH);
         <span class="kw">let </span><span class="kw-2">mut </span>borrow = Attr::none(cx, BORROW);
-        <span class="kw">let </span><span class="kw-2">mut </span>untagged = BoolAttr::none(cx, UNTAGGED);
 
-        <span class="kw">for </span>attr <span class="kw">in </span><span class="kw-2">&amp;</span>variant.attrs {
-            <span class="kw">if </span>attr.path() != SERDE {
-                <span class="kw">continue</span>;
-            }
-
-            <span class="kw">if let </span>syn::Meta::List(meta) = <span class="kw-2">&amp;</span>attr.meta {
-                <span class="kw">if </span>meta.tokens.is_empty() {
-                    <span class="kw">continue</span>;
+        <span class="kw">for </span>meta_item <span class="kw">in </span>variant
+            .attrs
+            .iter()
+            .flat_map(|attr| get_serde_meta_items(cx, attr))
+            .flatten()
+        {
+            <span class="kw">match </span><span class="kw-2">&amp;</span>meta_item {
+                <span class="comment">// Parse `#[serde(rename = &quot;foo&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == RENAME =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, RENAME, <span class="kw-2">&amp;</span>m.lit) {
+                        ser_name.set(<span class="kw-2">&amp;</span>m.path, s.value());
+                        de_name.set_if_none(s.value());
+                        de_aliases.insert(<span class="kw-2">&amp;</span>m.path, s.value());
+                    }
                 }
-            }
 
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = attr.parse_nested_meta(|meta| {
-                <span class="kw">if </span>meta.path == RENAME {
-                    <span class="comment">// #[serde(rename = &quot;foo&quot;)]
-                    // #[serde(rename(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]
-                    </span><span class="kw">let </span>(ser, de) = get_multiple_renames(cx, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
-                    ser_name.set_opt(<span class="kw-2">&amp;</span>meta.path, ser.as_ref().map(syn::LitStr::value));
-                    <span class="kw">for </span>de_value <span class="kw">in </span>de {
-                        de_name.set_if_none(de_value.value());
-                        de_aliases.insert(<span class="kw-2">&amp;</span>meta.path, de_value.value());
-                    }
-                } <span class="kw">else if </span>meta.path == ALIAS {
-                    <span class="comment">// #[serde(alias = &quot;foo&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(s) = get_lit_str(cx, ALIAS, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        de_aliases.insert(<span class="kw-2">&amp;</span>meta.path, s.value());
-                    }
-                } <span class="kw">else if </span>meta.path == RENAME_ALL {
-                    <span class="comment">// #[serde(rename_all = &quot;foo&quot;)]
-                    // #[serde(rename_all(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]
-                    </span><span class="kw">let </span>one_name = meta.input.peek(<span class="macro">Token!</span>[=]);
-                    <span class="kw">let </span>(ser, de) = get_renames(cx, RENAME_ALL, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(ser) = ser {
-                        <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>ser.value()) {
-                            <span class="prelude-val">Ok</span>(rename_rule) =&gt; rename_all_ser_rule.set(<span class="kw-2">&amp;</span>meta.path, rename_rule),
-                            <span class="prelude-val">Err</span>(err) =&gt; cx.error_spanned_by(ser, err),
+                <span class="comment">// Parse `#[serde(rename(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]`
+                </span>Meta(List(m)) <span class="kw">if </span>m.path == RENAME =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>((ser, de)) = get_multiple_renames(cx, <span class="kw-2">&amp;</span>m.nested) {
+                        ser_name.set_opt(<span class="kw-2">&amp;</span>m.path, ser.map(syn::LitStr::value));
+                        <span class="kw">for </span>de_value <span class="kw">in </span>de {
+                            de_name.set_if_none(de_value.value());
+                            de_aliases.insert(<span class="kw-2">&amp;</span>m.path, de_value.value());
                         }
                     }
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(de) = de {
-                        <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>de.value()) {
-                            <span class="prelude-val">Ok</span>(rename_rule) =&gt; rename_all_de_rule.set(<span class="kw-2">&amp;</span>meta.path, rename_rule),
-                            <span class="prelude-val">Err</span>(err) =&gt; {
-                                <span class="kw">if </span>!one_name {
-                                    cx.error_spanned_by(de, err);
-                                }
+                }
+
+                <span class="comment">// Parse `#[serde(alias = &quot;foo&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == ALIAS =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, ALIAS, <span class="kw-2">&amp;</span>m.lit) {
+                        de_aliases.insert(<span class="kw-2">&amp;</span>m.path, s.value());
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(rename_all = &quot;foo&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == RENAME_ALL =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, RENAME_ALL, <span class="kw-2">&amp;</span>m.lit) {
+                        <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>s.value()) {
+                            <span class="prelude-val">Ok</span>(rename_rule) =&gt; {
+                                rename_all_ser_rule.set(<span class="kw-2">&amp;</span>m.path, rename_rule);
+                                rename_all_de_rule.set(<span class="kw-2">&amp;</span>m.path, rename_rule);
+                            }
+                            <span class="prelude-val">Err</span>(err) =&gt; cx.error_spanned_by(s, err),
+                        }
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(rename_all(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]`
+                </span>Meta(List(m)) <span class="kw">if </span>m.path == RENAME_ALL =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>((ser, de)) = get_renames(cx, <span class="kw-2">&amp;</span>m.nested) {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(ser) = ser {
+                            <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>ser.value()) {
+                                <span class="prelude-val">Ok</span>(rename_rule) =&gt; rename_all_ser_rule.set(<span class="kw-2">&amp;</span>m.path, rename_rule),
+                                <span class="prelude-val">Err</span>(err) =&gt; cx.error_spanned_by(ser, err),
+                            }
+                        }
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(de) = de {
+                            <span class="kw">match </span>RenameRule::from_str(<span class="kw-2">&amp;</span>de.value()) {
+                                <span class="prelude-val">Ok</span>(rename_rule) =&gt; rename_all_de_rule.set(<span class="kw-2">&amp;</span>m.path, rename_rule),
+                                <span class="prelude-val">Err</span>(err) =&gt; cx.error_spanned_by(de, err),
                             }
                         }
                     }
-                } <span class="kw">else if </span>meta.path == SKIP {
-                    <span class="comment">// #[serde(skip)]
-                    </span>skip_serializing.set_true(<span class="kw-2">&amp;</span>meta.path);
-                    skip_deserializing.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else if </span>meta.path == SKIP_DESERIALIZING {
-                    <span class="comment">// #[serde(skip_deserializing)]
-                    </span>skip_deserializing.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else if </span>meta.path == SKIP_SERIALIZING {
-                    <span class="comment">// #[serde(skip_serializing)]
-                    </span>skip_serializing.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else if </span>meta.path == OTHER {
-                    <span class="comment">// #[serde(other)]
-                    </span>other.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else if </span>meta.path == BOUND {
-                    <span class="comment">// #[serde(bound = &quot;T: SomeBound&quot;)]
-                    // #[serde(bound(serialize = &quot;...&quot;, deserialize = &quot;...&quot;))]
-                    </span><span class="kw">let </span>(ser, de) = get_where_predicates(cx, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
-                    ser_bound.set_opt(<span class="kw-2">&amp;</span>meta.path, ser);
-                    de_bound.set_opt(<span class="kw-2">&amp;</span>meta.path, de);
-                } <span class="kw">else if </span>meta.path == WITH {
-                    <span class="comment">// #[serde(with = &quot;...&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, WITH, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
+                }
+
+                <span class="comment">// Parse `#[serde(skip)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == SKIP =&gt; {
+                    skip_serializing.set_true(word);
+                    skip_deserializing.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(skip_deserializing)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == SKIP_DESERIALIZING =&gt; {
+                    skip_deserializing.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(skip_serializing)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == SKIP_SERIALIZING =&gt; {
+                    skip_serializing.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(other)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == OTHER =&gt; {
+                    other.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(bound = &quot;T: SomeBound&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == BOUND =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(where_predicates) = parse_lit_into_where(cx, BOUND, BOUND, <span class="kw-2">&amp;</span>m.lit) {
+                        ser_bound.set(<span class="kw-2">&amp;</span>m.path, where_predicates.clone());
+                        de_bound.set(<span class="kw-2">&amp;</span>m.path, where_predicates);
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(bound(serialize = &quot;...&quot;, deserialize = &quot;...&quot;))]`
+                </span>Meta(List(m)) <span class="kw">if </span>m.path == BOUND =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>((ser, de)) = get_where_predicates(cx, <span class="kw-2">&amp;</span>m.nested) {
+                        ser_bound.set_opt(<span class="kw-2">&amp;</span>m.path, ser);
+                        de_bound.set_opt(<span class="kw-2">&amp;</span>m.path, de);
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(with = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == WITH =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, WITH, <span class="kw-2">&amp;</span>m.lit) {
                         <span class="kw">let </span><span class="kw-2">mut </span>ser_path = path.clone();
                         ser_path
                             .path
                             .segments
                             .push(Ident::new(<span class="string">&quot;serialize&quot;</span>, Span::call_site()).into());
-                        serialize_with.set(<span class="kw-2">&amp;</span>meta.path, ser_path);
+                        serialize_with.set(<span class="kw-2">&amp;</span>m.path, ser_path);
                         <span class="kw">let </span><span class="kw-2">mut </span>de_path = path;
                         de_path
                             .path
                             .segments
                             .push(Ident::new(<span class="string">&quot;deserialize&quot;</span>, Span::call_site()).into());
-                        deserialize_with.set(<span class="kw-2">&amp;</span>meta.path, de_path);
+                        deserialize_with.set(<span class="kw-2">&amp;</span>m.path, de_path);
                     }
-                } <span class="kw">else if </span>meta.path == SERIALIZE_WITH {
-                    <span class="comment">// #[serde(serialize_with = &quot;...&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, SERIALIZE_WITH, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        serialize_with.set(<span class="kw-2">&amp;</span>meta.path, path);
+                }
+
+                <span class="comment">// Parse `#[serde(serialize_with = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == SERIALIZE_WITH =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, SERIALIZE_WITH, <span class="kw-2">&amp;</span>m.lit) {
+                        serialize_with.set(<span class="kw-2">&amp;</span>m.path, path);
                     }
-                } <span class="kw">else if </span>meta.path == DESERIALIZE_WITH {
-                    <span class="comment">// #[serde(deserialize_with = &quot;...&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, DESERIALIZE_WITH, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        deserialize_with.set(<span class="kw-2">&amp;</span>meta.path, path);
+                }
+
+                <span class="comment">// Parse `#[serde(deserialize_with = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == DESERIALIZE_WITH =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, DESERIALIZE_WITH, <span class="kw-2">&amp;</span>m.lit) {
+                        deserialize_with.set(<span class="kw-2">&amp;</span>m.path, path);
                     }
-                } <span class="kw">else if </span>meta.path == BORROW {
-                    <span class="kw">let </span>borrow_attribute = <span class="kw">if </span>meta.input.peek(<span class="macro">Token!</span>[=]) {
-                        <span class="comment">// #[serde(borrow = &quot;&#39;a + &#39;b&quot;)]
-                        </span><span class="kw">let </span>lifetimes = parse_lit_into_lifetimes(cx, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
-                        BorrowAttribute {
-                            path: meta.path.clone(),
-                            lifetimes: <span class="prelude-val">Some</span>(lifetimes),
-                        }
-                    } <span class="kw">else </span>{
-                        <span class="comment">// #[serde(borrow)]
-                        </span>BorrowAttribute {
-                            path: meta.path.clone(),
-                            lifetimes: <span class="prelude-val">None</span>,
-                        }
-                    };
-                    <span class="kw">match </span><span class="kw-2">&amp;</span>variant.fields {
-                        syn::Fields::Unnamed(fields) <span class="kw">if </span>fields.unnamed.len() == <span class="number">1 </span>=&gt; {
-                            borrow.set(<span class="kw-2">&amp;</span>meta.path, borrow_attribute);
-                        }
-                        <span class="kw">_ </span>=&gt; {
-                            <span class="kw">let </span>msg = <span class="string">&quot;#[serde(borrow)] may only be used on newtype variants&quot;</span>;
-                            cx.error_spanned_by(variant, msg);
-                        }
+                }
+
+                <span class="comment">// Defer `#[serde(borrow)]` and `#[serde(borrow = &quot;&#39;a + &#39;b&quot;)]`
+                </span>Meta(m) <span class="kw">if </span>m.path() == BORROW =&gt; <span class="kw">match </span><span class="kw-2">&amp;</span>variant.fields {
+                    syn::Fields::Unnamed(fields) <span class="kw">if </span>fields.unnamed.len() == <span class="number">1 </span>=&gt; {
+                        borrow.set(m.path(), m.clone());
                     }
-                } <span class="kw">else if </span>meta.path == UNTAGGED {
-                    untagged.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else </span>{
-                    <span class="kw">let </span>path = meta.path.to_token_stream().to_string().replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;&quot;</span>);
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(
-                        meta.error(<span class="macro">format_args!</span>(<span class="string">&quot;unknown serde variant attribute `{}`&quot;</span>, path))
+                    <span class="kw">_ </span>=&gt; {
+                        cx.error_spanned_by(
+                            variant,
+                            <span class="string">&quot;#[serde(borrow)] may only be used on newtype variants&quot;</span>,
+                        );
+                    }
+                },
+
+                Meta(meta_item) =&gt; {
+                    <span class="kw">let </span>path = meta_item
+                        .path()
+                        .into_token_stream()
+                        .to_string()
+                        .replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;&quot;</span>);
+                    cx.error_spanned_by(
+                        meta_item.path(),
+                        <span class="macro">format!</span>(<span class="string">&quot;unknown serde variant attribute `{}`&quot;</span>, path),
                     );
                 }
-                <span class="prelude-val">Ok</span>(())
-            }) {
-                cx.syn_error(err);
+
+                Lit(lit) =&gt; {
+                    cx.error_spanned_by(lit, <span class="string">&quot;unexpected literal in serde variant attribute&quot;</span>);
+                }
             }
         }
 
@@ -2847,7 +3002,6 @@
             serialize_with: serialize_with.get(),
             deserialize_with: deserialize_with.get(),
             borrow: borrow.get(),
-            untagged: untagged.get(),
         }
     }
 
@@ -2855,24 +3009,21 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.name
     }
 
-    <span class="kw">pub fn </span>aliases(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;String&gt; {
+    <span class="kw">pub fn </span>aliases(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;String&gt; {
         <span class="self">self</span>.name.deserialize_aliases()
     }
 
-    <span class="kw">pub fn </span>rename_by_rules(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rules: RenameAllRules) {
+    <span class="kw">pub fn </span>rename_by_rules(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rules: <span class="kw-2">&amp;</span>RenameAllRules) {
         <span class="kw">if </span>!<span class="self">self</span>.name.serialize_renamed {
             <span class="self">self</span>.name.serialize = rules.serialize.apply_to_variant(<span class="kw-2">&amp;</span><span class="self">self</span>.name.serialize);
         }
         <span class="kw">if </span>!<span class="self">self</span>.name.deserialize_renamed {
             <span class="self">self</span>.name.deserialize = rules.deserialize.apply_to_variant(<span class="kw-2">&amp;</span><span class="self">self</span>.name.deserialize);
         }
-        <span class="self">self</span>.name
-            .deserialize_aliases
-            .insert(<span class="self">self</span>.name.deserialize.clone());
     }
 
-    <span class="kw">pub fn </span>rename_all_rules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RenameAllRules {
-        <span class="self">self</span>.rename_all_rules
+    <span class="kw">pub fn </span>rename_all_rules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>RenameAllRules {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.rename_all_rules
     }
 
     <span class="kw">pub fn </span>ser_bound(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[syn::WherePredicate]&gt; {
@@ -2901,10 +3052,6 @@
 
     <span class="kw">pub fn </span>deserialize_with(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>syn::ExprPath&gt; {
         <span class="self">self</span>.deserialize_with.as_ref()
-    }
-
-    <span class="kw">pub fn </span>untagged(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.untagged
     }
 }
 
@@ -2973,145 +3120,182 @@
             <span class="prelude-val">None </span>=&gt; index.to_string(),
         };
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(borrow_attribute) = attrs.and_then(|variant| variant.borrow.as_ref()) {
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(borrowable) = borrowable_lifetimes(cx, <span class="kw-2">&amp;</span>ident, field) {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(lifetimes) = <span class="kw-2">&amp;</span>borrow_attribute.lifetimes {
-                    <span class="kw">for </span>lifetime <span class="kw">in </span>lifetimes {
-                        <span class="kw">if </span>!borrowable.contains(lifetime) {
-                            <span class="kw">let </span>msg =
-                                <span class="macro">format!</span>(<span class="string">&quot;field `{}` does not have lifetime {}&quot;</span>, ident, lifetime);
-                            cx.error_spanned_by(field, msg);
+        <span class="kw">let </span>variant_borrow = attrs
+            .and_then(|variant| variant.borrow.as_ref())
+            .map(|borrow| Meta(borrow.clone()));
+
+        <span class="kw">for </span>meta_item <span class="kw">in </span>field
+            .attrs
+            .iter()
+            .flat_map(|attr| get_serde_meta_items(cx, attr))
+            .flatten()
+            .chain(variant_borrow)
+        {
+            <span class="kw">match </span><span class="kw-2">&amp;</span>meta_item {
+                <span class="comment">// Parse `#[serde(rename = &quot;foo&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == RENAME =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, RENAME, <span class="kw-2">&amp;</span>m.lit) {
+                        ser_name.set(<span class="kw-2">&amp;</span>m.path, s.value());
+                        de_name.set_if_none(s.value());
+                        de_aliases.insert(<span class="kw-2">&amp;</span>m.path, s.value());
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(rename(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]`
+                </span>Meta(List(m)) <span class="kw">if </span>m.path == RENAME =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>((ser, de)) = get_multiple_renames(cx, <span class="kw-2">&amp;</span>m.nested) {
+                        ser_name.set_opt(<span class="kw-2">&amp;</span>m.path, ser.map(syn::LitStr::value));
+                        <span class="kw">for </span>de_value <span class="kw">in </span>de {
+                            de_name.set_if_none(de_value.value());
+                            de_aliases.insert(<span class="kw-2">&amp;</span>m.path, de_value.value());
                         }
                     }
-                    borrowed_lifetimes.set(<span class="kw-2">&amp;</span>borrow_attribute.path, lifetimes.clone());
-                } <span class="kw">else </span>{
-                    borrowed_lifetimes.set(<span class="kw-2">&amp;</span>borrow_attribute.path, borrowable);
                 }
-            }
-        }
 
-        <span class="kw">for </span>attr <span class="kw">in </span><span class="kw-2">&amp;</span>field.attrs {
-            <span class="kw">if </span>attr.path() != SERDE {
-                <span class="kw">continue</span>;
-            }
-
-            <span class="kw">if let </span>syn::Meta::List(meta) = <span class="kw-2">&amp;</span>attr.meta {
-                <span class="kw">if </span>meta.tokens.is_empty() {
-                    <span class="kw">continue</span>;
+                <span class="comment">// Parse `#[serde(alias = &quot;foo&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == ALIAS =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(s) = get_lit_str(cx, ALIAS, <span class="kw-2">&amp;</span>m.lit) {
+                        de_aliases.insert(<span class="kw-2">&amp;</span>m.path, s.value());
+                    }
                 }
-            }
 
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = attr.parse_nested_meta(|meta| {
-                <span class="kw">if </span>meta.path == RENAME {
-                    <span class="comment">// #[serde(rename = &quot;foo&quot;)]
-                    // #[serde(rename(serialize = &quot;foo&quot;, deserialize = &quot;bar&quot;))]
-                    </span><span class="kw">let </span>(ser, de) = get_multiple_renames(cx, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
-                    ser_name.set_opt(<span class="kw-2">&amp;</span>meta.path, ser.as_ref().map(syn::LitStr::value));
-                    <span class="kw">for </span>de_value <span class="kw">in </span>de {
-                        de_name.set_if_none(de_value.value());
-                        de_aliases.insert(<span class="kw-2">&amp;</span>meta.path, de_value.value());
+                <span class="comment">// Parse `#[serde(default)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == DEFAULT =&gt; {
+                    default.set(word, Default::Default);
+                }
+
+                <span class="comment">// Parse `#[serde(default = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == DEFAULT =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, DEFAULT, <span class="kw-2">&amp;</span>m.lit) {
+                        default.set(<span class="kw-2">&amp;</span>m.path, Default::Path(path));
                     }
-                } <span class="kw">else if </span>meta.path == ALIAS {
-                    <span class="comment">// #[serde(alias = &quot;foo&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(s) = get_lit_str(cx, ALIAS, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        de_aliases.insert(<span class="kw-2">&amp;</span>meta.path, s.value());
+                }
+
+                <span class="comment">// Parse `#[serde(skip_serializing)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == SKIP_SERIALIZING =&gt; {
+                    skip_serializing.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(skip_deserializing)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == SKIP_DESERIALIZING =&gt; {
+                    skip_deserializing.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(skip)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == SKIP =&gt; {
+                    skip_serializing.set_true(word);
+                    skip_deserializing.set_true(word);
+                }
+
+                <span class="comment">// Parse `#[serde(skip_serializing_if = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == SKIP_SERIALIZING_IF =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, SKIP_SERIALIZING_IF, <span class="kw-2">&amp;</span>m.lit) {
+                        skip_serializing_if.set(<span class="kw-2">&amp;</span>m.path, path);
                     }
-                } <span class="kw">else if </span>meta.path == DEFAULT {
-                    <span class="kw">if </span>meta.input.peek(<span class="macro">Token!</span>[=]) {
-                        <span class="comment">// #[serde(default = &quot;...&quot;)]
-                        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, DEFAULT, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                            default.set(<span class="kw-2">&amp;</span>meta.path, Default::Path(path));
-                        }
-                    } <span class="kw">else </span>{
-                        <span class="comment">// #[serde(default)]
-                        </span>default.set(<span class="kw-2">&amp;</span>meta.path, Default::Default);
+                }
+
+                <span class="comment">// Parse `#[serde(serialize_with = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == SERIALIZE_WITH =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, SERIALIZE_WITH, <span class="kw-2">&amp;</span>m.lit) {
+                        serialize_with.set(<span class="kw-2">&amp;</span>m.path, path);
                     }
-                } <span class="kw">else if </span>meta.path == SKIP_SERIALIZING {
-                    <span class="comment">// #[serde(skip_serializing)]
-                    </span>skip_serializing.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else if </span>meta.path == SKIP_DESERIALIZING {
-                    <span class="comment">// #[serde(skip_deserializing)]
-                    </span>skip_deserializing.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else if </span>meta.path == SKIP {
-                    <span class="comment">// #[serde(skip)]
-                    </span>skip_serializing.set_true(<span class="kw-2">&amp;</span>meta.path);
-                    skip_deserializing.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else if </span>meta.path == SKIP_SERIALIZING_IF {
-                    <span class="comment">// #[serde(skip_serializing_if = &quot;...&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, SKIP_SERIALIZING_IF, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        skip_serializing_if.set(<span class="kw-2">&amp;</span>meta.path, path);
+                }
+
+                <span class="comment">// Parse `#[serde(deserialize_with = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == DESERIALIZE_WITH =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, DESERIALIZE_WITH, <span class="kw-2">&amp;</span>m.lit) {
+                        deserialize_with.set(<span class="kw-2">&amp;</span>m.path, path);
                     }
-                } <span class="kw">else if </span>meta.path == SERIALIZE_WITH {
-                    <span class="comment">// #[serde(serialize_with = &quot;...&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, SERIALIZE_WITH, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        serialize_with.set(<span class="kw-2">&amp;</span>meta.path, path);
-                    }
-                } <span class="kw">else if </span>meta.path == DESERIALIZE_WITH {
-                    <span class="comment">// #[serde(deserialize_with = &quot;...&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, DESERIALIZE_WITH, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        deserialize_with.set(<span class="kw-2">&amp;</span>meta.path, path);
-                    }
-                } <span class="kw">else if </span>meta.path == WITH {
-                    <span class="comment">// #[serde(with = &quot;...&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, WITH, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
+                }
+
+                <span class="comment">// Parse `#[serde(with = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == WITH =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, WITH, <span class="kw-2">&amp;</span>m.lit) {
                         <span class="kw">let </span><span class="kw-2">mut </span>ser_path = path.clone();
                         ser_path
                             .path
                             .segments
                             .push(Ident::new(<span class="string">&quot;serialize&quot;</span>, Span::call_site()).into());
-                        serialize_with.set(<span class="kw-2">&amp;</span>meta.path, ser_path);
+                        serialize_with.set(<span class="kw-2">&amp;</span>m.path, ser_path);
                         <span class="kw">let </span><span class="kw-2">mut </span>de_path = path;
                         de_path
                             .path
                             .segments
                             .push(Ident::new(<span class="string">&quot;deserialize&quot;</span>, Span::call_site()).into());
-                        deserialize_with.set(<span class="kw-2">&amp;</span>meta.path, de_path);
+                        deserialize_with.set(<span class="kw-2">&amp;</span>m.path, de_path);
                     }
-                } <span class="kw">else if </span>meta.path == BOUND {
-                    <span class="comment">// #[serde(bound = &quot;T: SomeBound&quot;)]
-                    // #[serde(bound(serialize = &quot;...&quot;, deserialize = &quot;...&quot;))]
-                    </span><span class="kw">let </span>(ser, de) = get_where_predicates(cx, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
-                    ser_bound.set_opt(<span class="kw-2">&amp;</span>meta.path, ser);
-                    de_bound.set_opt(<span class="kw-2">&amp;</span>meta.path, de);
-                } <span class="kw">else if </span>meta.path == BORROW {
-                    <span class="kw">if </span>meta.input.peek(<span class="macro">Token!</span>[=]) {
-                        <span class="comment">// #[serde(borrow = &quot;&#39;a + &#39;b&quot;)]
-                        </span><span class="kw">let </span>lifetimes = parse_lit_into_lifetimes(cx, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>;
+                }
+
+                <span class="comment">// Parse `#[serde(bound = &quot;T: SomeBound&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == BOUND =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(where_predicates) = parse_lit_into_where(cx, BOUND, BOUND, <span class="kw-2">&amp;</span>m.lit) {
+                        ser_bound.set(<span class="kw-2">&amp;</span>m.path, where_predicates.clone());
+                        de_bound.set(<span class="kw-2">&amp;</span>m.path, where_predicates);
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(bound(serialize = &quot;...&quot;, deserialize = &quot;...&quot;))]`
+                </span>Meta(List(m)) <span class="kw">if </span>m.path == BOUND =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>((ser, de)) = get_where_predicates(cx, <span class="kw-2">&amp;</span>m.nested) {
+                        ser_bound.set_opt(<span class="kw-2">&amp;</span>m.path, ser);
+                        de_bound.set_opt(<span class="kw-2">&amp;</span>m.path, de);
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(borrow)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == BORROW =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(borrowable) = borrowable_lifetimes(cx, <span class="kw-2">&amp;</span>ident, field) {
+                        borrowed_lifetimes.set(word, borrowable);
+                    }
+                }
+
+                <span class="comment">// Parse `#[serde(borrow = &quot;&#39;a + &#39;b&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == BORROW =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(lifetimes) = parse_lit_into_lifetimes(cx, BORROW, <span class="kw-2">&amp;</span>m.lit) {
                         <span class="kw">if let </span><span class="prelude-val">Ok</span>(borrowable) = borrowable_lifetimes(cx, <span class="kw-2">&amp;</span>ident, field) {
                             <span class="kw">for </span>lifetime <span class="kw">in </span><span class="kw-2">&amp;</span>lifetimes {
                                 <span class="kw">if </span>!borrowable.contains(lifetime) {
-                                    <span class="kw">let </span>msg = <span class="macro">format!</span>(
-                                        <span class="string">&quot;field `{}` does not have lifetime {}&quot;</span>,
-                                        ident, lifetime,
+                                    cx.error_spanned_by(
+                                        field,
+                                        <span class="macro">format!</span>(
+                                            <span class="string">&quot;field `{}` does not have lifetime {}&quot;</span>,
+                                            ident, lifetime
+                                        ),
                                     );
-                                    cx.error_spanned_by(field, msg);
                                 }
                             }
-                            borrowed_lifetimes.set(<span class="kw-2">&amp;</span>meta.path, lifetimes);
-                        }
-                    } <span class="kw">else </span>{
-                        <span class="comment">// #[serde(borrow)]
-                        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(borrowable) = borrowable_lifetimes(cx, <span class="kw-2">&amp;</span>ident, field) {
-                            borrowed_lifetimes.set(<span class="kw-2">&amp;</span>meta.path, borrowable);
+                            borrowed_lifetimes.set(<span class="kw-2">&amp;</span>m.path, lifetimes);
                         }
                     }
-                } <span class="kw">else if </span>meta.path == GETTER {
-                    <span class="comment">// #[serde(getter = &quot;...&quot;)]
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parse_lit_into_expr_path(cx, GETTER, <span class="kw-2">&amp;</span>meta)<span class="question-mark">? </span>{
-                        getter.set(<span class="kw-2">&amp;</span>meta.path, path);
+                }
+
+                <span class="comment">// Parse `#[serde(getter = &quot;...&quot;)]`
+                </span>Meta(NameValue(m)) <span class="kw">if </span>m.path == GETTER =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(path) = parse_lit_into_expr_path(cx, GETTER, <span class="kw-2">&amp;</span>m.lit) {
+                        getter.set(<span class="kw-2">&amp;</span>m.path, path);
                     }
-                } <span class="kw">else if </span>meta.path == FLATTEN {
-                    <span class="comment">// #[serde(flatten)]
-                    </span>flatten.set_true(<span class="kw-2">&amp;</span>meta.path);
-                } <span class="kw">else </span>{
-                    <span class="kw">let </span>path = meta.path.to_token_stream().to_string().replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;&quot;</span>);
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(
-                        meta.error(<span class="macro">format_args!</span>(<span class="string">&quot;unknown serde field attribute `{}`&quot;</span>, path))
+                }
+
+                <span class="comment">// Parse `#[serde(flatten)]`
+                </span>Meta(Path(word)) <span class="kw">if </span>word == FLATTEN =&gt; {
+                    flatten.set_true(word);
+                }
+
+                Meta(meta_item) =&gt; {
+                    <span class="kw">let </span>path = meta_item
+                        .path()
+                        .into_token_stream()
+                        .to_string()
+                        .replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;&quot;</span>);
+                    cx.error_spanned_by(
+                        meta_item.path(),
+                        <span class="macro">format!</span>(<span class="string">&quot;unknown serde field attribute `{}`&quot;</span>, path),
                     );
                 }
-                <span class="prelude-val">Ok</span>(())
-            }) {
-                cx.syn_error(err);
+
+                Lit(lit) =&gt; {
+                    cx.error_spanned_by(lit, <span class="string">&quot;unexpected literal in serde field attribute&quot;</span>);
+                }
             }
         }
 
@@ -3197,20 +3381,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.name
     }
 
-    <span class="kw">pub fn </span>aliases(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;String&gt; {
+    <span class="kw">pub fn </span>aliases(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;String&gt; {
         <span class="self">self</span>.name.deserialize_aliases()
     }
 
-    <span class="kw">pub fn </span>rename_by_rules(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rules: RenameAllRules) {
+    <span class="kw">pub fn </span>rename_by_rules(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rules: <span class="kw-2">&amp;</span>RenameAllRules) {
         <span class="kw">if </span>!<span class="self">self</span>.name.serialize_renamed {
             <span class="self">self</span>.name.serialize = rules.serialize.apply_to_field(<span class="kw-2">&amp;</span><span class="self">self</span>.name.serialize);
         }
         <span class="kw">if </span>!<span class="self">self</span>.name.deserialize_renamed {
             <span class="self">self</span>.name.deserialize = rules.deserialize.apply_to_field(<span class="kw-2">&amp;</span><span class="self">self</span>.name.deserialize);
         }
-        <span class="self">self</span>.name
-            .deserialize_aliases
-            .insert(<span class="self">self</span>.name.deserialize.clone());
     }
 
     <span class="kw">pub fn </span>skip_serializing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -3268,161 +3449,130 @@
 
 <span class="kw">type </span>SerAndDe&lt;T&gt; = (<span class="prelude-ty">Option</span>&lt;T&gt;, <span class="prelude-ty">Option</span>&lt;T&gt;);
 
-<span class="kw">fn </span>get_ser_and_de&lt;<span class="lifetime">&#39;c</span>, T, F, R&gt;(
-    cx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>Ctxt,
+<span class="kw">fn </span>get_ser_and_de&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, T, F&gt;(
+    cx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>Ctxt,
     attr_name: Symbol,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
+    metas: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Punctuated&lt;syn::NestedMeta, <span class="macro">Token!</span>[,]&gt;,
     f: F,
-) -&gt; syn::Result&lt;(VecAttr&lt;<span class="lifetime">&#39;c</span>, T&gt;, VecAttr&lt;<span class="lifetime">&#39;c</span>, T&gt;)&gt;
+) -&gt; <span class="prelude-ty">Result</span>&lt;(VecAttr&lt;<span class="lifetime">&#39;b</span>, T&gt;, VecAttr&lt;<span class="lifetime">&#39;b</span>, T&gt;), ()&gt;
 <span class="kw">where
-    </span>T: Clone,
-    F: Fn(<span class="kw-2">&amp;</span>Ctxt, Symbol, Symbol, <span class="kw-2">&amp;</span>ParseNestedMeta) -&gt; syn::Result&lt;R&gt;,
-    R: Into&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt;,
+    </span>T: <span class="lifetime">&#39;a</span>,
+    F: Fn(<span class="kw-2">&amp;</span>Ctxt, Symbol, Symbol, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>syn::Lit) -&gt; <span class="prelude-ty">Result</span>&lt;T, ()&gt;,
 {
     <span class="kw">let </span><span class="kw-2">mut </span>ser_meta = VecAttr::none(cx, attr_name);
     <span class="kw">let </span><span class="kw-2">mut </span>de_meta = VecAttr::none(cx, attr_name);
 
-    <span class="kw">let </span>lookahead = meta.input.lookahead1();
-    <span class="kw">if </span>lookahead.peek(<span class="macro">Token!</span>[=]) {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(both) = f(cx, attr_name, attr_name, meta)<span class="question-mark">?</span>.into() {
-            ser_meta.insert(<span class="kw-2">&amp;</span>meta.path, both.clone());
-            de_meta.insert(<span class="kw-2">&amp;</span>meta.path, both);
-        }
-    } <span class="kw">else if </span>lookahead.peek(token::Paren) {
-        meta.parse_nested_meta(|meta| {
-            <span class="kw">if </span>meta.path == SERIALIZE {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = f(cx, attr_name, SERIALIZE, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>.into() {
+    <span class="kw">for </span>meta <span class="kw">in </span>metas {
+        <span class="kw">match </span>meta {
+            Meta(NameValue(meta)) <span class="kw">if </span>meta.path == SERIALIZE =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = f(cx, attr_name, SERIALIZE, <span class="kw-2">&amp;</span>meta.lit) {
                     ser_meta.insert(<span class="kw-2">&amp;</span>meta.path, v);
                 }
-            } <span class="kw">else if </span>meta.path == DESERIALIZE {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = f(cx, attr_name, DESERIALIZE, <span class="kw-2">&amp;</span>meta)<span class="question-mark">?</span>.into() {
+            }
+
+            Meta(NameValue(meta)) <span class="kw">if </span>meta.path == DESERIALIZE =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = f(cx, attr_name, DESERIALIZE, <span class="kw-2">&amp;</span>meta.lit) {
                     de_meta.insert(<span class="kw-2">&amp;</span>meta.path, v);
                 }
-            } <span class="kw">else </span>{
-                <span class="kw">return </span><span class="prelude-val">Err</span>(meta.error(<span class="macro">format_args!</span>(
-                    <span class="string">&quot;malformed {0} attribute, expected `{0}(serialize = ..., deserialize = ...)`&quot;</span>,
-                    attr_name,
-                )));
             }
-            <span class="prelude-val">Ok</span>(())
-        })<span class="question-mark">?</span>;
-    } <span class="kw">else </span>{
-        <span class="kw">return </span><span class="prelude-val">Err</span>(lookahead.error());
+
+            <span class="kw">_ </span>=&gt; {
+                cx.error_spanned_by(
+                    meta,
+                    <span class="macro">format!</span>(
+                        <span class="string">&quot;malformed {0} attribute, expected `{0}(serialize = ..., deserialize = ...)`&quot;</span>,
+                        attr_name
+                    ),
+                );
+                <span class="kw">return </span><span class="prelude-val">Err</span>(());
+            }
+        }
     }
 
     <span class="prelude-val">Ok</span>((ser_meta, de_meta))
 }
 
-<span class="kw">fn </span>get_renames(
+<span class="kw">fn </span>get_renames&lt;<span class="lifetime">&#39;a</span>&gt;(
     cx: <span class="kw-2">&amp;</span>Ctxt,
-    attr_name: Symbol,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;SerAndDe&lt;syn::LitStr&gt;&gt; {
-    <span class="kw">let </span>(ser, de) = get_ser_and_de(cx, attr_name, meta, get_lit_str2)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>((ser.at_most_one(), de.at_most_one()))
+    items: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Punctuated&lt;syn::NestedMeta, <span class="macro">Token!</span>[,]&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;SerAndDe&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>syn::LitStr&gt;, ()&gt; {
+    <span class="kw">let </span>(ser, de) = get_ser_and_de(cx, RENAME, items, get_lit_str2)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>((ser.at_most_one()<span class="question-mark">?</span>, de.at_most_one()<span class="question-mark">?</span>))
 }
 
-<span class="kw">fn </span>get_multiple_renames(
+<span class="kw">fn </span>get_multiple_renames&lt;<span class="lifetime">&#39;a</span>&gt;(
     cx: <span class="kw-2">&amp;</span>Ctxt,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;(<span class="prelude-ty">Option</span>&lt;syn::LitStr&gt;, Vec&lt;syn::LitStr&gt;)&gt; {
-    <span class="kw">let </span>(ser, de) = get_ser_and_de(cx, RENAME, meta, get_lit_str2)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>((ser.at_most_one(), de.get()))
+    items: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Punctuated&lt;syn::NestedMeta, <span class="macro">Token!</span>[,]&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>syn::LitStr&gt;, Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>syn::LitStr&gt;), ()&gt; {
+    <span class="kw">let </span>(ser, de) = get_ser_and_de(cx, RENAME, items, get_lit_str2)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>((ser.at_most_one()<span class="question-mark">?</span>, de.get()))
 }
 
 <span class="kw">fn </span>get_where_predicates(
     cx: <span class="kw-2">&amp;</span>Ctxt,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;SerAndDe&lt;Vec&lt;syn::WherePredicate&gt;&gt;&gt; {
-    <span class="kw">let </span>(ser, de) = get_ser_and_de(cx, BOUND, meta, parse_lit_into_where)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>((ser.at_most_one(), de.at_most_one()))
+    items: <span class="kw-2">&amp;</span>Punctuated&lt;syn::NestedMeta, <span class="macro">Token!</span>[,]&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;SerAndDe&lt;Vec&lt;syn::WherePredicate&gt;&gt;, ()&gt; {
+    <span class="kw">let </span>(ser, de) = get_ser_and_de(cx, BOUND, items, parse_lit_into_where)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>((ser.at_most_one()<span class="question-mark">?</span>, de.at_most_one()<span class="question-mark">?</span>))
 }
 
-<span class="kw">fn </span>get_lit_str(
-    cx: <span class="kw-2">&amp;</span>Ctxt,
-    attr_name: Symbol,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;<span class="prelude-ty">Option</span>&lt;syn::LitStr&gt;&gt; {
-    get_lit_str2(cx, attr_name, attr_name, meta)
+<span class="kw">pub fn </span>get_serde_meta_items(cx: <span class="kw-2">&amp;</span>Ctxt, attr: <span class="kw-2">&amp;</span>syn::Attribute) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;syn::NestedMeta&gt;, ()&gt; {
+    <span class="kw">if </span>attr.path != SERDE {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(Vec::new());
+    }
+
+    <span class="kw">match </span>attr.parse_meta() {
+        <span class="prelude-val">Ok</span>(List(meta)) =&gt; <span class="prelude-val">Ok</span>(meta.nested.into_iter().collect()),
+        <span class="prelude-val">Ok</span>(other) =&gt; {
+            cx.error_spanned_by(other, <span class="string">&quot;expected #[serde(...)]&quot;</span>);
+            <span class="prelude-val">Err</span>(())
+        }
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            cx.syn_error(err);
+            <span class="prelude-val">Err</span>(())
+        }
+    }
 }
 
-<span class="kw">fn </span>get_lit_str2(
+<span class="kw">fn </span>get_lit_str&lt;<span class="lifetime">&#39;a</span>&gt;(cx: <span class="kw-2">&amp;</span>Ctxt, attr_name: Symbol, lit: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>syn::Lit) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>syn::LitStr, ()&gt; {
+    get_lit_str2(cx, attr_name, attr_name, lit)
+}
+
+<span class="kw">fn </span>get_lit_str2&lt;<span class="lifetime">&#39;a</span>&gt;(
     cx: <span class="kw-2">&amp;</span>Ctxt,
     attr_name: Symbol,
     meta_item_name: Symbol,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;<span class="prelude-ty">Option</span>&lt;syn::LitStr&gt;&gt; {
-    <span class="kw">let </span>expr: syn::Expr = meta.value()<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>value = <span class="kw-2">&amp;</span>expr;
-    <span class="kw">while let </span>syn::Expr::Group(e) = value {
-        value = <span class="kw-2">&amp;</span>e.expr;
-    }
-    <span class="kw">if let </span>syn::Expr::Lit(syn::ExprLit {
-        lit: syn::Lit::Str(lit),
-        ..
-    }) = value
-    {
-        <span class="kw">let </span>suffix = lit.suffix();
-        <span class="kw">if </span>!suffix.is_empty() {
-            cx.error_spanned_by(
-                lit,
-                <span class="macro">format!</span>(<span class="string">&quot;unexpected suffix `{}` on string literal&quot;</span>, suffix),
-            );
-        }
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(lit.clone()))
+    lit: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>syn::Lit,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>syn::LitStr, ()&gt; {
+    <span class="kw">if let </span>syn::Lit::Str(lit) = lit {
+        <span class="prelude-val">Ok</span>(lit)
     } <span class="kw">else </span>{
         cx.error_spanned_by(
-            expr,
+            lit,
             <span class="macro">format!</span>(
                 <span class="string">&quot;expected serde {} attribute to be a string: `{} = \&quot;...\&quot;`&quot;</span>,
                 attr_name, meta_item_name
             ),
         );
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+        <span class="prelude-val">Err</span>(())
     }
 }
 
-<span class="kw">fn </span>parse_lit_into_path(
-    cx: <span class="kw-2">&amp;</span>Ctxt,
-    attr_name: Symbol,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;<span class="prelude-ty">Option</span>&lt;syn::Path&gt;&gt; {
-    <span class="kw">let </span>string = <span class="kw">match </span>get_lit_str(cx, attr_name, meta)<span class="question-mark">? </span>{
-        <span class="prelude-val">Some</span>(string) =&gt; string,
-        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-    };
-
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span>string.parse() {
-        <span class="prelude-val">Ok</span>(path) =&gt; <span class="prelude-val">Some</span>(path),
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-            cx.error_spanned_by(
-                <span class="kw-2">&amp;</span>string,
-                <span class="macro">format!</span>(<span class="string">&quot;failed to parse path: {:?}&quot;</span>, string.value()),
-            );
-            <span class="prelude-val">None
-        </span>}
+<span class="kw">fn </span>parse_lit_into_path(cx: <span class="kw-2">&amp;</span>Ctxt, attr_name: Symbol, lit: <span class="kw-2">&amp;</span>syn::Lit) -&gt; <span class="prelude-ty">Result</span>&lt;syn::Path, ()&gt; {
+    <span class="kw">let </span>string = get_lit_str(cx, attr_name, lit)<span class="question-mark">?</span>;
+    parse_lit_str(string).map_err(|<span class="kw">_</span>| {
+        cx.error_spanned_by(lit, <span class="macro">format!</span>(<span class="string">&quot;failed to parse path: {:?}&quot;</span>, string.value()));
     })
 }
 
 <span class="kw">fn </span>parse_lit_into_expr_path(
     cx: <span class="kw-2">&amp;</span>Ctxt,
     attr_name: Symbol,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;<span class="prelude-ty">Option</span>&lt;syn::ExprPath&gt;&gt; {
-    <span class="kw">let </span>string = <span class="kw">match </span>get_lit_str(cx, attr_name, meta)<span class="question-mark">? </span>{
-        <span class="prelude-val">Some</span>(string) =&gt; string,
-        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-    };
-
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span>string.parse() {
-        <span class="prelude-val">Ok</span>(expr) =&gt; <span class="prelude-val">Some</span>(expr),
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-            cx.error_spanned_by(
-                <span class="kw-2">&amp;</span>string,
-                <span class="macro">format!</span>(<span class="string">&quot;failed to parse path: {:?}&quot;</span>, string.value()),
-            );
-            <span class="prelude-val">None
-        </span>}
+    lit: <span class="kw-2">&amp;</span>syn::Lit,
+) -&gt; <span class="prelude-ty">Result</span>&lt;syn::ExprPath, ()&gt; {
+    <span class="kw">let </span>string = get_lit_str(cx, attr_name, lit)<span class="question-mark">?</span>;
+    parse_lit_str(string).map_err(|<span class="kw">_</span>| {
+        cx.error_spanned_by(lit, <span class="macro">format!</span>(<span class="string">&quot;failed to parse path: {:?}&quot;</span>, string.value()));
     })
 }
 
@@ -3430,43 +3580,28 @@
     cx: <span class="kw-2">&amp;</span>Ctxt,
     attr_name: Symbol,
     meta_item_name: Symbol,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;Vec&lt;syn::WherePredicate&gt;&gt; {
-    <span class="kw">let </span>string = <span class="kw">match </span>get_lit_str2(cx, attr_name, meta_item_name, meta)<span class="question-mark">? </span>{
-        <span class="prelude-val">Some</span>(string) =&gt; string,
-        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(Vec::new()),
-    };
+    lit: <span class="kw-2">&amp;</span>syn::Lit,
+) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;syn::WherePredicate&gt;, ()&gt; {
+    <span class="kw">let </span>string = get_lit_str2(cx, attr_name, meta_item_name, lit)<span class="question-mark">?</span>;
+    <span class="kw">if </span>string.value().is_empty() {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(Vec::new());
+    }
 
-    <span class="prelude-val">Ok</span>(
-        <span class="kw">match </span>string.parse_with(Punctuated::&lt;syn::WherePredicate, <span class="macro">Token!</span>[,]&gt;::parse_terminated) {
-            <span class="prelude-val">Ok</span>(predicates) =&gt; Vec::from_iter(predicates),
-            <span class="prelude-val">Err</span>(err) =&gt; {
-                cx.error_spanned_by(string, err);
-                Vec::new()
-            }
-        },
-    )
+    <span class="kw">let </span>where_string = syn::LitStr::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;where {}&quot;</span>, string.value()), string.span());
+
+    parse_lit_str::&lt;syn::WhereClause&gt;(<span class="kw-2">&amp;</span>where_string)
+        .map(|wh| wh.predicates.into_iter().collect())
+        .map_err(|err| cx.error_spanned_by(lit, err))
 }
 
-<span class="kw">fn </span>parse_lit_into_ty(
-    cx: <span class="kw-2">&amp;</span>Ctxt,
-    attr_name: Symbol,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;<span class="prelude-ty">Option</span>&lt;syn::Type&gt;&gt; {
-    <span class="kw">let </span>string = <span class="kw">match </span>get_lit_str(cx, attr_name, meta)<span class="question-mark">? </span>{
-        <span class="prelude-val">Some</span>(string) =&gt; string,
-        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-    };
+<span class="kw">fn </span>parse_lit_into_ty(cx: <span class="kw-2">&amp;</span>Ctxt, attr_name: Symbol, lit: <span class="kw-2">&amp;</span>syn::Lit) -&gt; <span class="prelude-ty">Result</span>&lt;syn::Type, ()&gt; {
+    <span class="kw">let </span>string = get_lit_str(cx, attr_name, lit)<span class="question-mark">?</span>;
 
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span>string.parse() {
-        <span class="prelude-val">Ok</span>(ty) =&gt; <span class="prelude-val">Some</span>(ty),
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-            cx.error_spanned_by(
-                <span class="kw-2">&amp;</span>string,
-                <span class="macro">format!</span>(<span class="string">&quot;failed to parse type: {} = {:?}&quot;</span>, attr_name, string.value()),
-            );
-            <span class="prelude-val">None
-        </span>}
+    parse_lit_str(string).map_err(|<span class="kw">_</span>| {
+        cx.error_spanned_by(
+            lit,
+            <span class="macro">format!</span>(<span class="string">&quot;failed to parse type: {} = {:?}&quot;</span>, attr_name, string.value()),
+        );
     })
 }
 
@@ -3474,41 +3609,38 @@
 // lifetimes separated by `+`.
 </span><span class="kw">fn </span>parse_lit_into_lifetimes(
     cx: <span class="kw-2">&amp;</span>Ctxt,
-    meta: <span class="kw-2">&amp;</span>ParseNestedMeta,
-) -&gt; syn::Result&lt;BTreeSet&lt;syn::Lifetime&gt;&gt; {
-    <span class="kw">let </span>string = <span class="kw">match </span>get_lit_str(cx, BORROW, meta)<span class="question-mark">? </span>{
-        <span class="prelude-val">Some</span>(string) =&gt; string,
-        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(BTreeSet::new()),
-    };
+    attr_name: Symbol,
+    lit: <span class="kw-2">&amp;</span>syn::Lit,
+) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeSet&lt;syn::Lifetime&gt;, ()&gt; {
+    <span class="kw">let </span>string = get_lit_str(cx, attr_name, lit)<span class="question-mark">?</span>;
+    <span class="kw">if </span>string.value().is_empty() {
+        cx.error_spanned_by(lit, <span class="string">&quot;at least one lifetime must be borrowed&quot;</span>);
+        <span class="kw">return </span><span class="prelude-val">Err</span>(());
+    }
 
-    <span class="kw">if let </span><span class="prelude-val">Ok</span>(lifetimes) = string.parse_with(|input: ParseStream| {
+    <span class="kw">struct </span>BorrowedLifetimes(Punctuated&lt;syn::Lifetime, <span class="macro">Token!</span>[+]&gt;);
+
+    <span class="kw">impl </span>Parse <span class="kw">for </span>BorrowedLifetimes {
+        <span class="kw">fn </span>parse(input: ParseStream) -&gt; parse::Result&lt;<span class="self">Self</span>&gt; {
+            Punctuated::parse_separated_nonempty(input).map(BorrowedLifetimes)
+        }
+    }
+
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(BorrowedLifetimes(lifetimes)) = parse_lit_str(string) {
         <span class="kw">let </span><span class="kw-2">mut </span>set = BTreeSet::new();
-        <span class="kw">while </span>!input.is_empty() {
-            <span class="kw">let </span>lifetime: Lifetime = input.parse()<span class="question-mark">?</span>;
+        <span class="kw">for </span>lifetime <span class="kw">in </span>lifetimes {
             <span class="kw">if </span>!set.insert(lifetime.clone()) {
-                cx.error_spanned_by(
-                    <span class="kw-2">&amp;</span>string,
-                    <span class="macro">format!</span>(<span class="string">&quot;duplicate borrowed lifetime `{}`&quot;</span>, lifetime),
-                );
+                cx.error_spanned_by(lit, <span class="macro">format!</span>(<span class="string">&quot;duplicate borrowed lifetime `{}`&quot;</span>, lifetime));
             }
-            <span class="kw">if </span>input.is_empty() {
-                <span class="kw">break</span>;
-            }
-            input.parse::&lt;<span class="macro">Token!</span>[+]&gt;()<span class="question-mark">?</span>;
         }
-        <span class="prelude-val">Ok</span>(set)
-    }) {
-        <span class="kw">if </span>lifetimes.is_empty() {
-            cx.error_spanned_by(string, <span class="string">&quot;at least one lifetime must be borrowed&quot;</span>);
-        }
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(lifetimes);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(set);
     }
 
     cx.error_spanned_by(
-        <span class="kw-2">&amp;</span>string,
+        lit,
         <span class="macro">format!</span>(<span class="string">&quot;failed to parse borrowed lifetimes: {:?}&quot;</span>, string.value()),
     );
-    <span class="prelude-val">Ok</span>(BTreeSet::new())
+    <span class="prelude-val">Err</span>(())
 }
 
 <span class="kw">fn </span>is_implicitly_borrowed(ty: <span class="kw-2">&amp;</span>syn::Type) -&gt; bool {
@@ -3662,8 +3794,10 @@
     <span class="kw">let </span><span class="kw-2">mut </span>lifetimes = BTreeSet::new();
     collect_lifetimes(<span class="kw-2">&amp;</span>field.ty, <span class="kw-2">&amp;mut </span>lifetimes);
     <span class="kw">if </span>lifetimes.is_empty() {
-        <span class="kw">let </span>msg = <span class="macro">format!</span>(<span class="string">&quot;field `{}` has no lifetimes to borrow&quot;</span>, name);
-        cx.error_spanned_by(field, msg);
+        cx.error_spanned_by(
+            field,
+            <span class="macro">format!</span>(<span class="string">&quot;field `{}` has no lifetimes to borrow&quot;</span>, name),
+        );
         <span class="prelude-val">Err</span>(())
     } <span class="kw">else </span>{
         <span class="prelude-val">Ok</span>(lifetimes)
@@ -3704,10 +3838,11 @@
                             syn::GenericArgument::Type(ty) =&gt; {
                                 collect_lifetimes(ty, out);
                             }
-                            syn::GenericArgument::AssocType(binding) =&gt; {
+                            syn::GenericArgument::Binding(binding) =&gt; {
                                 collect_lifetimes(<span class="kw-2">&amp;</span>binding.ty, out);
                             }
-                            <span class="kw">_ </span>=&gt; {}
+                            syn::GenericArgument::Constraint(<span class="kw">_</span>)
+                            | syn::GenericArgument::Const(<span class="kw">_</span>) =&gt; {}
                         }
                     }
                 }
@@ -3753,5 +3888,18 @@
             <span class="kw">_ </span>=&gt; {}
         }
     }
+}
+
+<span class="kw">fn </span>parse_lit_str&lt;T&gt;(s: <span class="kw-2">&amp;</span>syn::LitStr) -&gt; parse::Result&lt;T&gt;
+<span class="kw">where
+    </span>T: Parse,
+{
+    <span class="kw">let </span>tokens = spanned_tokens(s)<span class="question-mark">?</span>;
+    syn::parse2(tokens)
+}
+
+<span class="kw">fn </span>spanned_tokens(s: <span class="kw-2">&amp;</span>syn::LitStr) -&gt; parse::Result&lt;TokenStream&gt; {
+    <span class="kw">let </span>stream = syn::parse_str(<span class="kw-2">&amp;</span>s.value())<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(respan(stream, s.span()))
 }
 </code></pre></div></section></main></body></html>

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde-1.0.188/src/ser/impls.rs`."><title>impls.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../serde/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde-1.0.149/src/ser/impls.rs`."><title>impls.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../serde/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -954,51 +954,9 @@
 <a href="#954" id="954">954</a>
 <a href="#955" id="955">955</a>
 <a href="#956" id="956">956</a>
-<a href="#957" id="957">957</a>
-<a href="#958" id="958">958</a>
-<a href="#959" id="959">959</a>
-<a href="#960" id="960">960</a>
-<a href="#961" id="961">961</a>
-<a href="#962" id="962">962</a>
-<a href="#963" id="963">963</a>
-<a href="#964" id="964">964</a>
-<a href="#965" id="965">965</a>
-<a href="#966" id="966">966</a>
-<a href="#967" id="967">967</a>
-<a href="#968" id="968">968</a>
-<a href="#969" id="969">969</a>
-<a href="#970" id="970">970</a>
-<a href="#971" id="971">971</a>
-<a href="#972" id="972">972</a>
-<a href="#973" id="973">973</a>
-<a href="#974" id="974">974</a>
-<a href="#975" id="975">975</a>
-<a href="#976" id="976">976</a>
-<a href="#977" id="977">977</a>
-<a href="#978" id="978">978</a>
-<a href="#979" id="979">979</a>
-<a href="#980" id="980">980</a>
-<a href="#981" id="981">981</a>
-<a href="#982" id="982">982</a>
-<a href="#983" id="983">983</a>
-<a href="#984" id="984">984</a>
-<a href="#985" id="985">985</a>
-<a href="#986" id="986">986</a>
-<a href="#987" id="987">987</a>
-<a href="#988" id="988">988</a>
-<a href="#989" id="989">989</a>
-<a href="#990" id="990">990</a>
-<a href="#991" id="991">991</a>
-<a href="#992" id="992">992</a>
-<a href="#993" id="993">993</a>
-<a href="#994" id="994">994</a>
-<a href="#995" id="995">995</a>
-<a href="#996" id="996">996</a>
-<a href="#997" id="997">997</a>
-<a href="#998" id="998">998</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::lib::<span class="kw-2">*</span>;
+</pre></div><pre class="rust"><code><span class="kw">use </span>lib::<span class="kw-2">*</span>;
 
-<span class="kw">use </span><span class="kw">crate</span>::ser::{Error, Serialize, SerializeTuple, Serializer};
+<span class="kw">use </span>ser::{Error, Serialize, SerializeTuple, Serializer};
 
 <span class="comment">////////////////////////////////////////////////////////////////////////////////
 
@@ -1022,16 +980,19 @@
 <span class="macro">primitive_impl!</span>(i16, serialize_i16);
 <span class="macro">primitive_impl!</span>(i32, serialize_i32);
 <span class="macro">primitive_impl!</span>(i64, serialize_i64);
-<span class="macro">primitive_impl!</span>(i128, serialize_i128);
 <span class="macro">primitive_impl!</span>(usize, serialize_u64 <span class="kw">as </span>u64);
 <span class="macro">primitive_impl!</span>(u8, serialize_u8);
 <span class="macro">primitive_impl!</span>(u16, serialize_u16);
 <span class="macro">primitive_impl!</span>(u32, serialize_u32);
 <span class="macro">primitive_impl!</span>(u64, serialize_u64);
-<span class="macro">primitive_impl!</span>(u128, serialize_u128);
 <span class="macro">primitive_impl!</span>(f32, serialize_f32);
 <span class="macro">primitive_impl!</span>(f64, serialize_f64);
 <span class="macro">primitive_impl!</span>(char, serialize_char);
+
+<span class="macro">serde_if_integer128! </span>{
+    <span class="macro">primitive_impl!</span>(i128, serialize_i128);
+    <span class="macro">primitive_impl!</span>(u128, serialize_u128);
+}
 
 <span class="comment">////////////////////////////////////////////////////////////////////////////////
 
@@ -1067,7 +1028,7 @@
 
 <span class="comment">////////////////////////////////////////////////////////////////////////////////
 
-</span><span class="attr">#[cfg(any(feature = <span class="string">&quot;std&quot;</span>, not(no_core_cstr)))]
+</span><span class="attr">#[cfg(feature = <span class="string">&quot;std&quot;</span>)]
 </span><span class="kw">impl </span>Serialize <span class="kw">for </span>CStr {
     <span class="attr">#[inline]
     </span><span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
@@ -1078,7 +1039,7 @@
     }
 }
 
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;std&quot;</span>, all(not(no_core_cstr), feature = <span class="string">&quot;alloc&quot;</span>)))]
+<span class="attr">#[cfg(feature = <span class="string">&quot;std&quot;</span>)]
 </span><span class="kw">impl </span>Serialize <span class="kw">for </span>CString {
     <span class="attr">#[inline]
     </span><span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
@@ -1128,7 +1089,7 @@
     <span class="kw">where
         </span>S: Serializer,
     {
-        <span class="macro">tri!</span>(serializer.serialize_tuple(<span class="number">0</span>)).end()
+        <span class="macro">try!</span>(serializer.serialize_tuple(<span class="number">0</span>)).end()
     }
 }
 
@@ -1144,9 +1105,9 @@
                 <span class="kw">where
                     </span>S: Serializer,
                 {
-                    <span class="kw">let </span><span class="kw-2">mut </span>seq = <span class="macro">tri!</span>(serializer.serialize_tuple(<span class="macro-nonterminal">$len</span>));
+                    <span class="kw">let </span><span class="kw-2">mut </span>seq = <span class="macro">try!</span>(serializer.serialize_tuple(<span class="macro-nonterminal">$len</span>));
                     <span class="kw">for </span>e <span class="kw">in </span><span class="self">self </span>{
-                        <span class="macro">tri!</span>(seq.serialize_element(e));
+                        <span class="macro">try!</span>(seq.serialize_element(e));
                     }
                     seq.end()
                 }
@@ -1179,7 +1140,7 @@
 
 <span class="attr">#[cfg(all(any(feature = <span class="string">&quot;std&quot;</span>, feature = <span class="string">&quot;alloc&quot;</span>), not(no_relaxed_trait_bounds)))]
 </span><span class="macro">macro_rules! </span>seq_impl {
-    (<span class="macro-nonterminal">$ty</span>:ident &lt;T $(: <span class="macro-nonterminal">$tbound1</span>:ident $(+ <span class="macro-nonterminal">$tbound2</span>:ident)<span class="kw-2">*</span>)* $(, <span class="macro-nonterminal">$typaram</span>:ident : <span class="macro-nonterminal">$bound</span>:ident)<span class="kw-2">*</span>&gt;) =&gt; {
+    (<span class="macro-nonterminal">$ty</span>:ident &lt; T $(: <span class="macro-nonterminal">$tbound1</span>:ident $(+ <span class="macro-nonterminal">$tbound2</span>:ident)<span class="kw-2">*</span>)* $(, <span class="macro-nonterminal">$typaram</span>:ident : <span class="macro-nonterminal">$bound</span>:ident)* &gt;) =&gt; {
         <span class="kw">impl</span>&lt;T $(, <span class="macro-nonterminal">$typaram</span>)<span class="kw-2">*</span>&gt; Serialize <span class="kw">for </span><span class="macro-nonterminal">$ty</span>&lt;T $(, <span class="macro-nonterminal">$typaram</span>)<span class="kw-2">*</span>&gt;
         <span class="kw">where
             </span>T: Serialize,
@@ -1197,7 +1158,7 @@
 
 <span class="attr">#[cfg(all(any(feature = <span class="string">&quot;std&quot;</span>, feature = <span class="string">&quot;alloc&quot;</span>), no_relaxed_trait_bounds))]
 </span><span class="macro">macro_rules! </span>seq_impl {
-    (<span class="macro-nonterminal">$ty</span>:ident &lt;T $(: <span class="macro-nonterminal">$tbound1</span>:ident $(+ <span class="macro-nonterminal">$tbound2</span>:ident)<span class="kw-2">*</span>)* $(, <span class="macro-nonterminal">$typaram</span>:ident : <span class="macro-nonterminal">$bound</span>:ident)<span class="kw-2">*</span>&gt;) =&gt; {
+    (<span class="macro-nonterminal">$ty</span>:ident &lt; T $(: <span class="macro-nonterminal">$tbound1</span>:ident $(+ <span class="macro-nonterminal">$tbound2</span>:ident)<span class="kw-2">*</span>)* $(, <span class="macro-nonterminal">$typaram</span>:ident : <span class="macro-nonterminal">$bound</span>:ident)* &gt;) =&gt; {
         <span class="kw">impl</span>&lt;T $(, <span class="macro-nonterminal">$typaram</span>)<span class="kw-2">*</span>&gt; Serialize <span class="kw">for </span><span class="macro-nonterminal">$ty</span>&lt;T $(, <span class="macro-nonterminal">$typaram</span>)<span class="kw-2">*</span>&gt;
         <span class="kw">where
             </span>T: Serialize $(+ <span class="macro-nonterminal">$tbound1 </span>$(+ <span class="macro-nonterminal">$tbound2</span>)<span class="kw-2">*</span>)<span class="kw-2">*</span>,
@@ -1243,32 +1204,16 @@
         </span>S: Serializer,
     {
         <span class="kw">use </span><span class="kw">super</span>::SerializeStruct;
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">tri!</span>(serializer.serialize_struct(<span class="string">&quot;Range&quot;</span>, <span class="number">2</span>));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;start&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.start));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;end&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.end));
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">try!</span>(serializer.serialize_struct(<span class="string">&quot;Range&quot;</span>, <span class="number">2</span>));
+        <span class="macro">try!</span>(state.serialize_field(<span class="string">&quot;start&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.start));
+        <span class="macro">try!</span>(state.serialize_field(<span class="string">&quot;end&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.end));
         state.end()
     }
 }
 
 <span class="comment">////////////////////////////////////////////////////////////////////////////////
 
-</span><span class="kw">impl</span>&lt;Idx&gt; Serialize <span class="kw">for </span>RangeFrom&lt;Idx&gt;
-<span class="kw">where
-    </span>Idx: Serialize,
-{
-    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-    <span class="kw">where
-        </span>S: Serializer,
-    {
-        <span class="kw">use </span><span class="kw">super</span>::SerializeStruct;
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">tri!</span>(serializer.serialize_struct(<span class="string">&quot;RangeFrom&quot;</span>, <span class="number">1</span>));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;start&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.start));
-        state.end()
-    }
-}
-
-<span class="comment">////////////////////////////////////////////////////////////////////////////////
-
+</span><span class="attr">#[cfg(not(no_range_inclusive))]
 </span><span class="kw">impl</span>&lt;Idx&gt; Serialize <span class="kw">for </span>RangeInclusive&lt;Idx&gt;
 <span class="kw">where
     </span>Idx: Serialize,
@@ -1278,32 +1223,16 @@
         </span>S: Serializer,
     {
         <span class="kw">use </span><span class="kw">super</span>::SerializeStruct;
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">tri!</span>(serializer.serialize_struct(<span class="string">&quot;RangeInclusive&quot;</span>, <span class="number">2</span>));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;start&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.start()));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;end&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.end()));
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">try!</span>(serializer.serialize_struct(<span class="string">&quot;RangeInclusive&quot;</span>, <span class="number">2</span>));
+        <span class="macro">try!</span>(state.serialize_field(<span class="string">&quot;start&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.start()));
+        <span class="macro">try!</span>(state.serialize_field(<span class="string">&quot;end&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.end()));
         state.end()
     }
 }
 
 <span class="comment">////////////////////////////////////////////////////////////////////////////////
 
-</span><span class="kw">impl</span>&lt;Idx&gt; Serialize <span class="kw">for </span>RangeTo&lt;Idx&gt;
-<span class="kw">where
-    </span>Idx: Serialize,
-{
-    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-    <span class="kw">where
-        </span>S: Serializer,
-    {
-        <span class="kw">use </span><span class="kw">super</span>::SerializeStruct;
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">tri!</span>(serializer.serialize_struct(<span class="string">&quot;RangeTo&quot;</span>, <span class="number">1</span>));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;end&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.end));
-        state.end()
-    }
-}
-
-<span class="comment">////////////////////////////////////////////////////////////////////////////////
-
+</span><span class="attr">#[cfg(any(not(no_ops_bound), all(feature = <span class="string">&quot;std&quot;</span>, not(no_collections_bound))))]
 </span><span class="kw">impl</span>&lt;T&gt; Serialize <span class="kw">for </span>Bound&lt;T&gt;
 <span class="kw">where
     </span>T: Serialize,
@@ -1360,9 +1289,9 @@
                 <span class="kw">where
                     </span>S: Serializer,
                 {
-                    <span class="kw">let </span><span class="kw-2">mut </span>tuple = <span class="macro">tri!</span>(serializer.serialize_tuple(<span class="macro-nonterminal">$len</span>));
+                    <span class="kw">let </span><span class="kw-2">mut </span>tuple = <span class="macro">try!</span>(serializer.serialize_tuple(<span class="macro-nonterminal">$len</span>));
                     $(
-                        <span class="macro">tri!</span>(tuple.serialize_element(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="macro-nonterminal">$n</span>));
+                        <span class="macro">try!</span>(tuple.serialize_element(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="macro-nonterminal">$n</span>));
                     )+
                     tuple.end()
                 }
@@ -1392,28 +1321,9 @@
 
 <span class="comment">////////////////////////////////////////////////////////////////////////////////
 
-</span><span class="attr">#[cfg(all(any(feature = <span class="string">&quot;std&quot;</span>, feature = <span class="string">&quot;alloc&quot;</span>), not(no_relaxed_trait_bounds)))]
+</span><span class="attr">#[cfg(any(feature = <span class="string">&quot;std&quot;</span>, feature = <span class="string">&quot;alloc&quot;</span>))]
 </span><span class="macro">macro_rules! </span>map_impl {
-    (<span class="macro-nonterminal">$ty</span>:ident &lt;K $(: <span class="macro-nonterminal">$kbound1</span>:ident $(+ <span class="macro-nonterminal">$kbound2</span>:ident)<span class="kw-2">*</span>)<span class="kw-2">*</span>, V $(, <span class="macro-nonterminal">$typaram</span>:ident : <span class="macro-nonterminal">$bound</span>:ident)<span class="kw-2">*</span>&gt;) =&gt; {
-        <span class="kw">impl</span>&lt;K, V $(, <span class="macro-nonterminal">$typaram</span>)<span class="kw-2">*</span>&gt; Serialize <span class="kw">for </span><span class="macro-nonterminal">$ty</span>&lt;K, V $(, <span class="macro-nonterminal">$typaram</span>)<span class="kw-2">*</span>&gt;
-        <span class="kw">where
-            </span>K: Serialize,
-            V: Serialize,
-        {
-            <span class="attr">#[inline]
-            </span><span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-            <span class="kw">where
-                </span>S: Serializer,
-            {
-                serializer.collect_map(<span class="self">self</span>)
-            }
-        }
-    }
-}
-
-<span class="attr">#[cfg(all(any(feature = <span class="string">&quot;std&quot;</span>, feature = <span class="string">&quot;alloc&quot;</span>), no_relaxed_trait_bounds))]
-</span><span class="macro">macro_rules! </span>map_impl {
-    (<span class="macro-nonterminal">$ty</span>:ident &lt;K $(: <span class="macro-nonterminal">$kbound1</span>:ident $(+ <span class="macro-nonterminal">$kbound2</span>:ident)<span class="kw-2">*</span>)<span class="kw-2">*</span>, V $(, <span class="macro-nonterminal">$typaram</span>:ident : <span class="macro-nonterminal">$bound</span>:ident)<span class="kw-2">*</span>&gt;) =&gt; {
+    (<span class="macro-nonterminal">$ty</span>:ident &lt; K $(: <span class="macro-nonterminal">$kbound1</span>:ident $(+ <span class="macro-nonterminal">$kbound2</span>:ident)<span class="kw-2">*</span>)<span class="kw-2">*</span>, V $(, <span class="macro-nonterminal">$typaram</span>:ident : <span class="macro-nonterminal">$bound</span>:ident)* &gt;) =&gt; {
         <span class="kw">impl</span>&lt;K, V $(, <span class="macro-nonterminal">$typaram</span>)<span class="kw-2">*</span>&gt; Serialize <span class="kw">for </span><span class="macro-nonterminal">$ty</span>&lt;K, V $(, <span class="macro-nonterminal">$typaram</span>)<span class="kw-2">*</span>&gt;
         <span class="kw">where
             </span>K: Serialize $(+ <span class="macro-nonterminal">$kbound1 </span>$(+ <span class="macro-nonterminal">$kbound2</span>)<span class="kw-2">*</span>)<span class="kw-2">*</span>,
@@ -1529,9 +1439,10 @@
 <span class="comment">////////////////////////////////////////////////////////////////////////////////
 
 </span><span class="macro">macro_rules! </span>nonzero_integers {
-    ($(<span class="macro-nonterminal">$T</span>:ident,)+) =&gt; {
+    ( $( <span class="macro-nonterminal">$T</span>: ident, )+ ) =&gt; {
         $(
-            <span class="kw">impl </span>Serialize <span class="kw">for </span>num::<span class="macro-nonterminal">$T </span>{
+            <span class="attr">#[cfg(not(no_num_nonzero))]
+            </span><span class="kw">impl </span>Serialize <span class="kw">for </span>num::<span class="macro-nonterminal">$T </span>{
                 <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
                 <span class="kw">where
                     </span>S: Serializer,
@@ -1548,7 +1459,6 @@
     NonZeroU16,
     NonZeroU32,
     NonZeroU64,
-    NonZeroU128,
     NonZeroUsize,
 }
 
@@ -1558,8 +1468,20 @@
     NonZeroI16,
     NonZeroI32,
     NonZeroI64,
-    NonZeroI128,
     NonZeroIsize,
+}
+
+<span class="comment">// Currently 128-bit integers do not work on Emscripten targets so we need an
+// additional `#[cfg]`
+</span><span class="macro">serde_if_integer128! </span>{
+    <span class="macro">nonzero_integers! </span>{
+        NonZeroU128,
+    }
+
+    <span class="attr">#[cfg(not(no_num_nonzero_signed))]
+    </span><span class="macro">nonzero_integers! </span>{
+        NonZeroI128,
+    }
 }
 
 <span class="kw">impl</span>&lt;T&gt; Serialize <span class="kw">for </span>Cell&lt;T&gt;
@@ -1643,15 +1565,16 @@
 
 <span class="comment">////////////////////////////////////////////////////////////////////////////////
 
+</span><span class="attr">#[cfg(any(feature = <span class="string">&quot;std&quot;</span>, not(no_core_duration)))]
 </span><span class="kw">impl </span>Serialize <span class="kw">for </span>Duration {
     <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
     <span class="kw">where
         </span>S: Serializer,
     {
         <span class="kw">use </span><span class="kw">super</span>::SerializeStruct;
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">tri!</span>(serializer.serialize_struct(<span class="string">&quot;Duration&quot;</span>, <span class="number">2</span>));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;secs&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.as_secs()));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;nanos&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.subsec_nanos()));
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">try!</span>(serializer.serialize_struct(<span class="string">&quot;Duration&quot;</span>, <span class="number">2</span>));
+        <span class="macro">try!</span>(state.serialize_field(<span class="string">&quot;secs&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.as_secs()));
+        <span class="macro">try!</span>(state.serialize_field(<span class="string">&quot;nanos&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.subsec_nanos()));
         state.end()
     }
 }
@@ -1669,9 +1592,9 @@
             <span class="prelude-val">Ok</span>(duration_since_epoch) =&gt; duration_since_epoch,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(S::Error::custom(<span class="string">&quot;SystemTime must be later than UNIX_EPOCH&quot;</span>)),
         };
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">tri!</span>(serializer.serialize_struct(<span class="string">&quot;SystemTime&quot;</span>, <span class="number">2</span>));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;secs_since_epoch&quot;</span>, <span class="kw-2">&amp;</span>duration_since_epoch.as_secs()));
-        <span class="macro">tri!</span>(state.serialize_field(<span class="string">&quot;nanos_since_epoch&quot;</span>, <span class="kw-2">&amp;</span>duration_since_epoch.subsec_nanos()));
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">try!</span>(serializer.serialize_struct(<span class="string">&quot;SystemTime&quot;</span>, <span class="number">2</span>));
+        <span class="macro">try!</span>(state.serialize_field(<span class="string">&quot;secs_since_epoch&quot;</span>, <span class="kw-2">&amp;</span>duration_since_epoch.as_secs()));
+        <span class="macro">try!</span>(state.serialize_field(<span class="string">&quot;nanos_since_epoch&quot;</span>, <span class="kw-2">&amp;</span>duration_since_epoch.subsec_nanos()));
         state.end()
     }
 }
@@ -1727,7 +1650,7 @@
 }
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;std&quot;</span>)]
-</span><span class="kw">const </span>DEC_DIGITS_LUT: <span class="kw-2">&amp;</span>[u8] = <span class="string">b&quot;\
+</span><span class="kw">const </span>DEC_DIGITS_LUT: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[u8] = <span class="string">b&quot;\
       0001020304050607080910111213141516171819\
       2021222324252627282930313233343536373839\
       4041424344454647484950515253545556575859\
@@ -1943,7 +1866,8 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T&gt; Serialize <span class="kw">for </span>Reverse&lt;T&gt;
+<span class="attr">#[cfg(not(no_core_reverse))]
+</span><span class="kw">impl</span>&lt;T&gt; Serialize <span class="kw">for </span>Reverse&lt;T&gt;
 <span class="kw">where
     </span>T: Serialize,
 {
@@ -1960,10 +1884,9 @@
 
 </span><span class="attr">#[cfg(all(feature = <span class="string">&quot;std&quot;</span>, not(no_std_atomic)))]
 </span><span class="macro">macro_rules! </span>atomic_impl {
-    ($(<span class="macro-nonterminal">$ty</span>:ident <span class="macro-nonterminal">$size</span>:expr)<span class="kw-2">*</span>) =&gt; {
+    ($(<span class="macro-nonterminal">$ty</span>:ident)<span class="kw-2">*</span>) =&gt; {
         $(
-            <span class="attr">#[cfg(any(no_target_has_atomic, target_has_atomic = <span class="macro-nonterminal">$size</span>))]
-            </span><span class="kw">impl </span>Serialize <span class="kw">for </span><span class="macro-nonterminal">$ty </span>{
+            <span class="kw">impl </span>Serialize <span class="kw">for </span><span class="macro-nonterminal">$ty </span>{
                 <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
                 <span class="kw">where
                     </span>S: Serializer,
@@ -1978,20 +1901,13 @@
 
 <span class="attr">#[cfg(all(feature = <span class="string">&quot;std&quot;</span>, not(no_std_atomic)))]
 </span><span class="macro">atomic_impl! </span>{
-    AtomicBool <span class="string">&quot;8&quot;
-    </span>AtomicI8 <span class="string">&quot;8&quot;
-    </span>AtomicI16 <span class="string">&quot;16&quot;
-    </span>AtomicI32 <span class="string">&quot;32&quot;
-    </span>AtomicIsize <span class="string">&quot;ptr&quot;
-    </span>AtomicU8 <span class="string">&quot;8&quot;
-    </span>AtomicU16 <span class="string">&quot;16&quot;
-    </span>AtomicU32 <span class="string">&quot;32&quot;
-    </span>AtomicUsize <span class="string">&quot;ptr&quot;
-</span>}
+    AtomicBool
+    AtomicI8 AtomicI16 AtomicI32 AtomicIsize
+    AtomicU8 AtomicU16 AtomicU32 AtomicUsize
+}
 
 <span class="attr">#[cfg(all(feature = <span class="string">&quot;std&quot;</span>, not(no_std_atomic64)))]
 </span><span class="macro">atomic_impl! </span>{
-    AtomicI64 <span class="string">&quot;64&quot;
-    </span>AtomicU64 <span class="string">&quot;64&quot;
-</span>}
+    AtomicI64 AtomicU64
+}
 </code></pre></div></section></main></body></html>

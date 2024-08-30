@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["RustEdition"],"struct":["BookConfig","BuildConfig","Code","Config","Fold","HtmlConfig","Playground","Print","RustConfig","Search"]};
+window.SIDEBAR_ITEMS = {"enum":["RustEdition"],"struct":["BookConfig","BuildConfig","Config","Fold","HtmlConfig","Playground","Print","RustConfig","Search"]};

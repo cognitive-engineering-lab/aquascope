@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde-1.0.188/src/ser/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../serde/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde-1.0.149/src/ser/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../serde/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1950,6 +1950,40 @@
 <a href="#1950" id="1950">1950</a>
 <a href="#1951" id="1951">1951</a>
 <a href="#1952" id="1952">1952</a>
+<a href="#1953" id="1953">1953</a>
+<a href="#1954" id="1954">1954</a>
+<a href="#1955" id="1955">1955</a>
+<a href="#1956" id="1956">1956</a>
+<a href="#1957" id="1957">1957</a>
+<a href="#1958" id="1958">1958</a>
+<a href="#1959" id="1959">1959</a>
+<a href="#1960" id="1960">1960</a>
+<a href="#1961" id="1961">1961</a>
+<a href="#1962" id="1962">1962</a>
+<a href="#1963" id="1963">1963</a>
+<a href="#1964" id="1964">1964</a>
+<a href="#1965" id="1965">1965</a>
+<a href="#1966" id="1966">1966</a>
+<a href="#1967" id="1967">1967</a>
+<a href="#1968" id="1968">1968</a>
+<a href="#1969" id="1969">1969</a>
+<a href="#1970" id="1970">1970</a>
+<a href="#1971" id="1971">1971</a>
+<a href="#1972" id="1972">1972</a>
+<a href="#1973" id="1973">1973</a>
+<a href="#1974" id="1974">1974</a>
+<a href="#1975" id="1975">1975</a>
+<a href="#1976" id="1976">1976</a>
+<a href="#1977" id="1977">1977</a>
+<a href="#1978" id="1978">1978</a>
+<a href="#1979" id="1979">1979</a>
+<a href="#1980" id="1980">1980</a>
+<a href="#1981" id="1981">1981</a>
+<a href="#1982" id="1982">1982</a>
+<a href="#1983" id="1983">1983</a>
+<a href="#1984" id="1984">1984</a>
+<a href="#1985" id="1985">1985</a>
+<a href="#1986" id="1986">1986</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Generic data structure serialization framework.
 //!
 //! The two most important traits in this module are [`Serialize`] and
@@ -2059,7 +2093,7 @@
 //! [derive section of the manual]: https://serde.rs/derive.html
 //! [data formats]: https://serde.rs/#data-formats
 
-</span><span class="kw">use </span><span class="kw">crate</span>::lib::<span class="kw-2">*</span>;
+</span><span class="kw">use </span>lib::<span class="kw-2">*</span>;
 
 <span class="kw">mod </span>fmt;
 <span class="kw">mod </span>impls;
@@ -2067,15 +2101,12 @@
 
 <span class="kw">pub use </span><span class="self">self</span>::impossible::Impossible;
 
-<span class="attr">#[cfg(not(any(feature = <span class="string">&quot;std&quot;</span>, feature = <span class="string">&quot;unstable&quot;</span>)))]
-#[doc(no_inline)]
-</span><span class="kw">pub use </span><span class="kw">crate</span>::std_error::Error <span class="kw">as </span>StdError;
-<span class="attr">#[cfg(all(feature = <span class="string">&quot;unstable&quot;</span>, not(feature = <span class="string">&quot;std&quot;</span>)))]
-#[doc(no_inline)]
-</span><span class="kw">pub use </span>core::error::Error <span class="kw">as </span>StdError;
 <span class="attr">#[cfg(feature = <span class="string">&quot;std&quot;</span>)]
 #[doc(no_inline)]
 </span><span class="kw">pub use </span>std::error::Error <span class="kw">as </span>StdError;
+<span class="attr">#[cfg(not(feature = <span class="string">&quot;std&quot;</span>))]
+#[doc(no_inline)]
+</span><span class="kw">pub use </span>std_error::Error <span class="kw">as </span>StdError;
 
 <span class="comment">////////////////////////////////////////////////////////////////////////////////
 
@@ -2101,7 +2132,7 @@
             /// For example, a filesystem [`Path`] may refuse to serialize
             /// itself if it contains invalid UTF-8 data.
             ///
-            /// ```edition2021
+            /// ```edition2018
             /// # struct Path;
             /// #
             /// # impl Path {
@@ -2146,8 +2177,8 @@
 /// by Serde.
 ///
 /// Serde provides `Serialize` implementations for many Rust primitive and
-/// standard library types. The complete list is [here][crate::ser]. All of
-/// these can be serialized using Serde out of the box.
+/// standard library types. The complete list is [here][ser]. All of these can
+/// be serialized using Serde out of the box.
 ///
 /// Additionally, Serde provides a procedural macro called [`serde_derive`] to
 /// automatically generate `Serialize` implementations for structs and enums in
@@ -2167,13 +2198,14 @@
 /// [`linked-hash-map`]: https://crates.io/crates/linked-hash-map
 /// [`serde_derive`]: https://crates.io/crates/serde_derive
 /// [derive section of the manual]: https://serde.rs/derive.html
+/// [ser]: https://docs.serde.rs/serde/ser/index.html
 </span><span class="kw">pub trait </span>Serialize {
     <span class="doccomment">/// Serialize this value into the given Serde serializer.
     ///
     /// See the [Implementing `Serialize`] section of the manual for more
     /// information about how to implement this method.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::ser::{Serialize, SerializeStruct, Serializer};
     ///
     /// struct Person {
@@ -2340,7 +2372,7 @@
 
     <span class="doccomment">/// Serialize a `bool` value.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2362,7 +2394,7 @@
     /// reasonable implementation would be to cast the value to `i64` and
     /// forward to `serialize_i64`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2384,7 +2416,7 @@
     /// reasonable implementation would be to cast the value to `i64` and
     /// forward to `serialize_i64`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2406,7 +2438,7 @@
     /// reasonable implementation would be to cast the value to `i64` and
     /// forward to `serialize_i64`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2424,7 +2456,7 @@
 
     <span class="doccomment">/// Serialize an `i64` value.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2440,27 +2472,30 @@
     /// ```
     </span><span class="kw">fn </span>serialize_i64(<span class="self">self</span>, v: i64) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Ok, <span class="self">Self</span>::Error&gt;;
 
-    <span class="doccomment">/// Serialize an `i128` value.
-    ///
-    /// ```edition2021
-    /// # use serde::Serializer;
-    /// #
-    /// # serde::__private_serialize!();
-    /// #
-    /// impl Serialize for i128 {
-    ///     fn serialize&lt;S&gt;(&amp;self, serializer: S) -&gt; Result&lt;S::Ok, S::Error&gt;
-    ///     where
-    ///         S: Serializer,
-    ///     {
-    ///         serializer.serialize_i128(*self)
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// The default behavior unconditionally returns an error.
-    </span><span class="kw">fn </span>serialize_i128(<span class="self">self</span>, v: i128) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Ok, <span class="self">Self</span>::Error&gt; {
-        <span class="kw">let _ </span>= v;
-        <span class="prelude-val">Err</span>(Error::custom(<span class="string">&quot;i128 is not supported&quot;</span>))
+    <span class="macro">serde_if_integer128! </span>{
+        <span class="doccomment">/// Serialize an `i128` value.
+        ///
+        /// ```edition2018
+        /// # use serde::Serializer;
+        /// #
+        /// # serde::__private_serialize!();
+        /// #
+        /// impl Serialize for i128 {
+        ///     fn serialize&lt;S&gt;(&amp;self, serializer: S) -&gt; Result&lt;S::Ok, S::Error&gt;
+        ///     where
+        ///         S: Serializer,
+        ///     {
+        ///         serializer.serialize_i128(*self)
+        ///     }
+        /// }
+        /// ```
+        ///
+        /// This method is available only on Rust compiler versions &gt;=1.26. The
+        /// default behavior unconditionally returns an error.
+        </span><span class="kw">fn </span>serialize_i128(<span class="self">self</span>, v: i128) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Ok, <span class="self">Self</span>::Error&gt; {
+            <span class="kw">let _ </span>= v;
+            <span class="prelude-val">Err</span>(Error::custom(<span class="string">&quot;i128 is not supported&quot;</span>))
+        }
     }
 
     <span class="doccomment">/// Serialize a `u8` value.
@@ -2469,7 +2504,7 @@
     /// reasonable implementation would be to cast the value to `u64` and
     /// forward to `serialize_u64`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2491,7 +2526,7 @@
     /// reasonable implementation would be to cast the value to `u64` and
     /// forward to `serialize_u64`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2513,7 +2548,7 @@
     /// reasonable implementation would be to cast the value to `u64` and
     /// forward to `serialize_u64`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2531,7 +2566,7 @@
 
     <span class="doccomment">/// Serialize a `u64` value.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2547,27 +2582,30 @@
     /// ```
     </span><span class="kw">fn </span>serialize_u64(<span class="self">self</span>, v: u64) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Ok, <span class="self">Self</span>::Error&gt;;
 
-    <span class="doccomment">/// Serialize a `u128` value.
-    ///
-    /// ```edition2021
-    /// # use serde::Serializer;
-    /// #
-    /// # serde::__private_serialize!();
-    /// #
-    /// impl Serialize for u128 {
-    ///     fn serialize&lt;S&gt;(&amp;self, serializer: S) -&gt; Result&lt;S::Ok, S::Error&gt;
-    ///     where
-    ///         S: Serializer,
-    ///     {
-    ///         serializer.serialize_u128(*self)
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// The default behavior unconditionally returns an error.
-    </span><span class="kw">fn </span>serialize_u128(<span class="self">self</span>, v: u128) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Ok, <span class="self">Self</span>::Error&gt; {
-        <span class="kw">let _ </span>= v;
-        <span class="prelude-val">Err</span>(Error::custom(<span class="string">&quot;u128 is not supported&quot;</span>))
+    <span class="macro">serde_if_integer128! </span>{
+        <span class="doccomment">/// Serialize a `u128` value.
+        ///
+        /// ```edition2018
+        /// # use serde::Serializer;
+        /// #
+        /// # serde::__private_serialize!();
+        /// #
+        /// impl Serialize for u128 {
+        ///     fn serialize&lt;S&gt;(&amp;self, serializer: S) -&gt; Result&lt;S::Ok, S::Error&gt;
+        ///     where
+        ///         S: Serializer,
+        ///     {
+        ///         serializer.serialize_u128(*self)
+        ///     }
+        /// }
+        /// ```
+        ///
+        /// This method is available only on Rust compiler versions &gt;=1.26. The
+        /// default behavior unconditionally returns an error.
+        </span><span class="kw">fn </span>serialize_u128(<span class="self">self</span>, v: u128) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Ok, <span class="self">Self</span>::Error&gt; {
+            <span class="kw">let _ </span>= v;
+            <span class="prelude-val">Err</span>(Error::custom(<span class="string">&quot;u128 is not supported&quot;</span>))
+        }
     }
 
     <span class="doccomment">/// Serialize an `f32` value.
@@ -2576,7 +2614,7 @@
     /// reasonable implementation would be to cast the value to `f64` and
     /// forward to `serialize_f64`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2594,7 +2632,7 @@
 
     <span class="doccomment">/// Serialize an `f64` value.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2615,7 +2653,7 @@
     /// If the format does not support characters, it is reasonable to serialize
     /// it as a single element `str` or a `u32`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2633,7 +2671,7 @@
 
     <span class="doccomment">/// Serialize a `&amp;str`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2657,7 +2695,7 @@
     /// `serialize_seq`. If forwarded, the implementation looks usually just
     /// like this:
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::ser::{Serializer, SerializeSeq};
     /// # use serde::__private::doc::Error;
     /// #
@@ -2686,7 +2724,7 @@
 
     <span class="doccomment">/// Serialize a [`None`] value.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::{Serialize, Serializer};
     /// #
     /// # enum Option&lt;T&gt; {
@@ -2719,7 +2757,7 @@
 
     <span class="doccomment">/// Serialize a [`Some(T)`] value.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::{Serialize, Serializer};
     /// #
     /// # enum Option&lt;T&gt; {
@@ -2754,7 +2792,7 @@
 
     <span class="doccomment">/// Serialize a `()` value.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use serde::Serializer;
     /// #
     /// # serde::__private_serialize!();
@@ -2774,7 +2812,7 @@
     ///
     /// A reasonable implementation would be to forward to `serialize_unit`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::{Serialize, Serializer};
     ///
     /// struct Nothing;
@@ -2796,7 +2834,7 @@
     /// this variant within the enum, and the `variant` is the name of the
     /// variant.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::{Serialize, Serializer};
     ///
     /// enum E {
@@ -2829,7 +2867,7 @@
     /// wrappers around the data they contain. A reasonable implementation would
     /// be to forward to `value.serialize(self)`.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::{Serialize, Serializer};
     ///
     /// struct Millimeters(u8);
@@ -2857,7 +2895,7 @@
     /// this variant within the enum, and the `variant` is the name of the
     /// variant. The `value` is the data contained within this newtype variant.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::{Serialize, Serializer};
     ///
     /// enum E {
@@ -2895,7 +2933,7 @@
     /// not be computable before the sequence is iterated. Some serializers only
     /// support sequences whose length is known up front.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use std::marker::PhantomData;
     /// #
     /// # struct Vec&lt;T&gt;(PhantomData&lt;T&gt;);
@@ -2908,14 +2946,14 @@
     /// #
     /// # impl&lt;&#39;a, T&gt; IntoIterator for &amp;&#39;a Vec&lt;T&gt; {
     /// #     type Item = &amp;&#39;a T;
-    /// #     type IntoIter = Box&lt;dyn Iterator&lt;Item = &amp;&#39;a T&gt;&gt;;
+    /// #     type IntoIter = Box&lt;Iterator&lt;Item = &amp;&#39;a T&gt;&gt;;
     /// #
     /// #     fn into_iter(self) -&gt; Self::IntoIter {
     /// #         unimplemented!()
     /// #     }
     /// # }
     /// #
-    /// use serde::ser::{Serialize, SerializeSeq, Serializer};
+    /// use serde::ser::{Serialize, Serializer, SerializeSeq};
     ///
     /// impl&lt;T&gt; Serialize for Vec&lt;T&gt;
     /// where
@@ -2940,8 +2978,8 @@
     /// This call must be followed by zero or more calls to `serialize_element`,
     /// then a call to `end`.
     ///
-    /// ```edition2021
-    /// use serde::ser::{Serialize, SerializeTuple, Serializer};
+    /// ```edition2018
+    /// use serde::ser::{Serialize, Serializer, SerializeTuple};
     ///
     /// # mod fool {
     /// #     trait Serialize {}
@@ -2970,7 +3008,7 @@
     /// }
     /// ```
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::ser::{Serialize, SerializeTuple, Serializer};
     ///
     /// const VRAM_SIZE: usize = 386;
@@ -2998,7 +3036,7 @@
     /// The `name` is the name of the tuple struct and the `len` is the number
     /// of data fields that will be serialized.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::ser::{Serialize, SerializeTupleStruct, Serializer};
     ///
     /// struct Rgb(u8, u8, u8);
@@ -3030,7 +3068,7 @@
     /// this variant within the enum, the `variant` is the name of the variant,
     /// and the `len` is the number of data fields that will be serialized.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::ser::{Serialize, SerializeTupleVariant, Serializer};
     ///
     /// enum E {
@@ -3076,7 +3114,7 @@
     /// be computable before the map is iterated. Some serializers only support
     /// maps whose length is known up front.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use std::marker::PhantomData;
     /// #
     /// # struct HashMap&lt;K, V&gt;(PhantomData&lt;K&gt;, PhantomData&lt;V&gt;);
@@ -3089,14 +3127,14 @@
     /// #
     /// # impl&lt;&#39;a, K, V&gt; IntoIterator for &amp;&#39;a HashMap&lt;K, V&gt; {
     /// #     type Item = (&amp;&#39;a K, &amp;&#39;a V);
-    /// #     type IntoIter = Box&lt;dyn Iterator&lt;Item = (&amp;&#39;a K, &amp;&#39;a V)&gt;&gt;;
+    /// #     type IntoIter = Box&lt;Iterator&lt;Item = (&amp;&#39;a K, &amp;&#39;a V)&gt;&gt;;
     /// #
     /// #     fn into_iter(self) -&gt; Self::IntoIter {
     /// #         unimplemented!()
     /// #     }
     /// # }
     /// #
-    /// use serde::ser::{Serialize, SerializeMap, Serializer};
+    /// use serde::ser::{Serialize, Serializer, SerializeMap};
     ///
     /// impl&lt;K, V&gt; Serialize for HashMap&lt;K, V&gt;
     /// where
@@ -3124,7 +3162,7 @@
     /// The `name` is the name of the struct and the `len` is the number of
     /// data fields that will be serialized.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::ser::{Serialize, SerializeStruct, Serializer};
     ///
     /// struct Rgb {
@@ -3160,7 +3198,7 @@
     /// this variant within the enum, the `variant` is the name of the variant,
     /// and the `len` is the number of data fields that will be serialized.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::ser::{Serialize, SerializeStructVariant, Serializer};
     ///
     /// enum E {
@@ -3202,7 +3240,7 @@
     /// using [`serialize_seq`]. Implementors should not need to override this
     /// method.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::{Serialize, Serializer};
     ///
     /// struct SecretlyOneHigher {
@@ -3225,9 +3263,22 @@
         </span>I: IntoIterator,
         &lt;I <span class="kw">as </span>IntoIterator&gt;::Item: Serialize,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>iter = iter.into_iter();
-        <span class="kw">let </span><span class="kw-2">mut </span>serializer = <span class="macro">tri!</span>(<span class="self">self</span>.serialize_seq(iterator_len_hint(<span class="kw-2">&amp;</span>iter)));
-        <span class="macro">tri!</span>(iter.try_for_each(|item| serializer.serialize_element(<span class="kw-2">&amp;</span>item)));
+        <span class="kw">let </span>iter = iter.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>serializer = <span class="macro">try!</span>(<span class="self">self</span>.serialize_seq(iterator_len_hint(<span class="kw-2">&amp;</span>iter)));
+
+        <span class="attr">#[cfg(not(no_iterator_try_fold))]
+        </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>iter = iter;
+            <span class="macro">try!</span>(iter.try_for_each(|item| serializer.serialize_element(<span class="kw-2">&amp;</span>item)));
+        }
+
+        <span class="attr">#[cfg(no_iterator_try_fold)]
+        </span>{
+            <span class="kw">for </span>item <span class="kw">in </span>iter {
+                <span class="macro">try!</span>(serializer.serialize_element(<span class="kw-2">&amp;</span>item));
+            }
+        }
+
         serializer.end()
     }
 
@@ -3237,7 +3288,7 @@
     /// using [`serialize_map`]. Implementors should not need to override this
     /// method.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// use serde::{Serialize, Serializer};
     /// use std::collections::BTreeSet;
     ///
@@ -3263,9 +3314,22 @@
         V: Serialize,
         I: IntoIterator&lt;Item = (K, V)&gt;,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>iter = iter.into_iter();
-        <span class="kw">let </span><span class="kw-2">mut </span>serializer = <span class="macro">tri!</span>(<span class="self">self</span>.serialize_map(iterator_len_hint(<span class="kw-2">&amp;</span>iter)));
-        <span class="macro">tri!</span>(iter.try_for_each(|(key, value)| serializer.serialize_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value)));
+        <span class="kw">let </span>iter = iter.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>serializer = <span class="macro">try!</span>(<span class="self">self</span>.serialize_map(iterator_len_hint(<span class="kw-2">&amp;</span>iter)));
+
+        <span class="attr">#[cfg(not(no_iterator_try_fold))]
+        </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>iter = iter;
+            <span class="macro">try!</span>(iter.try_for_each(|(key, value)| serializer.serialize_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value)));
+        }
+
+        <span class="attr">#[cfg(no_iterator_try_fold)]
+        </span>{
+            <span class="kw">for </span>(key, value) <span class="kw">in </span>iter {
+                <span class="macro">try!</span>(serializer.serialize_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value));
+            }
+        }
+
         serializer.end()
     }
 
@@ -3275,7 +3339,7 @@
     /// delegates to [`serialize_str`]. Serializers are encouraged to provide a
     /// more efficient implementation if possible.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # struct DateTime;
     /// #
     /// # impl DateTime {
@@ -3290,7 +3354,9 @@
     ///     where
     ///         S: Serializer,
     ///     {
-    ///         serializer.collect_str(&amp;format_args!(&quot;{:?}{:?}&quot;, self.naive_local(), self.offset()))
+    ///         serializer.collect_str(&amp;format_args!(&quot;{:?}{:?}&quot;,
+    ///                                              self.naive_local(),
+    ///                                              self.offset()))
     ///     }
     /// }
     /// ```
@@ -3311,7 +3377,7 @@
     /// of this method. If no more sensible behavior is possible, the
     /// implementation is expected to return an error.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # struct DateTime;
     /// #
     /// # impl DateTime {
@@ -3326,7 +3392,9 @@
     ///     where
     ///         S: Serializer,
     ///     {
-    ///         serializer.collect_str(&amp;format_args!(&quot;{:?}{:?}&quot;, self.naive_local(), self.offset()))
+    ///         serializer.collect_str(&amp;format_args!(&quot;{:?}{:?}&quot;,
+    ///                                              self.naive_local(),
+    ///                                              self.offset()))
     ///     }
     /// }
     /// ```
@@ -3344,7 +3412,7 @@
     /// human-readable one and binary formats like Postcard will prefer the
     /// compact one.
     ///
-    /// ```edition2021
+    /// ```edition2018
     /// # use std::fmt::{self, Display};
     /// #
     /// # struct Timestamp;
@@ -3393,7 +3461,7 @@
 ///
 /// # Example use
 ///
-/// ```edition2021
+/// ```edition2018
 /// # use std::marker::PhantomData;
 /// #
 /// # struct Vec&lt;T&gt;(PhantomData&lt;T&gt;);
@@ -3406,13 +3474,13 @@
 /// #
 /// # impl&lt;&#39;a, T&gt; IntoIterator for &amp;&#39;a Vec&lt;T&gt; {
 /// #     type Item = &amp;&#39;a T;
-/// #     type IntoIter = Box&lt;dyn Iterator&lt;Item = &amp;&#39;a T&gt;&gt;;
+/// #     type IntoIter = Box&lt;Iterator&lt;Item = &amp;&#39;a T&gt;&gt;;
 /// #     fn into_iter(self) -&gt; Self::IntoIter {
 /// #         unimplemented!()
 /// #     }
 /// # }
 /// #
-/// use serde::ser::{Serialize, SerializeSeq, Serializer};
+/// use serde::ser::{Serialize, Serializer, SerializeSeq};
 ///
 /// impl&lt;T&gt; Serialize for Vec&lt;T&gt;
 /// where
@@ -3457,8 +3525,8 @@
 ///
 /// # Example use
 ///
-/// ```edition2021
-/// use serde::ser::{Serialize, SerializeTuple, Serializer};
+/// ```edition2018
+/// use serde::ser::{Serialize, Serializer, SerializeTuple};
 ///
 /// # mod fool {
 /// #     trait Serialize {}
@@ -3487,7 +3555,7 @@
 /// }
 /// ```
 ///
-/// ```edition2021
+/// ```edition2018
 /// # use std::marker::PhantomData;
 /// #
 /// # struct Array&lt;T&gt;(PhantomData&lt;T&gt;);
@@ -3500,13 +3568,13 @@
 /// #
 /// # impl&lt;&#39;a, T&gt; IntoIterator for &amp;&#39;a Array&lt;T&gt; {
 /// #     type Item = &amp;&#39;a T;
-/// #     type IntoIter = Box&lt;dyn Iterator&lt;Item = &amp;&#39;a T&gt;&gt;;
+/// #     type IntoIter = Box&lt;Iterator&lt;Item = &amp;&#39;a T&gt;&gt;;
 /// #     fn into_iter(self) -&gt; Self::IntoIter {
 /// #         unimplemented!()
 /// #     }
 /// # }
 /// #
-/// use serde::ser::{Serialize, SerializeTuple, Serializer};
+/// use serde::ser::{Serialize, Serializer, SerializeTuple};
 ///
 /// # mod fool {
 /// #     trait Serialize {}
@@ -3557,7 +3625,7 @@
 ///
 /// # Example use
 ///
-/// ```edition2021
+/// ```edition2018
 /// use serde::ser::{Serialize, SerializeTupleStruct, Serializer};
 ///
 /// struct Rgb(u8, u8, u8);
@@ -3602,7 +3670,7 @@
 ///
 /// # Example use
 ///
-/// ```edition2021
+/// ```edition2018
 /// use serde::ser::{Serialize, SerializeTupleVariant, Serializer};
 ///
 /// enum E {
@@ -3660,7 +3728,7 @@
 ///
 /// # Example use
 ///
-/// ```edition2021
+/// ```edition2018
 /// # use std::marker::PhantomData;
 /// #
 /// # struct HashMap&lt;K, V&gt;(PhantomData&lt;K&gt;, PhantomData&lt;V&gt;);
@@ -3673,14 +3741,14 @@
 /// #
 /// # impl&lt;&#39;a, K, V&gt; IntoIterator for &amp;&#39;a HashMap&lt;K, V&gt; {
 /// #     type Item = (&amp;&#39;a K, &amp;&#39;a V);
-/// #     type IntoIter = Box&lt;dyn Iterator&lt;Item = (&amp;&#39;a K, &amp;&#39;a V)&gt;&gt;;
+/// #     type IntoIter = Box&lt;Iterator&lt;Item = (&amp;&#39;a K, &amp;&#39;a V)&gt;&gt;;
 /// #
 /// #     fn into_iter(self) -&gt; Self::IntoIter {
 /// #         unimplemented!()
 /// #     }
 /// # }
 /// #
-/// use serde::ser::{Serialize, SerializeMap, Serializer};
+/// use serde::ser::{Serialize, Serializer, SerializeMap};
 ///
 /// impl&lt;K, V&gt; Serialize for HashMap&lt;K, V&gt;
 /// where
@@ -3759,7 +3827,7 @@
         </span>K: Serialize,
         V: Serialize,
     {
-        <span class="macro">tri!</span>(<span class="self">self</span>.serialize_key(key));
+        <span class="macro">try!</span>(<span class="self">self</span>.serialize_key(key));
         <span class="self">self</span>.serialize_value(value)
     }
 
@@ -3771,7 +3839,7 @@
 ///
 /// # Example use
 ///
-/// ```edition2021
+/// ```edition2018
 /// use serde::ser::{Serialize, SerializeStruct, Serializer};
 ///
 /// struct Rgb {
@@ -3831,7 +3899,7 @@
 ///
 /// # Example use
 ///
-/// ```edition2021
+/// ```edition2018
 /// use serde::ser::{Serialize, SerializeStructVariant, Serializer};
 ///
 /// enum E {
