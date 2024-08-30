@@ -186,6 +186,9 @@ impl AquascopePreprocessor {
     // TODO: make this configurable
     add_data("no-interact", "true")?;
 
+    // TODO: add a code path to enable this from config
+    // add_data("show-bug-reporter", true)?;
+
     write!(html, "></div>")?;
 
     Ok(html)

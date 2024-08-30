@@ -1,8 +1,5 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.8.2/schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
   "javascript": {
     "formatter": {
       "arrowParentheses": "asNeeded",
@@ -11,11 +8,9 @@
     "jsxRuntime": "reactClassic"
   },
   "formatter": {
-    "enabled": true,
     "indentStyle": "space"
   },
   "linter": {
-    "enabled": true,
     "rules": {
       "recommended": true,
       "correctness": {

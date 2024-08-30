@@ -1,5 +1,5 @@
+import { Editor, type Result, type types } from "@aquascope/editor";
 import { useFloating } from "@floating-ui/react-dom";
-import { Editor, type Result, type types } from "aquascope-editor";
 import React, { useContext, useLayoutEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
@@ -179,6 +179,7 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
     elem.classList.add(AQUASCOPE_NAME);
 
     let readOnly = elem.dataset.noInteract! === "true";
+    let showBugReporter = elem.dataset.showBugReporter! === "true";
 
     let computePermBtn: HTMLButtonElement | undefined;
     if (!readOnly) {
@@ -200,7 +201,7 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
     let initialCode = maybeParseJson<string>(elem.dataset.code);
     if (!initialCode) throw new Error("Missing data-code attribute");
 
-    if (window.telemetry) {
+    if (window.telemetry && showBugReporter) {
       let extraInfo = document.createElement("div");
       elem.appendChild(extraInfo);
       ReactDOM.createRoot(extraInfo).render(
@@ -229,10 +230,10 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
     let ed = new Editor(
       elem,
       setup,
+      initialCode,
       err => {
         console.error(err);
       },
-      initialCode,
       serverUrl,
       readOnly,
       shouldFailHtml,

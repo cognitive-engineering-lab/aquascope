@@ -8,7 +8,7 @@ import type {
   AnalysisFacts,
   BoundariesAnnotations,
   PermissionsBoundary
-} from "../types";
+} from "../types.js";
 import {
   type PermLetter,
   flowChar,
@@ -22,7 +22,7 @@ import {
   showLoanRegion,
   showMoveRegion,
   writeChar
-} from "./misc";
+} from "./misc.js";
 
 // FIXME: the tooltips are not currently being used. The tooltips
 // provided by CM6 aren't expressive enough for what we want.

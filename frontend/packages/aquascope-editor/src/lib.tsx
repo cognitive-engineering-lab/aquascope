@@ -2,28 +2,28 @@ import { rust } from "@codemirror/lang-rust";
 import { indentUnit } from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 
-import { boundariesField } from "./editor-utils/boundaries";
+import { boundariesField } from "./editor-utils/boundaries.js";
 import {
   type InterpreterConfig,
   markerField,
   renderInterpreter
-} from "./editor-utils/interpreter";
+} from "./editor-utils/interpreter.js";
 import {
   type IconField,
   hiddenLines,
   hideLine,
   loanFactsField
-} from "./editor-utils/misc";
+} from "./editor-utils/misc.js";
 import {
   type PermissionsCfg,
   type PermissionsDecorations,
   makePermissionsDecorations,
   renderPermissions
-} from "./editor-utils/permissions";
-import { stepField } from "./editor-utils/stepper";
+} from "./editor-utils/permissions.js";
+import { stepField } from "./editor-utils/stepper.js";
 import "./styles.scss";
 import type {
   AnalysisFacts,
@@ -33,9 +33,9 @@ import type {
   CharRange,
   InterpAnnotations,
   MTrace
-} from "./types";
+} from "./types.js";
 
-export * as types from "./types";
+export * as types from "./types.js";
 
 const DEFAULT_SERVER_URL = new URL("http://127.0.0.1:8008");
 
@@ -124,11 +124,11 @@ export class Editor {
   public constructor(
     dom: HTMLDivElement,
     readonly setup: Extension,
+    code: string = defaultCodeExample,
     readonly reportStdErr: (err: BackendError) => void = err => {
       console.error("An error occurred: ");
       console.error(err);
     },
-    code: string = defaultCodeExample,
     readonly serverUrl: URL = DEFAULT_SERVER_URL,
     readonly noInteract: boolean = false,
     readonly shouldFailHtml: string = "This code does not compile!",
@@ -233,6 +233,10 @@ export class Editor {
     renderPermissions(this.view, this.permissionsDecos, cfg);
   }
 
+  public destroy() {
+    this.view.destroy();
+  }
+
   // Actions to communicate with the aquascope server
   async callBackendWithCode(
     endpoint: string,
@@ -281,7 +285,7 @@ export class Editor {
       annotations
     }: {
       response?: Result<any>;
-      config?: CommonConfig & object;
+      config?: CommonConfig & any;
       annotations?: AquascopeAnnotations;
     } = {}
   ) {
@@ -356,3 +360,34 @@ export class Editor {
     }
   }
 }
+
+export interface EditorComponentProps {
+  code: string;
+  setup?: Extension;
+  permissions?: any;
+  steps?: any;
+}
+
+export let EditorComponent = (props: EditorComponentProps) => {
+  let ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let editor = new Editor(ref.current!, props.setup ?? [], props.code);
+    if (props.steps)
+      editor.renderOperation("interpreter", {
+        response: props.steps,
+        config: {
+          horizontal: "true"
+        }
+      });
+    if (props.permissions)
+      editor.renderOperation("permissions", {
+        response: props.permissions,
+        config: {
+          stepper: "true",
+          boundaries: "true"
+        }
+      });
+    return () => editor.destroy();
+  }, []);
+  return <div ref={ref} />;
+};

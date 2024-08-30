@@ -1,5 +1,5 @@
 {
-  "name": "aquascope-standalone",
+  "name": "@aquascope/standalone",
   "version": "0.1.0",
   "depot": {
     "platform": "browser"
@@ -14,7 +14,7 @@
     "@codemirror/view": "^6.4.0",
     "@replit/codemirror-vim": "^6.0.3",
     "@vitejs/plugin-react": "^4.0.3",
-    "aquascope-editor": "workspace:*",
+    "@aquascope/editor": "workspace:*",
     "font-awesome": "^4.7.0",
     "jest-puppeteer": "^6.2.0",
     "normalize.css": "^8.0.1",

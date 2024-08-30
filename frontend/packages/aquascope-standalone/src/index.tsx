@@ -1,5 +1,5 @@
 // import { vim } from "@replit/codemirror-vim";
-import * as Ed from "aquascope-editor";
+import * as Ed from "@aquascope/editor";
 
 import { basicSetup } from "./setup";
 
@@ -67,6 +67,7 @@ window.addEventListener("load", () => {
     editor: new Ed.Editor(
       editorElement,
       basicSetup,
+      Ed.defaultCodeExample,
       (err: Ed.types.BackendError) => {
         if (err.type === "FileNotFound") {
           alert("A backend problem occurred!");
@@ -88,7 +89,6 @@ window.addEventListener("load", () => {
           console.error("an unknown error occurred:", err);
         }
       },
-      Ed.defaultCodeExample,
       new URL(SERVER_URL)
     )
   };

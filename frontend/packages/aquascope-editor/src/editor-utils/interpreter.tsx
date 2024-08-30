@@ -23,12 +23,12 @@ import type {
   MTrace,
   MUndefinedBehavior,
   MValue
-} from "../types";
+} from "../types.js";
 import {
   evenlySpaceAround,
   linecolToPosition,
   makeDecorationField
-} from "./misc";
+} from "./misc.js";
 
 const DEBUG: boolean = false;
 
