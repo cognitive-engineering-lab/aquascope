@@ -21,12 +21,12 @@ runs:
       with:
         version: '>= 412.0.0'
     - name: Copy to server
-      run: gcloud compute scp ./${{ inputs.file }} gh-actions@aquascope:~/${{ inputs.file }} --zone us-central1-a --tunnel-through-iap
+      run: gcloud compute scp ./${{ inputs.file }} gh-actions@aquascope:~/${{ inputs.file }} --zone us-central1-c --tunnel-through-iap
       shell: bash
     - name: Make executable
       uses: google-github-actions/ssh-compute@v0
       with:
-        zone: 'us-central1-a'
+        zone: 'us-central1-c'
         project_id: ${{ inputs.project-id }}
         ssh_private_key: ${{ inputs.ssh-key }}
         instance_name: aquascope
@@ -35,9 +35,9 @@ runs:
     - name: Execute script
       uses: google-github-actions/ssh-compute@v0
       with:
-        zone: 'us-central1-a'
+        zone: 'us-central1-c'
         project_id: ${{ inputs.project-id }}
         ssh_private_key: ${{ inputs.ssh-key }}
         instance_name: aquascope
         user: gh-actions
-        command: /home/gh-actions/${{ inputs.file }}
+        command: "~/${{ inputs.file }}"
