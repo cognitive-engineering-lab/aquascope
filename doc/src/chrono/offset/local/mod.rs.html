@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.28/src/offset/local/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../../chrono/index.html"><img class="rust-logo" src="../../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.38/src/offset/local/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../../chrono/index.html"><img class="rust-logo" src="../../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -266,16 +266,292 @@
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
 </pre></div><pre class="rust"><code><span class="comment">// This is a part of Chrono.
 // See README.md and LICENSE.txt for details.
 
 </span><span class="doccomment">//! The local (system) time zone.
 
-</span><span class="attr">#[cfg(feature = <span class="string">&quot;rkyv&quot;</span>)]
+</span><span class="attr">#[cfg(windows)]
+</span><span class="kw">use </span>std::cmp::Ordering;
+
+<span class="attr">#[cfg(any(feature = <span class="string">&quot;rkyv&quot;</span>, feature = <span class="string">&quot;rkyv-16&quot;</span>, feature = <span class="string">&quot;rkyv-32&quot;</span>, feature = <span class="string">&quot;rkyv-64&quot;</span>))]
 </span><span class="kw">use </span>rkyv::{Archive, Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">super</span>::fixed::FixedOffset;
-<span class="kw">use super</span>::{LocalResult, TimeZone};
+<span class="kw">use super</span>::{MappedLocalTime, TimeZone};
 <span class="kw">use </span><span class="kw">crate</span>::naive::{NaiveDate, NaiveDateTime, NaiveTime};
 <span class="attr">#[allow(deprecated)]
 </span><span class="kw">use </span><span class="kw">crate</span>::Date;
@@ -303,16 +579,18 @@
     ))
 ))]
 </span><span class="kw">mod </span>inner {
-    <span class="kw">use crate</span>::{FixedOffset, LocalResult, NaiveDateTime};
+    <span class="kw">use crate</span>::{FixedOffset, MappedLocalTime, NaiveDateTime};
 
-    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>offset_from_utc_datetime(_utc_time: <span class="kw-2">&amp;</span>NaiveDateTime) -&gt; LocalResult&lt;FixedOffset&gt; {
-        LocalResult::Single(FixedOffset::east_opt(<span class="number">0</span>).unwrap())
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>offset_from_utc_datetime(
+        _utc_time: <span class="kw-2">&amp;</span>NaiveDateTime,
+    ) -&gt; MappedLocalTime&lt;FixedOffset&gt; {
+        MappedLocalTime::Single(FixedOffset::east_opt(<span class="number">0</span>).unwrap())
     }
 
     <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>offset_from_local_datetime(
         _local_time: <span class="kw-2">&amp;</span>NaiveDateTime,
-    ) -&gt; LocalResult&lt;FixedOffset&gt; {
-        LocalResult::Single(FixedOffset::east_opt(<span class="number">0</span>).unwrap())
+    ) -&gt; MappedLocalTime&lt;FixedOffset&gt; {
+        MappedLocalTime::Single(FixedOffset::east_opt(<span class="number">0</span>).unwrap())
     }
 }
 
@@ -322,14 +600,16 @@
     not(any(target_os = <span class="string">&quot;emscripten&quot;</span>, target_os = <span class="string">&quot;wasi&quot;</span>))
 ))]
 </span><span class="kw">mod </span>inner {
-    <span class="kw">use crate</span>::{Datelike, FixedOffset, LocalResult, NaiveDateTime, Timelike};
+    <span class="kw">use crate</span>::{Datelike, FixedOffset, MappedLocalTime, NaiveDateTime, Timelike};
 
-    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>offset_from_utc_datetime(utc: <span class="kw-2">&amp;</span>NaiveDateTime) -&gt; LocalResult&lt;FixedOffset&gt; {
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>offset_from_utc_datetime(utc: <span class="kw-2">&amp;</span>NaiveDateTime) -&gt; MappedLocalTime&lt;FixedOffset&gt; {
         <span class="kw">let </span>offset = js_sys::Date::from(utc.and_utc()).get_timezone_offset();
-        LocalResult::Single(FixedOffset::west_opt((offset <span class="kw">as </span>i32) * <span class="number">60</span>).unwrap())
+        MappedLocalTime::Single(FixedOffset::west_opt((offset <span class="kw">as </span>i32) * <span class="number">60</span>).unwrap())
     }
 
-    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>offset_from_local_datetime(local: <span class="kw-2">&amp;</span>NaiveDateTime) -&gt; LocalResult&lt;FixedOffset&gt; {
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>offset_from_local_datetime(
+        local: <span class="kw-2">&amp;</span>NaiveDateTime,
+    ) -&gt; MappedLocalTime&lt;FixedOffset&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>year = local.year();
         <span class="kw">if </span>year &lt; <span class="number">100 </span>{
             <span class="comment">// The API in `js_sys` does not let us create a `Date` with negative years.
@@ -349,14 +629,14 @@
         </span>);
         <span class="kw">let </span>offset = js_date.get_timezone_offset();
         <span class="comment">// We always get a result, even if this time does not exist or is ambiguous.
-        </span>LocalResult::Single(FixedOffset::west_opt((offset <span class="kw">as </span>i32) * <span class="number">60</span>).unwrap())
+        </span>MappedLocalTime::Single(FixedOffset::west_opt((offset <span class="kw">as </span>i32) * <span class="number">60</span>).unwrap())
     }
 }
 
 <span class="attr">#[cfg(unix)]
 </span><span class="kw">mod </span>tz_info;
 
-<span class="doccomment">/// The local timescale. This is implemented via the standard `time` crate.
+<span class="doccomment">/// The local timescale.
 ///
 /// Using the [`TimeZone`](./trait.TimeZone.html) methods
 /// on the Local struct is the preferred way to construct `DateTime&lt;Local&gt;`
@@ -365,14 +645,20 @@
 /// # Example
 ///
 /// ```
-/// use chrono::{Local, DateTime, TimeZone};
+/// use chrono::{DateTime, Local, TimeZone};
 ///
 /// let dt1: DateTime&lt;Local&gt; = Local::now();
 /// let dt2: DateTime&lt;Local&gt; = Local.timestamp_opt(0, 0).unwrap();
 /// assert!(dt1 &gt;= dt2);
 /// ```
 </span><span class="attr">#[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = <span class="string">&quot;rkyv&quot;</span>, derive(Archive, Deserialize, Serialize))]
+#[cfg_attr(
+    any(feature = <span class="string">&quot;rkyv&quot;</span>, feature = <span class="string">&quot;rkyv-16&quot;</span>, feature = <span class="string">&quot;rkyv-32&quot;</span>, feature = <span class="string">&quot;rkyv-64&quot;</span>),
+    derive(Archive, Deserialize, Serialize),
+    archive(compare(PartialEq)),
+    archive_attr(derive(Clone, Copy, Debug))
+)]
+#[cfg_attr(feature = <span class="string">&quot;rkyv-validation&quot;</span>, archive(check_bytes))]
 #[cfg_attr(feature = <span class="string">&quot;arbitrary&quot;</span>, derive(arbitrary::Arbitrary))]
 </span><span class="kw">pub struct </span>Local;
 
@@ -425,12 +711,12 @@
     }
 
     <span class="attr">#[allow(deprecated)]
-    </span><span class="kw">fn </span>offset_from_local_date(<span class="kw-2">&amp;</span><span class="self">self</span>, local: <span class="kw-2">&amp;</span>NaiveDate) -&gt; LocalResult&lt;FixedOffset&gt; {
+    </span><span class="kw">fn </span>offset_from_local_date(<span class="kw-2">&amp;</span><span class="self">self</span>, local: <span class="kw-2">&amp;</span>NaiveDate) -&gt; MappedLocalTime&lt;FixedOffset&gt; {
         <span class="comment">// Get the offset at local midnight.
         </span><span class="self">self</span>.offset_from_local_datetime(<span class="kw-2">&amp;</span>local.and_time(NaiveTime::MIN))
     }
 
-    <span class="kw">fn </span>offset_from_local_datetime(<span class="kw-2">&amp;</span><span class="self">self</span>, local: <span class="kw-2">&amp;</span>NaiveDateTime) -&gt; LocalResult&lt;FixedOffset&gt; {
+    <span class="kw">fn </span>offset_from_local_datetime(<span class="kw-2">&amp;</span><span class="self">self</span>, local: <span class="kw-2">&amp;</span>NaiveDateTime) -&gt; MappedLocalTime&lt;FixedOffset&gt; {
         inner::offset_from_local_datetime(local)
     }
 
@@ -445,11 +731,96 @@
     }
 }
 
+<span class="attr">#[cfg(windows)]
+#[derive(Copy, Clone, Eq, PartialEq)]
+</span><span class="kw">struct </span>Transition {
+    transition_utc: NaiveDateTime,
+    offset_before: FixedOffset,
+    offset_after: FixedOffset,
+}
+
+<span class="attr">#[cfg(windows)]
+</span><span class="kw">impl </span>Transition {
+    <span class="kw">fn </span>new(
+        transition_local: NaiveDateTime,
+        offset_before: FixedOffset,
+        offset_after: FixedOffset,
+    ) -&gt; Transition {
+        <span class="comment">// It is no problem if the transition time in UTC falls a couple of hours inside the buffer
+        // space around the `NaiveDateTime` range (although it is very theoretical to have a
+        // transition at midnight around `NaiveDate::(MIN|MAX)`.
+        </span><span class="kw">let </span>transition_utc = transition_local.overflowing_sub_offset(offset_before);
+        Transition { transition_utc, offset_before, offset_after }
+    }
+}
+
+<span class="attr">#[cfg(windows)]
+</span><span class="kw">impl </span>PartialOrd <span class="kw">for </span>Transition {
+    <span class="kw">fn </span>partial_cmp(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Ordering&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.transition_utc.cmp(<span class="kw-2">&amp;</span>other.transition_utc))
+    }
+}
+
+<span class="attr">#[cfg(windows)]
+</span><span class="kw">impl </span>Ord <span class="kw">for </span>Transition {
+    <span class="kw">fn </span>cmp(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; Ordering {
+        <span class="self">self</span>.transition_utc.cmp(<span class="kw-2">&amp;</span>other.transition_utc)
+    }
+}
+
+<span class="comment">// Calculate the time in UTC given a local time and transitions.
+// `transitions` must be sorted.
+</span><span class="attr">#[cfg(windows)]
+</span><span class="kw">fn </span>lookup_with_dst_transitions(
+    transitions: <span class="kw-2">&amp;</span>[Transition],
+    dt: NaiveDateTime,
+) -&gt; MappedLocalTime&lt;FixedOffset&gt; {
+    <span class="kw">for </span>t <span class="kw">in </span>transitions.iter() {
+        <span class="comment">// A transition can result in the wall clock time going forward (creating a gap) or going
+        // backward (creating a fold). We are interested in the earliest and latest wall time of the
+        // transition, as this are the times between which `dt` does may not exist or is ambiguous.
+        //
+        // It is no problem if the transition times falls a couple of hours inside the buffer
+        // space around the `NaiveDateTime` range (although it is very theoretical to have a
+        // transition at midnight around `NaiveDate::(MIN|MAX)`.
+        </span><span class="kw">let </span>(offset_min, offset_max) =
+            <span class="kw">match </span>t.offset_after.local_minus_utc() &gt; t.offset_before.local_minus_utc() {
+                <span class="bool-val">true </span>=&gt; (t.offset_before, t.offset_after),
+                <span class="bool-val">false </span>=&gt; (t.offset_after, t.offset_before),
+            };
+        <span class="kw">let </span>wall_earliest = t.transition_utc.overflowing_add_offset(offset_min);
+        <span class="kw">let </span>wall_latest = t.transition_utc.overflowing_add_offset(offset_max);
+
+        <span class="kw">if </span>dt &lt; wall_earliest {
+            <span class="kw">return </span>MappedLocalTime::Single(t.offset_before);
+        } <span class="kw">else if </span>dt &lt;= wall_latest {
+            <span class="kw">return match </span>t.offset_after.local_minus_utc().cmp(<span class="kw-2">&amp;</span>t.offset_before.local_minus_utc()) {
+                Ordering::Equal =&gt; MappedLocalTime::Single(t.offset_before),
+                Ordering::Less =&gt; MappedLocalTime::Ambiguous(t.offset_before, t.offset_after),
+                Ordering::Greater =&gt; {
+                    <span class="kw">if </span>dt == wall_earliest {
+                        MappedLocalTime::Single(t.offset_before)
+                    } <span class="kw">else if </span>dt == wall_latest {
+                        MappedLocalTime::Single(t.offset_after)
+                    } <span class="kw">else </span>{
+                        MappedLocalTime::None
+                    }
+                }
+            };
+        }
+    }
+    MappedLocalTime::Single(transitions.last().unwrap().offset_after)
+}
+
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::Local;
+    <span class="attr">#[cfg(windows)]
+    </span><span class="kw">use </span><span class="kw">crate</span>::offset::local::{lookup_with_dst_transitions, Transition};
     <span class="kw">use </span><span class="kw">crate</span>::offset::TimeZone;
-    <span class="kw">use crate</span>::{Datelike, Duration, Utc};
+    <span class="kw">use crate</span>::{Datelike, Days, Utc};
+    <span class="attr">#[cfg(windows)]
+    </span><span class="kw">use crate</span>::{FixedOffset, MappedLocalTime, NaiveDate, NaiveDateTime};
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>verify_correct_offsets() {
@@ -466,8 +837,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>verify_correct_offsets_distant_past() {
-        <span class="comment">// let distant_past = Local::now() - Duration::days(365 * 100);
-        </span><span class="kw">let </span>distant_past = Local::now() - Duration::days(<span class="number">250 </span>* <span class="number">31</span>);
+        <span class="kw">let </span>distant_past = Local::now() - Days::new(<span class="number">365 </span>* <span class="number">500</span>);
         <span class="kw">let </span>from_local = Local.from_local_datetime(<span class="kw-2">&amp;</span>distant_past.naive_local()).unwrap();
         <span class="kw">let </span>from_utc = Local.from_utc_datetime(<span class="kw-2">&amp;</span>distant_past.naive_utc());
 
@@ -480,7 +850,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>verify_correct_offsets_distant_future() {
-        <span class="kw">let </span>distant_future = Local::now() + Duration::days(<span class="number">250 </span>* <span class="number">31</span>);
+        <span class="kw">let </span>distant_future = Local::now() + Days::new(<span class="number">365 </span>* <span class="number">35000</span>);
         <span class="kw">let </span>from_local = Local.from_local_datetime(<span class="kw-2">&amp;</span>distant_future.naive_local()).unwrap();
         <span class="kw">let </span>from_utc = Local.from_utc_datetime(<span class="kw-2">&amp;</span>distant_future.naive_utc());
 
@@ -526,12 +896,188 @@
         }
     }
 
-    <span class="doccomment">/// Test Issue #866
-    </span><span class="attr">#[test]
-    </span><span class="kw">fn </span>test_issue_866() {
-        <span class="attr">#[allow(deprecated)]
-        </span><span class="kw">let </span>local_20221106 = Local.ymd(<span class="number">2022</span>, <span class="number">11</span>, <span class="number">6</span>);
-        <span class="kw">let </span>_dt_20221106 = local_20221106.and_hms_milli_opt(<span class="number">1</span>, <span class="number">2</span>, <span class="number">59</span>, <span class="number">1000</span>).unwrap();
+    <span class="attr">#[test]
+    #[cfg(windows)]
+    </span><span class="kw">fn </span>test_lookup_with_dst_transitions() {
+        <span class="kw">let </span>ymdhms = |y, m, d, h, n, s| {
+            NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, n, s).unwrap()
+        };
+
+        <span class="attr">#[track_caller]
+        #[allow(clippy::too_many_arguments)]
+        </span><span class="kw">fn </span>compare_lookup(
+            transitions: <span class="kw-2">&amp;</span>[Transition],
+            y: i32,
+            m: u32,
+            d: u32,
+            h: u32,
+            n: u32,
+            s: u32,
+            result: MappedLocalTime&lt;FixedOffset&gt;,
+        ) {
+            <span class="kw">let </span>dt = NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, n, s).unwrap();
+            <span class="macro">assert_eq!</span>(lookup_with_dst_transitions(transitions, dt), result);
+        }
+
+        <span class="comment">// dst transition before std transition
+        // dst offset &gt; std offset
+        </span><span class="kw">let </span>std = FixedOffset::east_opt(<span class="number">3 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>dst = FixedOffset::east_opt(<span class="number">4 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>transitions = [
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>), std, dst),
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>), dst, std),
+        ];
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, MappedLocalTime::None);
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">4</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(dst, std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(dst, std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(dst, std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">4</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+
+        <span class="comment">// std transition before dst transition
+        // dst offset &gt; std offset
+        </span><span class="kw">let </span>std = FixedOffset::east_opt(-<span class="number">5 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>dst = FixedOffset::east_opt(-<span class="number">4 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>transitions = [
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>), dst, std),
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>), std, dst),
+        ];
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(dst, std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(dst, std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(dst, std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">4</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, MappedLocalTime::None);
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">4</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+
+        <span class="comment">// dst transition before std transition
+        // dst offset &lt; std offset
+        </span><span class="kw">let </span>std = FixedOffset::east_opt(<span class="number">3 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>dst = FixedOffset::east_opt((<span class="number">2 </span>* <span class="number">60 </span>+ <span class="number">30</span>) * <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>transitions = [
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>), std, dst),
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>), dst, std),
+        ];
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(std, dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">15</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(std, dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(std, dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">2</span>, <span class="number">15</span>, <span class="number">0</span>, MappedLocalTime::None);
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+
+        <span class="comment">// std transition before dst transition
+        // dst offset &lt; std offset
+        </span><span class="kw">let </span>std = FixedOffset::east_opt(-(<span class="number">4 </span>* <span class="number">60 </span>+ <span class="number">30</span>) * <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>dst = FixedOffset::east_opt(-<span class="number">5 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>transitions = [
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>), dst, std),
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>), std, dst),
+        ];
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">2</span>, <span class="number">15</span>, <span class="number">0</span>, MappedLocalTime::None);
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">24</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(std, dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">2</span>, <span class="number">15</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(std, dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, MappedLocalTime::Ambiguous(std, dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">27</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+
+        <span class="comment">// offset stays the same
+        </span><span class="kw">let </span>std = FixedOffset::east_opt(<span class="number">3 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>transitions = [
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>), std, std),
+            Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>), std, std),
+        ];
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">10</span>, <span class="number">29</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+
+        <span class="comment">// single transition
+        </span><span class="kw">let </span>std = FixedOffset::east_opt(<span class="number">3 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>dst = FixedOffset::east_opt(<span class="number">4 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>transitions = [Transition::new(ymdhms(<span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>), std, dst)];
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(std));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, MappedLocalTime::None);
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+        compare_lookup(<span class="kw-2">&amp;</span>transitions, <span class="number">2023</span>, <span class="number">3</span>, <span class="number">26</span>, <span class="number">4</span>, <span class="number">0</span>, <span class="number">0</span>, MappedLocalTime::Single(dst));
+    }
+
+    <span class="attr">#[test]
+    #[cfg(windows)]
+    </span><span class="kw">fn </span>test_lookup_with_dst_transitions_limits() {
+        <span class="comment">// Transition beyond UTC year end doesn&#39;t panic in year of `NaiveDate::MAX`
+        </span><span class="kw">let </span>std = FixedOffset::east_opt(<span class="number">3 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>dst = FixedOffset::east_opt(<span class="number">4 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>transitions = [
+            Transition::new(NaiveDateTime::MAX.with_month(<span class="number">7</span>).unwrap(), std, dst),
+            Transition::new(NaiveDateTime::MAX, dst, std),
+        ];
+        <span class="macro">assert_eq!</span>(
+            lookup_with_dst_transitions(<span class="kw-2">&amp;</span>transitions, NaiveDateTime::MAX.with_month(<span class="number">3</span>).unwrap()),
+            MappedLocalTime::Single(std)
+        );
+        <span class="macro">assert_eq!</span>(
+            lookup_with_dst_transitions(<span class="kw-2">&amp;</span>transitions, NaiveDateTime::MAX.with_month(<span class="number">8</span>).unwrap()),
+            MappedLocalTime::Single(dst)
+        );
+        <span class="comment">// Doesn&#39;t panic with `NaiveDateTime::MAX` as argument (which would be out of range when
+        // converted to UTC).
+        </span><span class="macro">assert_eq!</span>(
+            lookup_with_dst_transitions(<span class="kw-2">&amp;</span>transitions, NaiveDateTime::MAX),
+            MappedLocalTime::Ambiguous(dst, std)
+        );
+
+        <span class="comment">// Transition before UTC year end doesn&#39;t panic in year of `NaiveDate::MIN`
+        </span><span class="kw">let </span>std = FixedOffset::west_opt(<span class="number">3 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>dst = FixedOffset::west_opt(<span class="number">4 </span>* <span class="number">60 </span>* <span class="number">60</span>).unwrap();
+        <span class="kw">let </span>transitions = [
+            Transition::new(NaiveDateTime::MIN, std, dst),
+            Transition::new(NaiveDateTime::MIN.with_month(<span class="number">6</span>).unwrap(), dst, std),
+        ];
+        <span class="macro">assert_eq!</span>(
+            lookup_with_dst_transitions(<span class="kw-2">&amp;</span>transitions, NaiveDateTime::MIN.with_month(<span class="number">3</span>).unwrap()),
+            MappedLocalTime::Single(dst)
+        );
+        <span class="macro">assert_eq!</span>(
+            lookup_with_dst_transitions(<span class="kw-2">&amp;</span>transitions, NaiveDateTime::MIN.with_month(<span class="number">8</span>).unwrap()),
+            MappedLocalTime::Single(std)
+        );
+        <span class="comment">// Doesn&#39;t panic with `NaiveDateTime::MIN` as argument (which would be out of range when
+        // converted to UTC).
+        </span><span class="macro">assert_eq!</span>(
+            lookup_with_dst_transitions(<span class="kw-2">&amp;</span>transitions, NaiveDateTime::MIN),
+            MappedLocalTime::Ambiguous(std, dst)
+        );
+    }
+
+    <span class="attr">#[test]
+    #[cfg(feature = <span class="string">&quot;rkyv-validation&quot;</span>)]
+    </span><span class="kw">fn </span>test_rkyv_validation() {
+        <span class="kw">let </span>local = Local;
+        <span class="comment">// Local is a ZST and serializes to 0 bytes
+        </span><span class="kw">let </span>bytes = rkyv::to_bytes::&lt;<span class="kw">_</span>, <span class="number">0</span>&gt;(<span class="kw-2">&amp;</span>local).unwrap();
+        <span class="macro">assert_eq!</span>(bytes.len(), <span class="number">0</span>);
+
+        <span class="comment">// but is deserialized to an archived variant without a
+        // wrapping object
+        </span><span class="macro">assert_eq!</span>(rkyv::from_bytes::&lt;Local&gt;(<span class="kw-2">&amp;</span>bytes).unwrap(), <span class="kw">super</span>::ArchivedLocal);
     }
 }
 </code></pre></div></section></main></body></html>

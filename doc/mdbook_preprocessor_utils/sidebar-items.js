@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["main"],"macro":["asset_generator"],"struct":["Asset"],"trait":["SimplePreprocessor"]};
+window.SIDEBAR_ITEMS = {"fn":["copy_assets","main"],"macro":["asset_generator"],"struct":["Asset","HtmlElementBuilder"],"trait":["SimplePreprocessor"]};

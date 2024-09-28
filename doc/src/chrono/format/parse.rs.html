@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.28/src/format/parse.rs`."><title>parse.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../chrono/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.38/src/format/parse.rs`."><title>parse.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../chrono/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1841,16 +1841,6 @@
 <a href="#1841" id="1841">1841</a>
 <a href="#1842" id="1842">1842</a>
 <a href="#1843" id="1843">1843</a>
-<a href="#1844" id="1844">1844</a>
-<a href="#1845" id="1845">1845</a>
-<a href="#1846" id="1846">1846</a>
-<a href="#1847" id="1847">1847</a>
-<a href="#1848" id="1848">1848</a>
-<a href="#1849" id="1849">1849</a>
-<a href="#1850" id="1850">1850</a>
-<a href="#1851" id="1851">1851</a>
-<a href="#1852" id="1852">1852</a>
-<a href="#1853" id="1853">1853</a>
 </pre></div><pre class="rust"><code><span class="comment">// This is a part of Chrono.
 // Portions copyright (c) 2015, John Nagle.
 // See README.md and LICENSE.txt for details.
@@ -1863,8 +1853,8 @@
 
 <span class="kw">use </span><span class="kw">super</span>::scan;
 <span class="kw">use super</span>::{Fixed, InternalFixed, InternalInternal, Item, Numeric, Pad, Parsed};
-<span class="kw">use super</span>::{ParseError, ParseErrorKind, ParseResult};
-<span class="kw">use super</span>::{BAD_FORMAT, INVALID, NOT_ENOUGH, OUT_OF_RANGE, TOO_LONG, TOO_SHORT};
+<span class="kw">use super</span>::{ParseError, ParseResult};
+<span class="kw">use super</span>::{BAD_FORMAT, INVALID, OUT_OF_RANGE, TOO_LONG, TOO_SHORT};
 <span class="kw">use crate</span>::{DateTime, FixedOffset, Weekday};
 
 <span class="kw">fn </span>set_weekday_with_num_days_from_sunday(p: <span class="kw-2">&amp;mut </span>Parsed, v: i64) -&gt; ParseResult&lt;()&gt; {
@@ -1995,10 +1985,7 @@
     }
 
     s = scan::space(s)<span class="question-mark">?</span>; <span class="comment">// mandatory
-    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(offset) = <span class="macro">try_consume!</span>(scan::timezone_offset_2822(s)) {
-        <span class="comment">// only set the offset when it is definitely known (i.e. not `-0000`)
-        </span>parsed.set_offset(i64::from(offset))<span class="question-mark">?</span>;
-    }
+    </span>parsed.set_offset(i64::from(<span class="macro">try_consume!</span>(scan::timezone_offset_2822(s))))<span class="question-mark">?</span>;
 
     <span class="comment">// optional comments
     </span><span class="kw">while let </span><span class="prelude-val">Ok</span>((s_out, ())) = scan::comment_2822(s) {
@@ -2069,7 +2056,12 @@
     }
 
     <span class="kw">let </span>offset = <span class="macro">try_consume!</span>(scan::timezone_offset(s, |s| scan::char(s, <span class="string">b&#39;:&#39;</span>), <span class="bool-val">true</span>, <span class="bool-val">false</span>, <span class="bool-val">true</span>));
-    <span class="kw">if </span>offset &lt;= -<span class="number">86_400 </span>|| offset &gt;= <span class="number">86_400 </span>{
+    <span class="comment">// This range check is similar to the one in `FixedOffset::east_opt`, so it would be redundant.
+    // But it is possible to read the offset directly from `Parsed`. We want to only successfully
+    // populate `Parsed` if the input is fully valid RFC 3339.
+    // Max for the hours field is `23`, and for the minutes field `59`.
+    </span><span class="kw">const </span>MAX_RFC3339_OFFSET: i32 = (<span class="number">23 </span>* <span class="number">60 </span>+ <span class="number">59</span>) * <span class="number">60</span>;
+    <span class="kw">if </span>!(-MAX_RFC3339_OFFSET..=MAX_RFC3339_OFFSET).contains(<span class="kw-2">&amp;</span>offset) {
         <span class="kw">return </span><span class="prelude-val">Err</span>(OUT_OF_RANGE);
     }
     parsed.set_offset(i64::from(offset))<span class="question-mark">?</span>;
@@ -2098,7 +2090,11 @@
     </span>I: Iterator&lt;Item = B&gt;,
     B: Borrow&lt;Item&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
 {
-    parse_internal(parsed, s, items).map(|<span class="kw">_</span>| ()).map_err(|(_s, e)| e)
+    <span class="kw">match </span>parse_internal(parsed, s, items) {
+        <span class="prelude-val">Ok</span>(<span class="string">&quot;&quot;</span>) =&gt; <span class="prelude-val">Ok</span>(()),
+        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(TOO_LONG), <span class="comment">// if there are trailing chars it is an error
+        </span><span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
+    }
 }
 
 <span class="doccomment">/// Tries to parse given string into `parsed` with given formatting items.
@@ -2124,18 +2120,14 @@
     </span>I: Iterator&lt;Item = B&gt;,
     B: Borrow&lt;Item&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
 {
-    <span class="kw">match </span>parse_internal(parsed, s, items) {
-        <span class="prelude-val">Ok</span>(s) =&gt; <span class="prelude-val">Ok</span>(s),
-        <span class="prelude-val">Err</span>((s, ParseError(ParseErrorKind::TooLong))) =&gt; <span class="prelude-val">Ok</span>(s),
-        <span class="prelude-val">Err</span>((_s, e)) =&gt; <span class="prelude-val">Err</span>(e),
-    }
+    parse_internal(parsed, s, items)
 }
 
 <span class="kw">fn </span>parse_internal&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, I, B&gt;(
     parsed: <span class="kw-2">&amp;mut </span>Parsed,
     <span class="kw-2">mut </span>s: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>str,
     items: I,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>str, (<span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>str, ParseError)&gt;
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>str, ParseError&gt;
 <span class="kw">where
     </span>I: Iterator&lt;Item = B&gt;,
     B: Borrow&lt;Item&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
@@ -2147,7 +2139,7 @@
                     s = s_;
                     v
                 }
-                <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>((s, e)),
+                <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
             }
         }};
     }
@@ -2156,21 +2148,21 @@
         <span class="kw">match </span><span class="kw-2">*</span>item.borrow() {
             Item::Literal(prefix) =&gt; {
                 <span class="kw">if </span>s.len() &lt; prefix.len() {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>((s, TOO_SHORT));
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(TOO_SHORT);
                 }
                 <span class="kw">if </span>!s.starts_with(prefix) {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>((s, INVALID));
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(INVALID);
                 }
                 s = <span class="kw-2">&amp;</span>s[prefix.len()..];
             }
 
-            <span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+            <span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
             </span>Item::OwnedLiteral(<span class="kw-2">ref </span>prefix) =&gt; {
                 <span class="kw">if </span>s.len() &lt; prefix.len() {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>((s, TOO_SHORT));
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(TOO_SHORT);
                 }
                 <span class="kw">if </span>!s.starts_with(<span class="kw-2">&amp;</span>prefix[..]) {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>((s, INVALID));
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(INVALID);
                 }
                 s = <span class="kw-2">&amp;</span>s[prefix.len()..];
             }
@@ -2179,7 +2171,7 @@
                 s = s.trim_start();
             }
 
-            <span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+            <span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
             </span>Item::OwnedSpace(<span class="kw">_</span>) =&gt; {
                 s = s.trim_start();
             }
@@ -2218,7 +2210,7 @@
                 <span class="kw">let </span>v = <span class="kw">if </span>signed {
                     <span class="kw">if </span>s.starts_with(<span class="string">&#39;-&#39;</span>) {
                         <span class="kw">let </span>v = <span class="macro">try_consume!</span>(scan::number(<span class="kw-2">&amp;</span>s[<span class="number">1</span>..], <span class="number">1</span>, usize::MAX));
-                        <span class="number">0i64</span>.checked_sub(v).ok_or((s, OUT_OF_RANGE))<span class="question-mark">?
+                        <span class="number">0i64</span>.checked_sub(v).ok_or(OUT_OF_RANGE)<span class="question-mark">?
                     </span>} <span class="kw">else if </span>s.starts_with(<span class="string">&#39;+&#39;</span>) {
                         <span class="macro">try_consume!</span>(scan::number(<span class="kw-2">&amp;</span>s[<span class="number">1</span>..], <span class="number">1</span>, usize::MAX))
                     } <span class="kw">else </span>{
@@ -2228,7 +2220,7 @@
                 } <span class="kw">else </span>{
                     <span class="macro">try_consume!</span>(scan::number(s, <span class="number">1</span>, width))
                 };
-                set(parsed, v).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                set(parsed, v)<span class="question-mark">?</span>;
             }
 
             Item::Fixed(<span class="kw-2">ref </span>spec) =&gt; {
@@ -2237,66 +2229,66 @@
                 <span class="kw">match </span>spec {
                     <span class="kw-2">&amp;</span>ShortMonthName =&gt; {
                         <span class="kw">let </span>month0 = <span class="macro">try_consume!</span>(scan::short_month0(s));
-                        parsed.set_month(i64::from(month0) + <span class="number">1</span>).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_month(i64::from(month0) + <span class="number">1</span>)<span class="question-mark">?</span>;
                     }
 
                     <span class="kw-2">&amp;</span>LongMonthName =&gt; {
                         <span class="kw">let </span>month0 = <span class="macro">try_consume!</span>(scan::short_or_long_month0(s));
-                        parsed.set_month(i64::from(month0) + <span class="number">1</span>).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_month(i64::from(month0) + <span class="number">1</span>)<span class="question-mark">?</span>;
                     }
 
                     <span class="kw-2">&amp;</span>ShortWeekdayName =&gt; {
                         <span class="kw">let </span>weekday = <span class="macro">try_consume!</span>(scan::short_weekday(s));
-                        parsed.set_weekday(weekday).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_weekday(weekday)<span class="question-mark">?</span>;
                     }
 
                     <span class="kw-2">&amp;</span>LongWeekdayName =&gt; {
                         <span class="kw">let </span>weekday = <span class="macro">try_consume!</span>(scan::short_or_long_weekday(s));
-                        parsed.set_weekday(weekday).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_weekday(weekday)<span class="question-mark">?</span>;
                     }
 
                     <span class="kw-2">&amp;</span>LowerAmPm | <span class="kw-2">&amp;</span>UpperAmPm =&gt; {
                         <span class="kw">if </span>s.len() &lt; <span class="number">2 </span>{
-                            <span class="kw">return </span><span class="prelude-val">Err</span>((s, TOO_SHORT));
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(TOO_SHORT);
                         }
                         <span class="kw">let </span>ampm = <span class="kw">match </span>(s.as_bytes()[<span class="number">0</span>] | <span class="number">32</span>, s.as_bytes()[<span class="number">1</span>] | <span class="number">32</span>) {
                             (<span class="string">b&#39;a&#39;</span>, <span class="string">b&#39;m&#39;</span>) =&gt; <span class="bool-val">false</span>,
                             (<span class="string">b&#39;p&#39;</span>, <span class="string">b&#39;m&#39;</span>) =&gt; <span class="bool-val">true</span>,
-                            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>((s, INVALID)),
+                            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(INVALID),
                         };
-                        parsed.set_ampm(ampm).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_ampm(ampm)<span class="question-mark">?</span>;
                         s = <span class="kw-2">&amp;</span>s[<span class="number">2</span>..];
                     }
 
                     <span class="kw-2">&amp;</span>Nanosecond | <span class="kw-2">&amp;</span>Nanosecond3 | <span class="kw-2">&amp;</span>Nanosecond6 | <span class="kw-2">&amp;</span>Nanosecond9 =&gt; {
                         <span class="kw">if </span>s.starts_with(<span class="string">&#39;.&#39;</span>) {
                             <span class="kw">let </span>nano = <span class="macro">try_consume!</span>(scan::nanosecond(<span class="kw-2">&amp;</span>s[<span class="number">1</span>..]));
-                            parsed.set_nanosecond(nano).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                            parsed.set_nanosecond(nano)<span class="question-mark">?</span>;
                         }
                     }
 
                     <span class="kw-2">&amp;</span>Internal(InternalFixed { val: InternalInternal::Nanosecond3NoDot }) =&gt; {
                         <span class="kw">if </span>s.len() &lt; <span class="number">3 </span>{
-                            <span class="kw">return </span><span class="prelude-val">Err</span>((s, TOO_SHORT));
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(TOO_SHORT);
                         }
                         <span class="kw">let </span>nano = <span class="macro">try_consume!</span>(scan::nanosecond_fixed(s, <span class="number">3</span>));
-                        parsed.set_nanosecond(nano).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_nanosecond(nano)<span class="question-mark">?</span>;
                     }
 
                     <span class="kw-2">&amp;</span>Internal(InternalFixed { val: InternalInternal::Nanosecond6NoDot }) =&gt; {
                         <span class="kw">if </span>s.len() &lt; <span class="number">6 </span>{
-                            <span class="kw">return </span><span class="prelude-val">Err</span>((s, TOO_SHORT));
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(TOO_SHORT);
                         }
                         <span class="kw">let </span>nano = <span class="macro">try_consume!</span>(scan::nanosecond_fixed(s, <span class="number">6</span>));
-                        parsed.set_nanosecond(nano).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_nanosecond(nano)<span class="question-mark">?</span>;
                     }
 
                     <span class="kw-2">&amp;</span>Internal(InternalFixed { val: InternalInternal::Nanosecond9NoDot }) =&gt; {
                         <span class="kw">if </span>s.len() &lt; <span class="number">9 </span>{
-                            <span class="kw">return </span><span class="prelude-val">Err</span>((s, TOO_SHORT));
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(TOO_SHORT);
                         }
                         <span class="kw">let </span>nano = <span class="macro">try_consume!</span>(scan::nanosecond_fixed(s, <span class="number">9</span>));
-                        parsed.set_nanosecond(nano).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_nanosecond(nano)<span class="question-mark">?</span>;
                     }
 
                     <span class="kw-2">&amp;</span>TimezoneName =&gt; {
@@ -2314,7 +2306,7 @@
                             <span class="bool-val">false</span>,
                             <span class="bool-val">true</span>,
                         ));
-                        parsed.set_offset(i64::from(offset)).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_offset(i64::from(offset))<span class="question-mark">?</span>;
                     }
 
                     <span class="kw-2">&amp;</span>TimezoneOffsetColonZ | <span class="kw-2">&amp;</span>TimezoneOffsetZ =&gt; {
@@ -2325,7 +2317,7 @@
                             <span class="bool-val">false</span>,
                             <span class="bool-val">true</span>,
                         ));
-                        parsed.set_offset(i64::from(offset)).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_offset(i64::from(offset))<span class="question-mark">?</span>;
                     }
                     <span class="kw-2">&amp;</span>Internal(InternalFixed {
                         val: InternalInternal::TimezoneOffsetPermissive,
@@ -2337,7 +2329,7 @@
                             <span class="bool-val">true</span>,
                             <span class="bool-val">true</span>,
                         ));
-                        parsed.set_offset(i64::from(offset)).map_err(|e| (s, e))<span class="question-mark">?</span>;
+                        parsed.set_offset(i64::from(offset))<span class="question-mark">?</span>;
                     }
 
                     <span class="kw-2">&amp;</span>RFC2822 =&gt; <span class="macro">try_consume!</span>(parse_rfc2822(parsed, s)),
@@ -2352,17 +2344,11 @@
             }
 
             Item::Error =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>((s, BAD_FORMAT));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(BAD_FORMAT);
             }
         }
     }
-
-    <span class="comment">// if there are trailling chars, it is an error
-    </span><span class="kw">if </span>!s.is_empty() {
-        <span class="prelude-val">Err</span>((s, TOO_LONG))
-    } <span class="kw">else </span>{
-        <span class="prelude-val">Ok</span>(s)
-    }
+    <span class="prelude-val">Ok</span>(s)
 }
 
 <span class="doccomment">/// Accepts a relaxed form of RFC3339.
@@ -2421,11 +2407,7 @@
         Item::Space(<span class="string">&quot;&quot;</span>),
     ];
 
-    s = <span class="kw">match </span>parse_internal(parsed, s, DATE_ITEMS.iter()) {
-        <span class="prelude-val">Err</span>((remainder, e)) <span class="kw">if </span>e.<span class="number">0 </span>== ParseErrorKind::TooLong =&gt; remainder,
-        <span class="prelude-val">Err</span>((_s, e)) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
-        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(NOT_ENOUGH),
-    };
+    s = parse_internal(parsed, s, DATE_ITEMS.iter())<span class="question-mark">?</span>;
 
     s = <span class="kw">match </span>s.as_bytes().first() {
         <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">b&#39;t&#39; </span>| <span class="kw-2">&amp;</span><span class="string">b&#39;T&#39; </span>| <span class="kw-2">&amp;</span><span class="string">b&#39; &#39;</span>) =&gt; <span class="kw-2">&amp;</span>s[<span class="number">1</span>..],
@@ -2433,13 +2415,9 @@
         <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(TOO_SHORT),
     };
 
-    s = <span class="kw">match </span>parse_internal(parsed, s, TIME_ITEMS.iter()) {
-        <span class="prelude-val">Err</span>((s, e)) <span class="kw">if </span>e.<span class="number">0 </span>== ParseErrorKind::TooLong =&gt; s,
-        <span class="prelude-val">Err</span>((_s, e)) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
-        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(NOT_ENOUGH),
-    };
+    s = parse_internal(parsed, s, TIME_ITEMS.iter())<span class="question-mark">?</span>;
     s = s.trim_start();
-    <span class="kw">let </span>(s, offset) = <span class="kw">if </span>s.len() &gt;= <span class="number">3 </span>&amp;&amp; <span class="string">&quot;UTC&quot;</span>.eq_ignore_ascii_case(<span class="kw-2">&amp;</span>s[..<span class="number">3</span>]) {
+    <span class="kw">let </span>(s, offset) = <span class="kw">if </span>s.len() &gt;= <span class="number">3 </span>&amp;&amp; <span class="string">&quot;UTC&quot;</span>.as_bytes().eq_ignore_ascii_case(<span class="kw-2">&amp;</span>s.as_bytes()[..<span class="number">3</span>]) {
         (<span class="kw-2">&amp;</span>s[<span class="number">3</span>..], <span class="number">0</span>)
     } <span class="kw">else </span>{
         scan::timezone_offset(s, scan::colon_or_space, <span class="bool-val">true</span>, <span class="bool-val">false</span>, <span class="bool-val">true</span>)<span class="question-mark">?
@@ -2451,7 +2429,7 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::format::<span class="kw-2">*</span>;
-    <span class="kw">use crate</span>::{DateTime, FixedOffset, TimeZone, Timelike, Utc};
+    <span class="kw">use crate</span>::{DateTime, FixedOffset, NaiveDateTime, TimeZone, Timelike, Utc};
 
     <span class="macro">macro_rules! </span>parsed {
         ($(<span class="macro-nonterminal">$k</span>:ident: <span class="macro-nonterminal">$v</span>:expr),<span class="kw-2">*</span>) =&gt; (<span class="attr">#[allow(unused_mut)] </span>{
@@ -3492,7 +3470,6 @@
             </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:90 -0800&quot;</span>, <span class="prelude-val">Err</span>(OUT_OF_RANGE)), <span class="comment">// bad second
             </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 -0890&quot;</span>, <span class="prelude-val">Err</span>(OUT_OF_RANGE)), <span class="comment">// bad offset
             </span>(<span class="string">&quot;6 Jun 1944 04:00:00Z&quot;</span>, <span class="prelude-val">Err</span>(INVALID)),            <span class="comment">// bad offset (zulu not allowed)
-            </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 HAS&quot;</span>, <span class="prelude-val">Err</span>(NOT_ENOUGH)), <span class="comment">// bad named time zone
             // named timezones that have specific timezone offsets
             // see https://www.rfc-editor.org/rfc/rfc2822#section-4.3
             </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 GMT&quot;</span>, <span class="prelude-val">Ok</span>(ymd_hmsn(<span class="number">2015</span>, <span class="number">1</span>, <span class="number">20</span>, <span class="number">17</span>, <span class="number">35</span>, <span class="number">20</span>, <span class="number">0</span>, <span class="number">0</span>))),
@@ -3514,14 +3491,14 @@
             (<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 K&quot;</span>, <span class="prelude-val">Ok</span>(ymd_hmsn(<span class="number">2015</span>, <span class="number">1</span>, <span class="number">20</span>, <span class="number">17</span>, <span class="number">35</span>, <span class="number">20</span>, <span class="number">0</span>, <span class="number">0</span>))),
             (<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 k&quot;</span>, <span class="prelude-val">Ok</span>(ymd_hmsn(<span class="number">2015</span>, <span class="number">1</span>, <span class="number">20</span>, <span class="number">17</span>, <span class="number">35</span>, <span class="number">20</span>, <span class="number">0</span>, <span class="number">0</span>))),
             <span class="comment">// named single-letter timezone &quot;J&quot; is specifically not valid
-            </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 J&quot;</span>, <span class="prelude-val">Err</span>(NOT_ENOUGH)),
+            </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 J&quot;</span>, <span class="prelude-val">Err</span>(INVALID)),
             (<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 -0890&quot;</span>, <span class="prelude-val">Err</span>(OUT_OF_RANGE)), <span class="comment">// bad offset minutes
             </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20Z&quot;</span>, <span class="prelude-val">Err</span>(INVALID)),           <span class="comment">// bad offset: zulu not allowed
-            </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 Zulu&quot;</span>, <span class="prelude-val">Err</span>(NOT_ENOUGH)),    <span class="comment">// bad offset: zulu not allowed
-            </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 ZULU&quot;</span>, <span class="prelude-val">Err</span>(NOT_ENOUGH)),    <span class="comment">// bad offset: zulu not allowed
+            </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 Zulu&quot;</span>, <span class="prelude-val">Err</span>(INVALID)),       <span class="comment">// bad offset: zulu not allowed
+            </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 ZULU&quot;</span>, <span class="prelude-val">Err</span>(INVALID)),       <span class="comment">// bad offset: zulu not allowed
             </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 −0800&quot;</span>, <span class="prelude-val">Err</span>(INVALID)), <span class="comment">// bad offset: timezone offset using MINUS SIGN (U+2212), not specified for RFC 2822
             </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 0800&quot;</span>, <span class="prelude-val">Err</span>(INVALID)),  <span class="comment">// missing offset sign
-            </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 HAS&quot;</span>, <span class="prelude-val">Err</span>(NOT_ENOUGH)), <span class="comment">// bad named timezone
+            </span>(<span class="string">&quot;Tue, 20 Jan 2015 17:35:20 HAS&quot;</span>, <span class="prelude-val">Err</span>(INVALID)),   <span class="comment">// bad named timezone
             </span>(<span class="string">&quot;Tue, 20 Jan 2015😈17:35:20 -0800&quot;</span>, <span class="prelude-val">Err</span>(INVALID)), <span class="comment">// bad character!
         </span>];
 
@@ -3553,11 +3530,14 @@
         <span class="kw">let </span>dt = Utc.with_ymd_and_hms(<span class="number">1994</span>, <span class="number">11</span>, <span class="number">6</span>, <span class="number">8</span>, <span class="number">49</span>, <span class="number">37</span>).unwrap();
 
         <span class="comment">// Check that the format is what we expect
-        </span><span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+        </span><span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
         </span><span class="macro">assert_eq!</span>(dt.format(RFC850_FMT).to_string(), <span class="string">&quot;Sunday, 06-Nov-94 08:49:37 GMT&quot;</span>);
 
         <span class="comment">// Check that it parses correctly
-        </span><span class="macro">assert_eq!</span>(<span class="prelude-val">Ok</span>(dt), Utc.datetime_from_str(<span class="string">&quot;Sunday, 06-Nov-94 08:49:37 GMT&quot;</span>, RFC850_FMT));
+        </span><span class="macro">assert_eq!</span>(
+            NaiveDateTime::parse_from_str(<span class="string">&quot;Sunday, 06-Nov-94 08:49:37 GMT&quot;</span>, RFC850_FMT),
+            <span class="prelude-val">Ok</span>(dt.naive_utc())
+        );
 
         <span class="comment">// Check that the rest of the weekdays parse correctly (this test originally failed because
         // Sunday parsed incorrectly).
@@ -3589,7 +3569,7 @@
         ];
 
         <span class="kw">for </span>val <span class="kw">in </span><span class="kw-2">&amp;</span>testdates {
-            <span class="macro">assert_eq!</span>(<span class="prelude-val">Ok</span>(val.<span class="number">0</span>), Utc.datetime_from_str(val.<span class="number">1</span>, RFC850_FMT));
+            <span class="macro">assert_eq!</span>(NaiveDateTime::parse_from_str(val.<span class="number">1</span>, RFC850_FMT), <span class="prelude-val">Ok</span>(val.<span class="number">0</span>.naive_utc()));
         }
 
         <span class="kw">let </span>test_dates_fail = [
@@ -3608,7 +3588,7 @@
         ];
 
         <span class="kw">for </span>val <span class="kw">in </span><span class="kw-2">&amp;</span>test_dates_fail {
-            <span class="macro">assert!</span>(Utc.datetime_from_str(val, RFC850_FMT).is_err());
+            <span class="macro">assert!</span>(NaiveDateTime::parse_from_str(val, RFC850_FMT).is_err());
         }
     }
 

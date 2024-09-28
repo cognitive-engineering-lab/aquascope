@@ -206,25 +206,10 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Parser for Aquascope code blocks within Markdown.
 
 </span><span class="kw">use </span>std::{
   collections::HashMap,
-  fmt::Write,
   fs,
   path::PathBuf,
   process::{Command, Stdio},
@@ -233,6 +218,7 @@
 };
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>mdbook_preprocessor_utils::HtmlElementBuilder;
 <span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>tempfile::tempdir;
 <span class="kw">use </span>wait_timeout::ChildExt;
@@ -370,7 +356,7 @@
       <span class="kw">let </span>cache = <span class="self">self</span>.cache.read().unwrap();
       cache.get(<span class="kw-2">&amp;</span>block).cloned()
     };
-    <span class="kw">let </span>response = <span class="kw">match </span>cached_response {
+    <span class="kw">let </span>response_str = <span class="kw">match </span>cached_response {
       <span class="prelude-val">Some</span>(response) =&gt; response,
       <span class="prelude-val">None </span>=&gt; {
         <span class="kw">let </span>response = <span class="self">self</span>.run_aquascope(<span class="kw-2">&amp;</span>block)<span class="question-mark">?</span>;
@@ -382,38 +368,31 @@
         response
       }
     };
+    <span class="kw">let </span>response: serde_json::Value =
+      serde_json::from_str(response_str.trim_end())<span class="question-mark">?</span>;
 
-    <span class="kw">let </span><span class="kw-2">mut </span>html = String::from(<span class="string">r#&quot;&lt;div class=&quot;aquascope-embed&quot;&quot;#</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>html = HtmlElementBuilder::new();
+    html
+      .attr(<span class="string">&quot;class&quot;</span>, <span class="string">&quot;aquascope-embed&quot;</span>)
+      .data(<span class="string">&quot;code&quot;</span>, <span class="kw-2">&amp;</span>block.code)<span class="question-mark">?
+      </span>.data(<span class="string">&quot;annotations&quot;</span>, <span class="kw-2">&amp;</span>block.annotations)<span class="question-mark">?
+      </span>.data(<span class="string">&quot;operations&quot;</span>, <span class="kw-2">&amp;</span>block.operations)<span class="question-mark">?
+      </span>.data(<span class="string">&quot;responses&quot;</span>, response)<span class="question-mark">?</span>;
 
-    <span class="kw">let </span><span class="kw-2">mut </span>add_data = |k: <span class="kw-2">&amp;</span>str, v: <span class="kw-2">&amp;</span>str| {
-      <span class="macro">write!</span>(
-        html,
-        <span class="string">&quot; data-{}=\&quot;{}\&quot; &quot;</span>,
-        k,
-        html_escape::encode_double_quoted_attribute(v)
-      )
-    };
-
-    add_data(<span class="string">&quot;code&quot;</span>, <span class="kw-2">&amp;</span>serde_json::to_string(<span class="kw-2">&amp;</span>block.code)<span class="question-mark">?</span>)<span class="question-mark">?</span>;
-    add_data(<span class="string">&quot;annotations&quot;</span>, <span class="kw-2">&amp;</span>serde_json::to_string(<span class="kw-2">&amp;</span>block.annotations)<span class="question-mark">?</span>)<span class="question-mark">?</span>;
-    add_data(<span class="string">&quot;operations&quot;</span>, <span class="kw-2">&amp;</span>serde_json::to_string(<span class="kw-2">&amp;</span>block.operations)<span class="question-mark">?</span>)<span class="question-mark">?</span>;
-    add_data(<span class="string">&quot;responses&quot;</span>, response.trim_end())<span class="question-mark">?</span>;
     <span class="kw">let </span>config = block
       .config
       .iter()
       .map(|(k, v)| (k, v))
       .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
-    add_data(<span class="string">&quot;config&quot;</span>, <span class="kw-2">&amp;</span>serde_json::to_string(<span class="kw-2">&amp;</span>config)<span class="question-mark">?</span>)<span class="question-mark">?</span>;
+    html.data(<span class="string">&quot;config&quot;</span>, <span class="kw-2">&amp;</span>config)<span class="question-mark">?</span>;
 
     <span class="comment">// TODO: make this configurable
-    </span>add_data(<span class="string">&quot;no-interact&quot;</span>, <span class="string">&quot;true&quot;</span>)<span class="question-mark">?</span>;
+    </span>html.data(<span class="string">&quot;no-interact&quot;</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
 
     <span class="comment">// TODO: add a code path to enable this from config
     // add_data(&quot;show-bug-reporter&quot;, true)?;
 
-    </span><span class="macro">write!</span>(html, <span class="string">&quot;&gt;&lt;/div&gt;&quot;</span>)<span class="question-mark">?</span>;
-
-    <span class="prelude-val">Ok</span>(html)
+    </span><span class="prelude-val">Ok</span>(html.finish())
   }
 
   <span class="kw">pub fn </span>replacements(
@@ -421,21 +400,14 @@
     content: <span class="kw-2">&amp;</span>str,
   ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(std::ops::Range&lt;usize&gt;, String)&gt;&gt; {
     <span class="kw">let </span>to_process = AquascopeBlock::parse_all(content);
-    <span class="kw">let </span><span class="kw-2">mut </span>replacements = to_process
+    to_process
       .into_par_iter()
       .map(|(range, block)| {
         <span class="kw">let </span>html = <span class="self">self</span>.process_code(block)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>((range, html))
       })
-      .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
-
-    replacements.extend(
-      <span class="kw">crate</span>::permissions::parse_perms(content).collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>,
-    );
-
-    replacements.sort_by_key(|(range, <span class="kw">_</span>)| range.start);
-
-    <span class="prelude-val">Ok</span>(replacements)
+      .chain(<span class="kw">crate</span>::permissions::parse_perms(content).par_bridge())
+      .collect()
   }
 
   <span class="kw">pub fn </span>save_cache(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {

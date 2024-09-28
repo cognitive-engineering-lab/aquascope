@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.28/src/format/formatting.rs`."><title>formatting.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../chrono/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.38/src/format/formatting.rs`."><title>formatting.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../chrono/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -901,126 +901,38 @@
 <a href="#901" id="901">901</a>
 <a href="#902" id="902">902</a>
 <a href="#903" id="903">903</a>
-<a href="#904" id="904">904</a>
-<a href="#905" id="905">905</a>
-<a href="#906" id="906">906</a>
-<a href="#907" id="907">907</a>
-<a href="#908" id="908">908</a>
-<a href="#909" id="909">909</a>
-<a href="#910" id="910">910</a>
-<a href="#911" id="911">911</a>
-<a href="#912" id="912">912</a>
-<a href="#913" id="913">913</a>
-<a href="#914" id="914">914</a>
-<a href="#915" id="915">915</a>
-<a href="#916" id="916">916</a>
-<a href="#917" id="917">917</a>
-<a href="#918" id="918">918</a>
-<a href="#919" id="919">919</a>
-<a href="#920" id="920">920</a>
-<a href="#921" id="921">921</a>
-<a href="#922" id="922">922</a>
-<a href="#923" id="923">923</a>
-<a href="#924" id="924">924</a>
-<a href="#925" id="925">925</a>
-<a href="#926" id="926">926</a>
-<a href="#927" id="927">927</a>
-<a href="#928" id="928">928</a>
-<a href="#929" id="929">929</a>
-<a href="#930" id="930">930</a>
-<a href="#931" id="931">931</a>
-<a href="#932" id="932">932</a>
-<a href="#933" id="933">933</a>
-<a href="#934" id="934">934</a>
-<a href="#935" id="935">935</a>
-<a href="#936" id="936">936</a>
-<a href="#937" id="937">937</a>
-<a href="#938" id="938">938</a>
-<a href="#939" id="939">939</a>
-<a href="#940" id="940">940</a>
-<a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a>
-<a href="#947" id="947">947</a>
-<a href="#948" id="948">948</a>
-<a href="#949" id="949">949</a>
-<a href="#950" id="950">950</a>
-<a href="#951" id="951">951</a>
-<a href="#952" id="952">952</a>
-<a href="#953" id="953">953</a>
-<a href="#954" id="954">954</a>
-<a href="#955" id="955">955</a>
-<a href="#956" id="956">956</a>
-<a href="#957" id="957">957</a>
-<a href="#958" id="958">958</a>
-<a href="#959" id="959">959</a>
-<a href="#960" id="960">960</a>
-<a href="#961" id="961">961</a>
-<a href="#962" id="962">962</a>
-<a href="#963" id="963">963</a>
-<a href="#964" id="964">964</a>
-<a href="#965" id="965">965</a>
-<a href="#966" id="966">966</a>
-<a href="#967" id="967">967</a>
-<a href="#968" id="968">968</a>
-<a href="#969" id="969">969</a>
-<a href="#970" id="970">970</a>
-<a href="#971" id="971">971</a>
-<a href="#972" id="972">972</a>
-<a href="#973" id="973">973</a>
-<a href="#974" id="974">974</a>
 </pre></div><pre class="rust"><code><span class="comment">// This is a part of Chrono.
 // See README.md and LICENSE.txt for details.
 
 </span><span class="doccomment">//! Date and time formatting routines.
 
-</span><span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
+</span><span class="attr">#[cfg(all(feature = <span class="string">&quot;alloc&quot;</span>, not(feature = <span class="string">&quot;std&quot;</span>), not(test)))]
 </span><span class="kw">use </span>alloc::string::{String, ToString};
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
 </span><span class="kw">use </span>core::borrow::Borrow;
-<span class="kw">use </span>core::fmt;
-<span class="kw">use </span>core::fmt::Write;
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
+</span><span class="kw">use </span>core::fmt::Display;
+<span class="kw">use </span>core::fmt::{<span class="self">self</span>, Write};
 
-<span class="attr">#[cfg(any(
-    feature = <span class="string">&quot;alloc&quot;</span>,
-    feature = <span class="string">&quot;std&quot;</span>,
-    feature = <span class="string">&quot;serde&quot;</span>,
-    feature = <span class="string">&quot;rustc-serialize&quot;
-</span>))]
-</span><span class="kw">use </span><span class="kw">crate</span>::datetime::SecondsFormat;
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
 </span><span class="kw">use </span><span class="kw">crate</span>::offset::Offset;
-<span class="attr">#[cfg(any(
-    feature = <span class="string">&quot;alloc&quot;</span>,
-    feature = <span class="string">&quot;std&quot;</span>,
-    feature = <span class="string">&quot;serde&quot;</span>,
-    feature = <span class="string">&quot;rustc-serialize&quot;
-</span>))]
+<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;serde&quot;</span>))]
 </span><span class="kw">use crate</span>::{Datelike, FixedOffset, NaiveDateTime, Timelike};
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
 </span><span class="kw">use crate</span>::{NaiveDate, NaiveTime, Weekday};
 
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
 </span><span class="kw">use </span><span class="kw">super</span>::locales;
-<span class="attr">#[cfg(any(
-    feature = <span class="string">&quot;alloc&quot;</span>,
-    feature = <span class="string">&quot;std&quot;</span>,
-    feature = <span class="string">&quot;serde&quot;</span>,
-    feature = <span class="string">&quot;rustc-serialize&quot;
-</span>))]
+<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;serde&quot;</span>))]
 </span><span class="kw">use super</span>::{Colons, OffsetFormat, OffsetPrecision, Pad};
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
-</span><span class="kw">use super</span>::{Fixed, InternalFixed, InternalInternal, Item, Locale, Numeric};
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
+</span><span class="kw">use super</span>::{Fixed, InternalFixed, InternalInternal, Item, Numeric};
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
 </span><span class="kw">use </span>locales::<span class="kw-2">*</span>;
 
 <span class="doccomment">/// A *temporary* object which can be used as an argument to `format!` or others.
 /// This is normally constructed via `format` methods of each date and time type.
-</span><span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
-#[cfg_attr(docsrs, doc(cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))))]
+</span><span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
 #[derive(Debug)]
 </span><span class="kw">pub struct </span>DelayedFormat&lt;I&gt; {
     <span class="doccomment">/// The date view, if any.
@@ -1032,25 +944,16 @@
     <span class="doccomment">/// An iterator returning formatting items.
     </span>items: I,
     <span class="doccomment">/// Locale used for text.
-    </span><span class="comment">// TODO: Only used with the locale feature. We should make this property
-    // only present when the feature is enabled.
-    </span><span class="attr">#[cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)]
-    </span>locale: <span class="prelude-ty">Option</span>&lt;Locale&gt;,
+    /// ZST if the `unstable-locales` feature is not enabled.
+    </span>locale: Locale,
 }
 
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, I: Iterator&lt;Item = B&gt; + Clone, B: Borrow&lt;Item&lt;<span class="lifetime">&#39;a</span>&gt;&gt;&gt; DelayedFormat&lt;I&gt; {
     <span class="doccomment">/// Makes a new `DelayedFormat` value out of local date and time.
     </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>new(date: <span class="prelude-ty">Option</span>&lt;NaiveDate&gt;, time: <span class="prelude-ty">Option</span>&lt;NaiveTime&gt;, items: I) -&gt; DelayedFormat&lt;I&gt; {
-        DelayedFormat {
-            date,
-            time,
-            off: <span class="prelude-val">None</span>,
-            items,
-            <span class="attr">#[cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)]
-            </span>locale: <span class="prelude-val">None</span>,
-        }
+        DelayedFormat { date, time, off: <span class="prelude-val">None</span>, items, locale: default_locale() }
     }
 
     <span class="doccomment">/// Makes a new `DelayedFormat` value out of local date and time and UTC offset.
@@ -1062,22 +965,14 @@
         items: I,
     ) -&gt; DelayedFormat&lt;I&gt;
     <span class="kw">where
-        </span>Off: Offset + fmt::Display,
+        </span>Off: Offset + Display,
     {
         <span class="kw">let </span>name_and_diff = (offset.to_string(), offset.fix());
-        DelayedFormat {
-            date,
-            time,
-            off: <span class="prelude-val">Some</span>(name_and_diff),
-            items,
-            <span class="attr">#[cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)]
-            </span>locale: <span class="prelude-val">None</span>,
-        }
+        DelayedFormat { date, time, off: <span class="prelude-val">Some</span>(name_and_diff), items, locale: default_locale() }
     }
 
     <span class="doccomment">/// Makes a new `DelayedFormat` value out of local date and time and locale.
     </span><span class="attr">#[cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)]
-    #[cfg_attr(docsrs, doc(cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)))]
     #[must_use]
     </span><span class="kw">pub fn </span>new_with_locale(
         date: <span class="prelude-ty">Option</span>&lt;NaiveDate&gt;,
@@ -1085,12 +980,11 @@
         items: I,
         locale: Locale,
     ) -&gt; DelayedFormat&lt;I&gt; {
-        DelayedFormat { date, time, off: <span class="prelude-val">None</span>, items, locale: <span class="prelude-val">Some</span>(locale) }
+        DelayedFormat { date, time, off: <span class="prelude-val">None</span>, items, locale }
     }
 
     <span class="doccomment">/// Makes a new `DelayedFormat` value out of local date and time, UTC offset and locale.
     </span><span class="attr">#[cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)]
-    #[cfg_attr(docsrs, doc(cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)))]
     #[must_use]
     </span><span class="kw">pub fn </span>new_with_offset_and_locale&lt;Off&gt;(
         date: <span class="prelude-ty">Option</span>&lt;NaiveDate&gt;,
@@ -1100,38 +994,245 @@
         locale: Locale,
     ) -&gt; DelayedFormat&lt;I&gt;
     <span class="kw">where
-        </span>Off: Offset + fmt::Display,
+        </span>Off: Offset + Display,
     {
         <span class="kw">let </span>name_and_diff = (offset.to_string(), offset.fix());
-        DelayedFormat { date, time, off: <span class="prelude-val">Some</span>(name_and_diff), items, locale: <span class="prelude-val">Some</span>(locale) }
+        DelayedFormat { date, time, off: <span class="prelude-val">Some</span>(name_and_diff), items, locale }
     }
-}
 
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, I: Iterator&lt;Item = B&gt; + Clone, B: Borrow&lt;Item&lt;<span class="lifetime">&#39;a</span>&gt;&gt;&gt; fmt::Display <span class="kw">for </span>DelayedFormat&lt;I&gt; {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
-        <span class="attr">#[cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)]
-        </span>{
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(locale) = <span class="self">self</span>.locale {
-                <span class="kw">return </span>format_localized(
-                    f,
-                    <span class="self">self</span>.date.as_ref(),
-                    <span class="self">self</span>.time.as_ref(),
-                    <span class="self">self</span>.off.as_ref(),
-                    <span class="self">self</span>.items.clone(),
-                    locale,
-                );
+    <span class="kw">fn </span>format(<span class="kw-2">&amp;</span><span class="self">self</span>, w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write) -&gt; fmt::Result {
+        <span class="kw">for </span>item <span class="kw">in </span><span class="self">self</span>.items.clone() {
+            <span class="kw">match </span><span class="kw-2">*</span>item.borrow() {
+                Item::Literal(s) | Item::Space(s) =&gt; w.write_str(s),
+                <span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
+                </span>Item::OwnedLiteral(<span class="kw-2">ref </span>s) | Item::OwnedSpace(<span class="kw-2">ref </span>s) =&gt; w.write_str(s),
+                Item::Numeric(<span class="kw-2">ref </span>spec, pad) =&gt; <span class="self">self</span>.format_numeric(w, spec, pad),
+                Item::Fixed(<span class="kw-2">ref </span>spec) =&gt; <span class="self">self</span>.format_fixed(w, spec),
+                Item::Error =&gt; <span class="prelude-val">Err</span>(fmt::Error),
+            }<span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
+    </span><span class="kw">fn </span>format_numeric(<span class="kw-2">&amp;</span><span class="self">self</span>, w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write, spec: <span class="kw-2">&amp;</span>Numeric, pad: Pad) -&gt; fmt::Result {
+        <span class="kw">use </span><span class="self">self</span>::Numeric::<span class="kw-2">*</span>;
+
+        <span class="kw">fn </span>write_one(w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write, v: u8) -&gt; fmt::Result {
+            w.write_char((<span class="string">b&#39;0&#39; </span>+ v) <span class="kw">as </span>char)
+        }
+
+        <span class="kw">fn </span>write_two(w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write, v: u8, pad: Pad) -&gt; fmt::Result {
+            <span class="kw">let </span>ones = <span class="string">b&#39;0&#39; </span>+ v % <span class="number">10</span>;
+            <span class="kw">match </span>(v / <span class="number">10</span>, pad) {
+                (<span class="number">0</span>, Pad::None) =&gt; {}
+                (<span class="number">0</span>, Pad::Space) =&gt; w.write_char(<span class="string">&#39; &#39;</span>)<span class="question-mark">?</span>,
+                (tens, <span class="kw">_</span>) =&gt; w.write_char((<span class="string">b&#39;0&#39; </span>+ tens) <span class="kw">as </span>char)<span class="question-mark">?</span>,
+            }
+            w.write_char(ones <span class="kw">as </span>char)
+        }
+
+        <span class="attr">#[inline]
+        </span><span class="kw">fn </span>write_year(w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write, year: i32, pad: Pad) -&gt; fmt::Result {
+            <span class="kw">if </span>(<span class="number">1000</span>..=<span class="number">9999</span>).contains(<span class="kw-2">&amp;</span>year) {
+                <span class="comment">// fast path
+                </span>write_hundreds(w, (year / <span class="number">100</span>) <span class="kw">as </span>u8)<span class="question-mark">?</span>;
+                write_hundreds(w, (year % <span class="number">100</span>) <span class="kw">as </span>u8)
+            } <span class="kw">else </span>{
+                write_n(w, <span class="number">4</span>, year <span class="kw">as </span>i64, pad, !(<span class="number">0</span>..<span class="number">10_000</span>).contains(<span class="kw-2">&amp;</span>year))
             }
         }
 
-        format(f, <span class="self">self</span>.date.as_ref(), <span class="self">self</span>.time.as_ref(), <span class="self">self</span>.off.as_ref(), <span class="self">self</span>.items.clone())
+        <span class="kw">fn </span>write_n(
+            w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write,
+            n: usize,
+            v: i64,
+            pad: Pad,
+            always_sign: bool,
+        ) -&gt; fmt::Result {
+            <span class="kw">if </span>always_sign {
+                <span class="kw">match </span>pad {
+                    Pad::None =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:+}&quot;</span>, v),
+                    Pad::Zero =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:+01$}&quot;</span>, v, n + <span class="number">1</span>),
+                    Pad::Space =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:+1$}&quot;</span>, v, n + <span class="number">1</span>),
+                }
+            } <span class="kw">else </span>{
+                <span class="kw">match </span>pad {
+                    Pad::None =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{}&quot;</span>, v),
+                    Pad::Zero =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:01$}&quot;</span>, v, n),
+                    Pad::Space =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:1$}&quot;</span>, v, n),
+                }
+            }
+        }
+
+        <span class="kw">match </span>(spec, <span class="self">self</span>.date, <span class="self">self</span>.time) {
+            (Year, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_year(w, d.year(), pad),
+            (YearDiv100, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_two(w, d.year().div_euclid(<span class="number">100</span>) <span class="kw">as </span>u8, pad),
+            (YearMod100, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_two(w, d.year().rem_euclid(<span class="number">100</span>) <span class="kw">as </span>u8, pad),
+            (IsoYear, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_year(w, d.iso_week().year(), pad),
+            (IsoYearDiv100, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; {
+                write_two(w, d.iso_week().year().div_euclid(<span class="number">100</span>) <span class="kw">as </span>u8, pad)
+            }
+            (IsoYearMod100, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; {
+                write_two(w, d.iso_week().year().rem_euclid(<span class="number">100</span>) <span class="kw">as </span>u8, pad)
+            }
+            (Month, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_two(w, d.month() <span class="kw">as </span>u8, pad),
+            (Day, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_two(w, d.day() <span class="kw">as </span>u8, pad),
+            (WeekFromSun, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_two(w, d.weeks_from(Weekday::Sun) <span class="kw">as </span>u8, pad),
+            (WeekFromMon, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_two(w, d.weeks_from(Weekday::Mon) <span class="kw">as </span>u8, pad),
+            (IsoWeek, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_two(w, d.iso_week().week() <span class="kw">as </span>u8, pad),
+            (NumDaysFromSun, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_one(w, d.weekday().num_days_from_sunday() <span class="kw">as </span>u8),
+            (WeekdayFromMon, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_one(w, d.weekday().number_from_monday() <span class="kw">as </span>u8),
+            (Ordinal, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>) =&gt; write_n(w, <span class="number">3</span>, d.ordinal() <span class="kw">as </span>i64, pad, <span class="bool-val">false</span>),
+            (Hour, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t)) =&gt; write_two(w, t.hour() <span class="kw">as </span>u8, pad),
+            (Hour12, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t)) =&gt; write_two(w, t.hour12().<span class="number">1 </span><span class="kw">as </span>u8, pad),
+            (Minute, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t)) =&gt; write_two(w, t.minute() <span class="kw">as </span>u8, pad),
+            (Second, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t)) =&gt; {
+                write_two(w, (t.second() + t.nanosecond() / <span class="number">1_000_000_000</span>) <span class="kw">as </span>u8, pad)
+            }
+            (Nanosecond, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t)) =&gt; {
+                write_n(w, <span class="number">9</span>, (t.nanosecond() % <span class="number">1_000_000_000</span>) <span class="kw">as </span>i64, pad, <span class="bool-val">false</span>)
+            }
+            (Timestamp, <span class="prelude-val">Some</span>(d), <span class="prelude-val">Some</span>(t)) =&gt; {
+                <span class="kw">let </span>offset = <span class="self">self</span>.off.as_ref().map(|(<span class="kw">_</span>, o)| i64::from(o.local_minus_utc()));
+                <span class="kw">let </span>timestamp = d.and_time(t).and_utc().timestamp() - offset.unwrap_or(<span class="number">0</span>);
+                write_n(w, <span class="number">9</span>, timestamp, pad, <span class="bool-val">false</span>)
+            }
+            (Internal(<span class="kw">_</span>), <span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()), <span class="comment">// for future expansion
+            </span><span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(fmt::Error),          <span class="comment">// insufficient arguments for given format
+        </span>}
+    }
+
+    <span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
+    </span><span class="kw">fn </span>format_fixed(<span class="kw-2">&amp;</span><span class="self">self</span>, w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write, spec: <span class="kw-2">&amp;</span>Fixed) -&gt; fmt::Result {
+        <span class="kw">use </span>Fixed::<span class="kw-2">*</span>;
+        <span class="kw">use </span>InternalInternal::<span class="kw-2">*</span>;
+
+        <span class="kw">match </span>(spec, <span class="self">self</span>.date, <span class="self">self</span>.time, <span class="self">self</span>.off.as_ref()) {
+            (ShortMonthName, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
+                w.write_str(short_months(<span class="self">self</span>.locale)[d.month0() <span class="kw">as </span>usize])
+            }
+            (LongMonthName, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
+                w.write_str(long_months(<span class="self">self</span>.locale)[d.month0() <span class="kw">as </span>usize])
+            }
+            (ShortWeekdayName, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>, <span class="kw">_</span>) =&gt; w.write_str(
+                short_weekdays(<span class="self">self</span>.locale)[d.weekday().num_days_from_sunday() <span class="kw">as </span>usize],
+            ),
+            (LongWeekdayName, <span class="prelude-val">Some</span>(d), <span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
+                w.write_str(long_weekdays(<span class="self">self</span>.locale)[d.weekday().num_days_from_sunday() <span class="kw">as </span>usize])
+            }
+            (LowerAmPm, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t), <span class="kw">_</span>) =&gt; {
+                <span class="kw">let </span>ampm = <span class="kw">if </span>t.hour12().<span class="number">0 </span>{ am_pm(<span class="self">self</span>.locale)[<span class="number">1</span>] } <span class="kw">else </span>{ am_pm(<span class="self">self</span>.locale)[<span class="number">0</span>] };
+                <span class="kw">for </span>c <span class="kw">in </span>ampm.chars().flat_map(|c| c.to_lowercase()) {
+                    w.write_char(c)<span class="question-mark">?
+                </span>}
+                <span class="prelude-val">Ok</span>(())
+            }
+            (UpperAmPm, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t), <span class="kw">_</span>) =&gt; {
+                <span class="kw">let </span>ampm = <span class="kw">if </span>t.hour12().<span class="number">0 </span>{ am_pm(<span class="self">self</span>.locale)[<span class="number">1</span>] } <span class="kw">else </span>{ am_pm(<span class="self">self</span>.locale)[<span class="number">0</span>] };
+                w.write_str(ampm)
+            }
+            (Nanosecond, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t), <span class="kw">_</span>) =&gt; {
+                <span class="kw">let </span>nano = t.nanosecond() % <span class="number">1_000_000_000</span>;
+                <span class="kw">if </span>nano == <span class="number">0 </span>{
+                    <span class="prelude-val">Ok</span>(())
+                } <span class="kw">else </span>{
+                    w.write_str(decimal_point(<span class="self">self</span>.locale))<span class="question-mark">?</span>;
+                    <span class="kw">if </span>nano % <span class="number">1_000_000 </span>== <span class="number">0 </span>{
+                        <span class="macro">write!</span>(w, <span class="string">&quot;{:03}&quot;</span>, nano / <span class="number">1_000_000</span>)
+                    } <span class="kw">else if </span>nano % <span class="number">1_000 </span>== <span class="number">0 </span>{
+                        <span class="macro">write!</span>(w, <span class="string">&quot;{:06}&quot;</span>, nano / <span class="number">1_000</span>)
+                    } <span class="kw">else </span>{
+                        <span class="macro">write!</span>(w, <span class="string">&quot;{:09}&quot;</span>, nano)
+                    }
+                }
+            }
+            (Nanosecond3, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t), <span class="kw">_</span>) =&gt; {
+                w.write_str(decimal_point(<span class="self">self</span>.locale))<span class="question-mark">?</span>;
+                <span class="macro">write!</span>(w, <span class="string">&quot;{:03}&quot;</span>, t.nanosecond() / <span class="number">1_000_000 </span>% <span class="number">1000</span>)
+            }
+            (Nanosecond6, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t), <span class="kw">_</span>) =&gt; {
+                w.write_str(decimal_point(<span class="self">self</span>.locale))<span class="question-mark">?</span>;
+                <span class="macro">write!</span>(w, <span class="string">&quot;{:06}&quot;</span>, t.nanosecond() / <span class="number">1_000 </span>% <span class="number">1_000_000</span>)
+            }
+            (Nanosecond9, <span class="kw">_</span>, <span class="prelude-val">Some</span>(t), <span class="kw">_</span>) =&gt; {
+                w.write_str(decimal_point(<span class="self">self</span>.locale))<span class="question-mark">?</span>;
+                <span class="macro">write!</span>(w, <span class="string">&quot;{:09}&quot;</span>, t.nanosecond() % <span class="number">1_000_000_000</span>)
+            }
+            (Internal(InternalFixed { val: Nanosecond3NoDot }), <span class="kw">_</span>, <span class="prelude-val">Some</span>(t), <span class="kw">_</span>) =&gt; {
+                <span class="macro">write!</span>(w, <span class="string">&quot;{:03}&quot;</span>, t.nanosecond() / <span class="number">1_000_000 </span>% <span class="number">1_000</span>)
+            }
+            (Internal(InternalFixed { val: Nanosecond6NoDot }), <span class="kw">_</span>, <span class="prelude-val">Some</span>(t), <span class="kw">_</span>) =&gt; {
+                <span class="macro">write!</span>(w, <span class="string">&quot;{:06}&quot;</span>, t.nanosecond() / <span class="number">1_000 </span>% <span class="number">1_000_000</span>)
+            }
+            (Internal(InternalFixed { val: Nanosecond9NoDot }), <span class="kw">_</span>, <span class="prelude-val">Some</span>(t), <span class="kw">_</span>) =&gt; {
+                <span class="macro">write!</span>(w, <span class="string">&quot;{:09}&quot;</span>, t.nanosecond() % <span class="number">1_000_000_000</span>)
+            }
+            (TimezoneName, <span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>((tz_name, <span class="kw">_</span>))) =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{}&quot;</span>, tz_name),
+            (TimezoneOffset | TimezoneOffsetZ, <span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>((<span class="kw">_</span>, off))) =&gt; {
+                <span class="kw">let </span>offset_format = OffsetFormat {
+                    precision: OffsetPrecision::Minutes,
+                    colons: Colons::Maybe,
+                    allow_zulu: <span class="kw-2">*</span>spec == TimezoneOffsetZ,
+                    padding: Pad::Zero,
+                };
+                offset_format.format(w, <span class="kw-2">*</span>off)
+            }
+            (TimezoneOffsetColon | TimezoneOffsetColonZ, <span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>((<span class="kw">_</span>, off))) =&gt; {
+                <span class="kw">let </span>offset_format = OffsetFormat {
+                    precision: OffsetPrecision::Minutes,
+                    colons: Colons::Colon,
+                    allow_zulu: <span class="kw-2">*</span>spec == TimezoneOffsetColonZ,
+                    padding: Pad::Zero,
+                };
+                offset_format.format(w, <span class="kw-2">*</span>off)
+            }
+            (TimezoneOffsetDoubleColon, <span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>((<span class="kw">_</span>, off))) =&gt; {
+                <span class="kw">let </span>offset_format = OffsetFormat {
+                    precision: OffsetPrecision::Seconds,
+                    colons: Colons::Colon,
+                    allow_zulu: <span class="bool-val">false</span>,
+                    padding: Pad::Zero,
+                };
+                offset_format.format(w, <span class="kw-2">*</span>off)
+            }
+            (TimezoneOffsetTripleColon, <span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>((<span class="kw">_</span>, off))) =&gt; {
+                <span class="kw">let </span>offset_format = OffsetFormat {
+                    precision: OffsetPrecision::Hours,
+                    colons: Colons::None,
+                    allow_zulu: <span class="bool-val">false</span>,
+                    padding: Pad::Zero,
+                };
+                offset_format.format(w, <span class="kw-2">*</span>off)
+            }
+            (RFC2822, <span class="prelude-val">Some</span>(d), <span class="prelude-val">Some</span>(t), <span class="prelude-val">Some</span>((<span class="kw">_</span>, off))) =&gt; {
+                write_rfc2822(w, <span class="kw">crate</span>::NaiveDateTime::new(d, t), <span class="kw-2">*</span>off)
+            }
+            (RFC3339, <span class="prelude-val">Some</span>(d), <span class="prelude-val">Some</span>(t), <span class="prelude-val">Some</span>((<span class="kw">_</span>, off))) =&gt; write_rfc3339(
+                w,
+                <span class="kw">crate</span>::NaiveDateTime::new(d, t),
+                <span class="kw-2">*</span>off,
+                SecondsFormat::AutoSi,
+                <span class="bool-val">false</span>,
+            ),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(fmt::Error), <span class="comment">// insufficient arguments for given format
+        </span>}
+    }
+}
+
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, I: Iterator&lt;Item = B&gt; + Clone, B: Borrow&lt;Item&lt;<span class="lifetime">&#39;a</span>&gt;&gt;&gt; Display <span class="kw">for </span>DelayedFormat&lt;I&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+        <span class="kw">let </span><span class="kw-2">mut </span>result = String::new();
+        <span class="self">self</span>.format(<span class="kw-2">&amp;mut </span>result)<span class="question-mark">?</span>;
+        f.pad(<span class="kw-2">&amp;</span>result)
     }
 }
 
 <span class="doccomment">/// Tries to format given arguments with given formatting items.
 /// Internally used by `DelayedFormat`.
-</span><span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
-#[cfg_attr(docsrs, doc(cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))))]
+</span><span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
+#[deprecated(since = <span class="string">&quot;0.4.32&quot;</span>, note = <span class="string">&quot;Use DelayedFormat::fmt instead&quot;</span>)]
 </span><span class="kw">pub fn </span>format&lt;<span class="lifetime">&#39;a</span>, I, B&gt;(
     w: <span class="kw-2">&amp;mut </span>fmt::Formatter,
     date: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>NaiveDate&gt;,
@@ -1143,15 +1244,19 @@
     </span>I: Iterator&lt;Item = B&gt; + Clone,
     B: Borrow&lt;Item&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
 {
-    <span class="kw">let </span><span class="kw-2">mut </span>result = String::new();
-    <span class="kw">for </span>item <span class="kw">in </span>items {
-        format_inner(<span class="kw-2">&amp;mut </span>result, date, time, off, item.borrow(), <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+    DelayedFormat {
+        date: date.copied(),
+        time: time.copied(),
+        off: off.cloned(),
+        items,
+        locale: default_locale(),
     }
-    w.pad(<span class="kw-2">&amp;</span>result)
+    .fmt(w)
 }
+
 <span class="doccomment">/// Formats single formatting item
-</span><span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
-#[cfg_attr(docsrs, doc(cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))))]
+</span><span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
+#[deprecated(since = <span class="string">&quot;0.4.32&quot;</span>, note = <span class="string">&quot;Use DelayedFormat::fmt instead&quot;</span>)]
 </span><span class="kw">pub fn </span>format_item(
     w: <span class="kw-2">&amp;mut </span>fmt::Formatter,
     date: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>NaiveDate&gt;,
@@ -1159,287 +1264,17 @@
     off: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(String, FixedOffset)&gt;,
     item: <span class="kw-2">&amp;</span>Item&lt;<span class="lifetime">&#39;_</span>&gt;,
 ) -&gt; fmt::Result {
-    <span class="kw">let </span><span class="kw-2">mut </span>result = String::new();
-    format_inner(<span class="kw-2">&amp;mut </span>result, date, time, off, item, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
-    w.pad(<span class="kw-2">&amp;</span>result)
-}
-
-<span class="doccomment">/// Tries to format given arguments with given formatting items.
-/// Internally used by `DelayedFormat`.
-</span><span class="attr">#[cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)]
-#[cfg_attr(docsrs, doc(cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)))]
-</span><span class="kw">pub fn </span>format_localized&lt;<span class="lifetime">&#39;a</span>, I, B&gt;(
-    w: <span class="kw-2">&amp;mut </span>fmt::Formatter,
-    date: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>NaiveDate&gt;,
-    time: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>NaiveTime&gt;,
-    off: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(String, FixedOffset)&gt;,
-    items: I,
-    locale: Locale,
-) -&gt; fmt::Result
-<span class="kw">where
-    </span>I: Iterator&lt;Item = B&gt; + Clone,
-    B: Borrow&lt;Item&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
-{
-    <span class="kw">let </span><span class="kw-2">mut </span>result = String::new();
-    <span class="kw">for </span>item <span class="kw">in </span>items {
-        format_inner(<span class="kw-2">&amp;mut </span>result, date, time, off, item.borrow(), <span class="prelude-val">Some</span>(locale))<span class="question-mark">?</span>;
+    DelayedFormat {
+        date: date.copied(),
+        time: time.copied(),
+        off: off.cloned(),
+        items: [item].into_iter(),
+        locale: default_locale(),
     }
-    w.pad(<span class="kw-2">&amp;</span>result)
+    .fmt(w)
 }
 
-<span class="doccomment">/// Formats single formatting item
-</span><span class="attr">#[cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)]
-#[cfg_attr(docsrs, doc(cfg(feature = <span class="string">&quot;unstable-locales&quot;</span>)))]
-</span><span class="kw">pub fn </span>format_item_localized(
-    w: <span class="kw-2">&amp;mut </span>fmt::Formatter,
-    date: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>NaiveDate&gt;,
-    time: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>NaiveTime&gt;,
-    off: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(String, FixedOffset)&gt;,
-    item: <span class="kw-2">&amp;</span>Item&lt;<span class="lifetime">&#39;_</span>&gt;,
-    locale: Locale,
-) -&gt; fmt::Result {
-    <span class="kw">let </span><span class="kw-2">mut </span>result = String::new();
-    format_inner(<span class="kw-2">&amp;mut </span>result, date, time, off, item, <span class="prelude-val">Some</span>(locale))<span class="question-mark">?</span>;
-    w.pad(<span class="kw-2">&amp;</span>result)
-}
-
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
-</span><span class="kw">fn </span>format_inner(
-    w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write,
-    date: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>NaiveDate&gt;,
-    time: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>NaiveTime&gt;,
-    off: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(String, FixedOffset)&gt;,
-    item: <span class="kw-2">&amp;</span>Item&lt;<span class="lifetime">&#39;_</span>&gt;,
-    locale: <span class="prelude-ty">Option</span>&lt;Locale&gt;,
-) -&gt; fmt::Result {
-    <span class="kw">let </span>locale = locale.unwrap_or(default_locale());
-
-    <span class="kw">match </span><span class="kw-2">*</span>item {
-        Item::Literal(s) | Item::Space(s) =&gt; w.write_str(s),
-        <span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
-        </span>Item::OwnedLiteral(<span class="kw-2">ref </span>s) | Item::OwnedSpace(<span class="kw-2">ref </span>s) =&gt; w.write_str(s),
-
-        Item::Numeric(<span class="kw-2">ref </span>spec, <span class="kw-2">ref </span>pad) =&gt; {
-            <span class="kw">use </span><span class="self">self</span>::Numeric::<span class="kw-2">*</span>;
-
-            <span class="kw">let </span>week_from_sun = |d: <span class="kw-2">&amp;</span>NaiveDate| d.weeks_from(Weekday::Sun);
-            <span class="kw">let </span>week_from_mon = |d: <span class="kw-2">&amp;</span>NaiveDate| d.weeks_from(Weekday::Mon);
-
-            <span class="kw">let </span>(width, v) = <span class="kw">match </span><span class="kw-2">*</span>spec {
-                Year =&gt; (<span class="number">4</span>, date.map(|d| i64::from(d.year()))),
-                YearDiv100 =&gt; (<span class="number">2</span>, date.map(|d| i64::from(d.year()).div_euclid(<span class="number">100</span>))),
-                YearMod100 =&gt; (<span class="number">2</span>, date.map(|d| i64::from(d.year()).rem_euclid(<span class="number">100</span>))),
-                IsoYear =&gt; (<span class="number">4</span>, date.map(|d| i64::from(d.iso_week().year()))),
-                IsoYearDiv100 =&gt; (<span class="number">2</span>, date.map(|d| i64::from(d.iso_week().year()).div_euclid(<span class="number">100</span>))),
-                IsoYearMod100 =&gt; (<span class="number">2</span>, date.map(|d| i64::from(d.iso_week().year()).rem_euclid(<span class="number">100</span>))),
-                Month =&gt; (<span class="number">2</span>, date.map(|d| i64::from(d.month()))),
-                Day =&gt; (<span class="number">2</span>, date.map(|d| i64::from(d.day()))),
-                WeekFromSun =&gt; (<span class="number">2</span>, date.map(|d| i64::from(week_from_sun(d)))),
-                WeekFromMon =&gt; (<span class="number">2</span>, date.map(|d| i64::from(week_from_mon(d)))),
-                IsoWeek =&gt; (<span class="number">2</span>, date.map(|d| i64::from(d.iso_week().week()))),
-                NumDaysFromSun =&gt; (<span class="number">1</span>, date.map(|d| i64::from(d.weekday().num_days_from_sunday()))),
-                WeekdayFromMon =&gt; (<span class="number">1</span>, date.map(|d| i64::from(d.weekday().number_from_monday()))),
-                Ordinal =&gt; (<span class="number">3</span>, date.map(|d| i64::from(d.ordinal()))),
-                Hour =&gt; (<span class="number">2</span>, time.map(|t| i64::from(t.hour()))),
-                Hour12 =&gt; (<span class="number">2</span>, time.map(|t| i64::from(t.hour12().<span class="number">1</span>))),
-                Minute =&gt; (<span class="number">2</span>, time.map(|t| i64::from(t.minute()))),
-                Second =&gt; (<span class="number">2</span>, time.map(|t| i64::from(t.second() + t.nanosecond() / <span class="number">1_000_000_000</span>))),
-                Nanosecond =&gt; (<span class="number">9</span>, time.map(|t| i64::from(t.nanosecond() % <span class="number">1_000_000_000</span>))),
-                Timestamp =&gt; (
-                    <span class="number">1</span>,
-                    <span class="kw">match </span>(date, time, off) {
-                        (<span class="prelude-val">Some</span>(d), <span class="prelude-val">Some</span>(t), <span class="prelude-val">None</span>) =&gt; <span class="prelude-val">Some</span>(d.and_time(<span class="kw-2">*</span>t).timestamp()),
-                        (<span class="prelude-val">Some</span>(d), <span class="prelude-val">Some</span>(t), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>(<span class="kw">_</span>, off))) =&gt; {
-                            <span class="prelude-val">Some</span>(d.and_time(<span class="kw-2">*</span>t).timestamp() - i64::from(off.local_minus_utc()))
-                        }
-                        (<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-                    },
-                ),
-
-                <span class="comment">// for the future expansion
-                </span>Internal(<span class="kw-2">ref </span>int) =&gt; <span class="kw">match </span>int._dummy {},
-            };
-
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = v {
-                <span class="kw">if </span>(spec == <span class="kw-2">&amp;</span>Year || spec == <span class="kw-2">&amp;</span>IsoYear) &amp;&amp; !(<span class="number">0</span>..<span class="number">10_000</span>).contains(<span class="kw-2">&amp;</span>v) {
-                    <span class="comment">// non-four-digit years require an explicit sign as per ISO 8601
-                    </span><span class="kw">match </span><span class="kw-2">*</span>pad {
-                        Pad::None =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:+}&quot;</span>, v),
-                        Pad::Zero =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:+01$}&quot;</span>, v, width + <span class="number">1</span>),
-                        Pad::Space =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:+1$}&quot;</span>, v, width + <span class="number">1</span>),
-                    }
-                } <span class="kw">else </span>{
-                    <span class="kw">match </span><span class="kw-2">*</span>pad {
-                        Pad::None =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{}&quot;</span>, v),
-                        Pad::Zero =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:01$}&quot;</span>, v, width),
-                        Pad::Space =&gt; <span class="macro">write!</span>(w, <span class="string">&quot;{:1$}&quot;</span>, v, width),
-                    }
-                }
-            } <span class="kw">else </span>{
-                <span class="prelude-val">Err</span>(fmt::Error) <span class="comment">// insufficient arguments for given format
-            </span>}
-        }
-
-        Item::Fixed(<span class="kw-2">ref </span>spec) =&gt; {
-            <span class="kw">use </span><span class="self">self</span>::Fixed::<span class="kw-2">*</span>;
-
-            <span class="kw">let </span>ret = <span class="kw">match </span><span class="kw-2">*</span>spec {
-                ShortMonthName =&gt; date.map(|d| {
-                    w.write_str(short_months(locale)[d.month0() <span class="kw">as </span>usize])<span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>(())
-                }),
-                LongMonthName =&gt; date.map(|d| {
-                    w.write_str(long_months(locale)[d.month0() <span class="kw">as </span>usize])<span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>(())
-                }),
-                ShortWeekdayName =&gt; date.map(|d| {
-                    w.write_str(
-                        short_weekdays(locale)[d.weekday().num_days_from_sunday() <span class="kw">as </span>usize],
-                    )<span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>(())
-                }),
-                LongWeekdayName =&gt; date.map(|d| {
-                    w.write_str(
-                        long_weekdays(locale)[d.weekday().num_days_from_sunday() <span class="kw">as </span>usize],
-                    )<span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>(())
-                }),
-                LowerAmPm =&gt; time.map(|t| {
-                    <span class="kw">let </span>ampm = <span class="kw">if </span>t.hour12().<span class="number">0 </span>{ am_pm(locale)[<span class="number">1</span>] } <span class="kw">else </span>{ am_pm(locale)[<span class="number">0</span>] };
-                    <span class="kw">for </span>c <span class="kw">in </span>ampm.chars().flat_map(|c| c.to_lowercase()) {
-                        w.write_char(c)<span class="question-mark">?
-                    </span>}
-                    <span class="prelude-val">Ok</span>(())
-                }),
-                UpperAmPm =&gt; time.map(|t| {
-                    w.write_str(<span class="kw">if </span>t.hour12().<span class="number">0 </span>{ am_pm(locale)[<span class="number">1</span>] } <span class="kw">else </span>{ am_pm(locale)[<span class="number">0</span>] })<span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>(())
-                }),
-                Nanosecond =&gt; time.map(|t| {
-                    <span class="kw">let </span>nano = t.nanosecond() % <span class="number">1_000_000_000</span>;
-                    <span class="kw">if </span>nano == <span class="number">0 </span>{
-                        <span class="prelude-val">Ok</span>(())
-                    } <span class="kw">else </span>{
-                        w.write_str(decimal_point(locale))<span class="question-mark">?</span>;
-                        <span class="kw">if </span>nano % <span class="number">1_000_000 </span>== <span class="number">0 </span>{
-                            <span class="macro">write!</span>(w, <span class="string">&quot;{:03}&quot;</span>, nano / <span class="number">1_000_000</span>)
-                        } <span class="kw">else if </span>nano % <span class="number">1_000 </span>== <span class="number">0 </span>{
-                            <span class="macro">write!</span>(w, <span class="string">&quot;{:06}&quot;</span>, nano / <span class="number">1_000</span>)
-                        } <span class="kw">else </span>{
-                            <span class="macro">write!</span>(w, <span class="string">&quot;{:09}&quot;</span>, nano)
-                        }
-                    }
-                }),
-                Nanosecond3 =&gt; time.map(|t| {
-                    <span class="kw">let </span>nano = t.nanosecond() % <span class="number">1_000_000_000</span>;
-                    w.write_str(decimal_point(locale))<span class="question-mark">?</span>;
-                    <span class="macro">write!</span>(w, <span class="string">&quot;{:03}&quot;</span>, nano / <span class="number">1_000_000</span>)
-                }),
-                Nanosecond6 =&gt; time.map(|t| {
-                    <span class="kw">let </span>nano = t.nanosecond() % <span class="number">1_000_000_000</span>;
-                    w.write_str(decimal_point(locale))<span class="question-mark">?</span>;
-                    <span class="macro">write!</span>(w, <span class="string">&quot;{:06}&quot;</span>, nano / <span class="number">1_000</span>)
-                }),
-                Nanosecond9 =&gt; time.map(|t| {
-                    <span class="kw">let </span>nano = t.nanosecond() % <span class="number">1_000_000_000</span>;
-                    w.write_str(decimal_point(locale))<span class="question-mark">?</span>;
-                    <span class="macro">write!</span>(w, <span class="string">&quot;{:09}&quot;</span>, nano)
-                }),
-                Internal(InternalFixed { val: InternalInternal::Nanosecond3NoDot }) =&gt; {
-                    time.map(|t| {
-                        <span class="kw">let </span>nano = t.nanosecond() % <span class="number">1_000_000_000</span>;
-                        <span class="macro">write!</span>(w, <span class="string">&quot;{:03}&quot;</span>, nano / <span class="number">1_000_000</span>)
-                    })
-                }
-                Internal(InternalFixed { val: InternalInternal::Nanosecond6NoDot }) =&gt; {
-                    time.map(|t| {
-                        <span class="kw">let </span>nano = t.nanosecond() % <span class="number">1_000_000_000</span>;
-                        <span class="macro">write!</span>(w, <span class="string">&quot;{:06}&quot;</span>, nano / <span class="number">1_000</span>)
-                    })
-                }
-                Internal(InternalFixed { val: InternalInternal::Nanosecond9NoDot }) =&gt; {
-                    time.map(|t| {
-                        <span class="kw">let </span>nano = t.nanosecond() % <span class="number">1_000_000_000</span>;
-                        <span class="macro">write!</span>(w, <span class="string">&quot;{:09}&quot;</span>, nano)
-                    })
-                }
-                TimezoneName =&gt; off.map(|(name, <span class="kw">_</span>)| {
-                    w.write_str(name)<span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>(())
-                }),
-                TimezoneOffset | TimezoneOffsetZ =&gt; off.map(|<span class="kw-2">&amp;</span>(<span class="kw">_</span>, off)| {
-                    OffsetFormat {
-                        precision: OffsetPrecision::Minutes,
-                        colons: Colons::Maybe,
-                        allow_zulu: <span class="kw-2">*</span>spec == TimezoneOffsetZ,
-                        padding: Pad::Zero,
-                    }
-                    .format(w, off)
-                }),
-                TimezoneOffsetColon | TimezoneOffsetColonZ =&gt; off.map(|<span class="kw-2">&amp;</span>(<span class="kw">_</span>, off)| {
-                    OffsetFormat {
-                        precision: OffsetPrecision::Minutes,
-                        colons: Colons::Colon,
-                        allow_zulu: <span class="kw-2">*</span>spec == TimezoneOffsetColonZ,
-                        padding: Pad::Zero,
-                    }
-                    .format(w, off)
-                }),
-                TimezoneOffsetDoubleColon =&gt; off.map(|<span class="kw-2">&amp;</span>(<span class="kw">_</span>, off)| {
-                    OffsetFormat {
-                        precision: OffsetPrecision::Seconds,
-                        colons: Colons::Colon,
-                        allow_zulu: <span class="bool-val">false</span>,
-                        padding: Pad::Zero,
-                    }
-                    .format(w, off)
-                }),
-                TimezoneOffsetTripleColon =&gt; off.map(|<span class="kw-2">&amp;</span>(<span class="kw">_</span>, off)| {
-                    OffsetFormat {
-                        precision: OffsetPrecision::Hours,
-                        colons: Colons::None,
-                        allow_zulu: <span class="bool-val">false</span>,
-                        padding: Pad::Zero,
-                    }
-                    .format(w, off)
-                }),
-                Internal(InternalFixed { val: InternalInternal::TimezoneOffsetPermissive }) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(fmt::Error);
-                }
-                RFC2822 =&gt;
-                <span class="comment">// same as `%a, %d %b %Y %H:%M:%S %z`
-                </span>{
-                    <span class="kw">if let </span>(<span class="prelude-val">Some</span>(d), <span class="prelude-val">Some</span>(t), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>(<span class="kw">_</span>, off))) = (date, time, off) {
-                        <span class="prelude-val">Some</span>(write_rfc2822_inner(w, <span class="kw-2">*</span>d, <span class="kw-2">*</span>t, off, locale))
-                    } <span class="kw">else </span>{
-                        <span class="prelude-val">None
-                    </span>}
-                }
-                RFC3339 =&gt;
-                <span class="comment">// same as `%Y-%m-%dT%H:%M:%S%.f%:z`
-                </span>{
-                    <span class="kw">if let </span>(<span class="prelude-val">Some</span>(d), <span class="prelude-val">Some</span>(t), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>(<span class="kw">_</span>, off))) = (date, time, off) {
-                        <span class="prelude-val">Some</span>(write_rfc3339(
-                            w,
-                            <span class="kw">crate</span>::NaiveDateTime::new(<span class="kw-2">*</span>d, <span class="kw-2">*</span>t),
-                            off.fix(),
-                            SecondsFormat::AutoSi,
-                            <span class="bool-val">false</span>,
-                        ))
-                    } <span class="kw">else </span>{
-                        <span class="prelude-val">None
-                    </span>}
-                }
-            };
-
-            ret.unwrap_or(<span class="prelude-val">Err</span>(fmt::Error)) <span class="comment">// insufficient arguments for given format
-        </span>}
-
-        Item::Error =&gt; <span class="prelude-val">Err</span>(fmt::Error),
-    }
-}
-
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>, feature = <span class="string">&quot;serde&quot;</span>, feature = <span class="string">&quot;rustc-serialize&quot;</span>))]
+<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;serde&quot;</span>))]
 </span><span class="kw">impl </span>OffsetFormat {
     <span class="doccomment">/// Writes an offset from UTC with the format defined by `self`.
     </span><span class="kw">fn </span>format(<span class="kw-2">&amp;</span><span class="self">self</span>, w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write, off: FixedOffset) -&gt; fmt::Result {
@@ -1519,9 +1354,37 @@
     }
 }
 
+<span class="doccomment">/// Specific formatting options for seconds. This may be extended in the
+/// future, so exhaustive matching in external code is not recommended.
+///
+/// See the `TimeZone::to_rfc3339_opts` function for usage.
+</span><span class="attr">#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[allow(clippy::manual_non_exhaustive)]
+</span><span class="kw">pub enum </span>SecondsFormat {
+    <span class="doccomment">/// Format whole seconds only, with no decimal point nor subseconds.
+    </span>Secs,
+
+    <span class="doccomment">/// Use fixed 3 subsecond digits. This corresponds to [Fixed::Nanosecond3].
+    </span>Millis,
+
+    <span class="doccomment">/// Use fixed 6 subsecond digits. This corresponds to [Fixed::Nanosecond6].
+    </span>Micros,
+
+    <span class="doccomment">/// Use fixed 9 subsecond digits. This corresponds to [Fixed::Nanosecond9].
+    </span>Nanos,
+
+    <span class="doccomment">/// Automatically select one of `Secs`, `Millis`, `Micros`, or `Nanos` to display all available
+    /// non-zero sub-second digits.  This corresponds to [Fixed::Nanosecond].
+    </span>AutoSi,
+
+    <span class="comment">// Do not match against this.
+    </span><span class="attr">#[doc(hidden)]
+    </span>__NonExhaustive,
+}
+
 <span class="doccomment">/// Writes the date, time and offset to the string. same as `%Y-%m-%dT%H:%M:%S%.f%:z`
 </span><span class="attr">#[inline]
-#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>, feature = <span class="string">&quot;serde&quot;</span>, feature = <span class="string">&quot;rustc-serialize&quot;</span>))]
+#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;serde&quot;</span>))]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>write_rfc3339(
     w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write,
     dt: NaiveDateTime,
@@ -1584,47 +1447,42 @@
     .format(w, off)
 }
 
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+<span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
 </span><span class="doccomment">/// write datetimes like `Tue, 1 Jul 2003 10:52:37 +0200`, same as `%a, %d %b %Y %H:%M:%S %z`
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>write_rfc2822(
     w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write,
     dt: NaiveDateTime,
     off: FixedOffset,
 ) -&gt; fmt::Result {
-    write_rfc2822_inner(w, dt.date(), dt.time(), off, default_locale())
-}
-
-<span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
-</span><span class="doccomment">/// write datetimes like `Tue, 1 Jul 2003 10:52:37 +0200`, same as `%a, %d %b %Y %H:%M:%S %z`
-</span><span class="kw">fn </span>write_rfc2822_inner(
-    w: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Write,
-    d: NaiveDate,
-    t: NaiveTime,
-    off: FixedOffset,
-    locale: Locale,
-) -&gt; fmt::Result {
-    <span class="kw">let </span>year = d.year();
+    <span class="kw">let </span>year = dt.year();
     <span class="comment">// RFC2822 is only defined on years 0 through 9999
     </span><span class="kw">if </span>!(<span class="number">0</span>..=<span class="number">9999</span>).contains(<span class="kw-2">&amp;</span>year) {
         <span class="kw">return </span><span class="prelude-val">Err</span>(fmt::Error);
     }
 
-    w.write_str(short_weekdays(locale)[d.weekday().num_days_from_sunday() <span class="kw">as </span>usize])<span class="question-mark">?</span>;
+    <span class="kw">let </span>english = default_locale();
+
+    w.write_str(short_weekdays(english)[dt.weekday().num_days_from_sunday() <span class="kw">as </span>usize])<span class="question-mark">?</span>;
     w.write_str(<span class="string">&quot;, &quot;</span>)<span class="question-mark">?</span>;
-    write_hundreds(w, d.day() <span class="kw">as </span>u8)<span class="question-mark">?</span>;
+    <span class="kw">let </span>day = dt.day();
+    <span class="kw">if </span>day &lt; <span class="number">10 </span>{
+        w.write_char((<span class="string">b&#39;0&#39; </span>+ day <span class="kw">as </span>u8) <span class="kw">as </span>char)<span class="question-mark">?</span>;
+    } <span class="kw">else </span>{
+        write_hundreds(w, day <span class="kw">as </span>u8)<span class="question-mark">?</span>;
+    }
     w.write_char(<span class="string">&#39; &#39;</span>)<span class="question-mark">?</span>;
-    w.write_str(short_months(locale)[d.month0() <span class="kw">as </span>usize])<span class="question-mark">?</span>;
+    w.write_str(short_months(english)[dt.month0() <span class="kw">as </span>usize])<span class="question-mark">?</span>;
     w.write_char(<span class="string">&#39; &#39;</span>)<span class="question-mark">?</span>;
     write_hundreds(w, (year / <span class="number">100</span>) <span class="kw">as </span>u8)<span class="question-mark">?</span>;
     write_hundreds(w, (year % <span class="number">100</span>) <span class="kw">as </span>u8)<span class="question-mark">?</span>;
     w.write_char(<span class="string">&#39; &#39;</span>)<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>(hour, min, sec) = t.hms();
+    <span class="kw">let </span>(hour, min, sec) = dt.time().hms();
     write_hundreds(w, hour <span class="kw">as </span>u8)<span class="question-mark">?</span>;
     w.write_char(<span class="string">&#39;:&#39;</span>)<span class="question-mark">?</span>;
     write_hundreds(w, min <span class="kw">as </span>u8)<span class="question-mark">?</span>;
     w.write_char(<span class="string">&#39;:&#39;</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>sec = sec + t.nanosecond() / <span class="number">1_000_000_000</span>;
+    <span class="kw">let </span>sec = sec + dt.nanosecond() / <span class="number">1_000_000_000</span>;
     write_hundreds(w, sec <span class="kw">as </span>u8)<span class="question-mark">?</span>;
     w.write_char(<span class="string">&#39; &#39;</span>)<span class="question-mark">?</span>;
     OffsetFormat {
@@ -1649,15 +1507,15 @@
 }
 
 <span class="attr">#[cfg(test)]
-#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::{Colons, OffsetFormat, OffsetPrecision, Pad};
     <span class="kw">use </span><span class="kw">crate</span>::FixedOffset;
-    <span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+    <span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
     </span><span class="kw">use crate</span>::{NaiveDate, NaiveTime, TimeZone, Timelike, Utc};
 
     <span class="attr">#[test]
-    #[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+    #[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
     </span><span class="kw">fn </span>test_date_format() {
         <span class="kw">let </span>d = NaiveDate::from_ymd_opt(<span class="number">2012</span>, <span class="number">3</span>, <span class="number">4</span>).unwrap();
         <span class="macro">assert_eq!</span>(d.format(<span class="string">&quot;%Y,%C,%y,%G,%g&quot;</span>).to_string(), <span class="string">&quot;2012,20,12,2012,12&quot;</span>);
@@ -1702,7 +1560,7 @@
     }
 
     <span class="attr">#[test]
-    #[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+    #[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
     </span><span class="kw">fn </span>test_time_format() {
         <span class="kw">let </span>t = NaiveTime::from_hms_nano_opt(<span class="number">3</span>, <span class="number">5</span>, <span class="number">7</span>, <span class="number">98765432</span>).unwrap();
         <span class="macro">assert_eq!</span>(t.format(<span class="string">&quot;%H,%k,%I,%l,%P,%p&quot;</span>).to_string(), <span class="string">&quot;03, 3,03, 3,am,AM&quot;</span>);
@@ -1738,7 +1596,7 @@
     }
 
     <span class="attr">#[test]
-    #[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+    #[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
     </span><span class="kw">fn </span>test_datetime_format() {
         <span class="kw">let </span>dt =
             NaiveDate::from_ymd_opt(<span class="number">2010</span>, <span class="number">9</span>, <span class="number">8</span>).unwrap().and_hms_milli_opt(<span class="number">7</span>, <span class="number">6</span>, <span class="number">54</span>, <span class="number">321</span>).unwrap();
@@ -1756,7 +1614,7 @@
     </span>}
 
     <span class="attr">#[test]
-    #[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+    #[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
     </span><span class="kw">fn </span>test_datetime_format_alignment() {
         <span class="kw">let </span>datetime = Utc
             .with_ymd_and_hms(<span class="number">2007</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">12</span>, <span class="number">34</span>, <span class="number">56</span>)

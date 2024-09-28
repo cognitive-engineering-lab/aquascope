@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.28/src/naive/internals.rs`."><title>internals.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../chrono/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.38/src/naive/internals.rs`."><title>internals.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../chrono/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -589,358 +589,53 @@
 <a href="#589" id="589">589</a>
 <a href="#590" id="590">590</a>
 <a href="#591" id="591">591</a>
-<a href="#592" id="592">592</a>
-<a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
-<a href="#598" id="598">598</a>
-<a href="#599" id="599">599</a>
-<a href="#600" id="600">600</a>
-<a href="#601" id="601">601</a>
-<a href="#602" id="602">602</a>
-<a href="#603" id="603">603</a>
-<a href="#604" id="604">604</a>
-<a href="#605" id="605">605</a>
-<a href="#606" id="606">606</a>
-<a href="#607" id="607">607</a>
-<a href="#608" id="608">608</a>
-<a href="#609" id="609">609</a>
-<a href="#610" id="610">610</a>
-<a href="#611" id="611">611</a>
-<a href="#612" id="612">612</a>
-<a href="#613" id="613">613</a>
-<a href="#614" id="614">614</a>
-<a href="#615" id="615">615</a>
-<a href="#616" id="616">616</a>
-<a href="#617" id="617">617</a>
-<a href="#618" id="618">618</a>
-<a href="#619" id="619">619</a>
-<a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a>
-<a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
-<a href="#630" id="630">630</a>
-<a href="#631" id="631">631</a>
-<a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
-<a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
-<a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a>
-<a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
-<a href="#652" id="652">652</a>
-<a href="#653" id="653">653</a>
-<a href="#654" id="654">654</a>
-<a href="#655" id="655">655</a>
-<a href="#656" id="656">656</a>
-<a href="#657" id="657">657</a>
-<a href="#658" id="658">658</a>
-<a href="#659" id="659">659</a>
-<a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a>
-<a href="#662" id="662">662</a>
-<a href="#663" id="663">663</a>
-<a href="#664" id="664">664</a>
-<a href="#665" id="665">665</a>
-<a href="#666" id="666">666</a>
-<a href="#667" id="667">667</a>
-<a href="#668" id="668">668</a>
-<a href="#669" id="669">669</a>
-<a href="#670" id="670">670</a>
-<a href="#671" id="671">671</a>
-<a href="#672" id="672">672</a>
-<a href="#673" id="673">673</a>
-<a href="#674" id="674">674</a>
-<a href="#675" id="675">675</a>
-<a href="#676" id="676">676</a>
-<a href="#677" id="677">677</a>
-<a href="#678" id="678">678</a>
-<a href="#679" id="679">679</a>
-<a href="#680" id="680">680</a>
-<a href="#681" id="681">681</a>
-<a href="#682" id="682">682</a>
-<a href="#683" id="683">683</a>
-<a href="#684" id="684">684</a>
-<a href="#685" id="685">685</a>
-<a href="#686" id="686">686</a>
-<a href="#687" id="687">687</a>
-<a href="#688" id="688">688</a>
-<a href="#689" id="689">689</a>
-<a href="#690" id="690">690</a>
-<a href="#691" id="691">691</a>
-<a href="#692" id="692">692</a>
-<a href="#693" id="693">693</a>
-<a href="#694" id="694">694</a>
-<a href="#695" id="695">695</a>
-<a href="#696" id="696">696</a>
-<a href="#697" id="697">697</a>
-<a href="#698" id="698">698</a>
-<a href="#699" id="699">699</a>
-<a href="#700" id="700">700</a>
-<a href="#701" id="701">701</a>
-<a href="#702" id="702">702</a>
-<a href="#703" id="703">703</a>
-<a href="#704" id="704">704</a>
-<a href="#705" id="705">705</a>
-<a href="#706" id="706">706</a>
-<a href="#707" id="707">707</a>
-<a href="#708" id="708">708</a>
-<a href="#709" id="709">709</a>
-<a href="#710" id="710">710</a>
-<a href="#711" id="711">711</a>
-<a href="#712" id="712">712</a>
-<a href="#713" id="713">713</a>
-<a href="#714" id="714">714</a>
-<a href="#715" id="715">715</a>
-<a href="#716" id="716">716</a>
-<a href="#717" id="717">717</a>
-<a href="#718" id="718">718</a>
-<a href="#719" id="719">719</a>
-<a href="#720" id="720">720</a>
-<a href="#721" id="721">721</a>
-<a href="#722" id="722">722</a>
-<a href="#723" id="723">723</a>
-<a href="#724" id="724">724</a>
-<a href="#725" id="725">725</a>
-<a href="#726" id="726">726</a>
-<a href="#727" id="727">727</a>
-<a href="#728" id="728">728</a>
-<a href="#729" id="729">729</a>
-<a href="#730" id="730">730</a>
-<a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
-<a href="#733" id="733">733</a>
-<a href="#734" id="734">734</a>
-<a href="#735" id="735">735</a>
-<a href="#736" id="736">736</a>
-<a href="#737" id="737">737</a>
-<a href="#738" id="738">738</a>
-<a href="#739" id="739">739</a>
-<a href="#740" id="740">740</a>
-<a href="#741" id="741">741</a>
-<a href="#742" id="742">742</a>
-<a href="#743" id="743">743</a>
-<a href="#744" id="744">744</a>
-<a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
-<a href="#748" id="748">748</a>
-<a href="#749" id="749">749</a>
-<a href="#750" id="750">750</a>
-<a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
-<a href="#755" id="755">755</a>
-<a href="#756" id="756">756</a>
-<a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
-<a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a>
-<a href="#800" id="800">800</a>
-<a href="#801" id="801">801</a>
-<a href="#802" id="802">802</a>
-<a href="#803" id="803">803</a>
-<a href="#804" id="804">804</a>
-<a href="#805" id="805">805</a>
-<a href="#806" id="806">806</a>
-<a href="#807" id="807">807</a>
-<a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
-<a href="#826" id="826">826</a>
-<a href="#827" id="827">827</a>
-<a href="#828" id="828">828</a>
-<a href="#829" id="829">829</a>
-<a href="#830" id="830">830</a>
-<a href="#831" id="831">831</a>
-<a href="#832" id="832">832</a>
-<a href="#833" id="833">833</a>
-<a href="#834" id="834">834</a>
-<a href="#835" id="835">835</a>
-<a href="#836" id="836">836</a>
-<a href="#837" id="837">837</a>
-<a href="#838" id="838">838</a>
-<a href="#839" id="839">839</a>
-<a href="#840" id="840">840</a>
-<a href="#841" id="841">841</a>
-<a href="#842" id="842">842</a>
-<a href="#843" id="843">843</a>
-<a href="#844" id="844">844</a>
-<a href="#845" id="845">845</a>
-<a href="#846" id="846">846</a>
-<a href="#847" id="847">847</a>
-<a href="#848" id="848">848</a>
-<a href="#849" id="849">849</a>
-<a href="#850" id="850">850</a>
-<a href="#851" id="851">851</a>
-<a href="#852" id="852">852</a>
-<a href="#853" id="853">853</a>
-<a href="#854" id="854">854</a>
-<a href="#855" id="855">855</a>
-<a href="#856" id="856">856</a>
-<a href="#857" id="857">857</a>
-<a href="#858" id="858">858</a>
-<a href="#859" id="859">859</a>
-<a href="#860" id="860">860</a>
-<a href="#861" id="861">861</a>
-<a href="#862" id="862">862</a>
-<a href="#863" id="863">863</a>
-<a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
-<a href="#867" id="867">867</a>
-<a href="#868" id="868">868</a>
-<a href="#869" id="869">869</a>
-<a href="#870" id="870">870</a>
-<a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
-<a href="#875" id="875">875</a>
-<a href="#876" id="876">876</a>
-<a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
-<a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
-</pre></div><pre class="rust"><code><span class="comment">// This is a part of Chrono.
-// See README.md and LICENSE.txt for details.
-
-</span><span class="doccomment">//! The internal implementation of the calendar and ordinal date.
-//!
-//! The current implementation is optimized for determining year, month, day and day of week.
-//! 4-bit `YearFlags` map to one of 14 possible classes of year in the Gregorian calendar,
-//! which are included in every packed `NaiveDate` instance.
-//! The conversion between the packed calendar date (`Mdf`) and the ordinal date (`Of`) is
-//! based on the moderately-sized lookup table (~1.5KB)
-//! and the packed representation is chosen for the efficient lookup.
-//! Every internal data structure does not validate its input,
-//! but the conversion keeps the valid value valid and the invalid value invalid
-//! so that the user-facing `NaiveDate` can validate the input as late as possible.
+</pre></div><pre class="rust"><code><span class="doccomment">//! Internal helper types for working with dates.
 
 </span><span class="attr">#![cfg_attr(feature = <span class="string">&quot;__internal_bench&quot;</span>, allow(missing_docs))]
 
-</span><span class="kw">use </span><span class="kw">crate</span>::Weekday;
-<span class="kw">use </span>core::fmt;
+</span><span class="kw">use </span>core::fmt;
 
-<span class="doccomment">/// The internal date representation: `year &lt;&lt; 13 | Of`
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">type </span>DateImpl = i32;
-
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>MAX_YEAR: DateImpl = i32::MAX &gt;&gt; <span class="number">13</span>;
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>MIN_YEAR: DateImpl = i32::MIN &gt;&gt; <span class="number">13</span>;
-
-<span class="doccomment">/// The year flags (aka the dominical letter).
+<span class="doccomment">/// Year flags (aka the dominical letter).
+///
+/// `YearFlags` are used as the last four bits of `NaiveDate`, `Mdf` and `IsoWeek`.
 ///
 /// There are 14 possible classes of year in the Gregorian calendar:
 /// common and leap years starting with Monday through Sunday.
-/// The `YearFlags` stores this information into 4 bits `abbb`,
-/// where `a` is `1` for the common year (simplifies the `Of` validation)
-/// and `bbb` is a non-zero `Weekday` (mapping `Mon` to 7) of the last day in the past year
-/// (simplifies the day of week calculation from the 1-based ordinal).
+///
+/// The `YearFlags` stores this information into 4 bits `LWWW`. `L` is the leap year flag, with `1`
+/// for the common year (this simplifies validating an ordinal in `NaiveDate`). `WWW` is a non-zero
+/// `Weekday` of the last day in the preceding year.
 </span><span class="attr">#[allow(unreachable_pub)] </span><span class="comment">// public as an alias for benchmarks only
 </span><span class="attr">#[derive(PartialEq, Eq, Copy, Clone, Hash)]
 </span><span class="kw">pub struct </span>YearFlags(<span class="kw">pub</span>(<span class="kw">super</span>) u8);
 
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>A: YearFlags = YearFlags(<span class="number">0o15</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>AG: YearFlags = YearFlags(<span class="number">0o05</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>B: YearFlags = YearFlags(<span class="number">0o14</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>BA: YearFlags = YearFlags(<span class="number">0o04</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>C: YearFlags = YearFlags(<span class="number">0o13</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>CB: YearFlags = YearFlags(<span class="number">0o03</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>D: YearFlags = YearFlags(<span class="number">0o12</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>DC: YearFlags = YearFlags(<span class="number">0o02</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>E: YearFlags = YearFlags(<span class="number">0o11</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>ED: YearFlags = YearFlags(<span class="number">0o01</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>F: YearFlags = YearFlags(<span class="number">0o17</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>FE: YearFlags = YearFlags(<span class="number">0o07</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>G: YearFlags = YearFlags(<span class="number">0o16</span>);
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>GF: YearFlags = YearFlags(<span class="number">0o06</span>);
+<span class="comment">// Weekday of the last day in the preceding year.
+// Allows for quick day of week calculation from the 1-based ordinal.
+</span><span class="kw">const </span>YEAR_STARTS_AFTER_MONDAY: u8 = <span class="number">7</span>; <span class="comment">// non-zero to allow use with `NonZero*`.
+</span><span class="kw">const </span>YEAR_STARTS_AFTER_THUESDAY: u8 = <span class="number">1</span>;
+<span class="kw">const </span>YEAR_STARTS_AFTER_WEDNESDAY: u8 = <span class="number">2</span>;
+<span class="kw">const </span>YEAR_STARTS_AFTER_THURSDAY: u8 = <span class="number">3</span>;
+<span class="kw">const </span>YEAR_STARTS_AFTER_FRIDAY: u8 = <span class="number">4</span>;
+<span class="kw">const </span>YEAR_STARTS_AFTER_SATURDAY: u8 = <span class="number">5</span>;
+<span class="kw">const </span>YEAR_STARTS_AFTER_SUNDAY: u8 = <span class="number">6</span>;
+
+<span class="kw">const </span>COMMON_YEAR: u8 = <span class="number">1 </span>&lt;&lt; <span class="number">3</span>;
+<span class="kw">const </span>LEAP_YEAR: u8 = <span class="number">0 </span>&lt;&lt; <span class="number">3</span>;
+
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>A: YearFlags = YearFlags(COMMON_YEAR | YEAR_STARTS_AFTER_SATURDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>AG: YearFlags = YearFlags(LEAP_YEAR | YEAR_STARTS_AFTER_SATURDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>B: YearFlags = YearFlags(COMMON_YEAR | YEAR_STARTS_AFTER_FRIDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>BA: YearFlags = YearFlags(LEAP_YEAR | YEAR_STARTS_AFTER_FRIDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>C: YearFlags = YearFlags(COMMON_YEAR | YEAR_STARTS_AFTER_THURSDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>CB: YearFlags = YearFlags(LEAP_YEAR | YEAR_STARTS_AFTER_THURSDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>D: YearFlags = YearFlags(COMMON_YEAR | YEAR_STARTS_AFTER_WEDNESDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>DC: YearFlags = YearFlags(LEAP_YEAR | YEAR_STARTS_AFTER_WEDNESDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>E: YearFlags = YearFlags(COMMON_YEAR | YEAR_STARTS_AFTER_THUESDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>ED: YearFlags = YearFlags(LEAP_YEAR | YEAR_STARTS_AFTER_THUESDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>F: YearFlags = YearFlags(COMMON_YEAR | YEAR_STARTS_AFTER_MONDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>FE: YearFlags = YearFlags(LEAP_YEAR | YEAR_STARTS_AFTER_MONDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>G: YearFlags = YearFlags(COMMON_YEAR | YEAR_STARTS_AFTER_SUNDAY);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>GF: YearFlags = YearFlags(LEAP_YEAR | YEAR_STARTS_AFTER_SUNDAY);
 
 <span class="kw">const </span>YEAR_TO_FLAGS: <span class="kw-2">&amp;</span>[YearFlags; <span class="number">400</span>] = <span class="kw-2">&amp;</span>[
     BA, G, F, E, DC, B, A, G, FE, D, C, B, AG, F, E, D, CB, A, G, F, ED, C, B, A, GF, E, D, C, BA,
@@ -960,45 +655,6 @@
     E, D, CB, A, G, F, ED, C, B, A, GF, E, D, C, BA, G, F, E, DC, B, A, G, FE, D, C, B, AG, F, E,
     D, CB, A, G, F, ED, C, B, A, GF, E, D, C, <span class="comment">// 400
 </span>];
-
-<span class="kw">const </span>YEAR_DELTAS: <span class="kw-2">&amp;</span>[u8; <span class="number">401</span>] = <span class="kw-2">&amp;</span>[
-    <span class="number">0</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">4</span>, <span class="number">4</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">5</span>, <span class="number">5</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">6</span>, <span class="number">6</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">7</span>, <span class="number">7</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">8</span>, <span class="number">8</span>,
-    <span class="number">8</span>, <span class="number">9</span>, <span class="number">9</span>, <span class="number">9</span>, <span class="number">9</span>, <span class="number">10</span>, <span class="number">10</span>, <span class="number">10</span>, <span class="number">10</span>, <span class="number">11</span>, <span class="number">11</span>, <span class="number">11</span>, <span class="number">11</span>, <span class="number">12</span>, <span class="number">12</span>, <span class="number">12</span>, <span class="number">12</span>, <span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>, <span class="number">14</span>, <span class="number">14</span>, <span class="number">14</span>, <span class="number">14</span>,
-    <span class="number">15</span>, <span class="number">15</span>, <span class="number">15</span>, <span class="number">15</span>, <span class="number">16</span>, <span class="number">16</span>, <span class="number">16</span>, <span class="number">16</span>, <span class="number">17</span>, <span class="number">17</span>, <span class="number">17</span>, <span class="number">17</span>, <span class="number">18</span>, <span class="number">18</span>, <span class="number">18</span>, <span class="number">18</span>, <span class="number">19</span>, <span class="number">19</span>, <span class="number">19</span>, <span class="number">19</span>, <span class="number">20</span>, <span class="number">20</span>, <span class="number">20</span>, <span class="number">20</span>,
-    <span class="number">21</span>, <span class="number">21</span>, <span class="number">21</span>, <span class="number">21</span>, <span class="number">22</span>, <span class="number">22</span>, <span class="number">22</span>, <span class="number">22</span>, <span class="number">23</span>, <span class="number">23</span>, <span class="number">23</span>, <span class="number">23</span>, <span class="number">24</span>, <span class="number">24</span>, <span class="number">24</span>, <span class="number">24</span>, <span class="number">25</span>, <span class="number">25</span>, <span class="number">25</span>, <span class="comment">// 100
-    </span><span class="number">25</span>, <span class="number">25</span>, <span class="number">25</span>, <span class="number">25</span>, <span class="number">25</span>, <span class="number">26</span>, <span class="number">26</span>, <span class="number">26</span>, <span class="number">26</span>, <span class="number">27</span>, <span class="number">27</span>, <span class="number">27</span>, <span class="number">27</span>, <span class="number">28</span>, <span class="number">28</span>, <span class="number">28</span>, <span class="number">28</span>, <span class="number">29</span>, <span class="number">29</span>, <span class="number">29</span>, <span class="number">29</span>, <span class="number">30</span>, <span class="number">30</span>, <span class="number">30</span>,
-    <span class="number">30</span>, <span class="number">31</span>, <span class="number">31</span>, <span class="number">31</span>, <span class="number">31</span>, <span class="number">32</span>, <span class="number">32</span>, <span class="number">32</span>, <span class="number">32</span>, <span class="number">33</span>, <span class="number">33</span>, <span class="number">33</span>, <span class="number">33</span>, <span class="number">34</span>, <span class="number">34</span>, <span class="number">34</span>, <span class="number">34</span>, <span class="number">35</span>, <span class="number">35</span>, <span class="number">35</span>, <span class="number">35</span>, <span class="number">36</span>, <span class="number">36</span>, <span class="number">36</span>,
-    <span class="number">36</span>, <span class="number">37</span>, <span class="number">37</span>, <span class="number">37</span>, <span class="number">37</span>, <span class="number">38</span>, <span class="number">38</span>, <span class="number">38</span>, <span class="number">38</span>, <span class="number">39</span>, <span class="number">39</span>, <span class="number">39</span>, <span class="number">39</span>, <span class="number">40</span>, <span class="number">40</span>, <span class="number">40</span>, <span class="number">40</span>, <span class="number">41</span>, <span class="number">41</span>, <span class="number">41</span>, <span class="number">41</span>, <span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>,
-    <span class="number">42</span>, <span class="number">43</span>, <span class="number">43</span>, <span class="number">43</span>, <span class="number">43</span>, <span class="number">44</span>, <span class="number">44</span>, <span class="number">44</span>, <span class="number">44</span>, <span class="number">45</span>, <span class="number">45</span>, <span class="number">45</span>, <span class="number">45</span>, <span class="number">46</span>, <span class="number">46</span>, <span class="number">46</span>, <span class="number">46</span>, <span class="number">47</span>, <span class="number">47</span>, <span class="number">47</span>, <span class="number">47</span>, <span class="number">48</span>, <span class="number">48</span>, <span class="number">48</span>,
-    <span class="number">48</span>, <span class="number">49</span>, <span class="number">49</span>, <span class="number">49</span>, <span class="comment">// 200
-    </span><span class="number">49</span>, <span class="number">49</span>, <span class="number">49</span>, <span class="number">49</span>, <span class="number">49</span>, <span class="number">50</span>, <span class="number">50</span>, <span class="number">50</span>, <span class="number">50</span>, <span class="number">51</span>, <span class="number">51</span>, <span class="number">51</span>, <span class="number">51</span>, <span class="number">52</span>, <span class="number">52</span>, <span class="number">52</span>, <span class="number">52</span>, <span class="number">53</span>, <span class="number">53</span>, <span class="number">53</span>, <span class="number">53</span>, <span class="number">54</span>, <span class="number">54</span>, <span class="number">54</span>,
-    <span class="number">54</span>, <span class="number">55</span>, <span class="number">55</span>, <span class="number">55</span>, <span class="number">55</span>, <span class="number">56</span>, <span class="number">56</span>, <span class="number">56</span>, <span class="number">56</span>, <span class="number">57</span>, <span class="number">57</span>, <span class="number">57</span>, <span class="number">57</span>, <span class="number">58</span>, <span class="number">58</span>, <span class="number">58</span>, <span class="number">58</span>, <span class="number">59</span>, <span class="number">59</span>, <span class="number">59</span>, <span class="number">59</span>, <span class="number">60</span>, <span class="number">60</span>, <span class="number">60</span>,
-    <span class="number">60</span>, <span class="number">61</span>, <span class="number">61</span>, <span class="number">61</span>, <span class="number">61</span>, <span class="number">62</span>, <span class="number">62</span>, <span class="number">62</span>, <span class="number">62</span>, <span class="number">63</span>, <span class="number">63</span>, <span class="number">63</span>, <span class="number">63</span>, <span class="number">64</span>, <span class="number">64</span>, <span class="number">64</span>, <span class="number">64</span>, <span class="number">65</span>, <span class="number">65</span>, <span class="number">65</span>, <span class="number">65</span>, <span class="number">66</span>, <span class="number">66</span>, <span class="number">66</span>,
-    <span class="number">66</span>, <span class="number">67</span>, <span class="number">67</span>, <span class="number">67</span>, <span class="number">67</span>, <span class="number">68</span>, <span class="number">68</span>, <span class="number">68</span>, <span class="number">68</span>, <span class="number">69</span>, <span class="number">69</span>, <span class="number">69</span>, <span class="number">69</span>, <span class="number">70</span>, <span class="number">70</span>, <span class="number">70</span>, <span class="number">70</span>, <span class="number">71</span>, <span class="number">71</span>, <span class="number">71</span>, <span class="number">71</span>, <span class="number">72</span>, <span class="number">72</span>, <span class="number">72</span>,
-    <span class="number">72</span>, <span class="number">73</span>, <span class="number">73</span>, <span class="number">73</span>, <span class="comment">// 300
-    </span><span class="number">73</span>, <span class="number">73</span>, <span class="number">73</span>, <span class="number">73</span>, <span class="number">73</span>, <span class="number">74</span>, <span class="number">74</span>, <span class="number">74</span>, <span class="number">74</span>, <span class="number">75</span>, <span class="number">75</span>, <span class="number">75</span>, <span class="number">75</span>, <span class="number">76</span>, <span class="number">76</span>, <span class="number">76</span>, <span class="number">76</span>, <span class="number">77</span>, <span class="number">77</span>, <span class="number">77</span>, <span class="number">77</span>, <span class="number">78</span>, <span class="number">78</span>, <span class="number">78</span>,
-    <span class="number">78</span>, <span class="number">79</span>, <span class="number">79</span>, <span class="number">79</span>, <span class="number">79</span>, <span class="number">80</span>, <span class="number">80</span>, <span class="number">80</span>, <span class="number">80</span>, <span class="number">81</span>, <span class="number">81</span>, <span class="number">81</span>, <span class="number">81</span>, <span class="number">82</span>, <span class="number">82</span>, <span class="number">82</span>, <span class="number">82</span>, <span class="number">83</span>, <span class="number">83</span>, <span class="number">83</span>, <span class="number">83</span>, <span class="number">84</span>, <span class="number">84</span>, <span class="number">84</span>,
-    <span class="number">84</span>, <span class="number">85</span>, <span class="number">85</span>, <span class="number">85</span>, <span class="number">85</span>, <span class="number">86</span>, <span class="number">86</span>, <span class="number">86</span>, <span class="number">86</span>, <span class="number">87</span>, <span class="number">87</span>, <span class="number">87</span>, <span class="number">87</span>, <span class="number">88</span>, <span class="number">88</span>, <span class="number">88</span>, <span class="number">88</span>, <span class="number">89</span>, <span class="number">89</span>, <span class="number">89</span>, <span class="number">89</span>, <span class="number">90</span>, <span class="number">90</span>, <span class="number">90</span>,
-    <span class="number">90</span>, <span class="number">91</span>, <span class="number">91</span>, <span class="number">91</span>, <span class="number">91</span>, <span class="number">92</span>, <span class="number">92</span>, <span class="number">92</span>, <span class="number">92</span>, <span class="number">93</span>, <span class="number">93</span>, <span class="number">93</span>, <span class="number">93</span>, <span class="number">94</span>, <span class="number">94</span>, <span class="number">94</span>, <span class="number">94</span>, <span class="number">95</span>, <span class="number">95</span>, <span class="number">95</span>, <span class="number">95</span>, <span class="number">96</span>, <span class="number">96</span>, <span class="number">96</span>,
-    <span class="number">96</span>, <span class="number">97</span>, <span class="number">97</span>, <span class="number">97</span>, <span class="number">97</span>, <span class="comment">// 400+1
-</span>];
-
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>cycle_to_yo(cycle: u32) -&gt; (u32, u32) {
-    <span class="kw">let </span><span class="kw-2">mut </span>year_mod_400 = cycle / <span class="number">365</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>ordinal0 = cycle % <span class="number">365</span>;
-    <span class="kw">let </span>delta = YEAR_DELTAS[year_mod_400 <span class="kw">as </span>usize] <span class="kw">as </span>u32;
-    <span class="kw">if </span>ordinal0 &lt; delta {
-        year_mod_400 -= <span class="number">1</span>;
-        ordinal0 += <span class="number">365 </span>- YEAR_DELTAS[year_mod_400 <span class="kw">as </span>usize] <span class="kw">as </span>u32;
-    } <span class="kw">else </span>{
-        ordinal0 -= delta;
-    }
-    (year_mod_400, ordinal0 + <span class="number">1</span>)
-}
-
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>yo_to_cycle(year_mod_400: u32, ordinal: u32) -&gt; u32 {
-    year_mod_400 * <span class="number">365 </span>+ YEAR_DELTAS[year_mod_400 <span class="kw">as </span>usize] <span class="kw">as </span>u32 + ordinal - <span class="number">1
-</span>}
 
 <span class="kw">impl </span>YearFlags {
     <span class="attr">#[allow(unreachable_pub)] </span><span class="comment">// public as an alias for benchmarks only
@@ -1064,11 +720,13 @@
 }
 
 <span class="comment">// OL: (ordinal &lt;&lt; 1) | leap year flag
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>MIN_OL: u32 = <span class="number">1 </span>&lt;&lt; <span class="number">1</span>;
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>MAX_OL: u32 = <span class="number">366 </span>&lt;&lt; <span class="number">1</span>; <span class="comment">// `(366 &lt;&lt; 1) | 1` would be day 366 in a non-leap year
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const </span>MAX_MDL: u32 = (<span class="number">12 </span>&lt;&lt; <span class="number">6</span>) | (<span class="number">31 </span>&lt;&lt; <span class="number">1</span>) | <span class="number">1</span>;
+</span><span class="kw">const </span>MAX_OL: u32 = <span class="number">366 </span>&lt;&lt; <span class="number">1</span>; <span class="comment">// `(366 &lt;&lt; 1) | 1` would be day 366 in a non-leap year
+</span><span class="kw">const </span>MAX_MDL: u32 = (<span class="number">12 </span>&lt;&lt; <span class="number">6</span>) | (<span class="number">31 </span>&lt;&lt; <span class="number">1</span>) | <span class="number">1</span>;
 
-<span class="kw">const </span>XX: i8 = -<span class="number">128</span>;
+<span class="comment">// The next table are adjustment values to convert a date encoded as month-day-leapyear to
+// ordinal-leapyear. OL = MDL - adjustment.
+// Dates that do not exist are encoded as `XX`.
+</span><span class="kw">const </span>XX: i8 = <span class="number">0</span>;
 <span class="kw">const </span>MDL_TO_OL: <span class="kw-2">&amp;</span>[i8; MAX_MDL <span class="kw">as </span>usize + <span class="number">1</span>] = <span class="kw-2">&amp;</span>[
     XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX,
     XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX,
@@ -1153,179 +811,63 @@
     <span class="number">98</span>, <span class="comment">// 12
 </span>];
 
-<span class="doccomment">/// Ordinal (day of year) and year flags: `(ordinal &lt;&lt; 4) | flags`.
-///
-/// The whole bits except for the least 3 bits are referred as `Ol` (ordinal and leap flag),
-/// which is an index to the `OL_TO_MDL` lookup table.
-///
-/// The methods implemented on `Of` always return a valid value.
-</span><span class="attr">#[derive(PartialEq, PartialOrd, Copy, Clone)]
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>Of(u32);
-
-<span class="kw">impl </span>Of {
-    <span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>new(ordinal: u32, YearFlags(flags): YearFlags) -&gt; <span class="prelude-ty">Option</span>&lt;Of&gt; {
-        <span class="kw">let </span>of = Of((ordinal &lt;&lt; <span class="number">4</span>) | flags <span class="kw">as </span>u32);
-        of.validate()
-    }
-
-    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>from_date_impl(date_impl: DateImpl) -&gt; Of {
-        <span class="comment">// We assume the value in the `DateImpl` is valid.
-        </span>Of((date_impl &amp; <span class="number">0b1_1111_1111_1111</span>) <span class="kw">as </span>u32)
-    }
-
-    <span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>from_mdf(Mdf(mdf): Mdf) -&gt; <span class="prelude-ty">Option</span>&lt;Of&gt; {
-        <span class="kw">let </span>mdl = mdf &gt;&gt; <span class="number">3</span>;
-        <span class="kw">if </span>mdl &gt; MAX_MDL {
-            <span class="comment">// Panicking on out-of-bounds indexing would be reasonable, but just return `None`.
-            </span><span class="kw">return </span><span class="prelude-val">None</span>;
-        }
-        <span class="comment">// Array is indexed from `[1..=MAX_MDL]`, with a `0` index having a meaningless value.
-        </span><span class="kw">let </span>v = MDL_TO_OL[mdl <span class="kw">as </span>usize];
-        <span class="kw">let </span>of = Of(mdf.wrapping_sub((v <span class="kw">as </span>i32 <span class="kw">as </span>u32 &amp; <span class="number">0x3ff</span>) &lt;&lt; <span class="number">3</span>));
-        of.validate()
-    }
-
-    <span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
-        <span class="self">self</span>.<span class="number">0
-    </span>}
-
-    <span class="doccomment">/// Returns `(ordinal &lt;&lt; 1) | leap-year-flag`.
-    </span><span class="attr">#[inline]
-    </span><span class="kw">const fn </span>ol(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
-        <span class="self">self</span>.<span class="number">0 </span>&gt;&gt; <span class="number">3
-    </span>}
-
-    <span class="attr">#[inline]
-    </span><span class="kw">const fn </span>validate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Of&gt; {
-        <span class="kw">let </span>ol = <span class="self">self</span>.ol();
-        <span class="kw">match </span>ol &gt;= MIN_OL &amp;&amp; ol &lt;= MAX_OL {
-            <span class="bool-val">true </span>=&gt; <span class="prelude-val">Some</span>(<span class="self">self</span>),
-            <span class="bool-val">false </span>=&gt; <span class="prelude-val">None</span>,
-        }
-    }
-
-    <span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>ordinal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
-        <span class="self">self</span>.<span class="number">0 </span>&gt;&gt; <span class="number">4
-    </span>}
-
-    <span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>with_ordinal(<span class="kw-2">&amp;</span><span class="self">self</span>, ordinal: u32) -&gt; <span class="prelude-ty">Option</span>&lt;Of&gt; {
-        <span class="kw">let </span>of = Of((ordinal &lt;&lt; <span class="number">4</span>) | (<span class="self">self</span>.<span class="number">0 </span>&amp; <span class="number">0b1111</span>));
-        of.validate()
-    }
-
-    <span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>flags(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; YearFlags {
-        YearFlags((<span class="self">self</span>.<span class="number">0 </span>&amp; <span class="number">0b1111</span>) <span class="kw">as </span>u8)
-    }
-
-    <span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>weekday(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Weekday {
-        <span class="kw">let </span>Of(of) = <span class="kw-2">*</span><span class="self">self</span>;
-        weekday_from_u32_mod7((of &gt;&gt; <span class="number">4</span>) + (of &amp; <span class="number">0b111</span>))
-    }
-
-    <span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>isoweekdate_raw(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (u32, Weekday) {
-        <span class="comment">// week ordinal = ordinal + delta
-        </span><span class="kw">let </span>Of(of) = <span class="kw-2">*</span><span class="self">self</span>;
-        <span class="kw">let </span>weekord = (of &gt;&gt; <span class="number">4</span>).wrapping_add(<span class="self">self</span>.flags().isoweek_delta());
-        (weekord / <span class="number">7</span>, weekday_from_u32_mod7(weekord))
-    }
-
-    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cargo-clippy&quot;</span>, allow(clippy::wrong_self_convention))]
-    #[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>to_mdf(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Mdf {
-        Mdf::from_of(<span class="kw-2">*</span><span class="self">self</span>)
-    }
-
-    <span class="doccomment">/// Returns an `Of` with the next day, or `None` if this is the last day of the year.
-    </span><span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>succ(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Of&gt; {
-        <span class="kw">let </span>of = Of(<span class="self">self</span>.<span class="number">0 </span>+ (<span class="number">1 </span>&lt;&lt; <span class="number">4</span>));
-        of.validate()
-    }
-
-    <span class="doccomment">/// Returns an `Of` with the previous day, or `None` if this is the first day of the year.
-    </span><span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>pred(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Of&gt; {
-        <span class="kw">match </span><span class="self">self</span>.ordinal() {
-            <span class="number">1 </span>=&gt; <span class="prelude-val">None</span>,
-            <span class="kw">_ </span>=&gt; <span class="prelude-val">Some</span>(Of(<span class="self">self</span>.<span class="number">0 </span>- (<span class="number">1 </span>&lt;&lt; <span class="number">4</span>))),
-        }
-    }
-}
-
-<span class="kw">impl </span>fmt::Debug <span class="kw">for </span>Of {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
-        <span class="kw">let </span>Of(of) = <span class="kw-2">*</span><span class="self">self</span>;
-        <span class="macro">write!</span>(
-            f,
-            <span class="string">&quot;Of(({} &lt;&lt; 4) | {:#04o} /*{:?}*/)&quot;</span>,
-            of &gt;&gt; <span class="number">4</span>,
-            of &amp; <span class="number">0b1111</span>,
-            YearFlags((of &amp; <span class="number">0b1111</span>) <span class="kw">as </span>u8)
-        )
-    }
-}
-
 <span class="doccomment">/// Month, day of month and year flags: `(month &lt;&lt; 9) | (day &lt;&lt; 4) | flags`
+/// `M_MMMD_DDDD_LFFF`
 ///
-/// The whole bits except for the least 3 bits are referred as `Mdl`
-/// (month, day of month and leap flag),
-/// which is an index to the `MDL_TO_OL` lookup table.
+/// The whole bits except for the least 3 bits are referred as `Mdl` (month, day of month, and leap
+/// year flag), which is an index to the `MDL_TO_OL` lookup table.
 ///
-/// The methods implemented on `Mdf` do not always return a valid value.
-/// Dates that can&#39;t exist, like February 30, can still be represented.
-/// Use `Mdl::valid` to check whether the date is valid.
+/// The conversion between the packed calendar date (`Mdf`) and the ordinal date (`NaiveDate`) is
+/// based on the moderately-sized lookup table (~1.5KB) and the packed representation is chosen for
+/// efficient lookup.
+///
+/// The methods of `Mdf` validate their inputs as late as possible. Dates that can&#39;t exist, like
+/// February 30, can still be represented. This allows the validation to be combined with the final
+/// table lookup, which is good for performance.
 </span><span class="attr">#[derive(PartialEq, PartialOrd, Copy, Clone)]
 </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>Mdf(u32);
 
 <span class="kw">impl </span>Mdf {
-    <span class="attr">#[inline]
+    <span class="doccomment">/// Makes a new `Mdf` value from month, day and `YearFlags`.
+    ///
+    /// This method doesn&#39;t fully validate the range of the `month` and `day` parameters, only as
+    /// much as what can&#39;t be deferred until later. The year `flags` are trusted to be correct.
+    ///
+    /// # Errors
+    ///
+    /// Returns `None` if `month &gt; 12` or `day &gt; 31`.
+    </span><span class="attr">#[inline]
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>new(month: u32, day: u32, YearFlags(flags): YearFlags) -&gt; <span class="prelude-ty">Option</span>&lt;Mdf&gt; {
-        <span class="kw">match </span>month &gt;= <span class="number">1 </span>&amp;&amp; month &lt;= <span class="number">12 </span>&amp;&amp; day &gt;= <span class="number">1 </span>&amp;&amp; day &lt;= <span class="number">31 </span>{
+        <span class="kw">match </span>month &lt;= <span class="number">12 </span>&amp;&amp; day &lt;= <span class="number">31 </span>{
             <span class="bool-val">true </span>=&gt; <span class="prelude-val">Some</span>(Mdf((month &lt;&lt; <span class="number">9</span>) | (day &lt;&lt; <span class="number">4</span>) | flags <span class="kw">as </span>u32)),
             <span class="bool-val">false </span>=&gt; <span class="prelude-val">None</span>,
         }
     }
 
-    <span class="attr">#[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>from_of(Of(of): Of) -&gt; Mdf {
-        <span class="kw">let </span>ol = of &gt;&gt; <span class="number">3</span>;
-        <span class="kw">if </span>ol &lt;= MAX_OL {
-            <span class="comment">// Array is indexed from `[1..=MAX_OL]`, with a `0` index having a meaningless value.
-            </span>Mdf(of + ((OL_TO_MDL[ol <span class="kw">as </span>usize] <span class="kw">as </span>u32) &lt;&lt; <span class="number">3</span>))
-        } <span class="kw">else </span>{
-            <span class="comment">// Panicking here would be reasonable, but we are just going on with a safe value.
-            </span>Mdf(<span class="number">0</span>)
-        }
+    <span class="doccomment">/// Makes a new `Mdf` value from an `i32` with an ordinal and a leap year flag, and year
+    /// `flags`.
+    ///
+    /// The `ol` is trusted to be valid, and the `flags` are trusted to match it.
+    </span><span class="attr">#[inline]
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>from_ol(ol: i32, YearFlags(flags): YearFlags) -&gt; Mdf {
+        <span class="macro">debug_assert!</span>(ol &gt; <span class="number">1 </span>&amp;&amp; ol &lt;= MAX_OL <span class="kw">as </span>i32);
+        <span class="comment">// Array is indexed from `[2..=MAX_OL]`, with a `0` index having a meaningless value.
+        </span>Mdf(((ol <span class="kw">as </span>u32 + OL_TO_MDL[ol <span class="kw">as </span>usize] <span class="kw">as </span>u32) &lt;&lt; <span class="number">3</span>) | flags <span class="kw">as </span>u32)
     }
 
-    <span class="attr">#[cfg(test)]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>valid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="kw">let </span>Mdf(mdf) = <span class="kw-2">*</span><span class="self">self</span>;
-        <span class="kw">let </span>mdl = mdf &gt;&gt; <span class="number">3</span>;
-        <span class="kw">if </span>mdl &lt;= MAX_MDL {
-            <span class="comment">// Array is indexed from `[1..=MAX_MDL]`, with a `0` index having a meaningless value.
-            </span>MDL_TO_OL[mdl <span class="kw">as </span>usize] &gt;= <span class="number">0
-        </span>} <span class="kw">else </span>{
-            <span class="comment">// Panicking here would be reasonable, but we are just going on with a safe value.
-            </span><span class="bool-val">false
-        </span>}
-    }
-
-    <span class="attr">#[inline]
+    <span class="doccomment">/// Returns the month of this `Mdf`.
+    </span><span class="attr">#[inline]
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>month(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
         <span class="kw">let </span>Mdf(mdf) = <span class="kw-2">*</span><span class="self">self</span>;
         mdf &gt;&gt; <span class="number">9
     </span>}
 
-    <span class="attr">#[inline]
+    <span class="doccomment">/// Replaces the month of this `Mdf`, keeping the day and flags.
+    ///
+    /// # Errors
+    ///
+    /// Returns `None` if `month &gt; 12`.
+    </span><span class="attr">#[inline]
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>with_month(<span class="kw-2">&amp;</span><span class="self">self</span>, month: u32) -&gt; <span class="prelude-ty">Option</span>&lt;Mdf&gt; {
         <span class="kw">if </span>month &gt; <span class="number">12 </span>{
             <span class="kw">return </span><span class="prelude-val">None</span>;
@@ -1335,13 +877,19 @@
         <span class="prelude-val">Some</span>(Mdf((mdf &amp; <span class="number">0b1_1111_1111</span>) | (month &lt;&lt; <span class="number">9</span>)))
     }
 
-    <span class="attr">#[inline]
+    <span class="doccomment">/// Returns the day of this `Mdf`.
+    </span><span class="attr">#[inline]
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>day(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
         <span class="kw">let </span>Mdf(mdf) = <span class="kw-2">*</span><span class="self">self</span>;
         (mdf &gt;&gt; <span class="number">4</span>) &amp; <span class="number">0b1_1111
     </span>}
 
-    <span class="attr">#[inline]
+    <span class="doccomment">/// Replaces the day of this `Mdf`, keeping the month and flags.
+    ///
+    /// # Errors
+    ///
+    /// Returns `None` if `day &gt; 31`.
+    </span><span class="attr">#[inline]
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>with_day(<span class="kw-2">&amp;</span><span class="self">self</span>, day: u32) -&gt; <span class="prelude-ty">Option</span>&lt;Mdf&gt; {
         <span class="kw">if </span>day &gt; <span class="number">31 </span>{
             <span class="kw">return </span><span class="prelude-val">None</span>;
@@ -1351,17 +899,60 @@
         <span class="prelude-val">Some</span>(Mdf((mdf &amp; !<span class="number">0b1_1111_0000</span>) | (day &lt;&lt; <span class="number">4</span>)))
     }
 
-    <span class="attr">#[inline]
+    <span class="doccomment">/// Replaces the flags of this `Mdf`, keeping the month and day.
+    </span><span class="attr">#[inline]
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>with_flags(<span class="kw-2">&amp;</span><span class="self">self</span>, YearFlags(flags): YearFlags) -&gt; Mdf {
         <span class="kw">let </span>Mdf(mdf) = <span class="kw-2">*</span><span class="self">self</span>;
         Mdf((mdf &amp; !<span class="number">0b1111</span>) | flags <span class="kw">as </span>u32)
     }
 
-    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cargo-clippy&quot;</span>, allow(clippy::wrong_self_convention))]
-    #[inline]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>to_of(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Of&gt; {
-        Of::from_mdf(<span class="kw-2">*</span><span class="self">self</span>)
+    <span class="doccomment">/// Returns the ordinal that corresponds to this `Mdf`.
+    ///
+    /// This does a table lookup to calculate the corresponding ordinal. It will return an error if
+    /// the `Mdl` turns out not to be a valid date.
+    ///
+    /// # Errors
+    ///
+    /// Returns `None` if `month == 0` or `day == 0`, or if a the given day does not exist in the
+    /// given month.
+    </span><span class="attr">#[inline]
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>ordinal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
+        <span class="kw">let </span>mdl = <span class="self">self</span>.<span class="number">0 </span>&gt;&gt; <span class="number">3</span>;
+        <span class="kw">match </span>MDL_TO_OL[mdl <span class="kw">as </span>usize] {
+            XX =&gt; <span class="prelude-val">None</span>,
+            v =&gt; <span class="prelude-val">Some</span>((mdl - v <span class="kw">as </span>u8 <span class="kw">as </span>u32) &gt;&gt; <span class="number">1</span>),
+        }
     }
+
+    <span class="doccomment">/// Returns the year flags of this `Mdf`.
+    </span><span class="attr">#[inline]
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>year_flags(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; YearFlags {
+        YearFlags((<span class="self">self</span>.<span class="number">0 </span>&amp; <span class="number">0b1111</span>) <span class="kw">as </span>u8)
+    }
+
+    <span class="doccomment">/// Returns the ordinal that corresponds to this `Mdf`, encoded as a value including year flags.
+    ///
+    /// This does a table lookup to calculate the corresponding ordinal. It will return an error if
+    /// the `Mdl` turns out not to be a valid date.
+    ///
+    /// # Errors
+    ///
+    /// Returns `None` if `month == 0` or `day == 0`, or if a the given day does not exist in the
+    /// given month.
+    </span><span class="attr">#[inline]
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">const fn </span>ordinal_and_flags(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;i32&gt; {
+        <span class="kw">let </span>mdl = <span class="self">self</span>.<span class="number">0 </span>&gt;&gt; <span class="number">3</span>;
+        <span class="kw">match </span>MDL_TO_OL[mdl <span class="kw">as </span>usize] {
+            XX =&gt; <span class="prelude-val">None</span>,
+            v =&gt; <span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="number">0 </span><span class="kw">as </span>i32 - ((v <span class="kw">as </span>i32) &lt;&lt; <span class="number">3</span>)),
+        }
+    }
+
+    <span class="attr">#[cfg(test)]
+    </span><span class="kw">fn </span>valid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">let </span>mdl = <span class="self">self</span>.<span class="number">0 </span>&gt;&gt; <span class="number">3</span>;
+        MDL_TO_OL[mdl <span class="kw">as </span>usize] &gt; <span class="number">0
+    </span>}
 }
 
 <span class="kw">impl </span>fmt::Debug <span class="kw">for </span>Mdf {
@@ -1378,27 +969,10 @@
     }
 }
 
-<span class="doccomment">/// Create a `Weekday` from an `u32`, with Monday = 0.
-/// Infallible, takes any `n` and applies `% 7`.
-</span><span class="attr">#[inline]
-</span><span class="kw">const fn </span>weekday_from_u32_mod7(n: u32) -&gt; Weekday {
-    <span class="kw">match </span>n % <span class="number">7 </span>{
-        <span class="number">0 </span>=&gt; Weekday::Mon,
-        <span class="number">1 </span>=&gt; Weekday::Tue,
-        <span class="number">2 </span>=&gt; Weekday::Wed,
-        <span class="number">3 </span>=&gt; Weekday::Thu,
-        <span class="number">4 </span>=&gt; Weekday::Fri,
-        <span class="number">5 </span>=&gt; Weekday::Sat,
-        <span class="kw">_ </span>=&gt; Weekday::Sun,
-    }
-}
-
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">super</span>::weekday_from_u32_mod7;
-    <span class="kw">use super</span>::{Mdf, Of};
+    <span class="kw">use </span><span class="kw">super</span>::Mdf;
     <span class="kw">use super</span>::{YearFlags, A, AG, B, BA, C, CB, D, DC, E, ED, F, FE, G, GF};
-    <span class="kw">use </span><span class="kw">crate</span>::Weekday;
 
     <span class="kw">const </span>NONLEAP_FLAGS: [YearFlags; <span class="number">7</span>] = [A, B, C, D, E, F, G];
     <span class="kw">const </span>LEAP_FLAGS: [YearFlags; <span class="number">7</span>] = [AG, BA, CB, DC, ED, FE, GF];
@@ -1437,42 +1011,6 @@
         <span class="macro">assert_eq!</span>(ED.nisoweeks(), <span class="number">53</span>);
         <span class="macro">assert_eq!</span>(FE.nisoweeks(), <span class="number">52</span>);
         <span class="macro">assert_eq!</span>(GF.nisoweeks(), <span class="number">52</span>);
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_of() {
-        <span class="kw">fn </span>check(expected: bool, flags: YearFlags, ordinal1: u32, ordinal2: u32) {
-            <span class="kw">for </span>ordinal <span class="kw">in </span>ordinal1..=ordinal2 {
-                <span class="kw">let </span>of = <span class="kw">match </span>Of::new(ordinal, flags) {
-                    <span class="prelude-val">Some</span>(of) =&gt; of,
-                    <span class="prelude-val">None </span><span class="kw">if </span>!expected =&gt; <span class="kw">continue</span>,
-                    <span class="prelude-val">None </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Of::new({}, {:?}) returned None&quot;</span>, ordinal, flags),
-                };
-
-                <span class="macro">assert!</span>(
-                    of.validate().is_some() == expected,
-                    <span class="string">&quot;ordinal {} = {:?} should be {} for dominical year {:?}&quot;</span>,
-                    ordinal,
-                    of,
-                    <span class="kw">if </span>expected { <span class="string">&quot;valid&quot; </span>} <span class="kw">else </span>{ <span class="string">&quot;invalid&quot; </span>},
-                    flags
-                );
-            }
-        }
-
-        <span class="kw">for </span><span class="kw-2">&amp;</span>flags <span class="kw">in </span>NONLEAP_FLAGS.iter() {
-            check(<span class="bool-val">false</span>, flags, <span class="number">0</span>, <span class="number">0</span>);
-            check(<span class="bool-val">true</span>, flags, <span class="number">1</span>, <span class="number">365</span>);
-            check(<span class="bool-val">false</span>, flags, <span class="number">366</span>, <span class="number">1024</span>);
-            check(<span class="bool-val">false</span>, flags, u32::MAX, u32::MAX);
-        }
-
-        <span class="kw">for </span><span class="kw-2">&amp;</span>flags <span class="kw">in </span>LEAP_FLAGS.iter() {
-            check(<span class="bool-val">false</span>, flags, <span class="number">0</span>, <span class="number">0</span>);
-            check(<span class="bool-val">true</span>, flags, <span class="number">1</span>, <span class="number">366</span>);
-            check(<span class="bool-val">false</span>, flags, <span class="number">367</span>, <span class="number">1024</span>);
-            check(<span class="bool-val">false</span>, flags, u32::MAX, u32::MAX);
-        }
     }
 
     <span class="attr">#[test]
@@ -1567,69 +1105,6 @@
     }
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_of_fields() {
-        <span class="kw">for </span><span class="kw-2">&amp;</span>flags <span class="kw">in </span>FLAGS.iter() {
-            <span class="kw">for </span>ordinal <span class="kw">in </span><span class="number">1u32</span>..=<span class="number">366 </span>{
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(of) = Of::new(ordinal, flags) {
-                    <span class="macro">assert_eq!</span>(of.ordinal(), ordinal);
-                }
-            }
-        }
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_of_with_fields() {
-        <span class="kw">fn </span>check(flags: YearFlags, ordinal: u32) {
-            <span class="kw">let </span>of = Of::new(ordinal, flags).unwrap();
-
-            <span class="kw">for </span>ordinal <span class="kw">in </span><span class="number">0u32</span>..=<span class="number">1024 </span>{
-                <span class="kw">let </span>of = of.with_ordinal(ordinal);
-                <span class="macro">assert_eq!</span>(of, Of::new(ordinal, flags));
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(of) = of {
-                    <span class="macro">assert_eq!</span>(of.ordinal(), ordinal);
-                }
-            }
-        }
-
-        <span class="kw">for </span><span class="kw-2">&amp;</span>flags <span class="kw">in </span>NONLEAP_FLAGS.iter() {
-            check(flags, <span class="number">1</span>);
-            check(flags, <span class="number">365</span>);
-        }
-        <span class="kw">for </span><span class="kw-2">&amp;</span>flags <span class="kw">in </span>LEAP_FLAGS.iter() {
-            check(flags, <span class="number">1</span>);
-            check(flags, <span class="number">366</span>);
-        }
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_of_weekday() {
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, A).unwrap().weekday(), Weekday::Sun);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, B).unwrap().weekday(), Weekday::Sat);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, C).unwrap().weekday(), Weekday::Fri);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, D).unwrap().weekday(), Weekday::Thu);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, E).unwrap().weekday(), Weekday::Wed);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, F).unwrap().weekday(), Weekday::Tue);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, G).unwrap().weekday(), Weekday::Mon);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, AG).unwrap().weekday(), Weekday::Sun);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, BA).unwrap().weekday(), Weekday::Sat);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, CB).unwrap().weekday(), Weekday::Fri);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, DC).unwrap().weekday(), Weekday::Thu);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, ED).unwrap().weekday(), Weekday::Wed);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, FE).unwrap().weekday(), Weekday::Tue);
-        <span class="macro">assert_eq!</span>(Of::new(<span class="number">1</span>, GF).unwrap().weekday(), Weekday::Mon);
-
-        <span class="kw">for </span><span class="kw-2">&amp;</span>flags <span class="kw">in </span>FLAGS.iter() {
-            <span class="kw">let </span><span class="kw-2">mut </span>prev = Of::new(<span class="number">1</span>, flags).unwrap().weekday();
-            <span class="kw">for </span>ordinal <span class="kw">in </span><span class="number">2u32</span>..=flags.ndays() {
-                <span class="kw">let </span>of = Of::new(ordinal, flags).unwrap();
-                <span class="kw">let </span>expected = prev.succ();
-                <span class="macro">assert_eq!</span>(of.weekday(), expected);
-                prev = expected;
-            }
-        }
-    }
-
-    <span class="attr">#[test]
     </span><span class="kw">fn </span>test_mdf_fields() {
         <span class="kw">for </span><span class="kw-2">&amp;</span>flags <span class="kw">in </span>FLAGS.iter() {
             <span class="kw">for </span>month <span class="kw">in </span><span class="number">1u32</span>..=<span class="number">12 </span>{
@@ -1699,85 +1174,10 @@
     }
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_of_isoweekdate_raw() {
-        <span class="kw">for </span><span class="kw-2">&amp;</span>flags <span class="kw">in </span>FLAGS.iter() {
-            <span class="comment">// January 4 should be in the first week
-            </span><span class="kw">let </span>(week, <span class="kw">_</span>) = Of::new(<span class="number">4 </span><span class="comment">/* January 4 */</span>, flags).unwrap().isoweekdate_raw();
-            <span class="macro">assert_eq!</span>(week, <span class="number">1</span>);
-        }
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_of_to_mdf() {
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u32</span>..=<span class="number">8192 </span>{
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(of) = Of(i).validate() {
-                <span class="macro">assert!</span>(of.to_mdf().valid());
-            }
-        }
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_mdf_to_of() {
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u32</span>..=<span class="number">8192 </span>{
-            <span class="kw">let </span>mdf = Mdf(i);
-            <span class="macro">assert_eq!</span>(mdf.valid(), mdf.to_of().is_some());
-        }
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_of_to_mdf_to_of() {
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u32</span>..=<span class="number">8192 </span>{
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(of) = Of(i).validate() {
-                <span class="macro">assert_eq!</span>(of, of.to_mdf().to_of().unwrap());
-            }
-        }
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_mdf_to_of_to_mdf() {
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u32</span>..=<span class="number">8192 </span>{
-            <span class="kw">let </span>mdf = Mdf(i);
-            <span class="kw">if </span>mdf.valid() {
-                <span class="macro">assert_eq!</span>(mdf, mdf.to_of().unwrap().to_mdf());
-            }
-        }
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_invalid_returns_none() {
-        <span class="kw">let </span>regular_year = YearFlags::from_year(<span class="number">2023</span>);
-        <span class="kw">let </span>leap_year = YearFlags::from_year(<span class="number">2024</span>);
-        <span class="macro">assert!</span>(Of::new(<span class="number">0</span>, regular_year).is_none());
-        <span class="macro">assert!</span>(Of::new(<span class="number">366</span>, regular_year).is_none());
-        <span class="macro">assert!</span>(Of::new(<span class="number">366</span>, leap_year).is_some());
-        <span class="macro">assert!</span>(Of::new(<span class="number">367</span>, regular_year).is_none());
-
-        <span class="macro">assert!</span>(Mdf::new(<span class="number">0</span>, <span class="number">1</span>, regular_year).is_none());
-        <span class="macro">assert!</span>(Mdf::new(<span class="number">13</span>, <span class="number">1</span>, regular_year).is_none());
-        <span class="macro">assert!</span>(Mdf::new(<span class="number">1</span>, <span class="number">0</span>, regular_year).is_none());
-        <span class="macro">assert!</span>(Mdf::new(<span class="number">1</span>, <span class="number">32</span>, regular_year).is_none());
-        <span class="macro">assert!</span>(Mdf::new(<span class="number">2</span>, <span class="number">31</span>, regular_year).is_some());
-
-        <span class="macro">assert!</span>(Of::from_mdf(Mdf::new(<span class="number">2</span>, <span class="number">30</span>, regular_year).unwrap()).is_none());
-        <span class="macro">assert!</span>(Of::from_mdf(Mdf::new(<span class="number">2</span>, <span class="number">30</span>, leap_year).unwrap()).is_none());
-        <span class="macro">assert!</span>(Of::from_mdf(Mdf::new(<span class="number">2</span>, <span class="number">29</span>, regular_year).unwrap()).is_none());
-        <span class="macro">assert!</span>(Of::from_mdf(Mdf::new(<span class="number">2</span>, <span class="number">29</span>, leap_year).unwrap()).is_some());
-        <span class="macro">assert!</span>(Of::from_mdf(Mdf::new(<span class="number">2</span>, <span class="number">28</span>, regular_year).unwrap()).is_some());
-
-        <span class="macro">assert!</span>(Of::new(<span class="number">365</span>, regular_year).unwrap().succ().is_none());
-        <span class="macro">assert!</span>(Of::new(<span class="number">365</span>, leap_year).unwrap().succ().is_some());
-        <span class="macro">assert!</span>(Of::new(<span class="number">366</span>, leap_year).unwrap().succ().is_none());
-
-        <span class="macro">assert!</span>(Of::new(<span class="number">1</span>, regular_year).unwrap().pred().is_none());
-        <span class="macro">assert!</span>(Of::new(<span class="number">1</span>, leap_year).unwrap().pred().is_none());
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_weekday_from_u32_mod7() {
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..=<span class="number">1000 </span>{
-            <span class="macro">assert_eq!</span>(weekday_from_u32_mod7(i), Weekday::try_from((i % <span class="number">7</span>) <span class="kw">as </span>u8).unwrap());
-        }
-        <span class="macro">assert_eq!</span>(weekday_from_u32_mod7(u32::MAX), Weekday::Thu);
+    </span><span class="kw">fn </span>test_mdf_new_range() {
+        <span class="kw">let </span>flags = YearFlags::from_year(<span class="number">2023</span>);
+        <span class="macro">assert!</span>(Mdf::new(<span class="number">13</span>, <span class="number">1</span>, flags).is_none());
+        <span class="macro">assert!</span>(Mdf::new(<span class="number">1</span>, <span class="number">32</span>, flags).is_none());
     }
 }
 </code></pre></div></section></main></body></html>

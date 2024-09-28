@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.28/src/month.rs`."><title>month.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../chrono/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.38/src/month.rs`."><title>month.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../chrono/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -416,9 +416,33 @@
 <a href="#416" id="416">416</a>
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 
-<span class="attr">#[cfg(feature = <span class="string">&quot;rkyv&quot;</span>)]
+<span class="attr">#[cfg(any(feature = <span class="string">&quot;rkyv&quot;</span>, feature = <span class="string">&quot;rkyv-16&quot;</span>, feature = <span class="string">&quot;rkyv-32&quot;</span>, feature = <span class="string">&quot;rkyv-64&quot;</span>))]
 </span><span class="kw">use </span>rkyv::{Archive, Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::OutOfRange;
@@ -447,9 +471,14 @@
 /// Can be Serialized/Deserialized with serde
 </span><span class="comment">// Actual implementation is zero-indexed, API intended as 1-indexed for more intuitive behavior.
 </span><span class="attr">#[derive(PartialEq, Eq, Copy, Clone, Debug, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = <span class="string">&quot;rustc-serialize&quot;</span>, derive(RustcEncodable, RustcDecodable))]
-#[cfg_attr(feature = <span class="string">&quot;rkyv&quot;</span>, derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = <span class="string">&quot;arbitrary&quot;</span>, derive(arbitrary::Arbitrary))]
+#[cfg_attr(
+    any(feature = <span class="string">&quot;rkyv&quot;</span>, feature = <span class="string">&quot;rkyv-16&quot;</span>, feature = <span class="string">&quot;rkyv-32&quot;</span>, feature = <span class="string">&quot;rkyv-64&quot;</span>),
+    derive(Archive, Deserialize, Serialize),
+    archive(compare(PartialEq, PartialOrd)),
+    archive_attr(derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash))
+)]
+#[cfg_attr(feature = <span class="string">&quot;rkyv-validation&quot;</span>, archive(check_bytes))]
+#[cfg_attr(all(feature = <span class="string">&quot;arbitrary&quot;</span>, feature = <span class="string">&quot;std&quot;</span>), derive(arbitrary::Arbitrary))]
 </span><span class="kw">pub enum </span>Month {
     <span class="doccomment">/// January
     </span>January = <span class="number">0</span>,
@@ -637,7 +666,7 @@
 
 <span class="doccomment">/// A duration in calendar months
 </span><span class="attr">#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = <span class="string">&quot;arbitrary&quot;</span>, derive(arbitrary::Arbitrary))]
+#[cfg_attr(all(feature = <span class="string">&quot;arbitrary&quot;</span>, feature = <span class="string">&quot;std&quot;</span>), derive(arbitrary::Arbitrary))]
 </span><span class="kw">pub struct </span>Months(<span class="kw">pub</span>(<span class="kw">crate</span>) u32);
 
 <span class="kw">impl </span>Months {
@@ -645,6 +674,12 @@
     </span><span class="kw">pub const fn </span>new(num: u32) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(num)
     }
+
+    <span class="doccomment">/// Returns the total number of months in the `Months` instance.
+    </span><span class="attr">#[inline]
+    </span><span class="kw">pub const fn </span>as_u32(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+        <span class="self">self</span>.<span class="number">0
+    </span>}
 }
 
 <span class="doccomment">/// An error resulting from reading `&lt;Month&gt;` value with `FromStr`.
@@ -654,7 +689,6 @@
 }
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;std&quot;</span>)]
-#[cfg_attr(docsrs, doc(cfg(feature = <span class="string">&quot;std&quot;</span>)))]
 </span><span class="kw">impl </span>std::error::Error <span class="kw">for </span>ParseMonthError {}
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>ParseMonthError {
@@ -670,7 +704,6 @@
 }
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;serde&quot;</span>)]
-#[cfg_attr(docsrs, doc(cfg(feature = <span class="string">&quot;serde&quot;</span>)))]
 </span><span class="kw">mod </span>month_serde {
     <span class="kw">use </span><span class="kw">super</span>::Month;
     <span class="kw">use </span>serde::{de, ser};
@@ -716,7 +749,7 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::Month;
-    <span class="kw">use crate</span>::{Datelike, OutOfRange, TimeZone, Utc};
+    <span class="kw">use crate</span>::{Datelike, Months, OutOfRange, TimeZone, Utc};
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_month_enum_try_from() {
@@ -769,6 +802,13 @@
         <span class="macro">assert!</span>(Month::January &lt; Month::December);
         <span class="macro">assert!</span>(Month::July &gt;= Month::May);
         <span class="macro">assert!</span>(Month::September &gt; Month::March);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_months_as_u32() {
+        <span class="macro">assert_eq!</span>(Months::new(<span class="number">0</span>).as_u32(), <span class="number">0</span>);
+        <span class="macro">assert_eq!</span>(Months::new(<span class="number">1</span>).as_u32(), <span class="number">1</span>);
+        <span class="macro">assert_eq!</span>(Months::new(u32::MAX).as_u32(), u32::MAX);
     }
 
     <span class="attr">#[test]
@@ -832,6 +872,14 @@
         <span class="kw">for </span>string <span class="kw">in </span>errors {
             from_str::&lt;Month&gt;(string).unwrap_err();
         }
+    }
+
+    <span class="attr">#[test]
+    #[cfg(feature = <span class="string">&quot;rkyv-validation&quot;</span>)]
+    </span><span class="kw">fn </span>test_rkyv_validation() {
+        <span class="kw">let </span>month = Month::January;
+        <span class="kw">let </span>bytes = rkyv::to_bytes::&lt;<span class="kw">_</span>, <span class="number">1</span>&gt;(<span class="kw-2">&amp;</span>month).unwrap();
+        <span class="macro">assert_eq!</span>(rkyv::from_bytes::&lt;Month&gt;(<span class="kw-2">&amp;</span>bytes).unwrap(), month);
     }
 }
 </code></pre></div></section></main></body></html>

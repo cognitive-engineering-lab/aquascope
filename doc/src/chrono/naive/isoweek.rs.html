@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.28/src/naive/isoweek.rs`."><title>isoweek.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../chrono/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/chrono-0.4.38/src/naive/isoweek.rs`."><title>isoweek.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (58eefc33a 2023-08-24)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-b2d31d2efc7e9b67.css" data-theme-dark-css="dark-3388a2fb2ef8066b.css" data-theme-ayu-css="ayu-8c3c66a6cf12cb2f.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ef3a2de404864b0b.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-b2d31d2efc7e9b67.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-3388a2fb2ef8066b.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../chrono/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -202,6 +202,35 @@
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
 </pre></div><pre class="rust"><code><span class="comment">// This is a part of Chrono.
 // See README.md and LICENSE.txt for details.
 
@@ -209,9 +238,9 @@
 
 </span><span class="kw">use </span>core::fmt;
 
-<span class="kw">use </span><span class="kw">super</span>::internals::{DateImpl, Of, YearFlags};
+<span class="kw">use </span><span class="kw">super</span>::internals::YearFlags;
 
-<span class="attr">#[cfg(feature = <span class="string">&quot;rkyv&quot;</span>)]
+<span class="attr">#[cfg(any(feature = <span class="string">&quot;rkyv&quot;</span>, feature = <span class="string">&quot;rkyv-16&quot;</span>, feature = <span class="string">&quot;rkyv-32&quot;</span>, feature = <span class="string">&quot;rkyv-64&quot;</span>))]
 </span><span class="kw">use </span>rkyv::{Archive, Deserialize, Serialize};
 
 <span class="doccomment">/// ISO 8601 week.
@@ -221,46 +250,52 @@
 /// One can retrieve this type from the existing [`Datelike`](../trait.Datelike.html) types
 /// via the [`Datelike::iso_week`](../trait.Datelike.html#tymethod.iso_week) method.
 </span><span class="attr">#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Hash)]
-#[cfg_attr(feature = <span class="string">&quot;rkyv&quot;</span>, derive(Archive, Deserialize, Serialize))]
+#[cfg_attr(
+    any(feature = <span class="string">&quot;rkyv&quot;</span>, feature = <span class="string">&quot;rkyv-16&quot;</span>, feature = <span class="string">&quot;rkyv-32&quot;</span>, feature = <span class="string">&quot;rkyv-64&quot;</span>),
+    derive(Archive, Deserialize, Serialize),
+    archive(compare(PartialEq, PartialOrd)),
+    archive_attr(derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash))
+)]
+#[cfg_attr(feature = <span class="string">&quot;rkyv-validation&quot;</span>, archive(check_bytes))]
 </span><span class="kw">pub struct </span>IsoWeek {
-    <span class="comment">// note that this allows for larger year range than `NaiveDate`.
-    // this is crucial because we have an edge case for the first and last week supported,
+    <span class="comment">// Note that this allows for larger year range than `NaiveDate`.
+    // This is crucial because we have an edge case for the first and last week supported,
     // which year number might not match the calendar year number.
-    </span>ywf: DateImpl, <span class="comment">// (year &lt;&lt; 10) | (week &lt;&lt; 4) | flag
+    </span>ywf: i32, <span class="comment">// (year &lt;&lt; 10) | (week &lt;&lt; 4) | flag
 </span>}
 
-<span class="doccomment">/// Returns the corresponding `IsoWeek` from the year and the `Of` internal value.
-</span><span class="comment">//
-// internal use only. we don&#39;t expose the public constructor for `IsoWeek` for now,
-// because the year range for the week date and the calendar date do not match and
-// it is confusing to have a date that is out of range in one and not in another.
-// currently we sidestep this issue by making `IsoWeek` fully dependent of `Datelike`.
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>iso_week_from_yof(year: i32, of: Of) -&gt; IsoWeek {
-    <span class="kw">let </span>(rawweek, <span class="kw">_</span>) = of.isoweekdate_raw();
-    <span class="kw">let </span>(year, week) = <span class="kw">if </span>rawweek &lt; <span class="number">1 </span>{
-        <span class="comment">// previous year
-        </span><span class="kw">let </span>prevlastweek = YearFlags::from_year(year - <span class="number">1</span>).nisoweeks();
-        (year - <span class="number">1</span>, prevlastweek)
-    } <span class="kw">else </span>{
-        <span class="kw">let </span>lastweek = of.flags().nisoweeks();
-        <span class="kw">if </span>rawweek &gt; lastweek {
-            <span class="comment">// next year
-            </span>(year + <span class="number">1</span>, <span class="number">1</span>)
-        } <span class="kw">else </span>{
-            (year, rawweek)
-        }
-    };
-    <span class="kw">let </span>flags = YearFlags::from_year(year);
-    IsoWeek { ywf: (year &lt;&lt; <span class="number">10</span>) | (week &lt;&lt; <span class="number">4</span>) <span class="kw">as </span>DateImpl | DateImpl::from(flags.<span class="number">0</span>) }
-}
-
 <span class="kw">impl </span>IsoWeek {
+    <span class="doccomment">/// Returns the corresponding `IsoWeek` from the year and the `Of` internal value.
+    </span><span class="comment">//
+    // Internal use only. We don&#39;t expose the public constructor for `IsoWeek` for now
+    // because the year range for the week date and the calendar date do not match, and
+    // it is confusing to have a date that is out of range in one and not in another.
+    // Currently we sidestep this issue by making `IsoWeek` fully dependent of `Datelike`.
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>from_yof(year: i32, ordinal: u32, year_flags: YearFlags) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>rawweek = (ordinal + year_flags.isoweek_delta()) / <span class="number">7</span>;
+        <span class="kw">let </span>(year, week) = <span class="kw">if </span>rawweek &lt; <span class="number">1 </span>{
+            <span class="comment">// previous year
+            </span><span class="kw">let </span>prevlastweek = YearFlags::from_year(year - <span class="number">1</span>).nisoweeks();
+            (year - <span class="number">1</span>, prevlastweek)
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>lastweek = year_flags.nisoweeks();
+            <span class="kw">if </span>rawweek &gt; lastweek {
+                <span class="comment">// next year
+                </span>(year + <span class="number">1</span>, <span class="number">1</span>)
+            } <span class="kw">else </span>{
+                (year, rawweek)
+            }
+        };
+        <span class="kw">let </span>flags = YearFlags::from_year(year);
+        IsoWeek { ywf: (year &lt;&lt; <span class="number">10</span>) | (week &lt;&lt; <span class="number">4</span>) <span class="kw">as </span>i32 | i32::from(flags.<span class="number">0</span>) }
+    }
+
     <span class="doccomment">/// Returns the year number for this ISO week.
     ///
     /// # Example
     ///
     /// ```
-    /// use chrono::{NaiveDate, Datelike, Weekday};
+    /// use chrono::{Datelike, NaiveDate, Weekday};
     ///
     /// let d = NaiveDate::from_isoywd_opt(2015, 1, Weekday::Mon).unwrap();
     /// assert_eq!(d.iso_week().year(), 2015);
@@ -287,7 +322,7 @@
     /// # Example
     ///
     /// ```
-    /// use chrono::{NaiveDate, Datelike, Weekday};
+    /// use chrono::{Datelike, NaiveDate, Weekday};
     ///
     /// let d = NaiveDate::from_isoywd_opt(2015, 15, Weekday::Mon).unwrap();
     /// assert_eq!(d.iso_week().week(), 15);
@@ -304,7 +339,7 @@
     /// # Example
     ///
     /// ```
-    /// use chrono::{NaiveDate, Datelike, Weekday};
+    /// use chrono::{Datelike, NaiveDate, Weekday};
     ///
     /// let d = NaiveDate::from_isoywd_opt(2015, 15, Weekday::Mon).unwrap();
     /// assert_eq!(d.iso_week().week0(), 14);
@@ -322,19 +357,28 @@
 /// # Example
 ///
 /// ```
-/// use chrono::{NaiveDate, Datelike};
+/// use chrono::{Datelike, NaiveDate};
 ///
-/// assert_eq!(format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(2015,  9,  5).unwrap().iso_week()), &quot;2015-W36&quot;);
-/// assert_eq!(format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(   0,  1,  3).unwrap().iso_week()), &quot;0000-W01&quot;);
-/// assert_eq!(format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(9999, 12, 31).unwrap().iso_week()), &quot;9999-W52&quot;);
+/// assert_eq!(
+///     format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(2015, 9, 5).unwrap().iso_week()),
+///     &quot;2015-W36&quot;
+/// );
+/// assert_eq!(format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(0, 1, 3).unwrap().iso_week()), &quot;0000-W01&quot;);
+/// assert_eq!(
+///     format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(9999, 12, 31).unwrap().iso_week()),
+///     &quot;9999-W52&quot;
+/// );
 /// ```
 ///
 /// ISO 8601 requires an explicit sign for years before 1 BCE or after 9999 CE.
 ///
 /// ```
 /// # use chrono::{NaiveDate, Datelike};
-/// assert_eq!(format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(    0,  1,  2).unwrap().iso_week()),  &quot;-0001-W52&quot;);
-/// assert_eq!(format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(10000, 12, 31).unwrap().iso_week()), &quot;+10000-W52&quot;);
+/// assert_eq!(format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(0, 1, 2).unwrap().iso_week()), &quot;-0001-W52&quot;);
+/// assert_eq!(
+///     format!(&quot;{:?}&quot;, NaiveDate::from_ymd_opt(10000, 12, 31).unwrap().iso_week()),
+///     &quot;+10000-W52&quot;
+/// );
 /// ```
 </span><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>IsoWeek {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
@@ -351,7 +395,9 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">crate</span>::naive::{internals, NaiveDate};
+    <span class="attr">#[cfg(feature = <span class="string">&quot;rkyv-validation&quot;</span>)]
+    </span><span class="kw">use </span><span class="kw">super</span>::IsoWeek;
+    <span class="kw">use </span><span class="kw">crate</span>::naive::date::{<span class="self">self</span>, NaiveDate};
     <span class="kw">use </span><span class="kw">crate</span>::Datelike;
 
     <span class="attr">#[test]
@@ -359,16 +405,16 @@
         <span class="kw">let </span>minweek = NaiveDate::MIN.iso_week();
         <span class="kw">let </span>maxweek = NaiveDate::MAX.iso_week();
 
-        <span class="macro">assert_eq!</span>(minweek.year(), internals::MIN_YEAR);
+        <span class="macro">assert_eq!</span>(minweek.year(), date::MIN_YEAR);
         <span class="macro">assert_eq!</span>(minweek.week(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(minweek.week0(), <span class="number">0</span>);
-        <span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+        <span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
         </span><span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, minweek), NaiveDate::MIN.format(<span class="string">&quot;%G-W%V&quot;</span>).to_string());
 
-        <span class="macro">assert_eq!</span>(maxweek.year(), internals::MAX_YEAR + <span class="number">1</span>);
+        <span class="macro">assert_eq!</span>(maxweek.year(), date::MAX_YEAR + <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(maxweek.week(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(maxweek.week0(), <span class="number">0</span>);
-        <span class="attr">#[cfg(any(feature = <span class="string">&quot;alloc&quot;</span>, feature = <span class="string">&quot;std&quot;</span>))]
+        <span class="attr">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]
         </span><span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, maxweek), NaiveDate::MAX.format(<span class="string">&quot;%G-W%V&quot;</span>).to_string());
     }
 
@@ -404,6 +450,18 @@
 
         <span class="macro">assert!</span>(monday.iso_week() &gt;= friday.iso_week());
         <span class="macro">assert!</span>(monday.iso_week() &lt;= friday.iso_week());
+    }
+
+    <span class="attr">#[test]
+    #[cfg(feature = <span class="string">&quot;rkyv-validation&quot;</span>)]
+    </span><span class="kw">fn </span>test_rkyv_validation() {
+        <span class="kw">let </span>minweek = NaiveDate::MIN.iso_week();
+        <span class="kw">let </span>bytes = rkyv::to_bytes::&lt;<span class="kw">_</span>, <span class="number">4</span>&gt;(<span class="kw-2">&amp;</span>minweek).unwrap();
+        <span class="macro">assert_eq!</span>(rkyv::from_bytes::&lt;IsoWeek&gt;(<span class="kw-2">&amp;</span>bytes).unwrap(), minweek);
+
+        <span class="kw">let </span>maxweek = NaiveDate::MAX.iso_week();
+        <span class="kw">let </span>bytes = rkyv::to_bytes::&lt;<span class="kw">_</span>, <span class="number">4</span>&gt;(<span class="kw-2">&amp;</span>maxweek).unwrap();
+        <span class="macro">assert_eq!</span>(rkyv::from_bytes::&lt;IsoWeek&gt;(<span class="kw-2">&amp;</span>bytes).unwrap(), maxweek);
     }
 }
 </code></pre></div></section></main></body></html>
