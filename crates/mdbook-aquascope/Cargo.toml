@@ -19,13 +19,12 @@ repository = "https://github.com/cognitive-engineering-lab/aquascope"
 dev = ["mdbook-preprocessor-utils/testing"]
 
 [dependencies]
-clap = "=4.3.24"
-mdbook-preprocessor-utils = "0.1"
+clap = { version = "4.3.24", features = ["derive"] }
+mdbook-preprocessor-utils = "0.2.0"
 nom = "7"
 nom_locate = "4"
 anyhow = "1"
 tempfile = "3"
-html-escape = "0.2"
 serde_json = "1"
 serde = { workspace = true }
 ts-rs = "6.2"
@@ -43,3 +42,4 @@ maplit = "1.0"
 
 [build-dependencies]
 anyhow = "1"
+mdbook-preprocessor-utils = "0.2.0"

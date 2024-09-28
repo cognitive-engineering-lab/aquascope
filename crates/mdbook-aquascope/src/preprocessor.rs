@@ -2,7 +2,6 @@
 
 use std::{
   collections::HashMap,
-  fmt::Write,
   fs,
   path::PathBuf,
   process::{Command, Stdio},
@@ -11,6 +10,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
+use mdbook_preprocessor_utils::HtmlElementBuilder;
 use rayon::prelude::*;
 use tempfile::tempdir;
 use wait_timeout::ChildExt;
@@ -148,7 +148,7 @@ impl AquascopePreprocessor {
       let cache = self.cache.read().unwrap();
       cache.get(&block).cloned()
     };
-    let response = match cached_response {
+    let response_str = match cached_response {
       Some(response) => response,
       None => {
         let response = self.run_aquascope(&block)?;
@@ -160,38 +160,31 @@ impl AquascopePreprocessor {
         response
       }
     };
+    let response: serde_json::Value =
+      serde_json::from_str(response_str.trim_end())?;
 
-    let mut html = String::from(r#"<div class="aquascope-embed""#);
+    let mut html = HtmlElementBuilder::new();
+    html
+      .attr("class", "aquascope-embed")
+      .data("code", &block.code)?
+      .data("annotations", &block.annotations)?
+      .data("operations", &block.operations)?
+      .data("responses", response)?;
 
-    let mut add_data = |k: &str, v: &str| {
-      write!(
-        html,
-        " data-{}=\"{}\" ",
-        k,
-        html_escape::encode_double_quoted_attribute(v)
-      )
-    };
-
-    add_data("code", &serde_json::to_string(&block.code)?)?;
-    add_data("annotations", &serde_json::to_string(&block.annotations)?)?;
-    add_data("operations", &serde_json::to_string(&block.operations)?)?;
-    add_data("responses", response.trim_end())?;
     let config = block
       .config
       .iter()
       .map(|(k, v)| (k, v))
       .collect::<HashMap<_, _>>();
-    add_data("config", &serde_json::to_string(&config)?)?;
+    html.data("config", &config)?;
 
     // TODO: make this configurable
-    add_data("no-interact", "true")?;
+    html.data("no-interact", true)?;
 
     // TODO: add a code path to enable this from config
     // add_data("show-bug-reporter", true)?;
 
-    write!(html, "></div>")?;
-
-    Ok(html)
+    Ok(html.finish())
   }
 
   pub fn replacements(
@@ -199,21 +192,14 @@ impl AquascopePreprocessor {
     content: &str,
   ) -> Result<Vec<(std::ops::Range<usize>, String)>> {
     let to_process = AquascopeBlock::parse_all(content);
-    let mut replacements = to_process
+    to_process
       .into_par_iter()
       .map(|(range, block)| {
         let html = self.process_code(block)?;
         Ok((range, html))
       })
-      .collect::<Result<Vec<_>>>()?;
-
-    replacements.extend(
-      crate::permissions::parse_perms(content).collect::<Result<Vec<_>>>()?,
-    );
-
-    replacements.sort_by_key(|(range, _)| range.start);
-
-    Ok(replacements)
+      .chain(crate::permissions::parse_perms(content).par_bridge())
+      .collect()
   }
 
   pub fn save_cache(&mut self) {

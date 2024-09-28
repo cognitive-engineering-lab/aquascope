@@ -178,8 +178,12 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
     elem.classList.remove(EMBED_NAME);
     elem.classList.add(AQUASCOPE_NAME);
 
-    let readOnly = elem.dataset.noInteract! === "true";
-    let showBugReporter = elem.dataset.showBugReporter! === "true";
+    let maybeParseJson = <T,>(s: string | undefined): T | undefined =>
+      s ? JSON.parse(s) : undefined;
+
+    let readOnly = maybeParseJson(elem.dataset.noInteract!) === true;
+    let showBugReporter =
+      maybeParseJson(elem.dataset.showBugReporter!) === true;
 
     let computePermBtn: HTMLButtonElement | undefined;
     if (!readOnly) {
@@ -194,9 +198,6 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
       btnWrap.appendChild(computePermBtn);
       elem.appendChild(btnWrap);
     }
-
-    let maybeParseJson = <T,>(s: string | undefined): T | undefined =>
-      s ? JSON.parse(s) : undefined;
 
     let initialCode = maybeParseJson<string>(elem.dataset.code);
     if (!initialCode) throw new Error("Missing data-code attribute");

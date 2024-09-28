@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use clap::Parser;
 use mdbook_aquascope::AquascopePreprocessor;
 use mdbook_preprocessor_utils::{
   mdbook::preprocess::PreprocessorContext, Asset, SimplePreprocessor,
@@ -10,14 +11,18 @@ use mdbook_preprocessor_utils::{
 
 mdbook_preprocessor_utils::asset_generator!("../js/");
 
-const FRONTEND_ASSETS: [Asset; 2] = [
-  make_asset!("embed.iife.js"),
-  make_asset!("style.css"),
-];
+const FRONTEND_ASSETS: [Asset; 2] =
+  [make_asset!("embed.iife.js"), make_asset!("style.css")];
+
+#[derive(Parser)]
+#[clap(author, about, version)]
+struct AquascopeArgs;
 
 struct AquascopePreprocessorWrapper(AquascopePreprocessor);
 
 impl SimplePreprocessor for AquascopePreprocessorWrapper {
+  type Args = AquascopeArgs;
+
   fn name() -> &'static str {
     "aquascope"
   }
