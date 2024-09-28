@@ -4,7 +4,7 @@ authors = [
   "Will Crichton <wcrichto@cs.stanford.edu>",
   "Gavin Gray <gavinleroy6@gmail.com>"
 ]
-version = "0.3.3"
+version = "0.3.4"
 license = "MIT"
 edition = "2021"
 description = "Handy utilities for working in the Aquascope workspace"
