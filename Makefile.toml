@@ -12,7 +12,10 @@ script = "cargo watch -i frontend -x 'install --path crates/aquascope_front --of
 script = "cargo watch -w crates/mdbook-aquascope/src -w frontend/packages/aquascope-embed/dist --no-vcs-ignores -x 'install --path crates/mdbook-aquascope --debug --offline'"
 
 [tasks.watch-server]
-script = "cargo run --features=no-docker"
+script = """
+export MIRI_SYSROOT=$(cargo miri setup --print-sysroot)
+cargo run --features=no-docker
+"""
 
 [tasks.watch.run_task]
 name = ["watch-front", "watch-server", "watch-mdbook"]
