@@ -6,7 +6,7 @@ authors = [
 ]
 description = "Interactive Aquascope editor for your mdBook"
 license = "MIT"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 include = [
   "src/**/*",
@@ -19,7 +19,7 @@ repository = "https://github.com/cognitive-engineering-lab/aquascope"
 dev = ["mdbook-preprocessor-utils/testing"]
 
 [dependencies]
-clap = { version = "4.3.24", features = ["derive"] }
+clap = { version = "=4.3.24", features = ["derive"] }
 mdbook-preprocessor-utils = "0.2.0"
 nom = "7"
 nom_locate = "4"
