@@ -10,7 +10,10 @@ use std::time::Instant;
 
 use datafrog::{Iteration, Relation, RelationLeaper, ValueFilter};
 use polonius_engine::{Algorithm, FactTypes, Output as PEOutput};
-use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
+use rustc_borrowck::{
+  borrow_set::BorrowSet,
+  consumers::{places_conflict, BodyWithBorrowckFacts, PlaceConflictBias},
+};
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, Mutability};
 use rustc_index::IndexVec;
@@ -19,10 +22,7 @@ use rustc_middle::{
   ty::TyCtxt,
 };
 use rustc_mir_dataflow::move_paths::MoveData;
-use rustc_utils::{
-  mir::places_conflict::{self, AccessDepth, PlaceConflictBias},
-  BodyExt, PlaceExt,
-};
+use rustc_utils::{BodyExt, PlaceExt};
 
 use super::{
   context::PermissionsCtxt, flow, AquascopeFacts, Loan, Move, Path, Point,
@@ -321,7 +321,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
               p == point2 && {
                 let mp_assigned_to = ctxt.moveable_path_to_path(assigned_to);
                 let place1 = ctxt.path_to_place(mp_assigned_to);
-                places_conflict::places_conflict(
+                places_conflict(
                   tcx,
                   body,
                   place1,
@@ -392,13 +392,11 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
       |(_origin, loan, _point)| {
         let borrow = ctxt.loan_to_borrow(*loan);
         places.iter().filter_map(|place| {
-          places_conflict::borrow_conflicts_with_place(
+          places_conflict(
             tcx,
             body,
             borrow.borrowed_place,
-            borrow.kind,
-            place.as_ref(),
-            AccessDepth::Deep,
+            *place,
             PlaceConflictBias::Overlap,
           )
           .then_some((*loan, ctxt.place_to_path(place)))
@@ -520,14 +518,11 @@ pub fn compute<'a, 'tcx>(
 
   let locals_are_invalidated_at_exit =
     tcx.hir().body_owner_kind(def_id).is_fn_or_closure();
-  let move_data = match MoveData::gather_moves(body, tcx, tcx.param_env(def_id))
-  {
-    Ok(move_data) => move_data,
-    Err((move_data, _illegal_moves)) => {
-      log::debug!("illegal moves found {_illegal_moves:?}");
-      move_data
-    }
-  };
+
+  // FIXME: in 2024-05-20 `gather_moves` added the additional `FILTER` parameter.
+  // before merging double check that semantics don't depend on the filter.
+  let move_data =
+    MoveData::gather_moves(body, tcx, tcx.param_env(def_id), |_| true);
   let borrow_set =
     BorrowSet::build(tcx, body, locals_are_invalidated_at_exit, &move_data);
   let def_id = def_id.to_def_id();

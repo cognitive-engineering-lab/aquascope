@@ -10,10 +10,8 @@ use mdbook_preprocessor_utils::{
 
 mdbook_preprocessor_utils::asset_generator!("../js/");
 
-const FRONTEND_ASSETS: [Asset; 2] = [
-  make_asset!("aquascope-embed.iife.js"),
-  make_asset!("style.css"),
-];
+const FRONTEND_ASSETS: [Asset; 2] =
+  [make_asset!("embed.iife.js"), make_asset!("style.css")];
 
 struct AquascopePreprocessorWrapper(AquascopePreprocessor);
 
@@ -78,7 +76,7 @@ fn main() {{
     let chapter_path = harness.root().join("src/chapter_1.md");
     fs::write(&chapter_path, mk_contents("0"))?;
 
-    let _book =
+    let mut _book =
       harness.compile::<AquascopePreprocessorWrapper>(serde_json::json!({}))?;
 
     // After running the first compile, a cache should exist

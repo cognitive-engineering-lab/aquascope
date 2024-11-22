@@ -1,0 +1,6 @@
+{
+  "extends": ["../../biome.json"],
+  "files": {
+    "ignore": ["src/bindings/"]
+  } 
+}

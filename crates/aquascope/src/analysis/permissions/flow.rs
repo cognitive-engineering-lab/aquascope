@@ -76,16 +76,20 @@
 use std::time::Instant;
 
 use itertools::Itertools;
-use rustc_borrowck::borrow_set::BorrowData;
+use rustc_borrowck::{
+  borrow_set::BorrowData,
+  consumers::{places_conflict, PlaceConflictBias},
+};
 use rustc_data_structures::{
   fx::FxHashSet as HashSet,
   graph::{
-    scc::Sccs, vec_graph::VecGraph, DirectedGraph, WithNumNodes, WithSuccessors,
+    depth_first_search, scc::Sccs, vec_graph::VecGraph, DirectedGraph,
+    Successors,
   },
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
 };
 use rustc_index::{bit_set::HybridBitSet, Idx};
-use rustc_utils::{mir::places_conflict, BodyExt};
+use rustc_utils::BodyExt;
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -93,6 +97,7 @@ use super::{Origin, PermissionsCtxt};
 
 rustc_index::newtype_index! {
   #[debug_format = "scc{}"]
+  #[orderable]
   pub struct SccIdx {}
 }
 
@@ -276,7 +281,7 @@ fn count_nodes<T: Idx>(tups: &[(T, T)]) -> usize {
 /// The return closure answers queries of the form "for (v, s) did `s` flow to v?"
 fn flow_from_sources<T>(
   sources: impl Iterator<Item = T>,
-  graph: impl DirectedGraph<Node = T> + WithSuccessors + WithNumNodes,
+  graph: impl DirectedGraph<Node = T> + Successors,
 ) -> TransitiveRelation<T>
 where
   T: Idx,
@@ -285,7 +290,7 @@ where
 
   // Compute the transitive closure, then assert that they're the same.
   for s in sources {
-    for t in graph.depth_first_search(s) {
+    for t in depth_first_search(&graph, s) {
       // `t` can point to `s`
       tcb.add(t, s);
     }
@@ -301,7 +306,6 @@ fn check_for_invalidation_at_exit<'tcx>(
   ctxt: &PermissionsCtxt<'_, 'tcx>,
   borrow: &BorrowData<'tcx>,
 ) -> bool {
-  use places_conflict::AccessDepth::{Deep, Shallow};
   use rustc_middle::{
     mir::{PlaceElem, PlaceRef, ProjectionElem},
     ty::TyCtxt,
@@ -322,15 +326,15 @@ fn check_for_invalidation_at_exit<'tcx>(
     projection: &[],
   };
 
-  let (might_be_alive, will_be_dropped) =
+  let will_be_dropped =
     if body.local_decls[root_place.local].is_ref_to_thread_local() {
       // Thread-locals might be dropped after the function exits
       // We have to dereference the outer reference because
       // borrows don't conflict behind shared references.
       root_place.projection = TyCtxtConsts::DEREF_PROJECTION;
-      (true, true)
+      true
     } else {
-      (false, ctxt.locals_are_invalidated_at_exit)
+      ctxt.locals_are_invalidated_at_exit
     };
 
   if !will_be_dropped {
@@ -341,16 +345,16 @@ fn check_for_invalidation_at_exit<'tcx>(
     return false;
   }
 
-  let sd = if might_be_alive { Deep } else { Shallow(None) };
-
-  places_conflict::borrow_conflicts_with_place(
+  // FIXME(gavinleroy): I'm concerned that the switch from `borrow_conflicts_with_place`
+  // to `places_conflict` will result in an over-approximation because we can no longer control
+  // the `AccessDepth` and `BorrowKind` parameters. The `places_conflict` implementation
+  // defaults to `Deep` and `Mut::TwoPhaseBorrow` for those, respectively.
+  places_conflict(
     tcx,
     body,
     place,
-    borrow.kind,
-    root_place,
-    sd,
-    places_conflict::PlaceConflictBias::Overlap,
+    root_place.to_place(ctxt.tcx),
+    PlaceConflictBias::Overlap,
   )
 }
 
@@ -374,7 +378,8 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
 
   // Graph of constraints that need to be satisfied. This shows
   // us how data flows from one region into another.
-  let constraint_graph = VecGraph::new(count_nodes(&constraints), constraints);
+  let constraint_graph =
+    VecGraph::<_, false>::new(count_nodes(&constraints), constraints);
 
   let scc_constraints = Sccs::<Origin, SccIdx>::new(&constraint_graph);
   let num_sccs = scc_constraints.num_sccs();
@@ -418,7 +423,8 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   // Allowed flows between abstract regions specified in the type signature.
   //
   // e.g. `fn foo<'a, 'b: 'a>(...) ...` would cause a `'b: 'a` specified flow in this graph.
-  let specified_flows_graph = VecGraph::new(num_sccs, placeholder_edges);
+  let specified_flows_graph =
+    VecGraph::<_, false>::new(num_sccs, placeholder_edges);
 
   // Compute the flow facts between abstract regions.
   let specified_flows =

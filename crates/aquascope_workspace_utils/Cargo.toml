@@ -18,5 +18,5 @@ include = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-toml = "0.5"
+toml = "0.8"
 anyhow = "1"

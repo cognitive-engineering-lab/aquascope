@@ -1,12 +1,12 @@
 use std::{
   collections::HashMap, env, fs, io, panic, path::Path, process::Command,
+  sync::Arc,
 };
 
 use anyhow::{bail, Context, Result};
 use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
-use rustc_errors::Handler;
 use rustc_hir::BodyId;
 use rustc_middle::{
   mir::{Rvalue, StatementKind},
@@ -34,7 +34,7 @@ use crate::{
     },
     AquascopeAnalysis,
   },
-  errors::{self, silent_emitter::SilentEmitter},
+  errors,
   interpreter::{self, MTrace},
 };
 
@@ -48,8 +48,8 @@ impl FileLoader for StringLoader {
     Ok(self.0.clone())
   }
 
-  fn read_binary_file(&self, path: &Path) -> io::Result<Vec<u8>> {
-    fs::read(path)
+  fn read_binary_file(&self, path: &Path) -> io::Result<Arc<[u8]>> {
+    fs::read(path).map(Into::into)
   }
 }
 
@@ -523,12 +523,12 @@ where
   Cb: FnOnce(TyCtxt<'_>),
 {
   fn config(&mut self, config: &mut rustc_interface::Config) {
-    config.parse_sess_created = Some(Box::new(|sess| {
-      // Create a new emitter writer which consumes *silently* all
-      // errors. There most certainly is a *better* way to do this,
-      // if you, the reader, know what that is, please open an issue :)
-      let handler = Handler::with_emitter(Box::new(SilentEmitter));
-      sess.span_diagnostic = handler;
+    config.psess_created = Some(Box::new(|sess| {
+      let fallback_bundle = rustc_errors::fallback_fluent_bundle(
+        rustc_driver::DEFAULT_LOCALE_RESOURCES.to_vec(),
+        false,
+      );
+      sess.dcx.make_silent(fallback_bundle, None, false);
     }));
 
     config.override_queries = Some(if self.is_interpreter {

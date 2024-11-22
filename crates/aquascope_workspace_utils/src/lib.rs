@@ -19,17 +19,21 @@ pub fn toolchain() -> Result<String> {
 }
 
 pub fn miri_sysroot() -> Result<PathBuf> {
-  let output = Command::new("cargo")
-    .args([
-      &format!("+{}", toolchain()?),
-      "miri",
-      "setup",
-      "--print-sysroot",
-    ])
-    .output()?;
+  if let Ok(sysroot) = std::env::var("MIRI_SYSROOT") {
+    return Ok(sysroot.into());
+  }
+
+  let mut cmd = Command::new("cargo");
+  if let Ok(toolchain) = toolchain() {
+    cmd.arg(format!("+{}", toolchain));
+  }
+
+  let output = cmd.args(["miri", "setup", "--print-sysroot"]).output()?;
+
   if !output.status.success() {
     bail!("Command failed");
   }
+
   let stdout = String::from_utf8(output.stdout)?;
   Ok(PathBuf::from(stdout.trim_end()))
 }

@@ -1,13 +1,14 @@
-use miri::{
-  interpret::Provenance, InterpCx, InterpResult, MPlaceTy, Machine,
-  MemPlaceMeta, OpTy,
-};
 use rustc_abi::FieldsShape;
 use rustc_middle::{
   mir::{Local, PlaceElem},
   ty::{layout::TyAndLayout, AdtKind, FieldDef, TyKind},
 };
 use rustc_target::abi::{FieldIdx, Size};
+
+use super::miri::{
+  self, InterpCx, InterpResult, MPlaceTy, Machine, MemPlaceMeta, OpTy,
+  Projectable, ProvenanceTrait as Provenance,
+};
 
 pub trait OpTyExt<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>>: Sized {
   fn field_by_name(
@@ -153,7 +154,7 @@ pub fn locate_address_in_type<'mir, 'tcx>(
     let index = offset / array_elem_size;
     // dbg!((array_elem_size, offset, index));
 
-    let segment = match mplace.meta {
+    let segment = match mplace.meta() {
       MemPlaceMeta::Meta(meta) => {
         let end_offset = meta.to_u64().unwrap();
         let to = index + end_offset / array_elem_size - 1;

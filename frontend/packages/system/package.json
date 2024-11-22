@@ -1,0 +1,26 @@
+{
+  "name": "@aquascope/system",
+  "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
+  "main": "dist/lib.js",
+  "exports": {
+    ".": {
+      "default": "./dist/lib.js"
+    },
+    "./*": {
+      "default": "./dist/*.js"
+    }
+  },
+  "type": "module",
+  "depot": {
+    "platform": "browser",
+    "target": "lib",
+    "depot-version": "0.2.17"
+  },
+  "devDependencies": {
+    "@aquascope/types": "workspace:*",
+    "jsdom": "^24.1.1"
+  }
+}

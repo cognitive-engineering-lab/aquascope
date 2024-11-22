@@ -471,9 +471,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     let mapper = &self.mapper;
 
     // Find all basic blocks that are reachable from the root.
-    let reachable = mapper
-      .cleaned_graph
-      .depth_first_search(root)
+    let reachable = depth_first_search(&mapper.cleaned_graph, root)
       .filter(|&to| mapper.dominates(root, to))
       .collect::<HashSet<_>>();
 

@@ -1,0 +1,6 @@
+[submodule "frontend/packages/rustc/src/assets/wasm-builds"]
+	path = frontend/packages/rustc/src/assets/wasm-builds
+	url = git@github.com:cognitive-engineering-lab/wasm-builds.git
+[submodule "frontend/packages/system/src/assets/wasm-builds"]
+	path = frontend/packages/system/src/assets/wasm-builds
+	url = git@github.com:cognitive-engineering-lab/wasm-builds.git

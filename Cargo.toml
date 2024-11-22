@@ -1,6 +1,6 @@
 [workspace]
-members = [ "crates/*" ]
-exclude = [ "files" ]
+members = [ "crates/*" , "examples/hello-world"]
+exclude = [ "files", "crates/aquascope_serve" ]
 resolver = "2"
 
 # Make snapshot testing faster
@@ -9,7 +9,3 @@ opt-level = 3
 
 [profile.dev.package.similar]
 opt-level = 3
-
-[patch.crates-io]
-rustc_plugin = { git = "https://github.com/cognitive-engineering-lab/rustc_plugin", rev = "d4b3c43b0695d42030f9cb3a62fc27cc337019d1" }
-rustc_utils = { git = "https://github.com/cognitive-engineering-lab/rustc_plugin", rev = "d4b3c43b0695d42030f9cb3a62fc27cc337019d1" }

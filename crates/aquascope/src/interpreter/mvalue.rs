@@ -1,9 +1,5 @@
 //! Interpreting memory as Rust data types
 
-use miri::{
-  AllocKind, AllocMap, Immediate, InterpError, InterpErrorInfo, InterpResult,
-  MPlaceTy, MemPlaceMeta, MemoryKind, OpTy, Projectable, UndefinedBehaviorInfo,
-};
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
 use rustc_middle::ty::{
@@ -16,6 +12,11 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{
+  miri::{
+    self, AllocKind, AllocMap, Immediate, InterpError, InterpErrorInfo,
+    InterpResult, MPlaceTy, MemPlaceMeta, MemoryKind, OpTy, Projectable,
+    UndefinedBehaviorInfo,
+  },
   miri_utils::{locate_address_in_type, OpTyExt},
   step::VisEvaluator,
 };
@@ -177,12 +178,22 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
     &mut self,
     mplace: miri::MPlaceTy<'tcx, miri::Provenance>,
   ) -> InterpResult<'tcx, MValue> {
+    log::trace!("Reading pointer: {mplace:?}");
+
+    if mplace.ptr().provenance.is_none() {
+      log::warn!("mplace missing provenance: {mplace:?}");
+      return Ok(MValue::Unallocated { alloc_id: None });
+    }
+
     // Determine the base allocation from the mplace's provenance
-    let (alloc_id, offset, _) = self.ev.ecx.ptr_get_alloc_id(mplace.ptr)?;
+    let (alloc_id, offset, _) = self.ev.ecx.ptr_get_alloc_id(mplace.ptr())?;
     let (alloc_size, _, alloc_status) = self.ev.ecx.get_alloc_info(alloc_id);
 
     if matches!(alloc_status, AllocKind::Dead) {
-      log::warn!("Reading a dead allocation");
+      log::warn!("Reading a dead allocation: {mplace:?}");
+      return Ok(MValue::Unallocated {
+        alloc_id: Some(self.ev.remap_alloc_id(alloc_id)),
+      });
     }
 
     // Check if we have seen this allocation before
@@ -243,7 +254,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
     // The pointer could point anywhere inside the allocation, so we use
     // `get_path_segments` to reverse-engineer a path from the memory location.
-    let meta = mplace.meta;
+    let meta = mplace.meta();
     let parts =
       self.get_path_segments(alloc_size, alloc_layout, mplace, offset);
     let path = MPath { segment, parts };
@@ -320,6 +331,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       TyKind::Adt(adt_def, _) => {
         let def_id = adt_def.did();
         let name = self.ev.ecx.tcx.item_name(def_id).to_ident_string();
+        log::trace!("Reading adt: {name}");
 
         macro_rules! process_fields {
           ($op:expr, $fields:expr) => {{
@@ -432,6 +444,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
               f32::from_bits(scalar.to_f32()?.to_bits() as u32) as f64
             }
             FloatTy::F64 => f64::from_bits(scalar.to_f64()?.to_bits() as u64),
+            FloatTy::F16 | FloatTy::F128 => todo!(),
           }),
           _ => unreachable!(),
         }
@@ -452,15 +465,18 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       }
 
       _ if ty.is_any_ptr() => {
-        let val = self.ev.ecx.read_immediate(op)?;
-        let mplace = self.ev.ecx.ref_to_mplace(&val)?;
-        if self.ev.ecx.check_mplace(&mplace).is_err() {
-          let alloc_id = match self.ev.ecx.ptr_get_alloc_id(mplace.ptr) {
-            Ok((alloc_id, _, _)) => Some(self.ev.remap_alloc_id(alloc_id)),
-            Err(_) => None,
-          };
-          return Ok(MValue::Unallocated { alloc_id });
-        }
+        log::trace!("Reading pointer type: {ty:?}");
+
+        let mplace = self.ev.ecx.deref_pointer(op)?;
+
+        // if self.ev.ecx.check_mplace(&mplace).is_err() {
+        //   let alloc_id = match self.ev.ecx.ptr_get_alloc_id(mplace.ptr()) {
+        //     Ok((alloc_id, _, _)) => Some(self.ev.remap_alloc_id(alloc_id)),
+        //     Err(_) => None,
+        //   };
+        //   return Ok(MValue::Unallocated { alloc_id });
+        // }
+
         self.read_pointer(mplace)?
       }
 
@@ -496,7 +512,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         }
       }
 
-      kind => todo!("{:?} / {:?}", **op, kind),
+      kind => todo!("{:?} / {:?}", op, kind),
     };
 
     Ok(result)
@@ -515,3 +531,27 @@ impl<'tcx> VisEvaluator<'_, 'tcx> {
     .read(op)
   }
 }
+
+// trait InterpCxExt<'tcx> {
+//   fn check_mplace(
+//     &self,
+//     mplace: &MPlaceTy<'tcx, miri::Provenance>,
+//   ) -> InterpResult<'tcx>;
+// }
+
+// impl<'mir, 'tcx> InterpCxExt<'tcx>
+//   for miri::InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>
+// {
+//   fn check_mplace(
+//     &self,
+//     mplace: &MPlaceTy<'tcx, miri::Provenance>,
+//   ) -> InterpResult<'tcx> {
+//     let (size, _align) = self
+//       .size_and_align_of_mplace(&mplace)?
+//       .unwrap_or((mplace.layout.size, mplace.layout.align.abi));
+//     // Due to packed places, only `mplace.align` matters.
+//     let align = if M::enforce_alignment(self) { mplace.align } else { Align::ONE };
+//     self.check_ptr_access_align(mplace.ptr(), size, align, miri::CheckInAllocMsg::MemoryAccessTest)?;
+//     Ok(())
+//   }
+// }

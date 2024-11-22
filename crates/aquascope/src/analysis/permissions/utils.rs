@@ -3,15 +3,49 @@
 use std::collections::hash_map::Entry;
 
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_middle::mir::{Location, TerminatorEdges};
-use rustc_mir_dataflow::{
-  fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice,
+use rustc_middle::{
+  mir::{Body, Location, TerminatorEdges},
+  ty::TyCtxt,
 };
-use rustc_utils::BodyExt;
+use rustc_mir_dataflow::{
+  self as engine, fmt::DebugWithContext, Analysis, AnalysisDomain,
+  JoinSemiLattice,
+};
+use rustc_span::def_id::DefId;
 
 use super::{
   context::PermissionsCtxt, Permissions, PermissionsData, PermissionsDomain,
 };
+
+// FIXME: this functionw as removed from `rustc_utils` because the `graphviz::Formatter` struct
+// it now *private*. WTF, I know...but what can you do besides lobby for transparency?
+fn write_analysis_results<'tcx, A>(
+  _body: &Body<'tcx>,
+  _results: &mut engine::Results<'tcx, A>,
+  _def_id: DefId,
+  _tcx: TyCtxt<'tcx>,
+) -> anyhow::Result<()>
+where
+  A: Analysis<'tcx>,
+  A::Domain: DebugWithContext<A>,
+{
+  anyhow::bail!("graphviz `Formatter` currently private in rustc")
+  // use rustc_graphviz as dot;
+  // use rustc_mir_dataflow::graphviz;
+  // use rustc_utils::mir::body::run_dot;
+  // use std::path::Path;
+
+  // let graphviz =
+  //   graphviz::Formatter::new(body, results, graphviz::OutputStyle::AfterOnly);
+  // let mut buf = Vec::new();
+  // dot::render(&graphviz, &mut buf)?;
+
+  // let output_dir = Path::new("target");
+  // let fname = tcx.def_path_debug_str(def_id);
+  // let output_path = output_dir.join(format!("{fname}.pdf"));
+
+  // run_dot(&output_path, buf)
+}
 
 pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
   // XXX: Unfortunately, the only way I know how to do this is to do a MIR
@@ -36,7 +70,8 @@ pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
 
   log::debug!("Dumping results for {:?}", name.as_str());
 
-  if let Err(e) = ctxt.body_with_facts.body.write_analysis_results(
+  if let Err(e) = write_analysis_results(
+    &ctxt.body_with_facts.body,
     &mut results,
     def_id.to_def_id(),
     ctxt.tcx,

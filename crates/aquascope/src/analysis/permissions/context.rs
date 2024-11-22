@@ -123,7 +123,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     }
   }
 
-  pub fn path_to_moveable_path(&self, p: Path) -> MoveablePath {
+  pub fn path_to_moveable_path(&self, p: Path) -> Option<MoveablePath> {
     let place = self.path_to_place(p);
     self.move_data.rev_lookup.find_local(place.local)
   }

@@ -1,7 +1,7 @@
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::{
   intravisit::{self, Visitor},
-  BindingAnnotation, HirId, Pat, PatKind,
+  BindingMode, HirId, Pat, PatKind,
 };
 // use rustc_hir_analysis;
 use rustc_middle::{hir::nested_filter::OnlyBodies, ty::TyCtxt};
@@ -9,7 +9,7 @@ use rustc_middle::{hir::nested_filter::OnlyBodies, ty::TyCtxt};
 struct BindingFinder<'tcx> {
   tcx: TyCtxt<'tcx>,
   // Mapping a HirId (identifier) with it's binding annotations.
-  bindings: HashMap<HirId, BindingAnnotation>,
+  bindings: HashMap<HirId, BindingMode>,
 }
 
 impl<'tcx> Visitor<'tcx> for BindingFinder<'tcx> {
@@ -29,7 +29,7 @@ impl<'tcx> Visitor<'tcx> for BindingFinder<'tcx> {
   }
 }
 
-pub fn find_bindings(tcx: TyCtxt) -> HashMap<HirId, BindingAnnotation> {
+pub fn find_bindings(tcx: TyCtxt) -> HashMap<HirId, BindingMode> {
   let mut finder = BindingFinder {
     tcx,
     bindings: HashMap::default(),

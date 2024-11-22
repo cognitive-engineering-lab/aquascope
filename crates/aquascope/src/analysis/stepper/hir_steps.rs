@@ -225,8 +225,13 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   }
 
   fn pop_branch_start(&mut self, expecting: Location) {
-    if let Some(popped) = self.current_branch_start.pop() && popped != expecting {
-      report_unexpected!(self, "expecting popped location {expecting:?} but got {popped:?}")
+    if let Some(popped) = self.current_branch_start.pop()
+      && popped != expecting
+    {
+      report_unexpected!(
+        self,
+        "expecting popped location {expecting:?} but got {popped:?}"
+      )
     }
   }
 
@@ -517,8 +522,8 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
     let scope = invoke_internal!(self, open_scope);
 
-    if let SK::Local(local) = stmt.kind {
-      let places = self.ir_mapper.local_assigned_place(local);
+    if let SK::Let(local) = stmt.kind {
+      let places = self.ir_mapper.let_assigned_place(local);
       let locals = places.into_iter().map(|p| p.local).collect::<Vec<_>>();
       if !locals.is_empty() {
         log::debug!("storing locals at scope {scope:?} {locals:?}");
@@ -549,8 +554,10 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
         }
 
         // Insert the location and span for the else branch
-        if let Some(els) = else_opt && let Some(else_entry) = self.get_node_entry(els.hir_id) {
-        let else_span = self.span_of(els.hir_id).shrink_to_lo();
+        if let Some(els) = else_opt
+          && let Some(else_entry) = self.get_node_entry(els.hir_id)
+        {
+          let else_span = self.span_of(els.hir_id).shrink_to_lo();
           entry_to_spans.insert(else_entry, else_span);
         }
 

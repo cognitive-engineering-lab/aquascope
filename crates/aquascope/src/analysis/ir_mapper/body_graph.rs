@@ -101,31 +101,21 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
 
 impl DirectedGraph for CleanedBody<'_, '_> {
   type Node = BasicBlock;
-}
 
-impl WithStartNode for CleanedBody<'_, '_> {
-  fn start_node(&self) -> Self::Node {
-    self.0.basic_blocks.start_node()
-  }
-}
-
-impl<'tcx> WithNumNodes for CleanedBody<'_, 'tcx> {
   fn num_nodes(&self) -> usize {
     self.0.basic_blocks.len()
   }
 }
 
-impl<'tcx> GraphSuccessors<'_> for CleanedBody<'_, 'tcx> {
-  type Item = BasicBlock;
-  type Iter = smallvec::IntoIter<[BasicBlock; 4]>;
+impl StartNode for CleanedBody<'_, '_> {
+  fn start_node(&self) -> Self::Node {
+    self.0.basic_blocks.start_node()
+  }
 }
 
-impl<'tcx> WithSuccessors for CleanedBody<'_, 'tcx> {
-  fn successors(
-    &self,
-    node: Self::Node,
-  ) -> <Self as GraphSuccessors<'_>>::Iter {
-    <BasicBlocks as WithSuccessors>::successors(&self.0.basic_blocks, node)
+impl<'tcx> Successors for CleanedBody<'_, 'tcx> {
+  fn successors(&self, node: Self::Node) -> impl Iterator<Item = Self::Node> {
+    <BasicBlocks as Successors>::successors(&self.0.basic_blocks, node)
       .filter(|bb| {
         let from_data = &self.0.basic_blocks[*bb];
         CleanedBody::keep_block(from_data)
@@ -136,17 +126,9 @@ impl<'tcx> WithSuccessors for CleanedBody<'_, 'tcx> {
   }
 }
 
-impl<'tcx> GraphPredecessors<'_> for CleanedBody<'_, 'tcx> {
-  type Item = BasicBlock;
-  type Iter = smallvec::IntoIter<[BasicBlock; 4]>;
-}
-
-impl<'tcx> WithPredecessors for CleanedBody<'_, 'tcx> {
-  fn predecessors(
-    &self,
-    node: Self::Node,
-  ) -> <Self as GraphSuccessors<'_>>::Iter {
-    <BasicBlocks as WithPredecessors>::predecessors(&self.0.basic_blocks, node)
+impl<'tcx> Predecessors for CleanedBody<'_, 'tcx> {
+  fn predecessors(&self, node: Self::Node) -> impl Iterator<Item = Self::Node> {
+    <BasicBlocks as Predecessors>::predecessors(&self.0.basic_blocks, node)
       .filter(|bb| CleanedBody::keep_block(&self.0.basic_blocks[*bb]))
       .collect::<SmallVec<[BasicBlock; 4]>>()
       .into_iter()

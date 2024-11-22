@@ -6,12 +6,13 @@ use rustc_data_structures::fx::FxIndexMap;
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
   mir::{Body, BorrowCheckResult},
-  query,
   ty::TyCtxt,
+  util,
 };
 use rustc_utils::{source_map::range::CharRange, SpanExt};
 
 mod mapper;
+mod miri;
 mod miri_utils;
 mod mvalue;
 mod step;
@@ -24,7 +25,9 @@ pub use step::MTrace;
 use crate::interpreter::mapper::Mapper;
 
 pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<CharRange>> {
+  log::trace!("Interpretting ...");
   let mut evaluator = step::VisEvaluator::new(tcx).unwrap();
+  log::trace!("Evaluating ...");
   let mir_steps = evaluator.eval()?;
 
   if log::log_enabled!(log::Level::Trace) {
@@ -44,6 +47,8 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<CharRange>> {
   let mapper = Mapper::new(&evaluator.ecx);
   let hir_steps =
     mapper::group_steps(mir_steps, |loc| mapper.abstract_loc(loc));
+
+  log::trace!("Mapping ...");
 
   if log::log_enabled!(log::Level::Trace) {
     for step in &hir_steps.steps {
@@ -101,19 +106,15 @@ fn fake_mir_borrowck(
 // if the MoveData is empty. Thankfully we can reset and ignore that error via
 // `Handler::reset_err_count` which we do by overriding optimized_mir.
 fn fake_optimized_mir(tcx: TyCtxt<'_>, did: LocalDefId) -> &'_ Body<'_> {
-  let mut providers = query::Providers::default();
+  let mut providers = util::Providers::default();
   rustc_mir_transform::provide(&mut providers);
   let body = (providers.optimized_mir)(tcx, did);
-  tcx.sess.diagnostic().reset_err_count();
+  tcx.sess.dcx().reset_err_count();
   body
 }
 
 // See `fake_mir_borrowck`
-pub fn override_queries(
-  _session: &Session,
-  providers: &mut query::Providers,
-  _extern_providers: &mut query::ExternProviders,
-) {
+pub fn override_queries(_session: &Session, providers: &mut util::Providers) {
   providers.mir_borrowck = fake_mir_borrowck;
   providers.optimized_mir = fake_optimized_mir;
 }
@@ -133,6 +134,7 @@ impl rustc_driver::Callbacks for InterpretCallbacks {
   ) -> rustc_driver::Compilation {
     queries.global_ctxt().unwrap().enter(|tcx| {
       self.result = Some(interpret(tcx));
+      log::debug!("Interpretation done {:?}!", self.result);
     });
     rustc_driver::Compilation::Stop
   }

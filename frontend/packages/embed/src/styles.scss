@@ -1,0 +1,149 @@
+@use "@aquascope/editor/dist/styles.scss";
+
+.light, .rust {
+  --code-bg: #f6f7f6;
+}
+
+.coal, .navy {
+  --code-bg: #1d1f21;
+}
+
+.ayu {
+  --code-bg: #191f26;
+}
+
+:root {
+  --aq-fg: var(--fg);
+  --aq-bg: var(--bg);
+
+  --aq-button-border: var(--icons);
+  --aq-button-text: var(--icons);
+  --aq-button-background: var(--theme-popup-bg);
+  --aq-button-border-hover: var(--icons-hover);
+  --aq-button-text-hover: var(--sidebar-active);
+  --aq-button-background-hover: var(--theme-hover);
+
+  --aq-step-widget-text: var(--searchresults-header-fg);
+  --aq-step-table-text: var(--sidebar-fg);
+  --aq-step-table-border: var(--table-header-bg);
+  --aq-step-table-background: var(--sidebar-bg);
+}
+
+.rust {
+  --aq-step-table-background-alternate: var(--sidebar-non-existant);
+}
+
+.coal, .navy, .ayu, .rust  {
+  --aq-perm-gain-color: #eee;
+  --aq-perm-loss-color: #ccc;
+}
+
+.coal, .navy, .ayu {
+  --aq-error: #ff5151;
+  --aq-write-color: #399cf2;
+  --aq-step-widget-text: #aaa;
+}
+
+.aquascope {
+  border: 2px dashed var(--theme-popup-border);
+
+  .cm-editor {
+    background-color: var(--code-bg);
+  }
+
+  .cm-scroller {
+    line-height: inherit;
+  }
+
+  .cm-content {
+    // Same as `pre > code` and `code` rules
+    padding: 1rem;
+    font-family: "Source Code Pro", Consolas, "Ubuntu Mono", Menlo,
+      "DejaVu Sans Mono", monospace, monospace;
+    font-size: 0.875em;
+  }
+
+  .cm-line {
+    padding: 0;
+  }
+
+}
+
+.interpreter {
+  table {
+    margin: 0;
+
+    tbody tr:nth-child(2n) {
+      background: inherit;
+    }
+
+    td {
+      padding: 2px 4px;
+    }
+  }
+}
+
+
+.aquascope {
+  margin-top: 2em;
+}
+
+.extra-info {
+  display: flex;
+  position: absolute;
+  right: 0;
+  top: -2em;
+  width: max-content;
+  gap: 8px;
+}
+
+.context-provider {
+  button {
+    filter: grayscale(50%);
+    border: 0;
+    cursor: pointer;
+    border: 1px solid var(--aq-button-border);
+    background-color: var(--aq-button-background);    
+    border-radius: 4px;
+    
+    &:hover {
+      background-color: var(--aq-button-background-hover);
+      color: var(--aq-button-text-hover);
+      border-color: var(--aq-button-border-hover);
+    }
+  }
+  
+  .popup-context  {
+    background: var(--bg);
+    border: 2px solid var(--theme-popup-border);
+    padding: 0.5em;
+    text-align: left;
+    border-radius: 4px;
+    box-shadow: 1px 1px 4px var(--theme-popup-border);
+
+    z-index: 1000;
+    width: calc(min(400px, 70vw));        
+
+    h3 {
+      margin-top: 0;
+      margin-bottom: 1em;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 4.5em;
+      font-family: "Open Sans", sans-serif;
+    }
+
+    .close {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      color: var(--fg);
+    }
+  }
+}

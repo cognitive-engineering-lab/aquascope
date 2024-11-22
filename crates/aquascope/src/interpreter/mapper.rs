@@ -7,13 +7,15 @@ use std::{
 
 use either::Either;
 use itertools::Itertools;
-use miri::InterpCx;
 use rustc_hir::{intravisit::Visitor, Body, Expr, ExprKind, HirId, Stmt};
 use rustc_middle::{mir::Location, ty::InstanceDef};
 use rustc_span::{BytePos, Span};
 use rustc_utils::BodyExt;
 
-use super::step::{MFrame, MStack, MStep, MTrace, MirLoc};
+use super::{
+  miri::{self, InterpCx},
+  step::{MFrame, MStack, MStep, MTrace, MirLoc},
+};
 use crate::analysis::ir_mapper::{GatherDepth, GatherMode, IRMapper};
 
 #[derive(Default)]

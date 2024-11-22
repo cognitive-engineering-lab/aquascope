@@ -137,7 +137,7 @@ where
     )
   }
 
-  pub fn local_assigned_place(&self, local: &hir::Local) -> Vec<Place<'tcx>> {
+  pub fn let_assigned_place(&self, local: &hir::LetStmt) -> Vec<Place<'tcx>> {
     use either::Either;
     use mir::{FakeReadCause as FRC, StatementKind as SK};
     let id = local.hir_id;

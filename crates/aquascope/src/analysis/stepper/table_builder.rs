@@ -361,7 +361,7 @@ pub(super) fn prettify_permission_steps<'tcx>(
         .collect::<Vec<_>>();
 
       master_table_vec
-            .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
+            .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection.len()));
 
       let master_table = PermissionsStepTable {
         from,
