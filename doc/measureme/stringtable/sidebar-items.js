@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FIRST_REGULAR_STRING_ID","METADATA_STRING_ID","STRING_REF_ENCODED_SIZE","STRING_REF_TAG","TERMINATOR"],"enum":["StringComponent"],"struct":["StringId","StringTableBuilder"],"trait":["SerializableString"]};

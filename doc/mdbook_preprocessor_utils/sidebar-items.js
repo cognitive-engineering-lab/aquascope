@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["main"],"macro":["asset_generator"],"struct":["Asset"],"trait":["SimplePreprocessor"]};

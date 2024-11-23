@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["collapse_whitespace","id_from_content","log_backtrace","new_cmark_parser","normalize_id","render_markdown","render_markdown_with_path","take_anchored_lines","take_lines","take_rustdoc_include_anchored_lines","take_rustdoc_include_lines","unique_id_from_content"],"mod":["fs"]};

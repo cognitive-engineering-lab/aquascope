@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Pure Rust implementation of the Advanced Encryption Standard (AES, a.k.a. Rijndael)."><title>aes - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="aes" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-dev" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/26acc39f/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../aes/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/26acc39f/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../aes/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/26acc39f/logo.svg" alt="logo"></a><h2><a href="../aes/index.html">aes</a><span class="version">0.8.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">aes</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/aes/lib.rs.html#1-233">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Pure Rust implementation of the <a href="https://en.wikipedia.org/wiki/Advanced_Encryption_Standard">Advanced Encryption Standard</a>
+(AES, a.k.a. Rijndael).</p>
+<h2 id="-security-warning-hazmat"><a class="doc-anchor" href="#-security-warning-hazmat">§</a>⚠️ Security Warning: Hazmat!</h2>
+<p>This crate implements only the low-level block cipher function, and is intended
+for use for implementing higher-level constructions <em>only</em>. It is NOT
+intended for direct use in applications.</p>
+<p>USE AT YOUR OWN RISK!</p>
+<h2 id="supported-backends"><a class="doc-anchor" href="#supported-backends">§</a>Supported backends</h2>
+<p>This crate provides multiple backends including a portable pure Rust
+backend as well as ones based on CPU intrinsics.</p>
+<p>By default, it performs runtime detection of CPU intrinsics and uses them
+if they are available.</p>
+<h3 id="soft-portable-backend"><a class="doc-anchor" href="#soft-portable-backend">§</a>“soft” portable backend</h3>
+<p>As a baseline implementation, this crate provides a constant-time pure Rust
+implementation based on <a href="https://eprint.iacr.org/2020/1123.pdf">fixslicing</a>, a more advanced form of bitslicing
+implemented entirely in terms of bitwise arithmetic with no use of any
+lookup tables or data-dependent branches.</p>
+<p>Enabling the <code>aes_compact</code> configuration flag will reduce the code size of this
+backend at the cost of decreased performance (using a modified form of
+the fixslicing technique called “semi-fixslicing”).</p>
+<h3 id="armv8-intrinsics-rust-161"><a class="doc-anchor" href="#armv8-intrinsics-rust-161">§</a>ARMv8 intrinsics (Rust 1.61+)</h3>
+<p>On <code>aarch64</code> targets including <code>aarch64-apple-darwin</code> (Apple M1) and Linux
+targets such as <code>aarch64-unknown-linux-gnu</code> and <code>aarch64-unknown-linux-musl</code>,
+support for using AES intrinsics provided by the ARMv8 Cryptography Extensions
+is available when using Rust 1.61 or above, and can be enabled using the
+<code>aes_armv8</code> configuration flag.</p>
+<p>On Linux and macOS, when the <code>aes_armv8</code> flag is enabled support for AES
+intrinsics is autodetected at runtime. On other platforms the <code>aes</code>
+target feature must be enabled via RUSTFLAGS.</p>
+<h3 id="x86x86_64-intrinsics-aes-ni"><a class="doc-anchor" href="#x86x86_64-intrinsics-aes-ni">§</a><code>x86</code>/<code>x86_64</code> intrinsics (AES-NI)</h3>
+<p>By default this crate uses runtime detection on <code>i686</code>/<code>x86_64</code> targets
+in order to determine if AES-NI is available, and if it is not, it will
+fallback to using a constant-time software implementation.</p>
+<p>Passing <code>RUSTFLAGS=-C target-feature=+aes,+ssse3</code> explicitly at compile-time
+will override runtime detection and ensure that AES-NI is always used.
+Programs built in this manner will crash with an illegal instruction on
+CPUs which do not have AES-NI enabled.</p>
+<p>Note: runtime detection is not possible on SGX targets. Please use the
+afforementioned <code>RUSTFLAGS</code> to leverage AES-NI on these targets.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aes::Aes128;
+<span class="kw">use </span>aes::cipher::{
+    BlockCipher, BlockEncrypt, BlockDecrypt, KeyInit,
+    generic_array::GenericArray,
+};
+
+<span class="kw">let </span>key = GenericArray::from([<span class="number">0u8</span>; <span class="number">16</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>block = GenericArray::from([<span class="number">42u8</span>; <span class="number">16</span>]);
+
+<span class="comment">// Initialize cipher
+</span><span class="kw">let </span>cipher = Aes128::new(<span class="kw-2">&amp;</span>key);
+
+<span class="kw">let </span>block_copy = block.clone();
+
+<span class="comment">// Encrypt block in-place
+</span>cipher.encrypt_block(<span class="kw-2">&amp;mut </span>block);
+
+<span class="comment">// And decrypt it back
+</span>cipher.decrypt_block(<span class="kw-2">&amp;mut </span>block);
+<span class="macro">assert_eq!</span>(block, block_copy);
+
+<span class="comment">// Implementation supports parallel block processing. Number of blocks
+// processed in parallel depends in general on hardware capabilities.
+// This is achieved by instruction-level parallelism (ILP) on a single
+// CPU core, which is differen from multi-threaded parallelism.
+</span><span class="kw">let </span><span class="kw-2">mut </span>blocks = [block; <span class="number">100</span>];
+cipher.encrypt_blocks(<span class="kw-2">&amp;mut </span>blocks);
+
+<span class="kw">for </span>block <span class="kw">in </span>blocks.iter_mut() {
+    cipher.decrypt_block(block);
+    <span class="macro">assert_eq!</span>(block, <span class="kw-2">&amp;</span>block_copy);
+}
+
+<span class="comment">// `decrypt_blocks` also supports parallel block processing.
+</span>cipher.decrypt_blocks(<span class="kw-2">&amp;mut </span>blocks);
+
+<span class="kw">for </span>block <span class="kw">in </span>blocks.iter_mut() {
+    cipher.encrypt_block(block);
+    <span class="macro">assert_eq!</span>(block, <span class="kw-2">&amp;</span>block_copy);
+}</code></pre></div>
+<p>For implementation of block cipher modes of operation see
+<a href="https://github.com/RustCrypto/block-modes/"><code>block-modes</code></a> repository.</p>
+<h2 id="configuration-flags"><a class="doc-anchor" href="#configuration-flags">§</a>Configuration Flags</h2>
+<p>You can modify crate using the following configuration flags:</p>
+<ul>
+<li><code>aes_armv8</code>: enable ARMv8 AES intrinsics (Rust 1.61+).</li>
+<li><code>aes_force_soft</code>: force software implementation.</li>
+<li><code>aes_compact</code>: reduce code size at the cost of slower performance
+(affects only software backend).</li>
+</ul>
+<p>It can be enabled using <code>RUSTFLAGS</code> environmental variable
+(e.g. <code>RUSTFLAGS=&quot;--cfg aes_compact&quot;</code>) or by modifying <code>.cargo/config</code>.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.cipher"><code>pub use <a class="mod" href="../cipher/index.html" title="mod cipher">cipher</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="hazmat/index.html" title="mod aes::hazmat">hazmat</a></div><div class="desc docblock-short">⚠️ Low-level “hazmat” AES functions.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Aes128.html" title="struct aes::Aes128">Aes128</a></div><div class="desc docblock-short">AES-128
+block cipher</div></li><li><div class="item-name"><a class="struct" href="struct.Aes128Dec.html" title="struct aes::Aes128Dec">Aes128Dec</a></div><div class="desc docblock-short">AES-128
+block cipher (decrypt-only)</div></li><li><div class="item-name"><a class="struct" href="struct.Aes128Enc.html" title="struct aes::Aes128Enc">Aes128Enc</a></div><div class="desc docblock-short">AES-128
+block cipher (encrypt-only)</div></li><li><div class="item-name"><a class="struct" href="struct.Aes192.html" title="struct aes::Aes192">Aes192</a></div><div class="desc docblock-short">AES-192
+block cipher</div></li><li><div class="item-name"><a class="struct" href="struct.Aes192Dec.html" title="struct aes::Aes192Dec">Aes192Dec</a></div><div class="desc docblock-short">AES-192
+block cipher (decrypt-only)</div></li><li><div class="item-name"><a class="struct" href="struct.Aes192Enc.html" title="struct aes::Aes192Enc">Aes192Enc</a></div><div class="desc docblock-short">AES-192
+block cipher (encrypt-only)</div></li><li><div class="item-name"><a class="struct" href="struct.Aes256.html" title="struct aes::Aes256">Aes256</a></div><div class="desc docblock-short">AES-256
+block cipher</div></li><li><div class="item-name"><a class="struct" href="struct.Aes256Dec.html" title="struct aes::Aes256Dec">Aes256Dec</a></div><div class="desc docblock-short">AES-256
+block cipher (decrypt-only)</div></li><li><div class="item-name"><a class="struct" href="struct.Aes256Enc.html" title="struct aes::Aes256Enc">Aes256Enc</a></div><div class="desc docblock-short">AES-256
+block cipher (encrypt-only)</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Block.html" title="type aes::Block">Block</a></div><div class="desc docblock-short">128-bit AES block</div></li><li><div class="item-name"><a class="type" href="type.Block8.html" title="type aes::Block8">Block8</a></div><div class="desc docblock-short">Eight 128-bit AES blocks</div></li></ul></section></div></main></body></html>

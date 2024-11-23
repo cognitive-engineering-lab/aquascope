@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ENABLE_FLOW_DEFAULT"],"enum":["Refiner"],"fn":["compute"],"mod":["utils"],"static":["ENABLE_FLOW_PERMISSIONS"],"struct":["AquascopeFacts","Output","PathIndex","Permissions","PermissionsCtxt","PermissionsData","PermissionsDomain","RefinementRegion"],"type":["Loan","Move","Origin","Path","Point","Variable"]};

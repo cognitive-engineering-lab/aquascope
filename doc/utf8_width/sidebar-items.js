@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_0_1","MAX_0_2","MAX_1","MAX_2","MAX_3","MAX_4","MIN_0_1","MIN_0_2","MIN_1","MIN_2","MIN_3","MIN_4"],"fn":["get_width","get_width_assume_valid","is_width_0","is_width_1","is_width_2","is_width_3","is_width_4"]};

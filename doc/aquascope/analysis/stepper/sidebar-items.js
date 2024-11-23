@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PermIncludeMode","ValueStep"],"fn":["compute_permission_steps"],"static":["INCLUDE_MODE"],"struct":["MirSegment","PermissionsDataDiff","PermissionsDiff","PermissionsLineDisplay","PermissionsStepTable"],"trait":["Difference","Stepable"]};

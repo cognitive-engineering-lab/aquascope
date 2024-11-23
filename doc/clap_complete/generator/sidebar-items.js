@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate","generate_to"],"mod":["utils"],"trait":["Generator"]};

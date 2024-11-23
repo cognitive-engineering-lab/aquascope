@@ -1,0 +1,1 @@
+searchState.loadedDescShard("wait_timeout", 0, "A crate to wait on a child process with a particular …\nExtension methods for the standard <code>std::process::Child</code> …\nWait for this child to exit, timing out after the duration …")

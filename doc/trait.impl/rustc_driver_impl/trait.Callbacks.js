@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"aquascope":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/nightly-rustc/rustc_driver_impl/trait.Callbacks.html\" title=\"trait rustc_driver_impl::Callbacks\">Callbacks</a> for <a class=\"struct\" href=\"aquascope/interpreter/struct.InterpretCallbacks.html\" title=\"struct aquascope::interpreter::InterpretCallbacks\">InterpretCallbacks</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

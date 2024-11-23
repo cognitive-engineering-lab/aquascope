@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["copy_files_except_ext","create_file","get_404_output_file","normalize_path","path_to_root","remove_dir_content","write_file"]};

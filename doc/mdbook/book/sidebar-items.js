@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BookItem","SummaryItem"],"fn":["load_book","parse_summary"],"struct":["Book","BookBuilder","BookItems","Chapter","Link","MDBook","SectionNumber","Summary"]};

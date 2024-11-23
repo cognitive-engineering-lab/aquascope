@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DUMMY_BYTE_RANGE","DUMMY_CHAR_RANGE","DUMMY_FILE","DUMMY_FILE_NAME"],"fn":["color_ranges","compare_ranges","compare_sets","compile","compile_body","compile_body_with_range","fmt_ranges","parse_ranges"],"struct":["PlaceBuilder","Placer","StringLoader"],"type":["RangeMap"]};

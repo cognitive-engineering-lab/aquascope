@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["count","naive_count","naive_count_32","naive_num_chars","num_chars"]};

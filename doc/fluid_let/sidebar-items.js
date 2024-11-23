@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["fluid_let","fluid_set"],"struct":["DynamicVariable"]};

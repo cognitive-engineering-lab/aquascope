@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"miri":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/interpret/error/trait.MachineStopType.html\" title=\"trait rustc_middle::mir::interpret::error::MachineStopType\">MachineStopType</a> for <a class=\"enum\" href=\"miri/enum.TerminationInfo.html\" title=\"enum miri::TerminationInfo\">TerminationInfo</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["signal","stat","statfs","statvfs","time","wait"]};

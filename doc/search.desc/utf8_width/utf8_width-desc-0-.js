@@ -1,0 +1,1 @@
+searchState.loadedDescShard("utf8_width", 0, "UTF-8 Width\nGiven a first byte, determines how many bytes are in this …\n<em>Assume the input first byte is from a valid UTF-8 </em>…")

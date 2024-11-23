@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Color","ColorChoice"],"struct":["Ansi","Buffer","BufferWriter","BufferedStandardStream","ColorChoiceParseError","ColorSpec","NoColor","ParseColorError","StandardStream","StandardStreamLock"],"trait":["WriteColor"]};

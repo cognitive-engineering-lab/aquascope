@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CmdRenderer","HtmlHandlebars","MarkdownRenderer","RenderContext"],"trait":["Renderer"]};

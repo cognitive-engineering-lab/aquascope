@@ -1,0 +1,123 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Dynamically scoped variables."><title>fluid_let - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="fluid_let" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-dev" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../fluid_let/index.html">fluid_let</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">fluid_let</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/fluid_let/lib.rs.html#4-741">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Dynamically scoped variables.</p>
+<p><em>Dynamic</em> or <em>fluid</em> variables are a handy way to define global configuration values.
+They come from the Lisp family of languages where they are relatively popular in this role.</p>
+<h2 id="declaring-dynamic-variables"><a class="doc-anchor" href="#declaring-dynamic-variables">§</a>Declaring dynamic variables</h2>
+<p><a href="macro.fluid_let.html"><code>fluid_let!</code></a> macro is used to declare dynamic variables. Dynamic variables
+are <em>global</em>, therefore they must be declared as <code>static</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs::File;
+
+<span class="kw">use </span>fluid_let::fluid_let;
+
+<span class="macro">fluid_let!</span>(<span class="kw">static </span>LOG_FILE: File);</code></pre></div>
+<p>The actual type of <code>LOG_FILE</code> variable is <code>Option&lt;&amp;File&gt;</code>: that is,
+possibly absent reference to a file. All dynamic variables have <code>None</code> as
+their default value, unless a particular value is set for them.</p>
+<p>If you enable the <a href="#features"><code>&quot;static-init&quot;</code> feature</a>, it is also
+possible to provide <code>'static</code> initialization for types that allow it:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">fluid_let!</span>(<span class="kw">static </span>LOG_LEVEL: LogLevel = LogLevel::Info);</code></pre></div>
+<p>Here <code>LOG_LEVEL</code> has <code>Some(&amp;LogLevel::Info)</code> as its default value.</p>
+<h2 id="setting-dynamic-variables"><a class="doc-anchor" href="#setting-dynamic-variables">§</a>Setting dynamic variables</h2>
+<p><a href="struct.DynamicVariable.html#method.set"><code>set</code></a> is used to give value to a dynamic variable:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>log_file: File = open(<span class="string">"/tmp/log.txt"</span>);
+
+LOG_FILE.set(<span class="kw-2">&amp;</span>log_file, || {
+    <span class="comment">//
+    // logs will be redirected to /tmp/log.txt in this block
+    //
+</span>});</code></pre></div>
+<p>Note that you store an <em>immutable reference</em> in the dynamic variable.
+You can’t directly modify the dynamic variable value after setting it,
+but you can use something like <code>Cell</code> or <code>RefCell</code> to circumvent that.</p>
+<p>The new value is in effect within the <em>dynamic extent</em> of the assignment,
+that is within the closure passed to <code>set</code>. Once the closure returns, the
+previous value of the variable is restored.</p>
+<p>If you do not need precise control over the extent of the assignment, you
+can use the <a href="macro.fluid_set.html"><code>fluid_set!</code></a> macro to assign until the end of the scope:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>fluid_let::fluid_set;
+
+<span class="kw">fn </span>chatterbox_function() {
+    <span class="macro">fluid_set!</span>(LOG_FILE, open(<span class="string">"/dev/null"</span>));
+    <span class="comment">//
+    // logs will be written to /dev/null in this function
+    //
+</span>}</code></pre></div>
+<p>Obviously, you can also nest assignments arbitrarily:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>LOG_FILE.set(open(<span class="string">"A.txt"</span>), || {
+    <span class="comment">// log to A.txt here
+    </span>LOG_FILE.set(open(<span class="string">"/dev/null"</span>), || {
+        <span class="comment">// log to /dev/null for a bit
+        </span><span class="macro">fluid_set!</span>(LOG_FILE, open(<span class="string">"B.txt"</span>));
+        <span class="comment">// log to B.txt starting with this line
+        </span>{
+            <span class="macro">fluid_set!</span>(LOG_FILE, open(<span class="string">"C.txt"</span>));
+            <span class="comment">// but in this block log to C.txt
+        </span>}
+        <span class="comment">// before going back to using B.txt here
+    </span>});
+    <span class="comment">// and logging to A.txt again
+</span>});</code></pre></div>
+<h2 id="accessing-dynamic-variables"><a class="doc-anchor" href="#accessing-dynamic-variables">§</a>Accessing dynamic variables</h2>
+<p><a href="struct.DynamicVariable.html#method.get"><code>get</code></a> is used to retrieve the current value of a dynamic variable:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>write_log(msg: <span class="kw-2">&amp;</span>str) -&gt; io::Result&lt;()&gt; {
+    LOG_FILE.get(|current| {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>log_file) = current {
+            <span class="macro">write!</span>(log_file, <span class="string">"{}\n"</span>, msg)<span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
+    })
+}</code></pre></div>
+<p>Current value of the dynamic variable is passed to the provided closure, and
+the value returned by the closure becomes the value of the <code>get()</code> call.</p>
+<p>This somewhat weird access interface is dictated by safety requirements. The
+dynamic variable itself is global and thus has <code>'static</code> lifetime. However,
+its values usually have shorter lifetimes, as short as the corresponing
+<code>set()</code> call. Therefore, access reference must have <em>even shorter</em> lifetime.</p>
+<p>If the variable type implements <code>Clone</code> or <code>Copy</code> then you can use <a href="struct.DynamicVariable.html#method.cloned"><code>cloned</code></a>
+and <a href="struct.DynamicVariable.html#method.copied"><code>copied</code></a> convenience accessors to get a copy of the current value:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+</span><span class="kw">enum </span>LogLevel {
+    Debug,
+    Info,
+    Error,
+}
+
+<span class="macro">fluid_let!</span>(<span class="kw">static </span>LOG_LEVEL: LogLevel = LogLevel::Info);
+
+<span class="kw">fn </span>write_log(level: LogLevel, msg: <span class="kw-2">&amp;</span>str) -&gt; io::Result&lt;()&gt; {
+    <span class="kw">if </span>level &lt; LOG_LEVEL.copied().unwrap() {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+    LOG_FILE.get(|current| {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>log_file) = current {
+            <span class="macro">write!</span>(log_file, <span class="string">"{}\n"</span>, msg)<span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
+    })
+}</code></pre></div>
+<h2 id="thread-safety"><a class="doc-anchor" href="#thread-safety">§</a>Thread safety</h2>
+<p>Dynamic variables are global and <em>thread-local</em>. That is, each thread gets
+its own independent instance of a dynamic variable. Values set in one thread
+are visible only in this thread. Other threads will not see any changes in
+values of their dynamic variables and may have different configurations.</p>
+<p>Note, however, that this does not free you from the usual synchronization
+concerns when shared objects are involved. Dynamic variables hold <em>references</em>
+to objects. Therefore it is entirely possible to bind <em>the same</em> object with
+internal mutability to a dynamic variable and access it from multiple threads.
+In this case you will probably need some synchronization to use the shared
+object in a safe manner, just like you would do when using <code>Arc</code> and friends.</p>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<p>Currently, there is only one optional feature: <code>&quot;static-init&quot;</code>,
+gating static initialization of dynamic variables:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">fluid_let!</span>(<span class="kw">static </span>LOG_LEVEL: LogLevel = LogLevel::Info);
+<span class="comment">//                                    ~~~~~~~~~~~~~~~~</span></code></pre></div>
+<p>The API for accessing known-initialized variables has not stabilized yet
+and may be subject to changes.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.fluid_let.html" title="macro fluid_let::fluid_let">fluid_let</a></div><div class="desc docblock-short">Declares global dynamic variables.</div></li><li><div class="item-name"><a class="macro" href="macro.fluid_set.html" title="macro fluid_let::fluid_set">fluid_set</a></div><div class="desc docblock-short">Binds a value to a dynamic variable.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DynamicVariable.html" title="struct fluid_let::DynamicVariable">DynamicVariable</a></div><div class="desc docblock-short">A global dynamic variable.</div></li></ul></section></div></main></body></html>

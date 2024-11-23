@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fstatfs","statfs"],"struct":["Statfs"],"type":["fsid_t"]};

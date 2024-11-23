@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_INTERVAL_VALUE","MAX_SINGLE_VALUE"],"enum":["PageTag"],"fn":["split_streams"],"mod":["counters","event_id","file_header","rustc","stringtable"],"struct":["Addr","DetachedTiming","Profiler","RawEvent","SerializationSink","SerializationSinkBuilder","TimingGuard"]};

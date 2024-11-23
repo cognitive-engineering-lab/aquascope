@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","SignalType"],"fn":["set_handler","try_set_handler"],"type":["Signal"]};

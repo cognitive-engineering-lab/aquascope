@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SEPARATOR_BYTE"],"struct":["EventId","EventIdBuilder"]};

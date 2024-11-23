@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["online_column_minima","smawk_column_minima","smawk_row_minima"],"mod":["monge"],"trait":["Matrix"]};

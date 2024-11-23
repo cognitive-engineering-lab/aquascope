@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="mdBook"><title>mdbook - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="mdbook" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-dev" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../mdbook/index.html">mdbook</a><span class="version">0.4.34</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#constants">Constants</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">mdbook</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/mdbook/lib.rs.html#1-108">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="mdbook"><a class="doc-anchor" href="#mdbook">§</a>mdBook</h2>
+<p><strong>mdBook</strong> is a tool for rendering a collection of markdown documents into
+a form more suitable for end users like HTML or EPUB.  It offers a command
+line interface, but this crate can be used if more control is required.</p>
+<p>This is the API doc, the <a href="https://rust-lang.github.io/mdBook/">user guide</a> is also available if you want
+information about the command line tool, format, structure etc. It is also
+rendered with mdBook to showcase the features and default theme.</p>
+<p>Some reasons why you would want to use the crate (over the cli):</p>
+<ul>
+<li>Integrate mdbook in a current project</li>
+<li>Extend the capabilities of mdBook</li>
+<li>Do some processing or test before building your book</li>
+<li>Accessing the public API to help create a new Renderer</li>
+<li>…</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> While we try to ensure <code>mdbook</code>’s command-line interface and
+behaviour are backwards compatible, the tool’s internals are still
+evolving and being iterated on. If you wish to prevent accidental
+breakages it is recommended to pin any tools building on top of the
+<code>mdbook</code> crate to a specific release.</p>
+</blockquote>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>If creating a new book from scratch, you’ll want to get a <code>BookBuilder</code> via
+the <code>MDBook::init()</code> method.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>mdbook::MDBook;
+<span class="kw">use </span>mdbook::config::Config;
+
+<span class="kw">let </span>root_dir = <span class="string">"/path/to/book/root"</span>;
+
+<span class="comment">// create a default config and change a couple things
+</span><span class="kw">let </span><span class="kw-2">mut </span>cfg = Config::default();
+cfg.book.title = <span class="prelude-val">Some</span>(<span class="string">"My Book"</span>.to_string());
+cfg.book.authors.push(<span class="string">"Michael-F-Bryan"</span>.to_string());
+
+MDBook::init(root_dir)
+    .create_gitignore(<span class="bool-val">true</span>)
+    .with_config(cfg)
+    .build()
+    .expect(<span class="string">"Book generation failed"</span>);</code></pre></div>
+<p>You can also load an existing book and build it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>mdbook::MDBook;
+
+<span class="kw">let </span>root_dir = <span class="string">"/path/to/book/root"</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>md = MDBook::load(root_dir)
+    .expect(<span class="string">"Unable to load the book"</span>);
+md.build().expect(<span class="string">"Building failed"</span>);</code></pre></div>
+<h3 id="implementing-a-new-backend"><a class="doc-anchor" href="#implementing-a-new-backend">§</a>Implementing a new Backend</h3>
+<p><code>mdbook</code> has a fairly flexible mechanism for creating additional backends
+for your book. The general idea is you’ll add an extra table in the book’s
+<code>book.toml</code> which specifies an executable to be invoked by <code>mdbook</code>. This
+executable will then be called during a build, with an in-memory
+representation (<a href="renderer/struct.RenderContext.html" title="struct mdbook::renderer::RenderContext"><code>RenderContext</code></a>) of the book being passed to the
+subprocess via <code>stdin</code>.</p>
+<p>The <a href="renderer/struct.RenderContext.html" title="struct mdbook::renderer::RenderContext"><code>RenderContext</code></a> gives the backend access to the contents of
+<code>book.toml</code> and lets it know which directory all generated artefacts should
+be placed in. For a much more in-depth explanation, consult the <a href="https://rust-lang.github.io/mdBook/for_developers/backends.html">relevant
+chapter</a> in the <em>For Developers</em> section of the user guide.</p>
+<p>To make creating a backend easier, the <code>mdbook</code> crate can be imported
+directly, making deserializing the <code>RenderContext</code> easy and giving you
+access to the various methods for working with the <a href="config/struct.Config.html" title="struct mdbook::config::Config"><code>Config</code></a>.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.BookItem"><code>pub use crate::book::<a class="enum" href="book/enum.BookItem.html" title="enum mdbook::book::BookItem">BookItem</a>;</code></div></li><li><div class="item-name" id="reexport.MDBook"><code>pub use crate::book::<a class="struct" href="book/struct.MDBook.html" title="struct mdbook::book::MDBook">MDBook</a>;</code></div></li><li><div class="item-name" id="reexport.Config"><code>pub use crate::config::<a class="struct" href="config/struct.Config.html" title="struct mdbook::config::Config">Config</a>;</code></div></li><li><div class="item-name" id="reexport.Renderer"><code>pub use crate::renderer::<a class="trait" href="renderer/trait.Renderer.html" title="trait mdbook::renderer::Renderer">Renderer</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="book/index.html" title="mod mdbook::book">book</a></div><div class="desc docblock-short">The internal representation of a book and infrastructure for loading it from
+disk and building it.</div></li><li><div class="item-name"><a class="mod" href="config/index.html" title="mod mdbook::config">config</a></div><div class="desc docblock-short">Mdbook’s configuration system.</div></li><li><div class="item-name"><a class="mod" href="errors/index.html" title="mod mdbook::errors">errors</a></div><div class="desc docblock-short">The error types used through out this crate.</div></li><li><div class="item-name"><a class="mod" href="preprocess/index.html" title="mod mdbook::preprocess">preprocess</a></div><div class="desc docblock-short">Book preprocessing.</div></li><li><div class="item-name"><a class="mod" href="renderer/index.html" title="mod mdbook::renderer">renderer</a></div><div class="desc docblock-short"><code>mdbook</code>’s low level rendering interface.</div></li><li><div class="item-name"><a class="mod" href="theme/index.html" title="mod mdbook::theme">theme</a></div></li><li><div class="item-name"><a class="mod" href="utils/index.html" title="mod mdbook::utils">utils</a></div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.MDBOOK_VERSION.html" title="constant mdbook::MDBOOK_VERSION">MDBOOK_VERSION</a></div><div class="desc docblock-short">The current version of <code>mdbook</code>.</div></li></ul></section></div></main></body></html>

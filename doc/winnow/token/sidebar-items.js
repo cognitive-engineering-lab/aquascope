@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["any","none_of","one_of","tag","tag_no_case","take","take_till0","take_till1","take_until0","take_until1","take_while"]};

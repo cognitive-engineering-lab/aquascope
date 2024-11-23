@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;700&display=swap" rel="stylesheet">
+
+  
+
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+  <link rel="manifest" href="site.webmanifest">
+  <script src="coi-serviceworker.js"></script>
+
+  <title>Aquascope: Look Beneath the Surface of Rust</title>
+  <script type="module" crossorigin src="./assets/index-1b9b4f27.js"></script>
+  <link rel="stylesheet" href="./assets/index-7487630b.css">
+</head>
+
+<body>
+  
+
+  <h1>Aquascope Playground</h1>
+
+  <p>
+    Welcome! <a href=
+    "https://github.com/cognitive-engineering-lab/aquascope">Aquascope</a></span>
+    is a tool to visualize the compile-time and run-time behavior of <a href=
+    "https://www.rust-lang.org/">Rust</a> programs.
+  </p>
+
+  <p>
+    You can try out Aquascope by writing a Rust program in the editor below, then
+    clicking the "Interpret" button to see the runtime states, or clicking "Permissions" to see
+    the borrow-checking compiler state.
+  </p>
+
+  <p>
+    Aquascope is a research tool under active development, so it doesn't work for some Rust programs (but do <a href="https://github.com/cognitive-engineering-lab/aquascope/issues/new">file an issue</a>).
+    If you want to see Aquascope diagrams in action, check out the new chapter on ownership in the
+    <a href="https://rust-book.cs.brown.edu/ch04-01-what-is-ownership.html">Rust Book Experiment</a>.
+  </p>
+
+  <div class="columns">
+    <div class="tabs-container">    
+      <ul class="tabs">
+        <li class="tab active" data-tab="0">Code</li>
+
+        <li class="tab" data-tab="1">Stderr</li>
+      </ul>
+
+      <div class="aquascope static-editor tab-pane active" data-pane="0"></div>
+
+      <div class="tab-pane" data-pane="1"><pre class="aquascope-stderr"></pre></div>
+    </div>
+
+    <div class="buttons">
+      <div>
+        <div class="dropdown">
+          <button class="cm-button">            
+            <i class="fa fa-caret-down"></i>
+          </button>
+          <div class="dropdown-content">
+            <label class="dropdown-container">Must pass borrow checker?
+              <input type="checkbox" id="passesBorrowChecker">
+              <span class="checkmark">
+            </label>           
+          </div>
+        </div>
+        <button class="cm-button" id="showInterpret">Interpret<span class="loader"></button>
+      </div>
+      <div>
+        <div class="dropdown">
+          <button class="cm-button">
+            <i class="fa fa-caret-down"></i>
+          </button>
+          <div class="dropdown-content">
+            <label class="dropdown-container">Boundaries
+              <input type="checkbox" id="showBoundaries" checked>
+              <span class="checkmark">
+            </label>
+            <label class="dropdown-container">Steps
+              <input type="checkbox" id="showSteps" checked>
+              <span class="checkmark">
+            </label>
+          </div>
+        </div>
+        <button class="cm-button" id="showPermissions">Permissions<span class="loader"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="analysisErrorCard" class="analysis-error-card">
+    <span id="close">x</span>
+
+    <h3>Internal bug!</h3>
+
+    <p>Please <a src=
+    "https://github.com/cognitive-engineering-lab/aquascope/issues/new">
+    file a bug report</a> including:</p>
+
+    <ul>
+      <li>The code you tried to analyze</li>
+
+      <li>The following debug output</li>
+    </ul>
+
+    <h4>Debug Output</h4>
+
+    <div id="analysisErrorMsg" class="analysis-error-msg"></div>
+  </div>
+
+  <div id="buildErrorCard" class="build-error-card">
+    <h3>Build Error!</h3>
+
+    <p>One or more functions could not be analyzed. This is
+    typically caused by a <em>type error</em>.</p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Analysis for the “Needs-at” relations."><title>aquascope::analysis::boundaries - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="aquascope" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-dev" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../aquascope/index.html">aquascope</a><span class="version">0.1.0</span></h2></div><h2 class="location"><a href="#">Module boundaries</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In aquascope::analysis</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">aquascope</a>::<wbr><a href="../index.html">analysis</a>::<wbr><a class="mod" href="#">boundaries</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/aquascope/analysis/boundaries/mod.rs.html#1-796">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Analysis for the “Needs-at” relations.</p>
+<p>In other words, finding expected vs existing permission for a path usage.</p>
+<h2 id="walthrough"><a class="doc-anchor" href="#walthrough">§</a>Walthrough</h2>
+<p>The “boundaries” analysis is relatively simple and as such poses as a
+good demonstration for how to use permissions in a larger analysis.</p>
+<p>This analysis must do three things:</p>
+<ol>
+<li>Find all places where a path is used at the source-level, determine what
+permissions are necessary for this operation to be allowed.</li>
+<li>Determine the MIR-level <a href="https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/syntax/struct.Place.html" title="struct rustc_middle::mir::syntax::Place"><code>Place</code></a> and <a href="https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/struct.Location.html" title="struct rustc_middle::mir::Location"><code>Location</code></a> for this usage.</li>
+<li>Compute the permissions the given Place actually has at the use point.</li>
+</ol>
+<p>These three steps are represented as two distinct stages. In the [<code>path_visitor</code>]
+module all of the [<code>PathBoundary</code>]s are computed. This returns information
+such as the expected permissions, and the [<code>HirId</code>] of the usage. There’s some
+other stuff available in the struct, mostly to resolve the Flow permissions, but
+those aren’t relevant for this basic discussion.</p>
+<h3 id="finding-path-usages"><a class="doc-anchor" href="#finding-path-usages">§</a>Finding path usages</h3><h4 id="example"><a class="doc-anchor" href="#example">§</a>Example</h4>
+<p>Let’s walk through what this would look like for a simple function:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>append_hello(s: <span class="kw-2">&amp;mut </span>String) {
+  <span class="macro">println!</span>(<span class="string">"Adding hello to string { s }"</span>);
+  s.push_str(<span class="string">"hello!"</span>);
+}</code></pre></div>
+<p>Within the function there are two path usages. The first within the <code>println!</code>
+when <code>s</code> is read and the second when the method <code>push_str</code> is invoked on <code>s</code>.
+Therefore, a call to [<code>get_path_boundaries</code>] should return a vector of two elements:</p>
+<div class="example-wrap"><pre class="language-text"><code>[
+  PathBoundary {
+    hir_id: { &amp;s }
+    expected: Permissions { read: true, write: false, drop: false },
+    ...
+ },
+ PathBoundary {
+   hir_id: { &amp;mut *s }
+   expected: Permissions { read: true, write: true, drop: false },
+   ...
+ },
+]
+</code></pre></div>
+<p>Let’s go through each of these boundaries and discuss what this information means and
+how it was found. The first usage of <code>s</code> occurs within a macro. Macros, and other
+desugarings, are in tension with how we want to display information. When traversing the
+HIR, you won’t see a nice source code location that looks like <code>println!(&quot;... {s}&quot;)</code>,
+what you do see is an ugly monster, such as the following:</p>
+<div class="example-wrap"><pre class="language-text"><code>::std::io::_print(
+    ::new_v1(
+      &amp;[&quot;... &quot;, &quot;\n&quot;], &amp;[::new_display(&amp;s)]
+    )
+);
+</code></pre></div>
+<p>When desugaring, the compiler can insert new variables and places which are
+<em>invisible</em> at the source-level. The current solution to this is to use
+[<code>rustc_hir::hir::Expr::is_syntactic_place_expr</code>] and <a href="https://doc.rust-lang.org/nightly/nightly-rustc/rustc_span/span_encoding/struct.Span.html#method.from_expansion" title="method rustc_span::span_encoding::Span::from_expansion"><code>rustc_span::Span::from_expansion</code></a>
+to find out if the path we’re looking is a “syntactic place” (i.e., it looks like a place)
+and if it came from some sort of expansion. Returning to our example, the HIR node that we
+are going to find permissions for is <code>&amp;s</code>. That is, the shared borrow that occurs within the macro
+expansion. One last hiccup in the process of finding source spans is the span information
+available in the HIR. For this macro, if you just look at the source location it will point
+to somewhere from within rustc. We utilize the <a href="../../../rustc_utils/source_map/span/trait.SpanExt.html#tymethod.as_local" title="method rustc_utils::source_map::span::SpanExt::as_local"><code>SpanExt::as_local</code></a> method to sanitize spans
+and lift them back to original source code.
+Lastly, the struct [<code>ExpectedPermissions</code>] has a series of construction methods
+which show concisely when certain permissions are expected for the respective uses.
+In this case, a shared borrow only requires the Read permission.</p>
+<p>The second boundary returned corresponds to the usage of <code>s</code> as the receiver of the
+invoked meethod <code>push_str</code>. At the HIR, this is desugared into a function call
+passing the  receiver as the first argument, like so: <code>String::push_str(&amp;mut *s, &quot;hello!&quot;)</code>.
+There isn’t anything tricky about visualizing this information and the code is
+straightforward, if you want to peruse through the HIR visitor [<code>path_visitor::HirExprScraper</code>].
+The reason method calls are interesting is, at the time of writing, we visualize the
+boundary stack in-between the receiver and the dot (<code>.</code>), instead of to the left of the
+path like every other case. Note, there’s also a reborrow introduced but that’s only
+relevant in the next section.</p>
+<h3 id="resolving-actual-permissions"><a class="doc-anchor" href="#resolving-actual-permissions">§</a>Resolving actual permissions</h3>
+<p>The second stage of the boundaries analysis is taking the found [<code>PathBoundaries</code>]
+and converting them into a <a href="struct.PermissionsBoundary.html" title="struct aquascope::analysis::boundaries::PermissionsBoundary"><code>PermissionsBoundary</code></a>. This is the step that does
+most of the heavy lifting. So try to follow along!</p>
+<p>The crux of the entire analysis is converting a [<code>HirId</code>], specifially a HIR node
+that we <em>know</em> contains a path use, to the corresponding MIR <a href="https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/syntax/struct.Place.html" title="struct rustc_middle::mir::syntax::Place"><code>Place</code></a> and <a href="https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/struct.Location.html" title="struct rustc_middle::mir::Location"><code>Location</code></a>.
+Unfortunately, there isn’t a “really good way” to do this and before we return to the
+running example I’ll outline the strategy that is currently taken.</p>
+<p>Given a <code>HirId</code>, we can use the <a href="../ir_mapper/struct.IRMapper.html" title="struct aquascope::analysis::ir_mapper::IRMapper"><code>IRMapper</code></a> to gather all of the MIR instructions
+that correspond to the given HIR node. That means, given a HIR node such as <code>let a = &amp;b</code>,
+the <code>IRMapper</code> can tell you that the below MIR instructions were generated:</p>
+<div class="example-wrap"><pre class="language-text"><code>StorageLive(a);
+_t0 = &amp;b;
+a = move _t0;
+FakeRead(ForLet, a)
+</code></pre></div>
+<p>When doing resolution we search through the generated MIR instructions to find
+all Places that belong to a source-visible path that belongs to a source-visible
+variable. As you can see in the above mini-example, compiler temporaries are
+introduced that we don’t want to consider. After finding these so-called
+“candidate places” we need to actually pick one that belongs to the <em>specific</em> usage
+we’re interested in (more on this in the example). To date, every bug reported for
+the boundaries analysis had to do with picking a place from the list of candidates.</p>
+<h3 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h3>
+<p>Returning to our example function, remember that we have two <code>PathBoundaries</code>,
+representing <code>&amp;s</code> and <code>&amp;mut *s</code>.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>append_hello(s: <span class="kw-2">&amp;mut </span>String) {
+  <span class="macro">println!</span>(<span class="string">"Adding hello to string { s }"</span>);
+  s.push_str(<span class="string">"hello!"</span>);
+}</code></pre></div>
+<p>The first boundary is fortunately very simple. The MIR instructions generated for <code>&amp;s</code> would
+be something such as <code>_t0 = &amp;s</code>. This means we have very little to search through, and the
+list of candidate locations would be <code>[ s ]</code>. Thus we can easily resolve the place and location.</p>
+<p><em>A quick side note</em>, in the above examples I’ve been using the source-level paths within
+the MIR, but this <strong>doesn’t</strong> happen. It’s merely for readability. All paths are replaced
+by compiler temporaries, and those coming from HIR paths will have extra debug information
+attached to them. We can use the <a href="../../../rustc_utils/mir/place/trait.PlaceExt.html#tymethod.is_source_visible" title="method rustc_utils::mir::place::PlaceExt::is_source_visible"><code>PlaceExt::is_source_visible</code></a> method to see if a MIR
+<code>Place</code> is something with that information attached. The attentive reader will note that
+I’ve said “coming from the HIR” which means paths introduced by loop desugarings will
+also have this attached debug info, this is only a minor inconvenience.</p>
+<p>The second boundary in our example is the <code>&amp;mut *s</code> that occurs within the larger
+method invocation. For this, the <code>IRMapper</code> will tell us that the following MIR
+instructions are associated:</p>
+<div class="example-wrap"><pre class="language-text"><code>let _t0 = &amp;mut *s;
+let _t1 = move _t0;
+...
+String::push_str(move _t1, &quot;hello!&quot;);
+</code></pre></div>
+<p>This demonstrates that there can be a level (or two, or three, …) between
+the action, in this case the method invocation, and the first <em>usage</em> being
+the reborrow. Method calls are quite straightforward because we can take
+the first use of the path (and it’s corresponding location), but for all
+constructs that’s not sufficient (e.g., array accesses first do a
+bounds check, but the bounds check is on a different <code>Place</code> than what we’re
+after). One additional thing to note, however, is that for the method call our
+resolved <code>Place</code> corresponds to <code>(*s)</code>, different from the path <code>s</code> visible
+in the source code.</p>
+<p>For our example, after this selection we will have an exact <code>Place</code> and
+<code>Location</code> for a path use. To get the actual permissions, we can use the
+ever-so-handy <a href="../permissions/struct.PermissionsCtxt.html#method.permissions_data_at_point" title="method aquascope::analysis::permissions::PermissionsCtxt::permissions_data_at_point"><code>PermissionsCtxt::permissions_data_at_point</code></a> to get the
+<code>PermissionsData</code>, a struct containing the exact permissions as well as
+first-order provenance describing any active refinements.</p>
+<p>The entry location to this process of resolving a HIR path to a MIR place,
+and retrieving the permissions can be found in the [<code>path_to_perm_boundary</code>] function.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.FlowBoundary.html" title="struct aquascope::analysis::boundaries::FlowBoundary">FlowBoundary</a></div><div class="desc docblock-short">A point where a region flow is introduced, potentially resulting in a violation.</div></li><li><div class="item-name"><a class="struct" href="struct.PermissionsBoundary.html" title="struct aquascope::analysis::boundaries::PermissionsBoundary">PermissionsBoundary</a></div><div class="desc docblock-short">A point where the permissions reality are checked against their expectations.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.compute_permission_boundaries.html" title="fn aquascope::analysis::boundaries::compute_permission_boundaries">compute_permission_boundaries</a></div></li></ul></section></div></main></body></html>
