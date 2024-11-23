@@ -15,7 +15,7 @@ import {
   strace
 } from "./wasi/exports";
 
-import AQUASCOPE_URL from "./assets/wasm-builds/aquascope/aquascope-driver.wasm.gz?url";
+import AQUASCOPE_URL from "./assets/wasm-builds/aquascope/aquascope-driver.wasm?url";
 
 // TODO: figure out why import.meta.glob isn't working...
 import lib0Url from "./assets/wasm-builds/rustc/lib/rustlib/x86_64-unknown-linux-gnu/lib/libaddr2line-c29e40a4e2fdf368.rlib?url";
