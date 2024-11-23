@@ -1,5 +1,5 @@
 [workspace]
-members = [ "crates/*" , "examples/hello-world"]
+members = [ "crates/*" ]
 exclude = [ "files", "crates/aquascope_serve" ]
 resolver = "2"
 
