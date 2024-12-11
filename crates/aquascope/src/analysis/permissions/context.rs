@@ -20,7 +20,7 @@ use rustc_hir::{def_id::DefId, BodyId, Mutability};
 use rustc_index::IndexVec;
 use rustc_middle::{
   mir::{BorrowKind, Local, Location, Place, ProjectionElem},
-  ty::{self, ParamEnv, Ty, TyCtxt},
+  ty::{self, Ty, TyCtxt, TypingEnv},
 };
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
@@ -36,9 +36,9 @@ use crate::analysis::permissions::{
 /// A path as defined in rustc.
 type MoveablePath = <RustcFacts as FactTypes>::Path;
 
-pub struct PermissionsCtxt<'a, 'tcx> {
+pub struct PermissionsCtxt<'tcx> {
   pub tcx: TyCtxt<'tcx>,
-  pub polonius_input_facts: &'a AllFacts<RustcFacts>,
+  pub polonius_input_facts: &'tcx AllFacts<RustcFacts>,
   pub polonius_output: PEOutput<RustcFacts>,
 
   /// Program facts unique to Aquascope.
@@ -51,18 +51,18 @@ pub struct PermissionsCtxt<'a, 'tcx> {
   pub permissions_output: Output<AquascopeFacts>,
   pub body_id: BodyId,
   pub def_id: DefId,
-  pub body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+  pub body_with_facts: &'tcx BodyWithBorrowckFacts<'tcx>,
   pub borrow_set: BorrowSet<'tcx>,
   pub move_data: MoveData<'tcx>,
   pub loan_regions: Option<HashMap<Loan, (Point, Point)>>,
   pub locals_are_invalidated_at_exit: bool,
-  pub(crate) param_env: ParamEnv<'tcx>,
+  pub(crate) typing_env: TypingEnv<'tcx>,
   pub(crate) place_data: IndexVec<Path, Place<'tcx>>,
   pub(crate) rev_lookup: HashMap<Local, Vec<Path>>,
   pub(crate) region_flows: Option<RegionFlows>,
 }
 
-impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
+impl<'tcx> PermissionsCtxt<'tcx> {
   pub fn new_path(&mut self, place: Place<'tcx>) -> Path {
     let place = place.normalize(self.tcx, self.def_id);
     let new_path = self.place_data.push(place);
@@ -125,7 +125,11 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
   pub fn path_to_moveable_path(&self, p: Path) -> MoveablePath {
     let place = self.path_to_place(p);
-    self.move_data.rev_lookup.find_local(place.local)
+    self
+      .move_data
+      .rev_lookup
+      .find_local(place.local)
+      .unwrap_or_else(|| panic!("Missing local: {:?}", place.local))
   }
 
   pub fn moveable_path_to_path(&self, mp: MoveablePath) -> Path {
@@ -218,7 +222,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let body = &self.body_with_facts.body;
     let place = self.path_to_place(path);
     let ty = place.ty(&body.local_decls, self.tcx).ty;
-    ty.is_copyable(self.tcx, self.param_env)
+    ty.is_copyable(self.tcx, self.typing_env)
   }
 
   /// Can this path be written to?
@@ -290,7 +294,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       is_live: true,
       type_droppable: true,
       type_writeable: true,
-      type_copyable: ty.is_copyable(self.tcx, self.param_env),
+      type_copyable: ty.is_copyable(self.tcx, self.typing_env),
       path_moved: None,
       path_uninitialized: false,
       loan_read_refined: None,

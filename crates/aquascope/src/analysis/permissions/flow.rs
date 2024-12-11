@@ -76,22 +76,28 @@
 use std::time::Instant;
 
 use itertools::Itertools;
-use rustc_borrowck::borrow_set::BorrowData;
+use rustc_borrowck::{
+  borrow_set::BorrowData,
+  consumers::{places_conflict, PlaceConflictBias},
+  facts::PoloniusRegionVid,
+};
 use rustc_data_structures::{
   fx::FxHashSet as HashSet,
   graph::{
-    scc::Sccs, vec_graph::VecGraph, DirectedGraph, WithNumNodes, WithSuccessors,
+    depth_first_search, scc::Sccs, vec_graph::VecGraph, DirectedGraph,
+    Successors,
   },
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
 };
-use rustc_index::{bit_set::HybridBitSet, Idx};
-use rustc_utils::{mir::places_conflict, BodyExt};
+use rustc_index::{bit_set::ChunkedBitSet, Idx};
+use rustc_utils::BodyExt;
 use serde::Serialize;
 use ts_rs::TS;
 
 use super::{Origin, PermissionsCtxt};
 
 rustc_index::newtype_index! {
+  #[derive(Ord, PartialOrd)]
   #[debug_format = "scc{}"]
   pub struct SccIdx {}
 }
@@ -144,10 +150,10 @@ pub struct RegionFlows {
   specified_flows: TransitiveRelation<SccIdx>,
 
   /// Local regions that could dangle due to an exit invalidation.
-  dangling_local_sources: HybridBitSet<SccIdx>,
+  dangling_local_sources: ChunkedBitSet<SccIdx>,
 
   /// Regions that are equivalent to placeholders.
-  abstract_sources: HybridBitSet<SccIdx>,
+  abstract_sources: ChunkedBitSet<SccIdx>,
 
   /// The set of abstract components that a given component could contain.
   contains_abstract: TransitiveRelation<SccIdx>,
@@ -276,7 +282,7 @@ fn count_nodes<T: Idx>(tups: &[(T, T)]) -> usize {
 /// The return closure answers queries of the form "for (v, s) did `s` flow to v?"
 fn flow_from_sources<T>(
   sources: impl Iterator<Item = T>,
-  graph: impl DirectedGraph<Node = T> + WithSuccessors + WithNumNodes,
+  graph: impl DirectedGraph<Node = T> + Successors,
 ) -> TransitiveRelation<T>
 where
   T: Idx,
@@ -285,7 +291,7 @@ where
 
   // Compute the transitive closure, then assert that they're the same.
   for s in sources {
-    for t in graph.depth_first_search(s) {
+    for t in depth_first_search(&graph, s) {
       // `t` can point to `s`
       tcb.add(t, s);
     }
@@ -298,10 +304,9 @@ where
 ///
 /// Exit point would refer to a `StorageDead` or `Drop`.
 fn check_for_invalidation_at_exit<'tcx>(
-  ctxt: &PermissionsCtxt<'_, 'tcx>,
+  ctxt: &PermissionsCtxt<'tcx>,
   borrow: &BorrowData<'tcx>,
 ) -> bool {
-  use places_conflict::AccessDepth::{Deep, Shallow};
   use rustc_middle::{
     mir::{PlaceElem, PlaceRef, ProjectionElem},
     ty::TyCtxt,
@@ -341,16 +346,12 @@ fn check_for_invalidation_at_exit<'tcx>(
     return false;
   }
 
-  let sd = if might_be_alive { Deep } else { Shallow(None) };
-
-  places_conflict::borrow_conflicts_with_place(
+  places_conflict(
     tcx,
     body,
     place,
-    borrow.kind,
-    root_place,
-    sd,
-    places_conflict::PlaceConflictBias::Overlap,
+    root_place.to_place(tcx),
+    PlaceConflictBias::Overlap,
   )
 }
 
@@ -395,7 +396,11 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     .placeholder
     .iter()
     .filter_map(|&(p, _)| vertices.contains(&p).then_some(p))
-    .chain(body.regions_in_return().map(|rg| rg.as_var()))
+    .chain(
+      body
+        .regions_in_return()
+        .map(|rg| PoloniusRegionVid::from(rg.as_var())),
+    )
     .map(|p| scc_constraints.scc(p))
     .collect::<Vec<_>>();
 
@@ -427,7 +432,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   // Compute local sources:
   // If `Place::is_indirect` returns false, the caller knows
   // that the Place refers to the same region of memory as its base.
-  let mut local_sources = HybridBitSet::new_empty(num_sccs);
+  let mut local_sources = ChunkedBitSet::new_empty(num_sccs);
   for (_, bd) in ctxt.borrow_set.location_map.iter() {
     if !bd.borrowed_place.is_indirect() {
       let scc = scc_constraints.scc(bd.region);
@@ -449,7 +454,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   let contains_local =
     flow_from_sources(local_sources.iter(), &scc_constraints);
 
-  let mut dangling_local_sources = HybridBitSet::new_empty(num_sccs);
+  let mut dangling_local_sources = ChunkedBitSet::new_empty(num_sccs);
 
   for (_, loans) in ctxt.polonius_output.errors.iter() {
     for &loan in loans.iter() {
@@ -461,7 +466,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     }
   }
 
-  let mut abstract_sources = HybridBitSet::new_empty(num_sccs);
+  let mut abstract_sources = ChunkedBitSet::new_empty(num_sccs);
   for scc in placeholders.iter() {
     abstract_sources.insert(*scc);
   }

@@ -3,11 +3,10 @@
 use std::collections::hash_map::Entry;
 
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_middle::mir::{Location, TerminatorEdges};
-use rustc_mir_dataflow::{
-  fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice,
+use rustc_middle::mir::{
+  pretty::PrettyPrintMirOptions, Location, TerminatorEdges,
 };
-use rustc_utils::BodyExt;
+use rustc_mir_dataflow::{fmt::DebugWithContext, Analysis, JoinSemiLattice};
 
 use super::{
   context::PermissionsCtxt, Permissions, PermissionsData, PermissionsDomain,
@@ -30,19 +29,19 @@ pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
   }
 
   let analysis = PAnalysis { ctxt };
-  let mut results = analysis
-    .into_engine(ctxt.tcx, &ctxt.body_with_facts.body)
-    .iterate_to_fixpoint();
+  let mut results =
+    analysis.iterate_to_fixpoint(ctxt.tcx, &ctxt.body_with_facts.body, None);
 
   log::debug!("Dumping results for {:?}", name.as_str());
 
-  if let Err(e) = ctxt.body_with_facts.body.write_analysis_results(
-    &mut results,
-    def_id.to_def_id(),
-    ctxt.tcx,
-  ) {
-    log::warn!("{:?}", e);
-  }
+  // TODO(gavin): fixme or deleteme
+  // if let Err(e) = ctxt.body_with_facts.body.write_analysis_results(
+  //   &mut results,
+  //   def_id.to_def_id(),
+  //   ctxt.tcx,
+  // ) {
+  //   log::warn!("{:?}", e);
+  // }
 }
 
 pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
@@ -56,6 +55,9 @@ pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
     body,
     &mut |_, _| Ok(()),
     &mut stderr,
+    PrettyPrintMirOptions {
+      include_extra_comments: false,
+    },
   )
   .unwrap();
 }
@@ -213,7 +215,7 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
 // Analysis
 
 pub(crate) struct PAnalysis<'a, 'tcx> {
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  ctxt: &'a PermissionsCtxt<'tcx>,
 }
 
 impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
@@ -231,7 +233,7 @@ impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
   }
 }
 
-impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
+impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
   type Domain = PermissionsDomain<'tcx>;
   const NAME: &'static str = "PermissionsAnalysisDatalog";
 
@@ -271,9 +273,7 @@ impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
     _state: &mut Self::Domain,
   ) {
   }
-}
 
-impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
   fn apply_statement_effect(
     &mut self,
     state: &mut Self::Domain,

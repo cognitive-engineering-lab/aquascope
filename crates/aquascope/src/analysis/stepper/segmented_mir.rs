@@ -216,7 +216,7 @@ type BranchSpannerMap<'a> =
   HashMap<BranchId, Box<dyn Fn(&mut Location) -> Span + 'a>>;
 
 pub(super) struct SegmentedMirBuilder<'a, 'tcx: 'a> {
-  mapper: &'a IRMapper<'a, 'tcx>,
+  mapper: &'a IRMapper<'tcx>,
   first_collection: CollectionId,
   root_mappings: BranchSpannerMap<'a>,
   collections: IndexVec<CollectionId, Collection>,
@@ -356,7 +356,7 @@ enum GetSpanner<'a> {
 }
 
 impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
-  pub fn make(mapper: &'a IRMapper<'a, 'tcx>) -> Self {
+  pub fn make(mapper: &'a IRMapper<'tcx>) -> Self {
     let from = mapper.cleaned_graph.start_node().start_location();
 
     let mut collections = IndexVec::new();
@@ -471,9 +471,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     let mapper = &self.mapper;
 
     // Find all basic blocks that are reachable from the root.
-    let reachable = mapper
-      .cleaned_graph
-      .depth_first_search(root)
+    let reachable = depth_first_search(&mapper.cleaned_graph, root)
       .filter(|&to| mapper.dominates(root, to))
       .collect::<HashSet<_>>();
 

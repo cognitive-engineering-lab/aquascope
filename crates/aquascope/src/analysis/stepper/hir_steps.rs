@@ -81,10 +81,10 @@ pub(super) struct HirStepPoints<'a, 'tcx>
 where
   'tcx: 'a,
 {
-  tcx: &'a TyCtxt<'tcx>,
-  body: &'a Body<'tcx>,
+  tcx: TyCtxt<'tcx>,
+  body: &'tcx Body<'tcx>,
   body_id: BodyId,
-  ir_mapper: &'a IRMapper<'a, 'tcx>,
+  ir_mapper: &'a IRMapper<'tcx>,
 
   // Error reporting counters
   unsupported_features: Vec<anyhow::Error>,
@@ -145,10 +145,10 @@ macro_rules! report_unsupported {
 
 impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   pub(super) fn make(
-    tcx: &'a TyCtxt<'tcx>,
-    body: &'a Body<'tcx>,
+    tcx: TyCtxt<'tcx>,
+    body: &'tcx Body<'tcx>,
     body_id: BodyId,
-    ir_mapper: &'a IRMapper<'a, 'tcx>,
+    ir_mapper: &'a IRMapper<'tcx>,
   ) -> Result<Self> {
     let mir_segments = SegmentedMirBuilder::make(ir_mapper);
     let start_loc = mir::START_BLOCK.start_location();
@@ -191,7 +191,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 
   pub(super) fn finalize(
     self,
-    analysis: &AquascopeAnalysis<'_, 'tcx>,
+    analysis: &AquascopeAnalysis<'tcx>,
     mode: PermIncludeMode,
   ) -> Result<Vec<PermissionsLineDisplay>> {
     let body_hir_id = self.body_value_id();
@@ -225,8 +225,13 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   }
 
   fn pop_branch_start(&mut self, expecting: Location) {
-    if let Some(popped) = self.current_branch_start.pop() && popped != expecting {
-      report_unexpected!(self, "expecting popped location {expecting:?} but got {popped:?}")
+    if let Some(popped) = self.current_branch_start.pop()
+      && popped != expecting
+    {
+      report_unexpected!(
+        self,
+        "expecting popped location {expecting:?} but got {popped:?}"
+      )
     }
   }
 
@@ -487,12 +492,12 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
     self.tcx.hir()
   }
 
-  fn visit_body(&mut self, body: &'tcx hir::Body) {
+  fn visit_body(&mut self, body: &hir::Body<'tcx>) {
     intravisit::walk_body(self, body);
     self.insert_step_at_node_exit(body.value.hir_id);
   }
 
-  fn visit_block(&mut self, block: &'tcx hir::Block) {
+  fn visit_block(&mut self, block: &hir::Block<'tcx>) {
     let scope = invoke_internal!(self, open_scope);
     for stmt in block.stmts.iter() {
       self.visit_stmt(stmt);
@@ -507,7 +512,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
     invoke_internal!(self, close_scope, scope);
   }
 
-  fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt) {
+  fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt<'tcx>) {
     use rustc_hir::StmtKind as SK;
 
     log::debug!(
@@ -517,14 +522,15 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
 
     let scope = invoke_internal!(self, open_scope);
 
-    if let SK::Local(local) = stmt.kind {
-      let places = self.ir_mapper.local_assigned_place(local);
-      let locals = places.into_iter().map(|p| p.local).collect::<Vec<_>>();
-      if !locals.is_empty() {
-        log::debug!("storing locals at scope {scope:?} {locals:?}");
-        self.locals_at_scope.insert(scope, locals);
-      }
-    }
+    // TODO(gavin): fixme or deleteme
+    // if let SK::Local(local) = stmt.kind {
+    //   let places = self.ir_mapper.local_assigned_place(local);
+    //   let locals = places.into_iter().map(|p| p.local).collect::<Vec<_>>();
+    //   if !locals.is_empty() {
+    //     log::debug!("storing locals at scope {scope:?} {locals:?}");
+    //     self.locals_at_scope.insert(scope, locals);
+    //   }
+    // }
 
     intravisit::walk_stmt(self, stmt);
 
@@ -549,8 +555,10 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
         }
 
         // Insert the location and span for the else branch
-        if let Some(els) = else_opt && let Some(else_entry) = self.get_node_entry(els.hir_id) {
-        let else_span = self.span_of(els.hir_id).shrink_to_lo();
+        if let Some(els) = else_opt
+          && let Some(else_entry) = self.get_node_entry(els.hir_id)
+        {
+          let else_span = self.span_of(els.hir_id).shrink_to_lo();
           entry_to_spans.insert(else_entry, else_span);
         }
 

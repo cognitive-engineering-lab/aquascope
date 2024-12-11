@@ -218,11 +218,11 @@ where
   smoothed_elements
 }
 
-pub fn compute_permissions<'a, 'tcx>(
+pub fn compute_permissions<'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
-  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
-) -> PermissionsCtxt<'a, 'tcx> {
+  body_with_facts: &'tcx BodyWithBorrowckFacts<'tcx>,
+) -> PermissionsCtxt<'tcx> {
   BODY_ID_STACK.with(|stack| {
     stack.borrow_mut().push(body_id);
 
@@ -247,9 +247,9 @@ pub enum AquascopeError {
 
 pub type AquascopeResult<T> = ::std::result::Result<T, AquascopeError>;
 
-pub struct AquascopeAnalysis<'a, 'tcx: 'a> {
-  pub(crate) permissions: PermissionsCtxt<'a, 'tcx>,
-  pub(crate) ir_mapper: IRMapper<'a, 'tcx>,
+pub struct AquascopeAnalysis<'tcx> {
+  pub(crate) permissions: PermissionsCtxt<'tcx>,
+  pub(crate) ir_mapper: IRMapper<'tcx>,
 }
 
 impl From<anyhow::Error> for AquascopeError {
@@ -270,7 +270,7 @@ pub struct AnalysisOutput {
   pub move_regions: MoveRegions,
 }
 
-impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
+impl<'tcx> AquascopeAnalysis<'tcx> {
   pub fn new(tcx: TyCtxt<'tcx>, body_id: BodyId) -> Self {
     let def_id = tcx.hir().body_owner_def_id(body_id);
     let bwf = borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
@@ -389,7 +389,12 @@ impl<'a, 'tcx: 'a> AquascopeAnalysis<'a, 'tcx> {
 
         let loan_live_at = &self.permissions.polonius_output.loan_live_at;
         let active_nodes = self
-          .key_to_spans(**loan, loan_live_at, start_span, end_span)
+          .key_to_spans(
+            **loan,
+            &loan_live_at.clone().into_iter().collect(),
+            start_span,
+            end_span,
+          )
           .into_iter()
           .map(|s| self.span_to_range(s))
           .collect::<Vec<_>>();

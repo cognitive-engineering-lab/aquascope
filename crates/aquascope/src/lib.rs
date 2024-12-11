@@ -80,6 +80,7 @@ extern crate rustc_target;
 extern crate rustc_trait_selection;
 extern crate rustc_type_ir;
 extern crate smallvec;
+extern crate stable_mir;
 
 pub mod analysis;
 pub mod errors;

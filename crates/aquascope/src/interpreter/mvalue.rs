@@ -1,8 +1,9 @@
 //! Interpreting memory as Rust data types
 
 use miri::{
-  AllocKind, AllocMap, Immediate, InterpError, InterpErrorInfo, InterpResult,
-  MPlaceTy, MemPlaceMeta, MemoryKind, OpTy, Projectable, UndefinedBehaviorInfo,
+  interp_ok, AllocKind, AllocMap, CheckInAllocMsg, Immediate, InterpErrorInfo,
+  InterpErrorKind, InterpResult, MPlaceTy, MemPlaceMeta, MemoryKind, OpTy,
+  Projectable, UndefinedBehaviorInfo,
 };
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
@@ -61,13 +62,13 @@ impl<T> Abbreviated<T> {
   ) -> InterpResult<'tcx, Self> {
     if n <= ABBREV_MAX {
       let elts = (0 .. n).map(mk).collect::<InterpResult<'_, Vec<_>>>()?;
-      Ok(Abbreviated::All(elts))
+      interp_ok(Abbreviated::All(elts))
     } else {
       let initial = (0 .. ABBREV_MAX - 1)
         .map(&mut mk)
         .collect::<InterpResult<'tcx, Vec<_>>>()?;
       let last = mk(n - 1)?;
-      Ok(Abbreviated::Only(initial, Box::new(last)))
+      interp_ok(Abbreviated::Only(initial, Box::new(last)))
     }
   }
 
@@ -121,17 +122,17 @@ pub enum MValue {
   },
 }
 
-struct Reader<'a, 'mir, 'tcx> {
-  ev: &'a VisEvaluator<'mir, 'tcx>,
+struct Reader<'a, 'tcx> {
+  ev: &'a VisEvaluator<'tcx>,
   heap_alloc_kinds: Vec<MHeapAllocKind>,
 }
 
-impl<'tcx> Reader<'_, '_, 'tcx> {
+impl<'tcx> Reader<'_, 'tcx> {
   fn get_path_segments(
     &mut self,
     alloc_size: Size,
     alloc_layout: TyAndLayout<'tcx>,
-    mplace: MPlaceTy<'tcx, miri::Provenance>,
+    mplace: MPlaceTy<'tcx>,
     target: Size,
   ) -> Vec<MPathSegment> {
     let segments = locate_address_in_type(
@@ -149,11 +150,11 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
   fn read_alloc(
     &mut self,
-    base: miri::MPlaceTy<'tcx, miri::Provenance>,
+    base: miri::MPlaceTy<'tcx>,
   ) -> InterpResult<'tcx, MValue> {
     let el_ty = base.layout.ty;
     let stride = base.layout.size;
-    Ok(match self.heap_alloc_kinds.last() {
+    interp_ok(match self.heap_alloc_kinds.last() {
       Some(MHeapAllocKind::String { len }) => {
         let array = self.read_array(base, stride, *len, el_ty)?;
         let MValue::Array(values) = array else {
@@ -175,13 +176,16 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
   /// Reads a pointer, registering the pointed data for later use.
   fn read_pointer(
     &mut self,
-    mplace: miri::MPlaceTy<'tcx, miri::Provenance>,
+    mplace: miri::MPlaceTy<'tcx>,
   ) -> InterpResult<'tcx, MValue> {
     // Determine the base allocation from the mplace's provenance
-    let (alloc_id, offset, _) = self.ev.ecx.ptr_get_alloc_id(mplace.ptr)?;
-    let (alloc_size, _, alloc_status) = self.ev.ecx.get_alloc_info(alloc_id);
+    let (alloc_id, offset, _) = self
+      .ev
+      .ecx
+      .ptr_get_alloc_id(mplace.ptr(), mplace.layout().size.bytes() as i64)?;
+    let alloc_info = self.ev.ecx.get_alloc_info(alloc_id);
 
-    if matches!(alloc_status, AllocKind::Dead) {
+    if matches!(alloc_info.kind, AllocKind::Dead) {
       log::warn!("Reading a dead allocation");
     }
 
@@ -215,7 +219,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
               Some(t) => t.clone(),
               None => {
                 drop(memory_map);
-                return Ok(MValue::Unallocated {
+                return interp_ok(MValue::Unallocated {
                   alloc_id: Some(self.ev.remap_alloc_id(alloc_id)),
                 });
               }
@@ -243,9 +247,9 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
     // The pointer could point anywhere inside the allocation, so we use
     // `get_path_segments` to reverse-engineer a path from the memory location.
-    let meta = mplace.meta;
+    let meta = mplace.meta();
     let parts =
-      self.get_path_segments(alloc_size, alloc_layout, mplace, offset);
+      self.get_path_segments(alloc_info.size, alloc_layout, mplace, offset);
     let path = MPath { segment, parts };
 
     let range = match meta {
@@ -253,12 +257,12 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       MemPlaceMeta::None => None,
     };
 
-    Ok(MValue::Pointer { path, range })
+    interp_ok(MValue::Pointer { path, range })
   }
 
   fn read_array(
     &mut self,
-    base: MPlaceTy<'tcx, miri::Provenance>,
+    base: MPlaceTy<'tcx>,
     stride: Size,
     len: u64,
     el_ty: Ty<'tcx>,
@@ -270,26 +274,23 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       self.read(&offset_place.into())
     };
     let values = Abbreviated::new(len, read)?;
-    Ok(MValue::Array(values))
+    interp_ok(MValue::Array(values))
   }
 
   fn read_vec_len(
     &mut self,
-    op: &OpTy<'tcx, miri::Provenance>,
+    op: &OpTy<'tcx>,
   ) -> InterpResult<'tcx, Option<u64>> {
     let (_, len) = op.field_by_name("len", &self.ev.ecx)?;
-    let len = match self.read(&len) {
-      Ok(MValue::Unallocated { .. }) => return Ok(None),
-      Ok(MValue::Uint(len)) => len,
+    let len = match self.read(&len).unwrap() {
+      MValue::Unallocated { .. } => return interp_ok(None),
+      MValue::Uint(len) => len,
       _ => unreachable!(),
     };
-    Ok(Some(len))
+    interp_ok(Some(len))
   }
 
-  fn read(
-    &mut self,
-    op: &OpTy<'tcx, miri::Provenance>,
-  ) -> InterpResult<'tcx, MValue> {
+  fn read(&mut self, op: &OpTy<'tcx>) -> InterpResult<'tcx, MValue> {
     let ty = op.layout.ty;
 
     let result = match ty.kind() {
@@ -399,7 +400,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       }
 
       _ if ty.is_primitive() => {
-        let imm = match self.ev.ecx.read_immediate(op) {
+        let imm = match self.ev.ecx.read_immediate(op).report_err() {
           Ok(imm) => imm,
 
           // It's possible to read uninitialized data if a data structure
@@ -407,10 +408,10 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
           // is initialized. Therefore we have to handle this case by returning
           // MValue::Unallocated instead of throwing an error.
           Err(e) => match e.into_kind() {
-            InterpError::UndefinedBehavior(
+            InterpErrorKind::UndefinedBehavior(
               UndefinedBehaviorInfo::InvalidUninitBytes(..),
-            ) => return Ok(MValue::Unallocated { alloc_id: None }),
-            e => return Err(InterpErrorInfo::from(e)),
+            ) => return interp_ok(MValue::Unallocated { alloc_id: None }),
+            e => return Err(InterpErrorInfo::from(e)).into(),
           },
         };
         let Immediate::Scalar(scalar) = &*imm else {
@@ -432,6 +433,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
               f32::from_bits(scalar.to_f32()?.to_bits() as u32) as f64
             }
             FloatTy::F64 => f64::from_bits(scalar.to_f64()?.to_bits() as u64),
+            FloatTy::F16 | FloatTy::F128 => unimplemented!(),
           }),
           _ => unreachable!(),
         }
@@ -454,12 +456,29 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       _ if ty.is_any_ptr() => {
         let val = self.ev.ecx.read_immediate(op)?;
         let mplace = self.ev.ecx.ref_to_mplace(&val)?;
-        if self.ev.ecx.check_mplace(&mplace).is_err() {
-          let alloc_id = match self.ev.ecx.ptr_get_alloc_id(mplace.ptr) {
+        if let Some((size, _)) =
+          self.ev.ecx.size_and_align_of_mplace(&mplace)?
+          && self
+            .ev
+            .ecx
+            .check_ptr_access(
+              mplace.ptr(),
+              size,
+              CheckInAllocMsg::MemoryAccessTest,
+            )
+            .report_err()
+            .is_err()
+        {
+          let alloc_id = match self
+            .ev
+            .ecx
+            .ptr_get_alloc_id(mplace.ptr(), mplace.layout().size.bytes() as i64)
+            .report_err()
+          {
             Ok((alloc_id, _, _)) => Some(self.ev.remap_alloc_id(alloc_id)),
             Err(_) => None,
           };
-          return Ok(MValue::Unallocated { alloc_id });
+          return interp_ok(MValue::Unallocated { alloc_id });
         }
         self.read_pointer(mplace)?
       }
@@ -496,18 +515,15 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         }
       }
 
-      kind => todo!("{:?} / {:?}", **op, kind),
+      kind => todo!("{:?} / {:?}", op, kind),
     };
 
-    Ok(result)
+    interp_ok(result)
   }
 }
 
-impl<'tcx> VisEvaluator<'_, 'tcx> {
-  pub(super) fn read(
-    &self,
-    op: &OpTy<'tcx, miri::Provenance>,
-  ) -> InterpResult<'tcx, MValue> {
+impl<'tcx> VisEvaluator<'tcx> {
+  pub(super) fn read(&self, op: &OpTy<'tcx>) -> InterpResult<'tcx, MValue> {
     Reader {
       ev: self,
       heap_alloc_kinds: Vec::new(),

@@ -324,7 +324,7 @@ impl MirSegment {
 
   pub fn into_diff<'tcx>(
     self,
-    ctxt: &PermissionsCtxt<'_, 'tcx>,
+    ctxt: &PermissionsCtxt<'tcx>,
   ) -> HashMap<Place<'tcx>, PermissionsDataDiff> {
     let p0 = ctxt.location_to_point(self.from);
     let p1 = ctxt.location_to_point(self.to);
@@ -337,18 +337,15 @@ impl MirSegment {
 // ----------
 // Main entry
 
-pub fn compute_permission_steps<'a, 'tcx>(
-  analysis: &AquascopeAnalysis<'a, 'tcx>,
-) -> Result<Vec<PermissionsLineDisplay>>
-where
-  'tcx: 'a,
-{
+pub fn compute_permission_steps<'tcx>(
+  analysis: &AquascopeAnalysis<'tcx>,
+) -> Result<Vec<PermissionsLineDisplay>> {
   let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
   let ctxt = &analysis.permissions;
   let ir_mapper = &analysis.ir_mapper;
   let body = &ctxt.body_with_facts.body;
   let mut hir_visitor =
-    hir_steps::HirStepPoints::make(&ctxt.tcx, body, ctxt.body_id, ir_mapper)?;
+    hir_steps::HirStepPoints::make(ctxt.tcx, body, ctxt.body_id, ir_mapper)?;
 
   hir_visitor.visit_nested_body(ctxt.body_id);
 

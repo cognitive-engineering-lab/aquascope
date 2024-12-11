@@ -404,9 +404,9 @@ fn select_candidate_location<'tcx>(
 /// Return the constraints that occur nested within a [`HirId`].
 ///
 /// Note, constraints involving regions belonging to the same SCC are removed.
-fn flow_constraints_at_hir_id<'a, 'tcx: 'a>(
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
-  ir_mapper: &'a IRMapper<'a, 'tcx>,
+fn flow_constraints_at_hir_id<'tcx>(
+  ctxt: &PermissionsCtxt<'tcx>,
+  ir_mapper: &IRMapper<'tcx>,
   hir_id: HirId,
 ) -> Option<Vec<(Origin, Origin, Point)>> {
   let mir_locations =
@@ -543,10 +543,10 @@ fn get_flow_permission(
 /// given HIR node. This builds our set of candidate places
 /// that we consider for boundary resolution.
 #[allow(clippy::wildcard_in_or_patterns)]
-fn paths_at_hir_id<'a, 'tcx: 'a>(
+fn paths_at_hir_id<'tcx>(
   tcx: TyCtxt<'tcx>,
-  body: &'a Body<'tcx>,
-  ir_mapper: &'a IRMapper<'a, 'tcx>,
+  body: &'tcx Body<'tcx>,
+  ir_mapper: &IRMapper<'tcx>,
   hir_id: HirId,
 ) -> Option<Vec<(Location, Place<'tcx>)>> {
   type TempBuff<'tcx> = SmallVec<[(Location, Place<'tcx>); 3]>;
@@ -581,7 +581,6 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
 
       // Given place cases.
       Rvalue::Ref(_, _, place)
-        | Rvalue::AddressOf(_, place)
         | Rvalue::Len(place)
         | Rvalue::Discriminant(place)
         | Rvalue::CopyForDeref(place)
@@ -590,11 +589,10 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
         smallvec![(loc, *place)]
       }
 
-      // Two operand cases
-      Rvalue::BinaryOp(_, box (left_op, right_op))
-        | Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
-          maybe_in_op!(loc, left_op, right_op)
-        }
+      // Operand case
+      Rvalue::BinaryOp(_, box (left_op, right_op)) => {
+        maybe_in_op!(loc, left_op, right_op)
+      }
 
       // Unimplemented cases, ignore nested information for now.
       //
@@ -651,6 +649,7 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
       | StatementKind::Coverage(..)
       | StatementKind::Intrinsic(..)
       | StatementKind::ConstEvalCounter
+      | StatementKind::BackwardIncompatibleDropHint { .. }
       | StatementKind::Nop => smallvec![],
     }
   };
@@ -669,9 +668,9 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
   Some(mir_locations)
 }
 
-fn path_to_perm_boundary<'a, 'tcx: 'a>(
+fn path_to_perm_boundary<'tcx>(
   path_boundary: PathBoundary,
-  analysis: &'a AquascopeAnalysis<'a, 'tcx>,
+  analysis: &AquascopeAnalysis<'tcx>,
 ) -> Option<PermissionsBoundary> {
   let ctxt = &analysis.permissions;
   let ir_mapper = &analysis.ir_mapper;
@@ -763,8 +762,8 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
-  analysis: &AquascopeAnalysis<'a, 'tcx>,
+pub fn compute_permission_boundaries<'tcx>(
+  analysis: &AquascopeAnalysis<'tcx>,
 ) -> Result<Vec<PermissionsBoundary>> {
   let ctxt = &analysis.permissions;
 

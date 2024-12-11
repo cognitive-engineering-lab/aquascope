@@ -1,6 +1,6 @@
 use miri::{
-  interpret::Provenance, InterpCx, InterpResult, MPlaceTy, Machine,
-  MemPlaceMeta, OpTy,
+  interp_ok, InterpCx, InterpResult, MPlaceTy, Machine, MemPlaceMeta, OpTy,
+  Projectable,
 };
 use rustc_abi::FieldsShape;
 use rustc_middle::{
@@ -9,24 +9,23 @@ use rustc_middle::{
 };
 use rustc_target::abi::{FieldIdx, Size};
 
-pub trait OpTyExt<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>>: Sized {
+pub trait OpTyExt<'tcx, M: Machine<'tcx>>: Sized {
   fn field_by_name(
     &self,
     name: &str,
-    ecx: &InterpCx<'mir, 'tcx, M>,
+    ecx: &InterpCx<'tcx, M>,
   ) -> InterpResult<'tcx, (&FieldDef, Self)>;
 }
 
-impl<'mir, 'tcx, M, Prov: Provenance + 'static> OpTyExt<'mir, 'tcx, M>
-  for OpTy<'tcx, Prov>
+impl<'tcx, M> OpTyExt<'tcx, M> for OpTy<'tcx>
 where
-  M: Machine<'mir, 'tcx, Provenance = Prov>,
-  'tcx: 'mir,
+  M: Machine<'tcx>,
+  Self: Projectable<'tcx, M::Provenance>,
 {
   fn field_by_name(
     &self,
     name: &str,
-    ecx: &InterpCx<'mir, 'tcx, M>,
+    ecx: &InterpCx<'tcx, M>,
   ) -> InterpResult<'tcx, (&FieldDef, Self)> {
     let adt_def = self.layout.ty.ty_adt_def().unwrap();
     let (i, field) = adt_def
@@ -42,17 +41,18 @@ where
             .collect::<Vec<_>>()
         )
       });
-    Ok((field, ecx.project_field(self, i)?))
+    let field_op = ecx.project_field(self, i)?;
+    interp_ok((field, field_op))
   }
 }
 
-struct AddressLocator<'a, 'mir, 'tcx> {
-  ecx: &'a InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>,
+struct AddressLocator<'a, 'tcx> {
+  ecx: &'a InterpCx<'tcx, miri::MiriMachine<'tcx>>,
   target: u64,
   segments: Vec<PlaceElem<'tcx>>,
 }
 
-impl<'tcx> AddressLocator<'_, '_, 'tcx> {
+impl<'tcx> AddressLocator<'_, 'tcx> {
   fn locate(&mut self, layout: TyAndLayout<'tcx>, mut offset: u64) {
     if offset == self.target {
       return;
@@ -127,11 +127,11 @@ impl<'tcx> AddressLocator<'_, '_, 'tcx> {
   }
 }
 
-pub fn locate_address_in_type<'mir, 'tcx>(
-  ecx: &InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>,
+pub fn locate_address_in_type<'tcx>(
+  ecx: &InterpCx<'tcx, miri::MiriMachine<'tcx>>,
   alloc_layout: TyAndLayout<'tcx>,
   alloc_size: Size,
-  mplace: MPlaceTy<'tcx, miri::Provenance>,
+  mplace: MPlaceTy<'tcx>,
   target: Size,
 ) -> Vec<PlaceElem<'tcx>> {
   // dbg!((alloc_layout, alloc_size, mplace, target));
@@ -153,7 +153,7 @@ pub fn locate_address_in_type<'mir, 'tcx>(
     let index = offset / array_elem_size;
     // dbg!((array_elem_size, offset, index));
 
-    let segment = match mplace.meta {
+    let segment = match mplace.meta() {
       MemPlaceMeta::Meta(meta) => {
         let end_offset = meta.to_u64().unwrap();
         let to = index + end_offset / array_elem_size - 1;
