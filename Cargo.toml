@@ -5,8 +5,8 @@ resolver = "2"
 
 [workspace.dependencies]
 serde = { version = "=1.0.149", features = ["derive"] }
-rustc_plugin = { path = "../rustc_plugin/crates/rustc_plugin" }
-rustc_utils = { path = "../rustc_plugin/crates/rustc_utils" }
+rustc_plugin = "=0.12.0-nightly-2024-12-15"
+rustc_utils = "=0.12.0-nightly-2024-12-15"
 
 # Make snapshot testing faster
 [profile.dev.package.insta]
@@ -14,7 +14,3 @@ opt-level = 3
 
 [profile.dev.package.similar]
 opt-level = 3
-
-# [patch.crates-io]
-# rustc_plugin = { git = "https://github.com/cognitive-engineering-lab/rustc_plugin", rev = "d4b3c43b0695d42030f9cb3a62fc27cc337019d1" }
-# rustc_utils = { git = "https://github.com/cognitive-engineering-lab/rustc_plugin", rev = "d4b3c43b0695d42030f9cb3a62fc27cc337019d1" }

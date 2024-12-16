@@ -27,5 +27,5 @@ rustc_plugin = { workspace = true }
 rustc_utils = { workspace = true }
 
 # For binaries
-env_logger = {version = "0.9", default-features = false}
+env_logger = {version = "0.9", default-features = false, features = ["humantime"]}
 clap = {version = "3.1", default-features = false, features = ["std", "derive"]}

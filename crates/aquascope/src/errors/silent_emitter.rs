@@ -3,13 +3,24 @@
 //! See:
 //! https://doc.rust-lang.org/nightly/nightly-rustc/rustfmt_nightly/parse/session/struct.SilentEmitter.html#impl-Translate-for-SilentEmitter
 
+use rustc_driver::DEFAULT_LOCALE_RESOURCES;
 use rustc_errors::{
   emitter::Emitter, translation::Translate, DiagInner, FluentBundle,
+  LazyFallbackBundle,
 };
 use rustc_span::source_map::SourceMap;
 
 /// Emitter which discards every error.
-pub(crate) struct SilentEmitter;
+pub(crate) struct SilentEmitter(LazyFallbackBundle);
+
+impl SilentEmitter {
+  pub fn new() -> Self {
+    Self(rustc_errors::fallback_fluent_bundle(
+      DEFAULT_LOCALE_RESOURCES.to_vec(),
+      false,
+    ))
+  }
+}
 
 impl Translate for SilentEmitter {
   fn fluent_bundle(&self) -> Option<&FluentBundle> {
@@ -17,7 +28,7 @@ impl Translate for SilentEmitter {
   }
 
   fn fallback_fluent_bundle(&self) -> &FluentBundle {
-    panic!("silent emitter attempted to translate a diagnostic");
+    &self.0
   }
 }
 
@@ -26,5 +37,10 @@ impl Emitter for SilentEmitter {
     None
   }
 
-  fn emit_diagnostic(&mut self, _db: DiagInner) {}
+  fn emit_diagnostic(
+    &mut self,
+    _db: DiagInner,
+    _registry: &rustc_errors::registry::Registry,
+  ) {
+  }
 }

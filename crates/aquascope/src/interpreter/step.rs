@@ -15,7 +15,7 @@ use miri::{
   MiriConfig, MiriMachine, OpTy, UndefinedBehaviorInfo,
 };
 use rustc_abi::{FieldsShape, Size};
-use rustc_const_eval::{interpret::operand::Operand, ReportErrorExt};
+use rustc_const_eval::ReportErrorExt;
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{
@@ -31,7 +31,6 @@ use rustc_session::CtfeBacktrace;
 use rustc_span::Span;
 use rustc_utils::{source_map::range::CharRange, PlaceExt};
 use serde::Serialize;
-use stable_mir::mir::mono::InstanceDef;
 use ts_rs::TS;
 
 use super::mvalue::{MMemorySegment, MPathSegment, MValue};
@@ -121,7 +120,13 @@ impl<'tcx> MovedPlaces<'tcx> {
   }
 
   pub fn add_place(&mut self, frame: usize, place: Place<'tcx>) {
-    self.0.get_mut(frame).unwrap().insert(place);
+    self
+      .0
+      .get_mut(frame)
+      .unwrap_or_else(|| {
+        panic!("Tried to insert place at missing frame: {frame}")
+      })
+      .insert(place);
   }
 
   pub fn push_frame(&mut self) {
@@ -381,11 +386,7 @@ impl<'tcx> VisEvaluator<'tcx> {
       Either::Right(Immediate::Uninit) => {
         // Special case: a unit struct is considered uninitialized, but we would still like to
         // visualize it at the toplevel, so we handle that here. Might need to make this a configurable thing?
-        let not_zst = match layout {
-          Some(layout) => !layout.is_zst(),
-          None => true,
-        };
-        if not_zst {
+        if !layout.is_zst() {
           log::trace!("Ignoring local {local:?} because it's uninitialized and not zero-sized");
           return interp_ok(None);
         }
@@ -403,19 +404,19 @@ impl<'tcx> VisEvaluator<'tcx> {
         // Have to handle the case that a local is uninitialized and indirect
         let (_, allocation) =
           self.ecx.memory.alloc_map().get(alloc_id).unwrap();
-        if !self.mem_is_initialized(layout.unwrap(), allocation) {
+        if !self.mem_is_initialized(layout, allocation) {
           log::trace!("Ignoring local {local:?} because it's a pointer to uninitialized memory");
           return interp_ok(None);
         }
 
         memory_map
           .stack_slots
-          .insert(alloc_id, (frame_index, name.clone(), layout.unwrap()));
+          .insert(alloc_id, (frame_index, name.clone(), layout));
       }
       _ => {}
     };
 
-    let op_ty = self.ecx.local_to_op(frame, local, Some(layout))?;
+    let op_ty = self.ecx.local_at_frame_to_op(frame, local, Some(layout))?;
     interp_ok(Some((name, op_ty)))
   }
 
@@ -544,8 +545,10 @@ impl<'tcx> VisEvaluator<'tcx> {
               // todo!()
             }
             Either::Right((local, ..)) => {
-              moved_places
-                .add_place(n_frames, Place::from_local(local, self.ecx.tcx()));
+              moved_places.add_place(
+                n_frames - 1,
+                Place::from_local(local, self.ecx.tcx()),
+              );
             }
           }
         }

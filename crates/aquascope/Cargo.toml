@@ -28,8 +28,7 @@ fluid-let = "1.0"
 rustc_utils = {workspace = true, features = ["graphviz", "ts-rs", "serde", "test"]}
 
 # interpret module
-# miri = {git = "https://github.com/rust-lang/rust", rev = "1f3bf231e160b9869e2a85260fd6805304bfcee2"}
-miri = { path = "../../../rust/src/tools/miri" }
+miri = {git = "https://github.com/rust-lang/miri", rev = "afdbb080fe4b8e73838fffdbea8b290aa246f3d7"}
 aquascope_workspace_utils = { version = "0.3", path = "../aquascope_workspace_utils" }
 
 # testing utils

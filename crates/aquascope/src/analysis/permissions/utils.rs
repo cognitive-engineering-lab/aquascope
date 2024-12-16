@@ -12,6 +12,7 @@ use super::{
   context::PermissionsCtxt, Permissions, PermissionsData, PermissionsDomain,
 };
 
+#[allow(warnings)] // temporarily while this function is being fixed
 pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
   // XXX: Unfortunately, the only way I know how to do this is to do a MIR
   // dataflow analysis and simply take the information from the context.
@@ -274,7 +275,7 @@ impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
   ) {
   }
 
-  fn apply_statement_effect(
+  fn apply_primary_statement_effect(
     &mut self,
     state: &mut Self::Domain,
     _statement: &rustc_middle::mir::Statement<'tcx>,
@@ -283,7 +284,7 @@ impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
     self.check_location(state, location);
   }
 
-  fn apply_terminator_effect<'mir>(
+  fn apply_primary_terminator_effect<'mir>(
     &mut self,
     state: &mut Self::Domain,
     terminator: &'mir rustc_middle::mir::Terminator<'tcx>,

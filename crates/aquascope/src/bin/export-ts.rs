@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 use rustc_utils::source_map::{
   filename::FilenameIndex,
   range::{CharPos, CharRange},

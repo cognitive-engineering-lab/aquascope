@@ -10,9 +10,8 @@ use std::time::Instant;
 
 use datafrog::{Iteration, Relation, RelationLeaper, ValueFilter};
 use polonius_engine::{Algorithm, FactTypes, Output as PEOutput};
-use rustc_borrowck::{
-  borrow_set::BorrowSet,
-  consumers::{places_conflict, BodyWithBorrowckFacts, PlaceConflictBias},
+use rustc_borrowck::consumers::{
+  places_conflict, BodyWithBorrowckFacts, BorrowSet, PlaceConflictBias,
 };
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, Mutability};
@@ -395,7 +394,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
           places_conflict(
             tcx,
             body,
-            borrow.borrowed_place,
+            borrow.borrowed_place(),
             *place,
             PlaceConflictBias::Overlap,
           )

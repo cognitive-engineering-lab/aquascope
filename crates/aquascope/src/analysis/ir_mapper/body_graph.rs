@@ -1,4 +1,4 @@
-use rustc_data_structures::{captures::Captures, graph::*};
+use rustc_data_structures::graph::*;
 use rustc_middle::mir::{
   BasicBlock, BasicBlockData, BasicBlocks, Body, Location, Terminator,
   TerminatorKind,

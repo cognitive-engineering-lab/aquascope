@@ -3,11 +3,9 @@
 use anyhow::Result;
 use either::Either;
 use rustc_data_structures::fx::FxIndexMap;
-use rustc_errors::DiagCtxt;
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
   mir::{Body, BorrowCheckResult},
-  query,
   ty::TyCtxt,
   util::Providers,
 };
@@ -127,14 +125,12 @@ impl rustc_driver::Callbacks for InterpretCallbacks {
     }
   }
 
-  fn after_expansion<'tcx>(
+  fn after_analysis<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
-    queries: &'tcx rustc_interface::Queries<'tcx>,
+    tcx: TyCtxt<'tcx>,
   ) -> rustc_driver::Compilation {
-    queries.global_ctxt().unwrap().enter(|tcx| {
-      self.result = Some(interpret(tcx));
-    });
+    self.result = Some(interpret(tcx));
     rustc_driver::Compilation::Stop
   }
 }

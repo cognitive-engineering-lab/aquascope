@@ -342,7 +342,7 @@ impl<'tcx> AquascopeAnalysis<'tcx> {
       .filter_map(|(loan, _)| {
         // TODO: using `reserve_location` is not exactly accurate because this
         // could be a two-phase borrow. This needs to use the `activation_location`.
-        let loan_loc = self.permissions.borrow_set[*loan].reserve_location;
+        let loan_loc = self.permissions.borrow_set[*loan].reserve_location();
         let loan_span = self.permissions.location_to_span(loan_loc);
 
         let span = loan_span

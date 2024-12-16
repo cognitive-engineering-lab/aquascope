@@ -866,6 +866,7 @@ pub(crate) mod test_exts {
     fn validate(&self, mapper: &IRMapper) -> Result<(), InvalidReason>;
   }
 
+  #[allow(dead_code)]
   #[derive(Debug)]
   pub enum InvalidReason {
     MissingLocations {
@@ -907,7 +908,7 @@ pub(crate) mod test_exts {
   impl MirSegment {
     fn explode<'a, 'tcx: 'a>(
       self,
-      mapper: &'a IRMapper<'a, 'tcx>,
+      mapper: &'a IRMapper<'tcx>,
     ) -> impl Iterator<Item = Location> + Captures<'tcx> + 'a {
       let sb = self.from.block;
       let eb = self.to.block;

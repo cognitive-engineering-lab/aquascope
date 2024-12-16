@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 use aquascope::test_utils;
 
 #[test_log::test]

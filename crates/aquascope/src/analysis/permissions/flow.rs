@@ -76,10 +76,8 @@
 use std::time::Instant;
 
 use itertools::Itertools;
-use rustc_borrowck::{
-  borrow_set::BorrowData,
-  consumers::{places_conflict, PlaceConflictBias},
-  facts::PoloniusRegionVid,
+use rustc_borrowck::consumers::{
+  places_conflict, BorrowData, PlaceConflictBias, PoloniusRegionVid,
 };
 use rustc_data_structures::{
   fx::FxHashSet as HashSet,
@@ -307,32 +305,26 @@ fn check_for_invalidation_at_exit<'tcx>(
   ctxt: &PermissionsCtxt<'tcx>,
   borrow: &BorrowData<'tcx>,
 ) -> bool {
-  use rustc_middle::{
-    mir::{PlaceElem, PlaceRef, ProjectionElem},
-    ty::TyCtxt,
-  };
+  use rustc_middle::mir::{PlaceRef, ProjectionElem};
 
-  let place = borrow.borrowed_place;
+  let place = borrow.borrowed_place();
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;
-
-  struct TyCtxtConsts<'tcx>(TyCtxt<'tcx>);
-  impl<'tcx> TyCtxtConsts<'tcx> {
-    const DEREF_PROJECTION: &'tcx [PlaceElem<'tcx>; 1] =
-      &[ProjectionElem::Deref];
-  }
 
   let mut root_place = PlaceRef {
     local: place.local,
     projection: &[],
   };
 
-  let (might_be_alive, will_be_dropped) =
+  // NOTE(2024-12-15, wcrichto): might_be_alive used to be used to determine
+  // AccessDepth, but changes to rustc API hid this parameter to make it always Deep.
+  // TBD if we need to request that to be re-exposed.
+  let (_might_be_alive, will_be_dropped) =
     if body.local_decls[root_place.local].is_ref_to_thread_local() {
       // Thread-locals might be dropped after the function exits
       // We have to dereference the outer reference because
       // borrows don't conflict behind shared references.
-      root_place.projection = TyCtxtConsts::DEREF_PROJECTION;
+      root_place.projection = &[ProjectionElem::Deref];
       (true, true)
     } else {
       (false, ctxt.locals_are_invalidated_at_exit)
@@ -375,7 +367,8 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
 
   // Graph of constraints that need to be satisfied. This shows
   // us how data flows from one region into another.
-  let constraint_graph = VecGraph::new(count_nodes(&constraints), constraints);
+  let constraint_graph =
+    VecGraph::<_, false>::new(count_nodes(&constraints), constraints);
 
   let scc_constraints = Sccs::<Origin, SccIdx>::new(&constraint_graph);
   let num_sccs = scc_constraints.num_sccs();
@@ -423,7 +416,8 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   // Allowed flows between abstract regions specified in the type signature.
   //
   // e.g. `fn foo<'a, 'b: 'a>(...) ...` would cause a `'b: 'a` specified flow in this graph.
-  let specified_flows_graph = VecGraph::new(num_sccs, placeholder_edges);
+  let specified_flows_graph =
+    VecGraph::<_, false>::new(num_sccs, placeholder_edges);
 
   // Compute the flow facts between abstract regions.
   let specified_flows =
@@ -433,9 +427,9 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   // If `Place::is_indirect` returns false, the caller knows
   // that the Place refers to the same region of memory as its base.
   let mut local_sources = ChunkedBitSet::new_empty(num_sccs);
-  for (_, bd) in ctxt.borrow_set.location_map.iter() {
-    if !bd.borrowed_place.is_indirect() {
-      let scc = scc_constraints.scc(bd.region);
+  for (_, bd) in ctxt.borrow_set.location_map().iter() {
+    if !bd.borrowed_place().is_indirect() {
+      let scc = scc_constraints.scc(PoloniusRegionVid::from(bd.region()));
       local_sources.insert(scc);
     }
   }
@@ -460,7 +454,7 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
     for &loan in loans.iter() {
       let bd = ctxt.loan_to_borrow(loan);
       if check_for_invalidation_at_exit(ctxt, bd) {
-        let scc = scc_constraints.scc(bd.region);
+        let scc = scc_constraints.scc(PoloniusRegionVid::from(bd.region()));
         dangling_local_sources.insert(scc);
       }
     }

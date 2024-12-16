@@ -12,7 +12,6 @@ use rustc_hir::{intravisit::Visitor, Body, Expr, ExprKind, HirId, Stmt};
 use rustc_middle::{mir::Location, ty::Instance};
 use rustc_span::{BytePos, Span};
 use rustc_utils::BodyExt;
-use stable_mir::{mir::mono::InstanceDef, CrateDef};
 
 use super::step::{MFrame, MStack, MStep, MTrace, MirLoc};
 use crate::analysis::ir_mapper::{GatherDepth, GatherMode, IRMapper};

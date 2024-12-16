@@ -513,7 +513,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   }
 
   fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt<'tcx>) {
-    use rustc_hir::StmtKind as SK;
+    // use rustc_hir::StmtKind as SK;
 
     log::debug!(
       "Starting analysis of STMT {}\n",
@@ -790,7 +790,7 @@ mod tests {
         let body = &wfacts.body;
         let mapper = IRMapper::new(tcx, body, GatherMode::IgnoreCleanup);
 
-        let mut visitor = HirStepPoints::make(&tcx, body, body_id, &mapper)
+        let mut visitor = HirStepPoints::make(tcx, body, body_id, &mapper)
           .expect("Failed to create stepper");
         visitor.visit_nested_body(body_id);
 

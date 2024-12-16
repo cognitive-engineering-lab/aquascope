@@ -1282,7 +1282,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -1484,6 +1484,7 @@ dependencies = [
 [[package]]
 name = "miri"
 version = "0.1.0"
+source = "git+https://github.com/rust-lang/miri?rev=afdbb080fe4b8e73838fffdbea8b290aa246f3d7#afdbb080fe4b8e73838fffdbea8b290aa246f3d7"
 dependencies = [
  "aes",
  "chrono",
@@ -1922,7 +1923,9 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc_plugin"
-version = "0.11.0-nightly-2024-12-01"
+version = "0.12.0-nightly-2024-12-15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "351d0edb6bb7f15aa21d83c29604cdc3bdcec506e12233868b369ee6d3328da3"
 dependencies = [
  "cargo_metadata",
  "log",
@@ -1940,7 +1943,9 @@ checksum = "b3c5a95edfa0c893236ae4778bb7c4752760e4c0d245e19b5eff33c5aa5eb9dc"
 
 [[package]]
 name = "rustc_utils"
-version = "0.11.0-nightly-2024-12-01"
+version = "0.12.0-nightly-2024-12-15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a82a375e5df4530b4c5e94ab8251c754c92c3e593efaf8214e572ea422bf3a0"
 dependencies = [
  "anyhow",
  "cfg-if",

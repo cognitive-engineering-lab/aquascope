@@ -11,9 +11,9 @@
 //! about the theory of the permissions derivation.
 
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
-use rustc_borrowck::{
-  borrow_set::{BorrowData, BorrowSet},
-  consumers::{BodyWithBorrowckFacts, LocationTable, RichLocation, RustcFacts},
+use rustc_borrowck::consumers::{
+  BodyWithBorrowckFacts, BorrowData, BorrowSet, LocationTable, RichLocation,
+  RustcFacts,
 };
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{def_id::DefId, BodyId, Mutability};
@@ -196,7 +196,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
   }
 
   pub fn is_mutable_borrow(&self, brw: &BorrowData<'tcx>) -> bool {
-    matches!(brw.kind, BorrowKind::Mut { .. })
+    matches!(brw.kind(), BorrowKind::Mut { .. })
   }
 
   pub fn is_mutable_loan(&self, loan: Loan) -> bool {

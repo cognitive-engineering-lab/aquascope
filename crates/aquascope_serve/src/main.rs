@@ -1,4 +1,3 @@
-#![feature(async_closure)]
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

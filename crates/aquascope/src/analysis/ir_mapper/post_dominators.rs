@@ -66,35 +66,23 @@ mod tests {
 
   impl<N: Idx> DirectedGraph for VG<N> {
     type Node = N;
-  }
 
-  impl<'graph, N: Idx> GraphSuccessors<'graph> for VG<N> {
-    type Item = N;
-    type Iter = smallvec::IntoIter<[N; 10]>;
-  }
-
-  impl<'graph, N: Idx> GraphPredecessors<'graph> for VG<N> {
-    type Item = N;
-    type Iter = smallvec::IntoIter<[N; 10]>;
-  }
-
-  impl<N: Idx> WithStartNode for VG<N> {
-    fn start_node(&self) -> N {
-      self.source
-    }
-  }
-
-  impl<N: Idx> WithNumNodes for VG<N> {
     fn num_nodes(&self) -> usize {
       self.forward.num_nodes()
     }
   }
 
-  impl<N: Idx + Ord> WithSuccessors for VG<N> {
+  impl<N: Idx> StartNode for VG<N> {
+    fn start_node(&self) -> Self::Node {
+      self.source
+    }
+  }
+
+  impl<N: Idx + Ord> Successors for VG<N> {
     fn successors(
       &self,
       node: Self::Node,
-    ) -> <Self as GraphSuccessors<'_>>::Iter {
+    ) -> impl Iterator<Item = Self::Node> {
       self
         .forward
         .successors(node)
@@ -105,11 +93,11 @@ mod tests {
     }
   }
 
-  impl<N: Idx + Ord> WithPredecessors for VG<N> {
+  impl<N: Idx + Ord> Predecessors for VG<N> {
     fn predecessors(
       &self,
       node: Self::Node,
-    ) -> <Self as GraphSuccessors<'_>>::Iter {
+    ) -> impl Iterator<Item = Self::Node> {
       self
         .backward
         .successors(node)
