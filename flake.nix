@@ -20,6 +20,7 @@
     ci-check = pkgs.writeScriptBin "ci-check" ''
       cargo fmt --check
       cargo insta test -- --skip container_
+      cargo make init-bindings
       cd crates/mdbook-aquascope/test-book && mdbook build && cd ../../../
       cd frontend && depot test && cd ..
     '';
