@@ -34,50 +34,26 @@ jobs:
       - name: Publish Crates
         run: nix develop --command ci-publish-crates ${{ secrets.CRATES_IO_TOKEN }}
 
-
-  # TODO factor frontend updates into a separate action
-  # update-frontend:
-  #   needs: publish-crates
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - uses: DeterminateSystems/nix-installer-action@main
-  #     - uses: DeterminateSystems/magic-nix-cache-action@main
-  #     - uses: DeterminateSystems/flake-checker-action@main
-
-  #     - name: Build Docs and Standalone
-  #       run: nix develop .#minimal --command ci-build-pages
-
-  #     - uses: JamesIves/github-pages-deploy-action@v4.3.0
-  #       with:
-  #         branch: gh-pages
-  #         folder: ./frontend/packages/aquascope-standalone/dist
-  #         clean: true
-  #         clean-exclude: dev
-
-
   release-artifact:
     needs: publish-crates
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release')
     steps:
-      - name: Release Artifact
-        run: echo "TODO explicitly not releasing an artifact"
-      # - uses: actions/checkout@v3
-      # - uses: DeterminateSystems/nix-installer-action@main
-      # - uses: DeterminateSystems/magic-nix-cache-action@main
-      # - uses: DeterminateSystems/flake-checker-action@main
+      - uses: actions/checkout@v3
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: DeterminateSystems/flake-checker-action@main
 
-      # - name: Install aquascope and mdbook-aquascope
-      #   run: nix develop --command ci-build
+      - name: Install aquascope and mdbook-aquascope
+        run: nix develop --command ci-install
 
-      # - name: Package artifact
-      #   run: tar -czf aquascope-x86_64-unknown-linux-gnu.tar.gz mdbook-aquascope cargo-aquascope aquascope-driver
-      #   working-directory: target/release
+      - name: Package artifact
+        run: tar -czf aquascope-x86_64-unknown-linux-gnu.tar.gz mdbook-aquascope cargo-aquascope aquascope-driver
+        working-directory: target/release
 
-      # - name: Release artifact
-      #   uses: softprops/action-gh-release@v1
-      #   with:
-      #     tag_name: ${{ github.event.pull_request.title }}
-      #     files: |
-      #       target/release/aquascope-x86_64-unknown-linux-gnu.tar.gz
+      - name: Release artifact
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.pull_request.title }}
+          files: |
+            target/release/aquascope-x86_64-unknown-linux-gnu.tar.gz
