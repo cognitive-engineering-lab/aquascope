@@ -20,3 +20,7 @@ sample-book/
 # Rust things
 target/
 debug/
+
+# Nix things
+.direnv/
+.envrc

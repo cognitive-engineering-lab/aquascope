@@ -10,6 +10,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
+use aquascope_workspace_utils::{miri_sysroot, run_and_get_output, rustc};
 use mdbook_preprocessor_utils::HtmlElementBuilder;
 use rayon::prelude::*;
 use tempfile::tempdir;
@@ -25,25 +26,8 @@ pub struct AquascopePreprocessor {
 
 impl AquascopePreprocessor {
   pub fn new() -> Result<Self> {
-    let run_and_get_output = |cmd: &mut Command| -> Result<String> {
-      let output = cmd.output()?;
-      if !output.status.success() {
-        bail!("Command failed");
-      }
-      let stdout = String::from_utf8(output.stdout)?;
-      Ok(stdout.trim_end().to_string())
-    };
-
-    let miri_sysroot = aquascope_workspace_utils::miri_sysroot()?;
-
-    let output = run_and_get_output(Command::new("rustup").args([
-      "which",
-      "--toolchain",
-      &aquascope_workspace_utils::toolchain()?,
-      "rustc",
-    ]))?;
-    let rustc = PathBuf::from(output);
-
+    let miri_sysroot = miri_sysroot()?;
+    let rustc = rustc()?;
     let output = run_and_get_output(
       Command::new(rustc).args(["--print", "target-libdir"]),
     )?;
@@ -81,6 +65,7 @@ impl AquascopePreprocessor {
       cmd
         .arg("aquascope")
         .env("SYSROOT", &self.miri_sysroot)
+        .env("MIRI_SYSROOT", &self.miri_sysroot)
         .env("DYLD_LIBRARY_PATH", &self.target_libdir)
         .env("LD_LIBRARY_PATH", &self.target_libdir)
         .env("RUST_BACKTRACE", "1")
