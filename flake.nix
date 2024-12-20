@@ -26,6 +26,8 @@
     '';
 
     ci-install = pkgs.writeScriptBin "ci-install" ''
+      cargo make init-bindings
+      cd frontend && depot build && cd ..
       cargo install --path crates/aquascope_front --debug --locked
       cargo install --path crates/mdbook-aquascope --debug --locked
     '';
