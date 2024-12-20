@@ -21,4 +21,6 @@ jobs:
       - uses: DeterminateSystems/flake-checker-action@main
 
       - name: Argus Test
-        run: nix develop --command ci-check
+        run: |
+          nix develop --command ci-install
+          nix develop --command ci-check
