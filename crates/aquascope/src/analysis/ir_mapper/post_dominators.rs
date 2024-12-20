@@ -79,10 +79,7 @@ mod tests {
   }
 
   impl<N: Idx + Ord> Successors for VG<N> {
-    fn successors(
-      &self,
-      node: Self::Node,
-    ) -> impl Iterator<Item = Self::Node> {
+    fn successors(&self, node: Self::Node) -> impl Iterator<Item = Self::Node> {
       self
         .forward
         .successors(node)
