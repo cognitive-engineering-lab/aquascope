@@ -14,17 +14,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Setup
-        uses: ./.github/workflows/setup
-      - name: Backend tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: insta
-          args: test --features=no-docker
-      - name: Build Aquascope server
-        run: cargo build -p aquascope_serve --features=no-docker
-      - name: Frontend tests
+      - uses: actions/checkout@v3
+
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: DeterminateSystems/flake-checker-action@main
+
+      - name: Argus Test
         run: |
-          cargo run -p aquascope_serve --features=no-docker &
-          cd frontend && depot test
+          nix develop --command ci-install
+          nix develop --command ci-check

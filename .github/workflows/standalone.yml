@@ -1,0 +1,27 @@
+# TODO: automatically publish WASM port (somehow...)
+name: standalone
+
+# on:
+#   pull_request:
+#     branches: [main]
+#     types: [labeled,closed]
+
+# jobs:
+#   update-frontend:
+#     needs: publish-crates
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#       - uses: DeterminateSystems/nix-installer-action@main
+#       - uses: DeterminateSystems/magic-nix-cache-action@main
+#       - uses: DeterminateSystems/flake-checker-action@main
+
+#       - name: Build Docs and Standalone
+#         run: nix develop .#minimal --command ci-build-pages
+
+#       - uses: JamesIves/github-pages-deploy-action@v4.3.0
+#         with:
+#           branch: gh-pages
+#           folder: ./frontend/packages/aquascope-standalone/dist
+#           clean: true
+#           clean-exclude: dev

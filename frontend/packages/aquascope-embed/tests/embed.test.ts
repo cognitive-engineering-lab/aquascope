@@ -1,4 +1,4 @@
-import puppeteer, { type Browser, type Page } from "puppeteer";
+import { type Browser, type Page, chromium } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 describe("Aquascope Embed", () => {
@@ -6,7 +6,7 @@ describe("Aquascope Embed", () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await puppeteer.launch();
+    browser = await chromium.launch();
     page = await browser.newPage();
   });
 
@@ -22,7 +22,10 @@ describe("Aquascope Embed", () => {
       }
     );
 
-    await page.waitForSelector(".aquascope");
+    await page.waitForSelector(".aquascope", {
+      timeout: 60_000
+    });
+
     // The embedded editors don't have to call out to aquascope,
     // they just need to render their contents. After the first editor has been
     // rendered they should all follow shortly.
@@ -41,5 +44,5 @@ describe("Aquascope Embed", () => {
     // There must have been an editor on the screen.
     expect(editors).not.toBeNull();
     expect(editors.length).toBeGreaterThan(0);
-  }, 30_000);
+  }, 60_000);
 });
