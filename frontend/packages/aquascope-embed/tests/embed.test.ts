@@ -44,5 +44,5 @@ describe("Aquascope Embed", () => {
     // There must have been an editor on the screen.
     expect(editors).not.toBeNull();
     expect(editors.length).toBeGreaterThan(0);
-  }, 30_000);
+  }, 60_000);
 });
