@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 use std::{ffi::OsStr, io::Write, path::Path};
 
 fn main() {

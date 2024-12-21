@@ -10,9 +10,9 @@ use anyhow::{anyhow, bail, Context, Result};
 use either::Either;
 use itertools::Itertools;
 use miri::{
-  AllocId, AllocMap, AllocRange, Immediate, InterpCx, InterpError,
-  InterpErrorInfo, InterpResult, LocalState, LocalValue, Machine, MiriConfig,
-  MiriMachine, OpTy, Operand, UndefinedBehaviorInfo,
+  interp_ok, AllocId, AllocMap, AllocRange, Immediate, InterpCx,
+  InterpErrorInfo, InterpErrorKind, InterpResult, LocalState, Machine,
+  MiriConfig, MiriMachine, OpTy, UndefinedBehaviorInfo,
 };
 use rustc_abi::{FieldsShape, Size};
 use rustc_const_eval::ReportErrorExt;
@@ -24,7 +24,7 @@ use rustc_middle::{
   },
   ty::{
     layout::{HasTyCtxt, TyAndLayout},
-    InstanceDef, TyCtxt,
+    Instance, TyCtxt,
   },
 };
 use rustc_session::CtfeBacktrace;
@@ -94,7 +94,7 @@ pub struct MTrace<L> {
   pub result: MResult,
 }
 
-pub(crate) type MirLoc<'tcx> = (InstanceDef<'tcx>, Either<Location, Span>);
+pub(crate) type MirLoc<'tcx> = (Instance<'tcx>, Either<Location, Span>);
 
 #[derive(Default)]
 pub(crate) struct MemoryMap<'tcx> {
@@ -120,7 +120,13 @@ impl<'tcx> MovedPlaces<'tcx> {
   }
 
   pub fn add_place(&mut self, frame: usize, place: Place<'tcx>) {
-    self.0.get_mut(frame).unwrap().insert(place);
+    self
+      .0
+      .get_mut(frame)
+      .unwrap_or_else(|| {
+        panic!("Tried to insert place at missing frame: {frame}")
+      })
+      .insert(place);
   }
 
   pub fn push_frame(&mut self) {
@@ -132,8 +138,8 @@ impl<'tcx> MovedPlaces<'tcx> {
   }
 }
 
-pub struct VisEvaluator<'mir, 'tcx> {
-  pub(super) ecx: InterpCx<'mir, 'tcx, MiriMachine<'mir, 'tcx>>,
+pub struct VisEvaluator<'tcx> {
+  pub(super) ecx: InterpCx<'tcx, MiriMachine<'tcx>>,
   pub(super) memory_map: RefCell<MemoryMap<'tcx>>,
   pub(super) moved_places: RefCell<MovedPlaces<'tcx>>,
 }
@@ -146,26 +152,26 @@ enum BodySpanType {
 /// Returns the span of a body, either just the header or the entire item
 fn body_span(tcx: TyCtxt, def_id: DefId, body_span_type: BodySpanType) -> Span {
   let hir = tcx.hir();
-  let fn_node = hir.body_owner(hir.body_owned_by(def_id.expect_local()));
+  let fn_node = hir.body_owner(hir.body_owned_by(def_id.expect_local()).id());
   match body_span_type {
     BodySpanType::Header => hir.span(fn_node),
     BodySpanType::Whole => hir.span_with_body(fn_node),
   }
 }
 
-type FrameLocals<'tcx> = Vec<(Local, String, OpTy<'tcx, miri::Provenance>)>;
-type MiriFrame<'mir, 'tcx> =
-  miri::Frame<'mir, 'tcx, miri::Provenance, miri::FrameExtra<'tcx>>;
+type FrameLocals<'tcx> = Vec<(Local, String, OpTy<'tcx>)>;
+type MiriFrame<'tcx> =
+  miri::Frame<'tcx, miri::Provenance, miri::FrameExtra<'tcx>>;
 
 #[derive(Copy, Clone)]
-struct LocalFrame<'a, 'mir, 'tcx> {
+struct LocalFrame<'a, 'tcx> {
   current: bool,
   local_index: usize,
   global_index: usize,
-  frame: &'a MiriFrame<'mir, 'tcx>,
+  frame: &'a MiriFrame<'tcx>,
 }
 
-impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
+impl<'tcx> VisEvaluator<'tcx> {
   pub fn new(tcx: TyCtxt<'tcx>) -> Result<Self> {
     let (main_id, entry_fn_type) = tcx
       .entry_fn(())
@@ -173,10 +179,11 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     let ecx = miri::create_ecx(tcx, main_id, entry_fn_type, &MiriConfig {
       mute_stdout_stderr: true,
       // have to make sure miri doesn't complain about us poking around memory
-      validate: false,
+      validation: miri::ValidationMode::No,
       borrow_tracker: None,
       ..Default::default()
     })
+    .report_err()
     .map_err(|e| {
       anyhow!("{}", e.into_kind().diagnostic_message().as_str().unwrap())
     })?;
@@ -222,18 +229,18 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       local_index,
       global_index,
       current,
-    }: LocalFrame<'_, 'mir, 'tcx>,
+    }: LocalFrame<'_, 'tcx>,
     loc_override: MirLoc<'tcx>,
     locals: FrameLocals<'tcx>,
   ) -> InterpResult<'tcx, MFrame<MirLoc<'tcx>>> {
     log::trace!("Building frame {local_index}");
 
-    let def_id = frame.instance.def_id();
+    let def_id = frame.instance().def_id();
     let name = self.fn_name(def_id);
 
     let tcx = *self.ecx.tcx;
     let body_span = CharRange::from_span(
-      body_span(tcx, frame.instance.def_id(), BodySpanType::Whole),
+      body_span(tcx, frame.instance().def_id(), BodySpanType::Whole),
       tcx.sess.source_map(),
     )
     .unwrap();
@@ -241,7 +248,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     let current_loc = if current {
       loc_override
     } else {
-      (frame.instance.def, frame.current_loc())
+      (frame.instance(), frame.current_loc())
     };
 
     let moved_places = self.moved_places.borrow();
@@ -268,7 +275,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
             .collect::<Vec<_>>(),
           None => Vec::new(),
         };
-        Ok(MLocal {
+        interp_ok(MLocal {
           name,
           value,
           moved_paths,
@@ -276,7 +283,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       })
       .collect::<InterpResult<'_, Vec<_>>>()?;
 
-    Ok(MFrame {
+    interp_ok(MFrame {
       name,
       body_span,
       locals,
@@ -287,7 +294,11 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   pub(super) fn mem_is_initialized(
     &self,
     layout: TyAndLayout<'tcx>,
-    allocation: &miri::Allocation<miri::Provenance, miri::AllocExtra>,
+    allocation: &miri::Allocation<
+      miri::Provenance,
+      miri::AllocExtra,
+      miri::MiriAllocBytes,
+    >,
   ) -> bool {
     // TODO: this should be recursive over the type. Only handles one-step right now.
     let ranges = match &layout.fields {
@@ -317,17 +328,17 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
   fn test_local(
     &self,
-    frame: &MiriFrame<'mir, 'tcx>,
+    frame: &MiriFrame<'tcx>,
     frame_index: usize,
     local: Local,
     state: &LocalState<'tcx, miri::Provenance>,
-  ) -> InterpResult<'tcx, Option<(String, OpTy<'tcx, miri::Provenance>)>> {
-    let decl = &frame.body.local_decls[local];
+  ) -> InterpResult<'tcx, Option<(String, OpTy<'tcx>)>> {
+    let decl = &frame.body().local_decls[local];
     let name = if local == RETURN_PLACE {
       // Don't include unit return types in locals
       if decl.ty.is_unit() {
         log::trace!("Ignoring local {local:?} because it's a unit type");
-        return Ok(None);
+        return interp_ok(None);
       }
 
       "(return)".into()
@@ -336,7 +347,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       // visualize in the case of f(&Some(x)). Need to figure out a good strategy for
       // deciding when a temp should be included.
       let has_debug_info = frame
-        .body
+        .body()
         .var_debug_info
         .iter()
         .filter_map(|info| match info.value {
@@ -354,60 +365,59 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
         log::trace!(
           "Ignoring local {local:?} because it's not a source-level variable"
         );
-        return Ok(None);
+        return interp_ok(None);
       }
 
       Place::from_local(local, *self.ecx.tcx)
-        .to_string(*self.ecx.tcx, frame.body)
+        .to_string(*self.ecx.tcx, frame.body())
         .unwrap_or_else(|| String::from("(tmp)"))
     };
 
-    let layout = state.layout.get();
-
     // Ignore dead locals
-    let LocalValue::Live(op) = state.value else {
+    let Some(op) = state.as_mplace_or_imm() else {
       log::trace!("Ignoring local {local:?} because it's not live");
-      return Ok(None);
+      return interp_ok(None);
     };
+
+    let layout = self.ecx.layout_of_local(frame, local, None)?;
 
     match op {
       // Ignore uninitialized locals
-      Operand::Immediate(Immediate::Uninit) => {
+      Either::Right(Immediate::Uninit) => {
         // Special case: a unit struct is considered uninitialized, but we would still like to
         // visualize it at the toplevel, so we handle that here. Might need to make this a configurable thing?
-        let not_zst = match layout {
-          Some(layout) => !layout.is_zst(),
-          None => true,
-        };
-        if not_zst {
+        if !layout.is_zst() {
           log::trace!("Ignoring local {local:?} because it's uninitialized and not zero-sized");
-          return Ok(None);
+          return interp_ok(None);
         }
       }
 
       // If a local is Indirect, meaning there exists a pointer to it,
       // then save its allocation in `MemoryMap::stack_slots`
-      Operand::Indirect(mplace) => {
+      Either::Left((ptr, _)) => {
         let mut memory_map = self.memory_map.borrow_mut();
-        let (alloc_id, _, _) = self.ecx.ptr_get_alloc_id(mplace.ptr).unwrap();
+        let (alloc_id, _, _) = self
+          .ecx
+          .ptr_get_alloc_id(ptr, layout.size.bytes() as i64)
+          .unwrap();
 
         // Have to handle the case that a local is uninitialized and indirect
         let (_, allocation) =
           self.ecx.memory.alloc_map().get(alloc_id).unwrap();
-        if !self.mem_is_initialized(layout.unwrap(), allocation) {
+        if !self.mem_is_initialized(layout, allocation) {
           log::trace!("Ignoring local {local:?} because it's a pointer to uninitialized memory");
-          return Ok(None);
+          return interp_ok(None);
         }
 
         memory_map
           .stack_slots
-          .insert(alloc_id, (frame_index, name.clone(), layout.unwrap()));
+          .insert(alloc_id, (frame_index, name.clone(), layout));
       }
       _ => {}
     };
 
-    let op_ty = self.ecx.local_to_op(frame, local, layout)?;
-    Ok(Some((name, op_ty)))
+    let op_ty = self.ecx.local_at_frame_to_op(frame, local, Some(layout))?;
+    interp_ok(Some((name, op_ty)))
   }
 
   fn find_locals(&self) -> InterpResult<'tcx, Vec<FrameLocals<'tcx>>> {
@@ -423,8 +433,9 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
             .filter_map(|(local, state)| {
               let local_data_res = self
                 .test_local(frame, local_index, local, state)
+                .report_err()
                 .transpose()?;
-              Some(local_data_res.map(|(name, op)| (local, name, op)))
+              Some(local_data_res.map(|(name, op)| (local, name, op)).into())
             })
             .collect::<InterpResult<'tcx, Vec<_>>>()
         },
@@ -442,7 +453,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
       .zip(locals)
       .map(|(frame, locals)| self.build_frame(frame, current_loc, locals))
       .collect::<InterpResult<'_, _>>()?;
-    Ok(MStack { frames })
+    interp_ok(MStack { frames })
   }
 
   fn build_heap(&self) -> MHeap {
@@ -458,24 +469,24 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     log::trace!("Building stack");
     let stack = self.build_stack(current_loc)?;
     if stack.frames.is_empty() {
-      return Ok(None);
+      return interp_ok(None);
     }
 
     log::trace!("Building heap");
     let heap = self.build_heap();
 
     log::trace!("Step built!");
-    Ok(Some(MStep { stack, heap }))
+    interp_ok(Some(MStep { stack, heap }))
   }
 
   /// Get the stack frames for functions defined in the local crate
-  fn local_frames(&self) -> impl Iterator<Item = LocalFrame<'_, 'mir, 'tcx>> {
+  fn local_frames(&self) -> impl Iterator<Item = LocalFrame<'_, 'tcx>> {
     let stack = Machine::stack(&self.ecx);
     let n = stack.len();
     stack
       .iter()
       .enumerate()
-      .filter(|(_, frame)| frame.instance.def_id().is_local())
+      .filter(|(_, frame)| frame.instance().def_id().is_local())
       .enumerate()
       .map(move |(local_index, (global_index, frame))| LocalFrame {
         current: global_index == n - 1,
@@ -488,10 +499,10 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   fn collect_moves(&self) -> InterpResult<'tcx, Vec<Place<'tcx>>> {
     let stack = Machine::stack(&self.ecx);
     let Some(frame) = stack.last() else {
-      return Ok(Vec::new());
+      return interp_ok(Vec::new());
     };
     let Either::Left(loc) = frame.current_loc() else {
-      return Ok(Vec::new());
+      return interp_ok(Vec::new());
     };
 
     struct CollectMoves<'tcx> {
@@ -511,9 +522,9 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     }
 
     let mut collector = CollectMoves { places: Vec::new() };
-    collector.visit_location(frame.body, loc);
+    collector.visit_location(frame.body(), loc);
 
-    Ok(collector.places)
+    interp_ok(collector.places)
   }
 
   fn handle_moves(
@@ -533,28 +544,29 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
             Either::Left(_mplace) => {
               // todo!()
             }
-            Either::Right((frame, local, _)) => {
-              moved_places
-                .add_place(frame, Place::from_local(local, self.ecx.tcx()));
+            Either::Right((local, ..)) => {
+              moved_places.add_place(
+                n_frames - 1,
+                Place::from_local(local, self.ecx.tcx()),
+              );
             }
           }
         }
       }
     }
 
-    Ok(())
+    interp_ok(())
   }
 
   /// Take a single (local) step, internally stepping until we reach a serialization point
   fn step(
     &mut self,
   ) -> InterpResult<'tcx, (Option<MStep<MirLoc<'tcx>>>, bool)> {
-    let get_current_local_loc =
-      |local_frames: &[LocalFrame<'_, 'mir, 'tcx>]| {
-        let LocalFrame { frame, .. } = local_frames.last()?;
-        let loc = frame.current_loc();
-        Some((frame.instance.def, loc))
-      };
+    let get_current_local_loc = |local_frames: &[LocalFrame<'_, 'tcx>]| {
+      let LocalFrame { frame, .. } = local_frames.last()?;
+      let loc = frame.current_loc();
+      Some((frame.instance(), loc))
+    };
 
     loop {
       let local_frames = self.local_frames().collect::<Vec<_>>();
@@ -578,16 +590,16 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
           let LocalFrame { frame, .. } = local_frames_after.last().unwrap();
           let span = body_span(
             *self.ecx.tcx,
-            frame.instance.def_id(),
+            frame.instance().def_id(),
             BodySpanType::Header,
           );
 
-          Some((frame.instance.def, Either::Right(span)))
+          Some((frame.instance(), Either::Right(span)))
         }
         Ordering::Less => {
           if let Some(caller_frame_loc) = caller_frame_loc {
             let LocalFrame { frame, .. } = local_frames_after.last().unwrap();
-            Some((frame.instance.def, caller_frame_loc))
+            Some((frame.instance(), caller_frame_loc))
           } else {
             current_loc_opt
           }
@@ -597,12 +609,12 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
 
       if let Some(current_loc) = current_loc_opt {
         if let Some(step) = self.build_step(current_loc)? {
-          return Ok((Some(step), more_work));
+          return interp_ok((Some(step), more_work));
         }
       }
 
       if !more_work {
-        return Ok((None, more_work));
+        return interp_ok((None, more_work));
       }
     }
   }
@@ -614,7 +626,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
     use UndefinedBehaviorInfo::PointerUseAfterFree;
 
     Ok(match e.into_kind() {
-      InterpError::UndefinedBehavior(ub) => match ub {
+      InterpErrorKind::UndefinedBehavior(ub) => match ub {
         PointerUseAfterFree(alloc_id, _) => {
           MUndefinedBehavior::PointerUseAfterFree {
             alloc_id: self.remap_alloc_id(alloc_id),
@@ -632,7 +644,7 @@ impl<'mir, 'tcx> VisEvaluator<'mir, 'tcx> {
   pub fn eval(&mut self) -> Result<MTrace<MirLoc<'tcx>>> {
     let mut steps = Vec::new();
     let result = loop {
-      match self.step() {
+      match self.step().report_err() {
         Ok((step, more_work)) => {
           if let Some(step) = step {
             steps.push(step);

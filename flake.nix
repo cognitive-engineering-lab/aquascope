@@ -18,9 +18,10 @@
     depotjs = depot-js.packages.${system}.default;
 
     ci-check = pkgs.writeScriptBin "ci-check" ''
-      cargo fmt --check
-      cargo insta test -- --skip container_
-      cd crates/mdbook-aquascope/test-book && mdbook build && cd ../../../
+      cargo fmt --check &&
+      cargo clippy -- -D warnings &&
+      cargo insta test &&
+      cd crates/mdbook-aquascope/test-book && mdbook build && cd ../../../ &&
       cd frontend && depot test && cd ..
     '';
 

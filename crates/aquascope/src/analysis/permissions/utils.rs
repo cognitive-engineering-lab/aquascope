@@ -3,47 +3,14 @@
 use std::collections::hash_map::Entry;
 
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_middle::mir::{Location, TerminatorEdges};
-use rustc_mir_dataflow::{
-  fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice,
+use rustc_middle::mir::{
+  pretty::PrettyPrintMirOptions, Location, TerminatorEdges,
 };
-use rustc_utils::BodyExt;
+use rustc_mir_dataflow::{fmt::DebugWithContext, Analysis, JoinSemiLattice};
 
 use super::{
   context::PermissionsCtxt, Permissions, PermissionsData, PermissionsDomain,
 };
-
-pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
-  // XXX: Unfortunately, the only way I know how to do this is to do a MIR
-  // dataflow analysis and simply take the information from the context.
-  // This mean there will only be a single pass but :shrug:
-
-  let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
-
-  // Only print the analysis on a specific function
-  let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-  let Some(name) = ctxt.tcx.hir().opt_name(owner) else {
-    return;
-  };
-  if name.as_str() != "dump_me" {
-    return;
-  }
-
-  let analysis = PAnalysis { ctxt };
-  let mut results = analysis
-    .into_engine(ctxt.tcx, &ctxt.body_with_facts.body)
-    .iterate_to_fixpoint();
-
-  log::debug!("Dumping results for {:?}", name.as_str());
-
-  if let Err(e) = ctxt.body_with_facts.body.write_analysis_results(
-    &mut results,
-    def_id.to_def_id(),
-    ctxt.tcx,
-  ) {
-    log::warn!("{:?}", e);
-  }
-}
 
 pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
   let tcx = ctxt.tcx;
@@ -56,6 +23,9 @@ pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
     body,
     &mut |_, _| Ok(()),
     &mut stderr,
+    PrettyPrintMirOptions {
+      include_extra_comments: false,
+    },
   )
   .unwrap();
 }
@@ -213,7 +183,7 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
 // Analysis
 
 pub(crate) struct PAnalysis<'a, 'tcx> {
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  ctxt: &'a PermissionsCtxt<'tcx>,
 }
 
 impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
@@ -231,7 +201,7 @@ impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
   }
 }
 
-impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
+impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
   type Domain = PermissionsDomain<'tcx>;
   const NAME: &'static str = "PermissionsAnalysisDatalog";
 
@@ -271,10 +241,8 @@ impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
     _state: &mut Self::Domain,
   ) {
   }
-}
 
-impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
-  fn apply_statement_effect(
+  fn apply_primary_statement_effect(
     &mut self,
     state: &mut Self::Domain,
     _statement: &rustc_middle::mir::Statement<'tcx>,
@@ -283,7 +251,7 @@ impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
     self.check_location(state, location);
   }
 
-  fn apply_terminator_effect<'mir>(
+  fn apply_primary_terminator_effect<'mir>(
     &mut self,
     state: &mut Self::Domain,
     terminator: &'mir rustc_middle::mir::Terminator<'tcx>,

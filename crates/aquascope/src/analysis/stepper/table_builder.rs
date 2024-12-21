@@ -30,8 +30,8 @@ pub(super) struct Table<'tcx> {
 pub(super) type Tables<'tcx> = HashMap<Location, Vec<Table<'tcx>>>;
 
 pub(super) struct TableBuilder<'a, 'tcx: 'a> {
-  pub(super) analysis: &'a AquascopeAnalysis<'a, 'tcx>,
-  pub(super) ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+  pub(super) analysis: &'a AquascopeAnalysis<'tcx>,
+  pub(super) ctxt: &'a PermissionsCtxt<'tcx>,
   pub(super) mir: &'a SegmentedMir,
   pub(super) locals_at_scope: HashMap<ScopeId, Vec<Local>>,
 }
@@ -209,7 +209,7 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
 // - Convert Spans to Ranges
 #[allow(clippy::if_not_else)]
 pub(super) fn prettify_permission_steps<'tcx>(
-  analysis: &AquascopeAnalysis<'_, 'tcx>,
+  analysis: &AquascopeAnalysis<'tcx>,
   perm_steps: Tables<'tcx>,
   mode: PermIncludeMode,
 ) -> Vec<PermissionsLineDisplay> {
@@ -361,7 +361,7 @@ pub(super) fn prettify_permission_steps<'tcx>(
         .collect::<Vec<_>>();
 
       master_table_vec
-            .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection));
+            .sort_by_key(|(place, _)| (place.local.as_usize(), place.projection.len()));
 
       let master_table = PermissionsStepTable {
         from,

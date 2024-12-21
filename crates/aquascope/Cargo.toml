@@ -18,17 +18,18 @@ rustc_private = true
 testing = []
 
 [dependencies]
-anyhow = "1.0.0"
+anyhow.workspace = true
 log = "0.4"
 itertools = "0.10.5"
-serde = { workspace = true }
-ts-rs = "6.2"
+serde.workspace = true
+ts-rs = "7"
 regex = "1"
 fluid-let = "1.0"
-rustc_utils = {version = "0.7.0-nightly-2023-08-25", features = ["graphviz", "ts-rs", "serde", "test"]}
+fuzzy_match = "0.2.1"
+rustc_utils = {workspace = true, features = ["graphviz", "ts-rs", "serde", "test"]}
 
 # interpret module
-miri = {git = "https://github.com/rust-lang/miri.git", rev = "63c5542edf907dd797db82c4c2979e3c4df71a8b"}
+miri = {git = "https://github.com/rust-lang/miri", rev = "afdbb080fe4b8e73838fffdbea8b290aa246f3d7"}
 aquascope_workspace_utils = { version = "0.3", path = "../aquascope_workspace_utils" }
 
 # testing utils
