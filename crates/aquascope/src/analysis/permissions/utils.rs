@@ -12,39 +12,6 @@ use super::{
   context::PermissionsCtxt, Permissions, PermissionsData, PermissionsDomain,
 };
 
-#[allow(warnings)] // temporarily while this function is being fixed
-pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
-  // XXX: Unfortunately, the only way I know how to do this is to do a MIR
-  // dataflow analysis and simply take the information from the context.
-  // This mean there will only be a single pass but :shrug:
-
-  let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
-
-  // Only print the analysis on a specific function
-  let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-  let Some(name) = ctxt.tcx.hir().opt_name(owner) else {
-    return;
-  };
-  if name.as_str() != "dump_me" {
-    return;
-  }
-
-  let analysis = PAnalysis { ctxt };
-  let mut results =
-    analysis.iterate_to_fixpoint(ctxt.tcx, &ctxt.body_with_facts.body, None);
-
-  log::debug!("Dumping results for {:?}", name.as_str());
-
-  // TODO(gavin): fixme or deleteme
-  // if let Err(e) = ctxt.body_with_facts.body.write_analysis_results(
-  //   &mut results,
-  //   def_id.to_def_id(),
-  //   ctxt.tcx,
-  // ) {
-  //   log::warn!("{:?}", e);
-  // }
-}
-
 pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
   let tcx = ctxt.tcx;
   let body = &ctxt.body_with_facts.body;

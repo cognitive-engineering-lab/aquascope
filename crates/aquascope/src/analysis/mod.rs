@@ -228,8 +228,6 @@ pub fn compute_permissions<'tcx>(
 
     let permissions = permissions::compute(tcx, body_id, body_with_facts);
 
-    permissions::utils::dump_permissions_with_mir(&permissions);
-
     permissions
   })
 }

@@ -9,7 +9,7 @@ use rustc_data_structures::{
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
   graph::{dominators::Dominators, *},
 };
-use rustc_hir::HirId;
+use rustc_hir::{self as hir, HirId};
 use rustc_middle::{
   mir::{self, visit::Visitor as MirVisitor, BasicBlock, Body, Location},
   ty::TyCtxt,
@@ -135,26 +135,30 @@ impl<'tcx> IRMapper<'tcx> {
   }
 
   // TODO(gavin): fixme or deleteme
-  // pub fn local_assigned_place(&self, local: &hir::Local) -> Vec<Place<'tcx>> {
-  //   use either::Either;
-  //   use mir::{FakeReadCause as FRC, StatementKind as SK};
-  //   let id = local.hir_id;
-  //   self.get_mir_locations(id, GatherDepth::Outer).map_or_else(
-  //     Vec::default,
-  //     |mol| {
-  //       mol
-  //         .values()
-  //         .filter_map(|loc| match self.body.stmt_at(loc) {
-  //           Either::Left(mir::Statement {
-  //             kind: SK::FakeRead(box (FRC::ForLet(_), place)),
-  //             ..
-  //           }) => Some(*place),
-  //           _ => None,
-  //         })
-  //         .collect::<Vec<_>>()
-  //     },
-  //   )
-  // }
+  pub fn local_assigned_place(
+    &self,
+    local: &hir::LetStmt,
+  ) -> Vec<mir::Place<'tcx>> {
+    use either::Either;
+    use mir::{FakeReadCause as FRC, StatementKind as SK};
+
+    let id = local.hir_id;
+    self.get_mir_locations(id, GatherDepth::Outer).map_or_else(
+      Vec::default,
+      |mol| {
+        mol
+          .values()
+          .filter_map(|loc| match self.body.stmt_at(loc) {
+            Either::Left(mir::Statement {
+              kind: SK::FakeRead(box (FRC::ForLet(_), place)),
+              ..
+            }) => Some(*place),
+            _ => None,
+          })
+          .collect::<Vec<_>>()
+      },
+    )
+  }
 
   // Determines whether or not a block was inserted solely as a
   // `FalseEdge` or `FalseUnwind`. These were making the post-dominator

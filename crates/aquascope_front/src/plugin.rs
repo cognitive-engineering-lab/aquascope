@@ -221,7 +221,7 @@ impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 
-  fn after_analysis<'tcx>(
+  fn after_expansion<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
     tcx: TyCtxt<'tcx>,

@@ -18,13 +18,14 @@ rustc_private = true
 testing = []
 
 [dependencies]
-anyhow = "1.0.0"
+anyhow.workspace = true
 log = "0.4"
 itertools = "0.10.5"
-serde = { workspace = true }
+serde.workspace = true
 ts-rs = "7"
 regex = "1"
 fluid-let = "1.0"
+fuzzy_match = "0.2.1"
 rustc_utils = {workspace = true, features = ["graphviz", "ts-rs", "serde", "test"]}
 
 # interpret module

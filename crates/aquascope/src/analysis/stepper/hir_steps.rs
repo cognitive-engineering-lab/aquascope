@@ -513,7 +513,7 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   }
 
   fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt<'tcx>) {
-    // use rustc_hir::StmtKind as SK;
+    use rustc_hir::StmtKind as SK;
 
     log::debug!(
       "Starting analysis of STMT {}\n",
@@ -523,14 +523,14 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
     let scope = invoke_internal!(self, open_scope);
 
     // TODO(gavin): fixme or deleteme
-    // if let SK::Local(local) = stmt.kind {
-    //   let places = self.ir_mapper.local_assigned_place(local);
-    //   let locals = places.into_iter().map(|p| p.local).collect::<Vec<_>>();
-    //   if !locals.is_empty() {
-    //     log::debug!("storing locals at scope {scope:?} {locals:?}");
-    //     self.locals_at_scope.insert(scope, locals);
-    //   }
-    // }
+    if let SK::Let(local) = stmt.kind {
+      let places = self.ir_mapper.local_assigned_place(local);
+      let locals = places.into_iter().map(|p| p.local).collect::<Vec<_>>();
+      if !locals.is_empty() {
+        log::debug!("storing locals at scope {scope:?} {locals:?}");
+        self.locals_at_scope.insert(scope, locals);
+      }
+    }
 
     intravisit::walk_stmt(self, stmt);
 
