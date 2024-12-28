@@ -24,62 +24,6 @@ import {
   writeChar
 } from "./misc.js";
 
-// FIXME: the tooltips are not currently being used. The tooltips
-// provided by CM6 aren't expressive enough for what we want.
-// export const copiedValueHover = hoverTooltip(
-//   (_view, pos: number, side: number) => {
-//     let copyPoints = Array.from(
-//       document.querySelectorAll<HTMLElement>(".copied-tip")
-//     );
-
-//     let sPos = pos.toString();
-//     let hovered = copyPoints.find(s => s.dataset.bufferPos == sPos);
-//     if (hovered == undefined || hovered == null || side >= 0) {
-//       return null;
-//     }
-
-//     let copiedPerm = hovered.textContent!;
-//     return {
-//       pos: pos,
-//       above: true,
-//       arrow: true,
-//       create(_view) {
-//         let dom = document.createElement("div");
-//         dom.textContent = "Value was copied: creating 'O' permission";
-//         dom.classList.add("cm-tooltip-cursor");
-//         return { dom };
-//       },
-//     };
-//   }
-// );
-
-// export const insufficientTypeHover = hoverTooltip(
-//   (_view, pos: number, side: number) => {
-//     let copyPoints = Array.from(
-//       document.querySelectorAll<HTMLElement>(".insufficient-type-tip")
-//     );
-
-//     let sPos = pos.toString();
-//     let hovered = copyPoints.find(s => s.dataset.bufferPos == sPos);
-//     if (hovered == undefined || hovered == null || side >= 0) {
-//       return null;
-//     }
-
-//     let perm = hovered.textContent!;
-//     return {
-//       pos: pos,
-//       above: true,
-//       arrow: true,
-//       create(_view) {
-//         let dom = document.createElement("div");
-//         dom.textContent = `Declared type does not allow for permission '${perm}'`;
-//         dom.classList.add("cm-tooltip-cursor");
-//         return { dom };
-//       },
-//     };
-//   }
-// );
-
 interface PermCharProps {
   content: PermLetter;
   names: string[];
