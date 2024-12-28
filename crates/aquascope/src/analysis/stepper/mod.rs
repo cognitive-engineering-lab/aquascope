@@ -266,7 +266,7 @@ impl Difference for PermissionsData {
       loan_drop_refined: self.loan_drop_refined.diff(rhs.loan_drop_refined),
       path_moved: self.path_moved.diff(rhs.path_moved),
       path_uninitialized: self.path_uninitialized.diff(rhs.path_uninitialized),
-      permissions: self.permissions.diff(rhs.permissions),
+      permissions: self.permissions().diff(rhs.permissions()),
     }
   }
 }

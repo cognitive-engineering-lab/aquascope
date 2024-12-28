@@ -10,13 +10,12 @@ description: foo@mut_assign.test
     write: true
     drop: false
   actual:
+    read: true
+    write: true
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
-

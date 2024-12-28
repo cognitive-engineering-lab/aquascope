@@ -28,6 +28,8 @@ pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
     },
   )
   .unwrap();
+
+  log::debug!("{:?}", ctxt.polonius_output);
 }
 
 // --------------------------------------------------
@@ -67,7 +69,7 @@ impl JoinSemiLattice for PermissionsDomain<'_> {
     for (place, perms) in other.0.iter() {
       match self.0.entry(*place) {
         Entry::Occupied(mut entry) => {
-          changed |= entry.get_mut().permissions.join(&perms.permissions);
+          changed |= entry.get_mut().permissions().join(&perms.permissions());
         }
         Entry::Vacant(entry) => {
           entry.insert(*perms);
@@ -119,7 +121,7 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
       r#"<table border="0" cellborder="1" cellspacing="0" cellpadding="2">"#
     )?;
     for (place, perms) in self.iter() {
-      let perms = perms.permissions;
+      let perms = perms.permissions();
       write!(
         f,
         r#"<tr><td align="left">{place:?}</td><td align="left">{perms:?}</td></tr>"#
@@ -137,11 +139,11 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
     f: &mut std::fmt::Formatter<'_>,
   ) -> std::fmt::Result {
     let no_perm_changes = self.0.iter().all(|(place, permsd)| {
-      let perms = permsd.permissions;
+      let perms = permsd.permissions();
       old
         .0
         .get(place)
-        .map_or(true, |permd| permd.permissions == perms)
+        .map_or(true, |permd| permd.permissions() == perms)
     });
 
     if old == self || no_perm_changes {
@@ -153,10 +155,10 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
       r#"<table border="0" cellborder="1" cellspacing="0" cellpadding="2" sides="rb">"#
     )?;
     for (place, perms) in self.0.iter() {
-      let perms = perms.permissions;
+      let perms = perms.permissions();
       match old.0.get(place) {
         Some(old_perms) => {
-          let old_perms = old_perms.permissions;
+          let old_perms = old_perms.permissions();
           if perms != old_perms {
             write!(
               f,
@@ -214,8 +216,6 @@ impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
       .domain_places()
       .into_iter()
       .map(|place| {
-        let path = self.ctxt.place_to_path(&place);
-        let mp = self.ctxt.max_permissions(path);
         // NOTE: I'm currently just ignoring the permissions data
         // for this utility just so we can see the permissions changes.
         (place, PermissionsData {
@@ -228,7 +228,6 @@ impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
           loan_read_refined: None,
           loan_write_refined: None,
           loan_drop_refined: None,
-          permissions: mp,
         })
       })
       .collect::<HashMap<_, _>>()

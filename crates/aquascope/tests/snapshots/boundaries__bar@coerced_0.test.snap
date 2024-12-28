@@ -10,15 +10,15 @@ description: bar@coerced_0.test
     write: true
     drop: false
   actual:
+    read: true
+    write: true
+    drop: true
+  data:
     type_droppable: true
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: true
 - location:
     line: 3
     column: 29
@@ -27,15 +27,15 @@ description: bar@coerced_0.test
     write: true
     drop: false
   actual:
+    read: true
+    write: true
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
 - location:
     line: 4
     column: 9
@@ -44,15 +44,15 @@ description: bar@coerced_0.test
     write: true
     drop: false
   actual:
+    read: true
+    write: true
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
 - location:
     line: 5
     column: 3
@@ -61,13 +61,12 @@ description: bar@coerced_0.test
     write: true
     drop: false
   actual:
+    read: true
+    write: true
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
-

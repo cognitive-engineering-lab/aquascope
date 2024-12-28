@@ -10,15 +10,15 @@ description: main@assignop_path_resolution.test
     write: false
     drop: false
   actual:
+    read: true
+    write: true
+    drop: true
+  data:
     type_droppable: true
     type_writeable: true
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: true
 - location:
     line: 7
     column: 10
@@ -27,15 +27,15 @@ description: main@assignop_path_resolution.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
 - location:
     line: 8
     column: 2
@@ -44,15 +44,15 @@ description: main@assignop_path_resolution.test
     write: true
     drop: false
   actual:
+    read: true
+    write: true
+    drop: true
+  data:
     type_droppable: true
     type_writeable: true
     type_copyable: true
-    is_live: true
+    is_live: false
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: true
 - location:
     line: 8
     column: 7
@@ -61,6 +61,10 @@ description: main@assignop_path_resolution.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: true
     type_writeable: true
     type_copyable: true
@@ -68,10 +72,6 @@ description: main@assignop_path_resolution.test
     path_uninitialized: false
     loan_write_refined: 0
     loan_drop_refined: 0
-    permissions:
-      read: true
-      write: false
-      drop: false
 - location:
     line: 8
     column: 11
@@ -80,15 +80,15 @@ description: main@assignop_path_resolution.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: true
+  data:
     type_droppable: true
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: true
 - location:
     line: 8
     column: 15
@@ -97,13 +97,12 @@ description: main@assignop_path_resolution.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
-

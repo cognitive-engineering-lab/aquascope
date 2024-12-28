@@ -300,11 +300,6 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       loan_read_refined: None,
       loan_write_refined: None,
       loan_drop_refined: None,
-      permissions: Permissions {
-        read: true,
-        write: true,
-        drop: true,
-      },
     }
   }
 
@@ -349,6 +344,8 @@ impl<'tcx> PermissionsCtxt<'tcx> {
     path: Path,
     point: Point,
   ) -> PermissionsData {
+    log::trace!("permissions_data_at_point: {:?} at {:?}", path, point);
+
     let empty_hash_move = &HashMap::default();
     let empty_hash_loan = &HashMap::default();
     let empty_set = &HashSet::default();
@@ -384,36 +381,6 @@ impl<'tcx> PermissionsCtxt<'tcx> {
     let loan_drop_refined: Option<LoanKey> =
       loan_drop_refined.get(path).map(Into::<LoanKey>::into);
 
-    let mem_uninit = path_moved.is_some() || path_uninitialized;
-
-    // An English description of the previous Datalog rules:
-    //
-    // A path is readable IFF:
-    // - it is not moved.
-    // - there doesn't exist a read-refining loan at this point.
-    //
-    // A path is writeable IFF:
-    // - the path's declared type allows for mutability.
-    // - the path is readable (you can't write if you can't read)
-    //   this implies that the path isn't moved.
-    // - there doesn't exist a write-refining loan at this point.
-    //
-    // A path is droppable(without copy) IFF:
-    // - the path's declared type is droppable.
-    // - it isn't moved.
-    // - no drop-refining loan exists at this point.
-    let permissions = if !is_live {
-      Permissions::bottom()
-    } else {
-      let read = !mem_uninit && loan_read_refined.is_none();
-
-      let write = type_writeable && read && loan_write_refined.is_none();
-
-      let drop = type_droppable && read && loan_drop_refined.is_none();
-
-      Permissions { read, write, drop }
-    };
-
     PermissionsData {
       type_droppable,
       type_writeable,
@@ -424,7 +391,6 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       loan_read_refined,
       loan_write_refined,
       loan_drop_refined,
-      permissions,
     }
   }
 
@@ -450,7 +416,6 @@ impl<'tcx> PermissionsCtxt<'tcx> {
           loan_read_refined: None,
           loan_write_refined: None,
           loan_drop_refined: None,
-          permissions: Permissions::bottom(),
         })
       })
       .collect::<HashMap<_, _>>()

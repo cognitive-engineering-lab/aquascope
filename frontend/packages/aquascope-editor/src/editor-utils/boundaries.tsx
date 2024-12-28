@@ -115,14 +115,14 @@ let PermStack = ({
   facts: AnalysisFacts;
   boundary: PermissionsBoundary;
 }) => {
-  const data = boundary.actual;
+  const data = boundary.data;
 
   let allIcons: (PermCharProps & { exp: boolean })[] = [
     {
       content: readChar,
       names: ["perm", "read"],
       exp: boundary.expected.read,
-      act: data.permissions.read,
+      act: boundary.actual.read,
       showit: () => {
         showLoanRegion(facts, data.loan_read_refined, ["read"]);
         showMoveRegion(facts, data.path_moved, ["read"]);
@@ -136,7 +136,7 @@ let PermStack = ({
       content: writeChar,
       names: ["perm", "write"],
       exp: boundary.expected.write,
-      act: data.permissions.write,
+      act: boundary.actual.write,
       showit: () => {
         showLoanRegion(facts, data.loan_write_refined, ["write"]);
         showMoveRegion(facts, data.path_moved, ["write"]);
@@ -150,7 +150,7 @@ let PermStack = ({
       content: ownChar,
       names: ["perm", "own"],
       exp: boundary.expected.drop,
-      act: data.permissions.drop,
+      act: boundary.actual.drop,
       showit: () => {
         showLoanRegion(facts, data.loan_drop_refined, ["own"]);
         showMoveRegion(facts, data.path_moved, ["own"]);
@@ -164,7 +164,7 @@ let PermStack = ({
       content: flowChar,
       names: ["perm", "flow"],
       exp: boundary.expecting_flow !== undefined,
-      act: !boundary.expecting_flow?.is_violation ?? false,
+      act: !(boundary.expecting_flow?.is_violation ?? false),
       showit: () => void null,
       hideit: () => void null
     }

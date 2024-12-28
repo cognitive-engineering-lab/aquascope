@@ -223,7 +223,8 @@ pub struct PermissionsBoundary {
   #[serde(skip)]
   byte_location: BytePos,
   pub expected: Permissions,
-  pub actual: PermissionsData,
+  pub actual: Permissions,
+  pub data: PermissionsData,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub expecting_flow: Option<FlowBoundary>,
 }
@@ -232,7 +233,7 @@ impl PermissionsBoundary {
   pub fn is_violation(&self) -> bool {
     macro_rules! is_missing {
       ($this:ident, $perm:ident) => {
-        ($this.expected.$perm && !$this.actual.permissions.$perm)
+        ($this.expected.$perm && !$this.actual.$perm)
       };
     }
 
@@ -735,10 +736,10 @@ fn path_to_perm_boundary<'tcx>(
       &path_locations,
     )?;
 
-    log::debug!("Chosen place at location {place:#?} {loc:#?} other options: {path_locations:#?}");
-
     let point = ctxt.location_to_point(loc);
     let path = ctxt.place_to_path(&place);
+
+    log::debug!("Chosen place at location {place:#?} {loc:#?} ({point:?},{path:?})\nOther options: {path_locations:#?}");
 
     Some((point, path))
   };
@@ -755,8 +756,9 @@ fn path_to_perm_boundary<'tcx>(
       })
     })
     .map(|(point, path)| {
-      let actual = ctxt.permissions_data_at_point(path, point);
+      let data = ctxt.permissions_data_at_point(path, point);
       let expected = path_boundary.expected;
+      let actual = data.permissions_ignore_liveness();
 
       let expecting_flow =
         get_flow_permission(analysis, path_boundary.flow_context, hir_id);
@@ -781,6 +783,7 @@ fn path_to_perm_boundary<'tcx>(
         byte_location,
         expected: expected.into(),
         actual,
+        data,
         expecting_flow,
       }
     });

@@ -272,8 +272,9 @@ pub fn test_refinements_in_file(path: &Path) {
 
           let path = ctxt.place_to_path(&place);
           let point = ctxt.location_to_point(loc);
-          let computed_perms =
-            ctxt.permissions_data_at_point(path, point).permissions;
+          let computed_perms = ctxt
+            .permissions_data_at_point(path, point)
+            .permissions_ignore_liveness();
 
           assert!(
             (*expected_perms == computed_perms),

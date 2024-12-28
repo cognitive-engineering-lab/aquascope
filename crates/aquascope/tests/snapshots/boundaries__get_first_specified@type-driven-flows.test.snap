@@ -10,15 +10,15 @@ description: get_first_specified@type-driven-flows.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
   expecting_flow:
     is_violation: false
     flow_context:
@@ -29,7 +29,7 @@ description: get_first_specified@type-driven-flows.test
         line: 21
         column: 20
       filename:
-        private: 0
+        private_use_as_methods_instead: 0
     kind: Ok
 - location:
     line: 22
@@ -39,15 +39,15 @@ description: get_first_specified@type-driven-flows.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
   expecting_flow:
     is_violation: false
     flow_context:
@@ -58,6 +58,5 @@ description: get_first_specified@type-driven-flows.test
         line: 22
         column: 7
       filename:
-        private: 0
+        private_use_as_methods_instead: 0
     kind: Ok
-

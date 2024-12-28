@@ -113,9 +113,42 @@ pub struct PermissionsData {
   #[serde(skip_serializing_if = "Option::is_none")]
   /// Is a live loan removing `drop` permissions?
   pub loan_drop_refined: Option<LoanKey>,
+}
 
-  /// Computed permissions given the above information.
-  pub permissions: Permissions,
+impl PermissionsData {
+  /// If the place is not live, then the permissions are always the bottom type.
+  /// Otherwise, see `permissions_ignore_liveness`. (You may want to ignore liveness
+  /// when you know a variable is being used, and should therefore be live.)
+  pub fn permissions(&self) -> Permissions {
+    if !self.is_live {
+      Permissions::bottom()
+    } else {
+      self.permissions_ignore_liveness()
+    }
+  }
+
+  /// A path is readable IFF:
+  /// - it is not moved.
+  /// - there doesn't exist a read-refining loan at this point.
+  ///
+  /// A path is writeable IFF:
+  /// - the path's declared type allows for mutability.
+  /// - the path is readable (you can't write if you can't read)
+  ///   this implies that the path isn't moved.
+  /// - there doesn't exist a write-refining loan at this point.
+  ///
+  /// A path is droppable(without copy) IFF:
+  /// - the path's declared type is droppable.
+  /// - it isn't moved.
+  /// - no drop-refining loan exists at this point.
+  pub fn permissions_ignore_liveness(&self) -> Permissions {
+    let mem_uninit = self.path_moved.is_some() || self.path_uninitialized;
+    let read = !mem_uninit && self.loan_read_refined.is_none();
+    let write =
+      self.type_writeable && read && self.loan_write_refined.is_none();
+    let drop = self.type_droppable && read && self.loan_drop_refined.is_none();
+    Permissions { read, write, drop }
+  }
 }
 
 /// A permissions refiner. [`Loan`]s and moves can refine permissions.

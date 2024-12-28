@@ -10,15 +10,15 @@ description: main@read_on_copy_0.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
 - location:
     line: 10
     column: 3
@@ -27,15 +27,15 @@ description: main@read_on_copy_0.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
 - location:
     line: 11
     column: 3
@@ -44,15 +44,15 @@ description: main@read_on_copy_0.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
 - location:
     line: 12
     column: 3
@@ -61,13 +61,12 @@ description: main@read_on_copy_0.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
-
