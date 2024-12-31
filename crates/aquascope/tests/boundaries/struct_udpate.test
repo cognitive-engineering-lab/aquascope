@@ -1,0 +1,12 @@
+struct User {
+    name : String,
+    age : i32,
+}
+
+fn main() {
+    let mut a = User { name: String::from("Jeff"), age: 2 };
+    a.age += 1;
+    let b = User { age: 1, ..a };
+    a.age += 1;
+    println!("{} {}", b.name, b.age);
+}

@@ -180,7 +180,10 @@ use either::Either;
 use path_visitor::get_path_boundaries;
 use rustc_hir::HirId;
 use rustc_middle::{
-  mir::{Body, Location, Mutability, Place, Rvalue, Statement, StatementKind},
+  mir::{
+    Body, Location, Mutability, Operand, Place, Rvalue, Statement,
+    StatementKind,
+  },
   ty::{adjustment::AutoBorrowMutability, TyCtxt},
 };
 use rustc_span::Span;
@@ -584,28 +587,32 @@ fn paths_at_hir_id<'tcx>(
   ir_mapper: &IRMapper<'tcx>,
   hir_id: HirId,
 ) -> Option<Vec<(Location, Place<'tcx>)>> {
-  type TempBuff<'tcx> = SmallVec<[(Location, Place<'tcx>); 3]>;
+  type UsedPlace<'tcx> = (Location, Place<'tcx>);
+  type UsedPlaces<'tcx> = SmallVec<[UsedPlace<'tcx>; 3]>;
+
+  fn maybe_in_op<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    body: &'tcx Body<'tcx>,
+    loc: Location,
+    op: &Operand<'tcx>,
+  ) -> Option<UsedPlace<'tcx>> {
+    op.as_place()
+      .and_then(|p| p.is_source_visible(tcx, body).then_some(p))
+      .map(|p| (loc, p))
+  }
+
+  macro_rules! maybe_in_op {
+    ($loc:expr, $op:expr $(,$ops:expr)*) => {
+      maybe_in_op(tcx, body, $loc, $op).into_iter()
+        $(.chain(maybe_in_op(tcx, body, $loc, $ops).into_iter()))*
+        .collect()
+    };
+  }
 
   let mir_locations_opt =
     ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
 
-  macro_rules! maybe_in_op {
-    ($loc:expr, $op:expr) => {
-      $op
-        .as_place()
-        .and_then(|p| p.is_source_visible(tcx, body).then_some(p))
-        .map(|p| smallvec![($loc, p)])
-        .unwrap_or(smallvec![])
-    };
-    ($loc:expr, $op1:expr, $op2:expr) => {{
-      let mut v: TempBuff = maybe_in_op!($loc, $op1);
-      let mut o: TempBuff = maybe_in_op!($loc, $op2);
-      v.append(&mut o);
-      v
-    }};
-  }
-
-  let look_in_rvalue = |rvalue: &Rvalue<'tcx>, loc: Location| -> TempBuff {
+  let look_in_rvalue = |rvalue: &Rvalue<'tcx>, loc: Location| -> UsedPlaces {
     match rvalue {
       // Nested operand cases
       Rvalue::Use(op)
@@ -619,6 +626,7 @@ fn paths_at_hir_id<'tcx>(
         | Rvalue::Len(place)
         | Rvalue::Discriminant(place)
         | Rvalue::CopyForDeref(place)
+        | Rvalue::RawPtr(_, place)
         if place.is_source_visible(tcx, body) =>
       {
         smallvec![(loc, *place)]
@@ -629,26 +637,30 @@ fn paths_at_hir_id<'tcx>(
         maybe_in_op!(loc, left_op, right_op)
       }
 
+      Rvalue::Aggregate(_, fields) => {
+        fields.iter().flat_map(|op| maybe_in_op(tcx, body, loc, op)).collect()
+      }
+
       // Unimplemented cases, ignore nested information for now.
-      //
-      // These are separated in the or because they aren't implemented,
-      // but still silently ignored.
       Rvalue::ThreadLocalRef(..)
         | Rvalue::NullaryOp(..)
-        | Rvalue::Aggregate(..)
-
-      // Wildcard for catching the previous guarded matches.
-        | _ => {
-          log::warn!("couldn't find in RVALUE {rvalue:?}");
-          smallvec![]
-        }
+        // Without guard
+        | Rvalue::Ref(..)
+        | Rvalue::Len(..)
+        | Rvalue::Discriminant(..)
+        | Rvalue::CopyForDeref(..)
+        | Rvalue::RawPtr(..) => {
+          log::warn!("Unimplemented rvalue case: {rvalue:?}");
+          SmallVec::default()
+        },
     }
   };
 
-  let look_in_statement = |stmt: &Statement<'tcx>, loc: Location| -> TempBuff {
-    match &stmt.kind {
+  let look_in_statement =
+    |stmt: &Statement<'tcx>, loc: Location| -> UsedPlaces {
+      match &stmt.kind {
       StatementKind::Assign(box (lhs_place, ref rvalue)) => {
-        let mut found_so_far: TempBuff = look_in_rvalue(rvalue, loc);
+        let mut found_so_far: UsedPlaces = look_in_rvalue(rvalue, loc);
         if lhs_place.is_source_visible(tcx, body) {
           found_so_far.push((loc, *lhs_place));
         }
@@ -687,7 +699,7 @@ fn paths_at_hir_id<'tcx>(
       | StatementKind::BackwardIncompatibleDropHint { .. }
       | StatementKind::Nop => smallvec![],
     }
-  };
+    };
 
   let mir_locations = mir_locations_opt?
     .values()
