@@ -7,7 +7,6 @@ use anyhow::{bail, Context, Result};
 use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
-use rustc_errors::DiagCtxt;
 use rustc_hir::BodyId;
 use rustc_middle::{
   mir::{Rvalue, StatementKind},
@@ -35,7 +34,7 @@ use crate::{
     },
     AquascopeAnalysis,
   },
-  errors::{self, silent_emitter::SilentEmitter},
+  errors::{self, silent::silent_session},
   interpreter::{self, MTrace},
 };
 
@@ -525,14 +524,7 @@ where
   Cb: FnOnce(TyCtxt<'_>),
 {
   fn config(&mut self, config: &mut rustc_interface::Config) {
-    config.psess_created = Some(Box::new(|sess| {
-      // Create a new emitter writer which consumes *silently* all
-      // errors. There most certainly is a *better* way to do this,
-      // if you, the reader, know what that is, please open an issue :)
-      let dcx = DiagCtxt::new(Box::new(SilentEmitter::new()));
-      sess.set_dcx(dcx);
-    }));
-
+    config.psess_created = Some(silent_session());
     config.override_queries = Some(if self.is_interpreter {
       crate::interpreter::override_queries
     } else {

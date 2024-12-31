@@ -145,7 +145,6 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     let BranchData {
       reach,
       splits,
-      // joins,
       nested,
       ..
     } = self.mir.get_branch(bid);
@@ -160,8 +159,6 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     );
 
     let mut temp_middle = Tables::default();
-    // let mut temp_joins = Tables::default();
-
     for &sid in splits.iter() {
       self.insert_segment(&mut temp_middle, sid);
     }
@@ -169,10 +166,6 @@ impl<'a, 'tcx: 'a> TableBuilder<'a, 'tcx> {
     for &cid in nested.iter() {
       self.insert_collection(&mut temp_middle, cid);
     }
-
-    // for &sid in joins.iter() {
-    //   self.insert_segment(&mut temp_joins, sid);
-    // }
 
     // Find the locals which were filtered from all scopes. In theory,
     // `all_scopes` should contains the same scope, copied over,

@@ -319,6 +319,7 @@ impl MirSegment {
   pub fn span(&self, ctxt: &PermissionsCtxt) -> Span {
     let lo = ctxt.location_to_span(self.from);
     let hi = ctxt.location_to_span(self.to);
+    log::debug!("Span for segment {self:?}: {:?} -> {:?}", lo, hi);
     lo.with_hi(hi.hi())
   }
 

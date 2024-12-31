@@ -12,7 +12,9 @@ use aquascope::{
     stepper::{PermIncludeMode, INCLUDE_MODE},
     AquascopeError, AquascopeResult,
   },
-  errors::{initialize_error_tracking, track_body_diagnostics},
+  errors::{
+    initialize_error_tracking, silent::silent_session, track_body_diagnostics,
+  },
 };
 use clap::{Parser, Subcommand};
 use fluid_let::fluid_set;
@@ -218,6 +220,7 @@ struct AquascopeCallbacks<A: AquascopeAnalysis> {
 
 impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
   fn config(&mut self, config: &mut rustc_interface::Config) {
+    config.psess_created = Some(silent_session());
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 

@@ -2,15 +2,10 @@
 
 use std::collections::hash_map::Entry;
 
-use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_middle::mir::{
-  pretty::PrettyPrintMirOptions, Location, TerminatorEdges,
-};
-use rustc_mir_dataflow::{fmt::DebugWithContext, Analysis, JoinSemiLattice};
+use rustc_middle::mir::pretty::PrettyPrintMirOptions;
+use rustc_mir_dataflow::{fmt::DebugWithContext, JoinSemiLattice};
 
-use super::{
-  context::PermissionsCtxt, Permissions, PermissionsData, PermissionsDomain,
-};
+use super::{context::PermissionsCtxt, Permissions, PermissionsDomain};
 
 pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
   let tcx = ctxt.tcx;
@@ -178,93 +173,5 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
     }
     write!(f, "</table>")?;
     Ok(())
-  }
-}
-
-// --------------------------------------------------
-// Analysis
-
-pub(crate) struct PAnalysis<'a, 'tcx> {
-  ctxt: &'a PermissionsCtxt<'tcx>,
-}
-
-impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
-  fn check_location(
-    &self,
-    state: &mut PermissionsDomain<'tcx>,
-    location: Location,
-  ) {
-    let point = self.ctxt.location_to_point(location);
-    let dmn = self.ctxt.permissions_domain_at_point(point);
-    for (place, perms) in state.iter_mut() {
-      let new_perms = dmn.get(place).unwrap();
-      *perms = *new_perms;
-    }
-  }
-}
-
-impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
-  type Domain = PermissionsDomain<'tcx>;
-  const NAME: &'static str = "PermissionsAnalysisDatalog";
-
-  fn bottom_value(
-    &self,
-    _body: &rustc_middle::mir::Body<'tcx>,
-  ) -> Self::Domain {
-    self
-      .ctxt
-      .domain_places()
-      .into_iter()
-      .map(|place| {
-        // NOTE: I'm currently just ignoring the permissions data
-        // for this utility just so we can see the permissions changes.
-        (place, PermissionsData {
-          is_live: false,
-          type_droppable: false,
-          type_writeable: false,
-          type_copyable: false,
-          path_moved: None,
-          path_uninitialized: false,
-          loan_read_refined: None,
-          loan_write_refined: None,
-          loan_drop_refined: None,
-        })
-      })
-      .collect::<HashMap<_, _>>()
-      .into()
-  }
-
-  fn initialize_start_block(
-    &self,
-    _body: &rustc_middle::mir::Body<'tcx>,
-    _state: &mut Self::Domain,
-  ) {
-  }
-
-  fn apply_primary_statement_effect(
-    &mut self,
-    state: &mut Self::Domain,
-    _statement: &rustc_middle::mir::Statement<'tcx>,
-    location: rustc_middle::mir::Location,
-  ) {
-    self.check_location(state, location);
-  }
-
-  fn apply_primary_terminator_effect<'mir>(
-    &mut self,
-    state: &mut Self::Domain,
-    terminator: &'mir rustc_middle::mir::Terminator<'tcx>,
-    location: rustc_middle::mir::Location,
-  ) -> TerminatorEdges<'mir, 'tcx> {
-    self.check_location(state, location);
-    terminator.edges()
-  }
-
-  fn apply_call_return_effect(
-    &mut self,
-    _state: &mut Self::Domain,
-    _block: rustc_middle::mir::BasicBlock,
-    _return_places: rustc_middle::mir::CallReturnPlaces<'_, 'tcx>,
-  ) {
   }
 }

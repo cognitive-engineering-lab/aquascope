@@ -1,4 +1,4 @@
-pub(crate) mod silent_emitter;
+pub mod silent;
 
 use std::cell::RefCell;
 

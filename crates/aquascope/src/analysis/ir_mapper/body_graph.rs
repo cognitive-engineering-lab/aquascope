@@ -76,7 +76,7 @@ impl<'tcx> CleanedBody<'tcx> {
   }
 
   fn keep_block(bb: &BasicBlockData) -> bool {
-    !bb.is_cleanup && !bb.is_empty_unreachable()
+    !bb.is_cleanup && !bb.is_unreachable()
   }
 
   fn is_imaginary_target(
@@ -130,6 +130,16 @@ impl<'tcx> Predecessors for CleanedBody<'tcx> {
       .filter(|bb| CleanedBody::keep_block(&self.0.basic_blocks[*bb]))
       .collect::<SmallVec<[BasicBlock; 4]>>()
       .into_iter()
+  }
+}
+
+trait BasicBlockDataExt {
+  fn is_unreachable(&self) -> bool;
+}
+
+impl BasicBlockDataExt for BasicBlockData<'_> {
+  fn is_unreachable(&self) -> bool {
+    matches!(self.terminator().kind, TerminatorKind::Unreachable)
   }
 }
 
