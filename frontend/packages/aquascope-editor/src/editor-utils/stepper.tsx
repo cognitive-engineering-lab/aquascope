@@ -56,14 +56,14 @@ let PermChar = ({
       return perm.step.value ? (
         <div
           className="perm-diff-present"
-          title={`Path had ${kind} permissions before the preceding line, and that didn't change after this line.`}
+          title={`Place had ${kind} permissions before the preceding line, and that didn't change after this line.`}
         >
           <Perm>{perm.perm}</Perm>
         </div>
       ) : (
         <div
           className="perm-diff-none"
-          title={`Path did not have ${kind} permissions before the preceding line, and that didn't change after this line.`}
+          title={`Place did not have ${kind} permissions before the preceding line, and that didn't change after this line.`}
         >
           <Perm>‒</Perm>
         </div>
@@ -72,7 +72,7 @@ let PermChar = ({
       return (
         <div
           className="perm-diff-sub-container"
-          title={`Path had ${kind} permissions before the preceding line, and lost it after this line.`}
+          title={`Place had ${kind} permissions before the preceding line, and lost it after this line.`}
         >
           <div className="perm-diff-sub" />
           <Perm>{perm.perm}</Perm>
@@ -81,7 +81,7 @@ let PermChar = ({
     } /* perm.step.type === "High" */ else {
       return (
         <div
-          title={`Path did not have ${kind} permissions before the preceding line, and gained it after this line.`}
+          title={`Place did not have ${kind} permissions before the preceding line, and gained it after this line.`}
         >
           <span className="perm-diff-add">+</span>
           <Perm>{perm.perm}</Perm>
@@ -146,12 +146,12 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "sign-out",
-          desc: "Path is moved here"
+          desc: "Place is moved here"
         },
         {
           value: { type: "Low" },
           icon: "recycle",
-          desc: "Path is re-initialized after move here"
+          desc: "Place is re-initialized after move here"
         }
       ]
     },
@@ -161,12 +161,12 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "arrow-right",
-          desc: "Path is borrowed here"
+          desc: "Place is borrowed here"
         },
         {
           value: { type: "Low" },
           icon: "rotate-left",
-          desc: "Borrow on path is dropped here"
+          desc: "Borrow on place is dropped here"
         }
       ]
     },
@@ -176,12 +176,12 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "arrow-right",
-          desc: "Path is borrowed here"
+          desc: "Place is borrowed here"
         },
         {
           value: { type: "Low" },
           icon: "rotate-left",
-          desc: "Borrow on path is no longer used here"
+          desc: "Borrow on place is no longer used here"
         }
       ]
     },
@@ -191,12 +191,12 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "level-up",
-          desc: "Path is initialized here"
+          desc: "Place is initialized here"
         },
         {
           value: { type: "Low" },
           icon: "level-down",
-          desc: "Path is no longer used here"
+          desc: "Place is no longer used here"
         }
       ]
     },
@@ -206,12 +206,12 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "sign-out",
-          desc: "Path contains uninitialized data"
+          desc: "Place contains uninitialized data"
         },
         {
           value: { type: "Low" },
           icon: "recycle",
-          desc: "Path data is initialized after move here"
+          desc: "Place data is initialized after move here"
         }
       ]
     }

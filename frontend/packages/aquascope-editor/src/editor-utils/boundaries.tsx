@@ -37,8 +37,8 @@ let PermChar = ({ content, names, act, showit, hideit }: PermCharProps) => {
   name = name.charAt(0).toUpperCase() + name.slice(1);
   let title = `${name} permission is expected, `;
   title += act
-    ? "and the path has the permission."
-    : "but the path does not have the permission.";
+    ? "and the place has the permission."
+    : "but the place does not have the permission.";
   return (
     <div
       className={classNames(...names, { missing: !act })}
