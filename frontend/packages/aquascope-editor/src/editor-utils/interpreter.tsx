@@ -118,7 +118,8 @@ let read_unique = (unique: MAdt): MAdt => {
 
 let read_vec = (vec: MAdt): MAdt => {
   let raw_vec = read_field(vec, "buf");
-  let unique = read_field(raw_vec, "ptr");
+  let raw_vec_inner = read_field(raw_vec, "inner");
+  let unique = read_field(raw_vec_inner, "ptr");
   return read_unique(unique);
 };
 

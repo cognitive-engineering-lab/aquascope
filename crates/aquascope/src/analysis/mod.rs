@@ -452,7 +452,6 @@ impl<'tcx> AquascopeAnalysis<'tcx> {
         // Also, if the move point was removed for not being visible then
         // we can just ignore computing the highlighted ranges as well.
         let lo = move_points.get(&move_key).map(|s| s.lo())?;
-
         let points = self
           .points_to_spans(
             points
