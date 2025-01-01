@@ -31,7 +31,7 @@ struct HirExprScraper<'tcx> {
   unsupported_feature: Option<(Span, String)>,
 }
 
-impl<'tcx> HirExprScraper<'tcx> {
+impl HirExprScraper<'_> {
   fn get_adjusted_permissions(&self, expr: &Expr) -> ExpectedPermissions {
     let ty_adj = self.typeck_res.expr_ty_adjusted(expr);
     let adjs = self.typeck_res.expr_adjustments(expr);
@@ -255,8 +255,8 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
   }
 }
 
-pub(super) fn get_path_boundaries<'tcx>(
-  ctxt: &PermissionsCtxt<'tcx>,
+pub(super) fn get_path_boundaries(
+  ctxt: &PermissionsCtxt<'_>,
 ) -> Result<Vec<PathBoundary>> {
   let tcx = ctxt.tcx;
   let body_id = ctxt.body_id;

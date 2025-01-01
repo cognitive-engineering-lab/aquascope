@@ -111,7 +111,7 @@ impl StartNode for CleanedBody<'_> {
   }
 }
 
-impl<'tcx> Successors for CleanedBody<'tcx> {
+impl Successors for CleanedBody<'_> {
   fn successors(&self, node: Self::Node) -> impl Iterator<Item = Self::Node> {
     <BasicBlocks as Successors>::successors(&self.0.basic_blocks, node)
       .filter(|bb| {
@@ -124,7 +124,7 @@ impl<'tcx> Successors for CleanedBody<'tcx> {
   }
 }
 
-impl<'tcx> Predecessors for CleanedBody<'tcx> {
+impl Predecessors for CleanedBody<'_> {
   fn predecessors(&self, node: Self::Node) -> impl Iterator<Item = Self::Node> {
     <BasicBlocks as Predecessors>::predecessors(&self.0.basic_blocks, node)
       .filter(|bb| CleanedBody::keep_block(&self.0.basic_blocks[*bb]))

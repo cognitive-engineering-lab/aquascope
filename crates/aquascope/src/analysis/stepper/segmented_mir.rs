@@ -475,11 +475,15 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
       .filter(|&to| mapper.dominates(root, to))
       .collect::<HashSet<_>>();
 
+    log::debug!("Reachable from root: {reachable:?}");
+
     // Find the blocks that is the _most_ post-dominating,
     // this is a point that must post-dominate everything else.
     let most_post_dominating = reachable
       .iter()
       .find(|&can| reachable.iter().all(|&n| mapper.post_dominates(*can, n)))?;
+
+    log::debug!("Most post-dominating: {most_post_dominating:?}");
 
     // If a block dominates the "most post-dominator" that means that this
     // block also post-dominates all branches that occur after the root.
@@ -494,6 +498,8 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
           && mapper.dominates(*can, *most_post_dominating)
       })
       .collect::<Vec<_>>();
+
+    log::debug!("Candidate least-dominating: {candidate_leasts:?}");
 
     // The least post-dominator dominates all the other post-dominators.
     candidate_leasts

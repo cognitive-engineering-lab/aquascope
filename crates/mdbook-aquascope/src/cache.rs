@@ -33,6 +33,7 @@ impl<K: Hash, V: Serialize + DeserializeOwned> Cache<K, V> {
       .read(true)
       .write(true)
       .create(true)
+      .truncate(true)
       .open(CACHE_PATH)?;
     let cache = if cache_file.metadata()?.len() == 0 {
       HashMap::new()

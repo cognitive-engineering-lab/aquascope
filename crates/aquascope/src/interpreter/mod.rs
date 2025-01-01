@@ -125,10 +125,10 @@ impl rustc_driver::Callbacks for InterpretCallbacks {
     }
   }
 
-  fn after_analysis<'tcx>(
+  fn after_analysis(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
-    tcx: TyCtxt<'tcx>,
+    tcx: TyCtxt<'_>,
   ) -> rustc_driver::Compilation {
     self.result = Some(interpret(tcx));
     rustc_driver::Compilation::Stop

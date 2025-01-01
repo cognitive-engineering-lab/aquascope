@@ -138,7 +138,7 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
       old
         .0
         .get(place)
-        .map_or(true, |permd| permd.permissions() == perms)
+        .is_none_or(|permd| permd.permissions() == perms)
     });
 
     if old == self || no_perm_changes {

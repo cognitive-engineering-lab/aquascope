@@ -134,7 +134,6 @@ impl<'tcx> IRMapper<'tcx> {
     )
   }
 
-  // TODO(gavin): fixme or deleteme
   pub fn local_assigned_place(
     &self,
     local: &hir::LetStmt,

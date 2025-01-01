@@ -81,10 +81,7 @@ use rustc_borrowck::consumers::{
 };
 use rustc_data_structures::{
   fx::FxHashSet as HashSet,
-  graph::{
-    depth_first_search, scc::Sccs, vec_graph::VecGraph, DirectedGraph,
-    Successors,
-  },
+  graph::{depth_first_search, scc::Sccs, vec_graph::VecGraph, Successors},
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
 };
 use rustc_index::{bit_set::ChunkedBitSet, Idx};
@@ -280,7 +277,7 @@ fn count_nodes<T: Idx>(tups: &[(T, T)]) -> usize {
 /// The return closure answers queries of the form "for (v, s) did `s` flow to v?"
 fn flow_from_sources<T>(
   sources: impl Iterator<Item = T>,
-  graph: impl DirectedGraph<Node = T> + Successors,
+  graph: impl Successors<Node = T>,
 ) -> TransitiveRelation<T>
 where
   T: Idx,

@@ -524,9 +524,9 @@ pub fn compute<'tcx>(
   let typing_env = TypingEnv::post_analysis(tcx, def_id);
 
   // This should always be true for the current analysis of aquascope
-  let locals_are_invalidated_at_exit = def_id.as_local().map_or(false, |did| {
-    tcx.hir().body_owner_kind(did).is_fn_or_closure()
-  });
+  let locals_are_invalidated_at_exit = def_id
+    .as_local()
+    .is_some_and(|did| tcx.hir().body_owner_kind(did).is_fn_or_closure());
 
   let mut ctxt = PermissionsCtxt {
     tcx,

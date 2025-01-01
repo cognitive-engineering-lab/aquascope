@@ -8,7 +8,7 @@ use rustc_span::Span;
 
 thread_local! {
     static BODY_DIAGNOSTICS: RefCell<Vec<DiagnosticInfo>> = RefCell::new(Vec::default());
-    static CURRENT_BODY: RefCell<Option<LocalDefId>> = RefCell::new(None);
+    static CURRENT_BODY: RefCell<Option<LocalDefId>> = const { RefCell::new(None) };
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

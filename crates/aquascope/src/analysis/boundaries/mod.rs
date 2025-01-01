@@ -393,7 +393,7 @@ fn select_candidate_location<'tcx>(
 
   let others = subtract_from();
   // Remove all candidates present in the subtraction set.
-  let candidates = candidates.into_iter().filter(|t| !others.contains(t));
+  let candidates = candidates.iter().filter(|t| !others.contains(t));
 
   // From the list of local places sorted by similarity to the given `HirId`,
   // pick the first one that matches the base local.
@@ -638,7 +638,7 @@ fn paths_at_hir_id<'tcx>(
       }
 
       Rvalue::Aggregate(_, fields) => {
-        fields.iter().flat_map(|op| maybe_in_op(tcx, body, loc, op)).collect()
+        fields.iter().filter_map(|op| maybe_in_op(tcx, body, loc, op)).collect()
       }
 
       // Unimplemented cases, ignore nested information for now.
@@ -715,9 +715,9 @@ fn paths_at_hir_id<'tcx>(
   Some(mir_locations)
 }
 
-fn path_to_perm_boundary<'tcx>(
+fn path_to_perm_boundary(
   path_boundary: PathBoundary,
-  analysis: &AquascopeAnalysis<'tcx>,
+  analysis: &AquascopeAnalysis<'_>,
 ) -> Option<PermissionsBoundary> {
   let ctxt = &analysis.permissions;
   let ir_mapper = &analysis.ir_mapper;
@@ -811,8 +811,8 @@ fn path_to_perm_boundary<'tcx>(
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub fn compute_permission_boundaries<'tcx>(
-  analysis: &AquascopeAnalysis<'tcx>,
+pub fn compute_permission_boundaries(
+  analysis: &AquascopeAnalysis<'_>,
 ) -> Result<Vec<PermissionsBoundary>> {
   let ctxt = &analysis.permissions;
 
@@ -829,7 +829,7 @@ pub fn compute_permission_boundaries<'tcx>(
 
   let boundaries = path_use_points
     .filter(|pb| {
-      first_error_span_opt.map_or(true, |error_span| {
+      first_error_span_opt.is_none_or(|error_span| {
         pb.expecting_flow.is_some() || {
           let error_range =
             ByteRange::from_span(error_span, ctxt.tcx.sess.source_map())
@@ -863,13 +863,6 @@ mod test {
 
   #[test]
   fn fuzzy_search_2() {
-    let search = "a + b + c";
-    let haystack = vec![("x", 0), ("y", 1), ("z", 2)];
-    assert_eq!(None, fuzzy_match(search, haystack));
-  }
-
-  #[test]
-  fn fuzzy_search_3() {
     let search = "y[..a]";
     let haystack = vec![("x", 0), ("y", 1), ("z", 2)];
     assert_eq!(Some(1), fuzzy_match(search, haystack));

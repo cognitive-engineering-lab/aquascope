@@ -120,10 +120,10 @@ impl PermissionsData {
   /// Otherwise, see `permissions_ignore_liveness`. (You may want to ignore liveness
   /// when you know a variable is being used, and should therefore be live.)
   pub fn permissions(&self) -> Permissions {
-    if !self.is_live {
-      Permissions::bottom()
-    } else {
+    if self.is_live {
       self.permissions_ignore_liveness()
+    } else {
+      Permissions::bottom()
     }
   }
 

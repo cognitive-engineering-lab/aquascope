@@ -214,7 +214,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       .polonius_output
       .var_live_on_entry
       .get(&point)
-      .map_or(false, |live_vars| live_vars.contains(&var))
+      .is_some_and(|live_vars| live_vars.contains(&var))
   }
 
   /// On use would the given path be copied?

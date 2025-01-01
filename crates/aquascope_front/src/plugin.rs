@@ -224,10 +224,10 @@ impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 
-  fn after_expansion<'tcx>(
+  fn after_expansion(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
-    tcx: TyCtxt<'tcx>,
+    tcx: TyCtxt<'_>,
   ) -> rustc_driver::Compilation {
     // Setting up error tracking happens here. Within rustc callbacks
     // seem to be set up *after* `config` is called.

@@ -338,8 +338,8 @@ impl MirSegment {
 // ----------
 // Main entry
 
-pub fn compute_permission_steps<'tcx>(
-  analysis: &AquascopeAnalysis<'tcx>,
+pub fn compute_permission_steps(
+  analysis: &AquascopeAnalysis<'_>,
 ) -> Result<Vec<PermissionsLineDisplay>> {
   let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
   let ctxt = &analysis.permissions;
