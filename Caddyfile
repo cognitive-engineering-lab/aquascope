@@ -1,7 +1,0 @@
-aquascope.willcrichton.net
-
-reverse_proxy :8008
-
-log {
-    output file /var/log/caddy/access.log
-}

@@ -1,14 +1,15 @@
 //! Interpreting memory as Rust data types
 
 use miri::{
-  AllocKind, AllocMap, Immediate, InterpError, InterpErrorInfo, InterpResult,
-  MPlaceTy, MemPlaceMeta, MemoryKind, OpTy, Projectable, UndefinedBehaviorInfo,
+  interp_ok, AllocKind, AllocMap, CheckInAllocMsg, Immediate, InterpErrorInfo,
+  InterpErrorKind, InterpResult, MPlaceTy, MemPlaceMeta, MemoryKind, OpTy,
+  Projectable, UndefinedBehaviorInfo,
 };
 use rustc_abi::FieldsShape;
 use rustc_apfloat::Float;
 use rustc_middle::ty::{
   layout::{LayoutOf, TyAndLayout},
-  AdtKind, Ty, TyKind,
+  AdtKind, Ty, TyKind, TypingEnv,
 };
 use rustc_target::abi::Size;
 use rustc_type_ir::FloatTy;
@@ -61,13 +62,13 @@ impl<T> Abbreviated<T> {
   ) -> InterpResult<'tcx, Self> {
     if n <= ABBREV_MAX {
       let elts = (0 .. n).map(mk).collect::<InterpResult<'_, Vec<_>>>()?;
-      Ok(Abbreviated::All(elts))
+      interp_ok(Abbreviated::All(elts))
     } else {
       let initial = (0 .. ABBREV_MAX - 1)
         .map(&mut mk)
         .collect::<InterpResult<'tcx, Vec<_>>>()?;
       let last = mk(n - 1)?;
-      Ok(Abbreviated::Only(initial, Box::new(last)))
+      interp_ok(Abbreviated::Only(initial, Box::new(last)))
     }
   }
 
@@ -82,6 +83,15 @@ impl<T> Abbreviated<T> {
   }
 }
 
+// This type mirrors MHeapAllocKind, except it's allowed to store
+// non-serializable stuff from the compiler.
+#[derive(Copy, Clone)]
+enum HeapAllocKind<'tcx> {
+  String { len: u64 },
+  Vec { len: u64, el_ty: TyAndLayout<'tcx> },
+  Box,
+}
+
 #[derive(Serialize, Deserialize, Debug, TS, PartialEq, Copy, Clone)]
 #[serde(tag = "type", content = "value")]
 #[ts(export)]
@@ -89,6 +99,16 @@ pub enum MHeapAllocKind {
   String { len: u64 },
   Vec { len: u64 },
   Box,
+}
+
+impl From<HeapAllocKind<'_>> for MHeapAllocKind {
+  fn from(value: HeapAllocKind<'_>) -> Self {
+    match value {
+      HeapAllocKind::String { len } => MHeapAllocKind::String { len },
+      HeapAllocKind::Vec { len, .. } => MHeapAllocKind::Vec { len },
+      HeapAllocKind::Box => MHeapAllocKind::Box,
+    }
+  }
 }
 
 #[derive(Serialize, Deserialize, Debug, TS, PartialEq)]
@@ -121,17 +141,17 @@ pub enum MValue {
   },
 }
 
-struct Reader<'a, 'mir, 'tcx> {
-  ev: &'a VisEvaluator<'mir, 'tcx>,
-  heap_alloc_kinds: Vec<MHeapAllocKind>,
+struct Reader<'a, 'tcx> {
+  ev: &'a VisEvaluator<'tcx>,
+  heap_alloc_kinds: Vec<HeapAllocKind<'tcx>>,
 }
 
-impl<'tcx> Reader<'_, '_, 'tcx> {
+impl<'tcx> Reader<'_, 'tcx> {
   fn get_path_segments(
     &mut self,
     alloc_size: Size,
     alloc_layout: TyAndLayout<'tcx>,
-    mplace: MPlaceTy<'tcx, miri::Provenance>,
+    mplace: MPlaceTy<'tcx>,
     target: Size,
   ) -> Vec<MPathSegment> {
     let segments = locate_address_in_type(
@@ -149,12 +169,12 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
   fn read_alloc(
     &mut self,
-    base: miri::MPlaceTy<'tcx, miri::Provenance>,
+    base: miri::MPlaceTy<'tcx>,
   ) -> InterpResult<'tcx, MValue> {
     let el_ty = base.layout.ty;
     let stride = base.layout.size;
-    Ok(match self.heap_alloc_kinds.last() {
-      Some(MHeapAllocKind::String { len }) => {
+    interp_ok(match self.heap_alloc_kinds.last() {
+      Some(HeapAllocKind::String { len }) => {
         let array = self.read_array(base, stride, *len, el_ty)?;
         let MValue::Array(values) = array else {
           unreachable!()
@@ -165,23 +185,27 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         });
         MValue::Array(chars)
       }
-      Some(MHeapAllocKind::Vec { len }) => {
-        self.read_array(base, stride, *len, el_ty)?
+      Some(HeapAllocKind::Vec { len, el_ty }) => {
+        let stride = el_ty.layout.size;
+        self.read_array(base, stride, *len, el_ty.ty)?
       }
-      Some(MHeapAllocKind::Box) | None => self.read(&OpTy::from(base))?,
+      Some(HeapAllocKind::Box) | None => self.read(&OpTy::from(base))?,
     })
   }
 
   /// Reads a pointer, registering the pointed data for later use.
   fn read_pointer(
     &mut self,
-    mplace: miri::MPlaceTy<'tcx, miri::Provenance>,
+    mplace: miri::MPlaceTy<'tcx>,
   ) -> InterpResult<'tcx, MValue> {
     // Determine the base allocation from the mplace's provenance
-    let (alloc_id, offset, _) = self.ev.ecx.ptr_get_alloc_id(mplace.ptr)?;
-    let (alloc_size, _, alloc_status) = self.ev.ecx.get_alloc_info(alloc_id);
+    let (alloc_id, offset, _) = self
+      .ev
+      .ecx
+      .ptr_get_alloc_id(mplace.ptr(), mplace.layout().size.bytes() as i64)?;
+    let alloc_info = self.ev.ecx.get_alloc_info(alloc_id);
 
-    if matches!(alloc_status, AllocKind::Dead) {
+    if matches!(alloc_info.kind, AllocKind::Dead) {
       log::warn!("Reading a dead allocation");
     }
 
@@ -215,7 +239,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
               Some(t) => t.clone(),
               None => {
                 drop(memory_map);
-                return Ok(MValue::Unallocated {
+                return interp_ok(MValue::Unallocated {
                   alloc_id: Some(self.ev.remap_alloc_id(alloc_id)),
                 });
               }
@@ -230,7 +254,13 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
           // that property always holds.
           let index = memory_map.heap.locations.len();
           memory_map.heap.locations.push(mvalue);
-          (MMemorySegment::Heap { index }, mplace.layout)
+
+          let layout = match self.heap_alloc_kinds.last() {
+            Some(HeapAllocKind::Vec { el_ty, .. }) => *el_ty,
+            _ => mplace.layout,
+          };
+
+          (MMemorySegment::Heap { index }, layout)
         }
         _ => unimplemented!(),
       };
@@ -243,9 +273,9 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
     // The pointer could point anywhere inside the allocation, so we use
     // `get_path_segments` to reverse-engineer a path from the memory location.
-    let meta = mplace.meta;
+    let meta = mplace.meta();
     let parts =
-      self.get_path_segments(alloc_size, alloc_layout, mplace, offset);
+      self.get_path_segments(alloc_info.size, alloc_layout, mplace, offset);
     let path = MPath { segment, parts };
 
     let range = match meta {
@@ -253,12 +283,12 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       MemPlaceMeta::None => None,
     };
 
-    Ok(MValue::Pointer { path, range })
+    interp_ok(MValue::Pointer { path, range })
   }
 
   fn read_array(
     &mut self,
-    base: MPlaceTy<'tcx, miri::Provenance>,
+    base: MPlaceTy<'tcx>,
     stride: Size,
     len: u64,
     el_ty: Ty<'tcx>,
@@ -270,32 +300,31 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       self.read(&offset_place.into())
     };
     let values = Abbreviated::new(len, read)?;
-    Ok(MValue::Array(values))
+    interp_ok(MValue::Array(values))
   }
 
   fn read_vec_len(
     &mut self,
-    op: &OpTy<'tcx, miri::Provenance>,
+    op: &OpTy<'tcx>,
   ) -> InterpResult<'tcx, Option<u64>> {
     let (_, len) = op.field_by_name("len", &self.ev.ecx)?;
-    let len = match self.read(&len) {
-      Ok(MValue::Unallocated { .. }) => return Ok(None),
-      Ok(MValue::Uint(len)) => len,
+    let len = match self.read(&len).unwrap() {
+      MValue::Unallocated { .. } => return interp_ok(None),
+      MValue::Uint(len) => len,
       _ => unreachable!(),
     };
-    Ok(Some(len))
+    interp_ok(Some(len))
   }
 
-  fn read(
-    &mut self,
-    op: &OpTy<'tcx, miri::Provenance>,
-  ) -> InterpResult<'tcx, MValue> {
+  fn read(&mut self, op: &OpTy<'tcx>) -> InterpResult<'tcx, MValue> {
+    let ecx = &self.ev.ecx;
+    let tcx = ecx.tcx;
     let ty = op.layout.ty;
 
     let result = match ty.kind() {
       _ if ty.is_box() => {
-        self.heap_alloc_kinds.push(MHeapAllocKind::Box);
-        let unique = self.ev.ecx.project_field(op, 0)?;
+        self.heap_alloc_kinds.push(HeapAllocKind::Box);
+        let unique = ecx.project_field(op, 0)?;
         let result = self.read(&unique)?;
         self.heap_alloc_kinds.pop();
         MValue::Adt {
@@ -309,7 +338,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       TyKind::Tuple(tys) => {
         let fields = (0 .. tys.len())
           .map(|i| {
-            let field_op = self.ev.ecx.project_field(op, i)?;
+            let field_op = ecx.project_field(op, i)?;
             self.read(&field_op)
           })
           .collect::<InterpResult<'tcx, Vec<_>>>()?;
@@ -317,15 +346,15 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         MValue::Tuple(fields)
       }
 
-      TyKind::Adt(adt_def, _) => {
+      TyKind::Adt(adt_def, args) => {
         let def_id = adt_def.did();
-        let name = self.ev.ecx.tcx.item_name(def_id).to_ident_string();
+        let name = tcx.item_name(def_id).to_ident_string();
 
         macro_rules! process_fields {
           ($op:expr, $fields:expr) => {{
             let mut fields = Vec::new();
             for (i, field) in $fields.enumerate() {
-              let field_op = self.ev.ecx.project_field($op, i)?;
+              let field_op = ecx.project_field($op, i)?;
 
               // Skip ZST fields since they don't exist at runtime
               if field_op.layout.is_zst() {
@@ -344,18 +373,24 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
             let mut alloc_kind = None;
             match name.as_str() {
               "String" => {
-                let (_, vec) = op.field_by_name("vec", &self.ev.ecx)?;
+                let (_, vec) = op.field_by_name("vec", ecx)?;
                 if let Some(len) = self.read_vec_len(&vec)? {
-                  alloc_kind = Some(MHeapAllocKind::String { len });
+                  alloc_kind = Some(HeapAllocKind::String { len });
                 }
               }
               "Vec" => {
                 if let Some(len) = self.read_vec_len(op)? {
                   if !matches!(
                     self.heap_alloc_kinds.last(),
-                    Some(MHeapAllocKind::String { .. })
+                    Some(HeapAllocKind::String { .. })
                   ) {
-                    alloc_kind = Some(MHeapAllocKind::Vec { len });
+                    let el_ty = args[0].expect_ty();
+                    let el_ty = tcx
+                      .layout_of(
+                        TypingEnv::fully_monomorphized().as_query_input(el_ty),
+                      )
+                      .unwrap();
+                    alloc_kind = Some(HeapAllocKind::Vec { len, el_ty });
                   }
                 }
               }
@@ -376,12 +411,12 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
               name,
               variant: None,
               fields,
-              alloc_kind,
+              alloc_kind: alloc_kind.map(Into::into),
             }
           }
           AdtKind::Enum => {
-            let variant_idx = self.ev.ecx.read_discriminant(op)?;
-            let casted = self.ev.ecx.project_downcast(op, variant_idx)?;
+            let variant_idx = ecx.read_discriminant(op)?;
+            let casted = ecx.project_downcast(op, variant_idx)?;
             let variant_def = adt_def.variant(variant_idx);
             let variant = variant_def.name.to_ident_string();
 
@@ -399,7 +434,7 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       }
 
       _ if ty.is_primitive() => {
-        let imm = match self.ev.ecx.read_immediate(op) {
+        let imm = match ecx.read_immediate(op).report_err() {
           Ok(imm) => imm,
 
           // It's possible to read uninitialized data if a data structure
@@ -407,10 +442,10 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
           // is initialized. Therefore we have to handle this case by returning
           // MValue::Unallocated instead of throwing an error.
           Err(e) => match e.into_kind() {
-            InterpError::UndefinedBehavior(
+            InterpErrorKind::UndefinedBehavior(
               UndefinedBehaviorInfo::InvalidUninitBytes(..),
-            ) => return Ok(MValue::Unallocated { alloc_id: None }),
-            e => return Err(InterpErrorInfo::from(e)),
+            ) => return interp_ok(MValue::Unallocated { alloc_id: None }),
+            e => return Err(InterpErrorInfo::from(e)).into(),
           },
         };
         let Immediate::Scalar(scalar) = &*imm else {
@@ -421,17 +456,18 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
           TyKind::Char => MValue::Char(scalar.to_char()? as usize),
           TyKind::Uint(uty) => MValue::Uint(match uty.bit_width() {
             Some(width) => scalar.to_uint(Size::from_bits(width))? as u64,
-            None => scalar.to_target_usize(&self.ev.ecx)?,
+            None => scalar.to_target_usize(ecx)?,
           }),
           TyKind::Int(ity) => MValue::Int(match ity.bit_width() {
             Some(width) => scalar.to_int(Size::from_bits(width))? as i64,
-            None => scalar.to_target_isize(&self.ev.ecx)?,
+            None => scalar.to_target_isize(ecx)?,
           }),
           TyKind::Float(fty) => MValue::Float(match fty {
             FloatTy::F32 => {
               f32::from_bits(scalar.to_f32()?.to_bits() as u32) as f64
             }
             FloatTy::F64 => f64::from_bits(scalar.to_f64()?.to_bits() as u64),
+            FloatTy::F16 | FloatTy::F128 => unimplemented!(),
           }),
           _ => unreachable!(),
         }
@@ -452,14 +488,26 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
       }
 
       _ if ty.is_any_ptr() => {
-        let val = self.ev.ecx.read_immediate(op)?;
-        let mplace = self.ev.ecx.ref_to_mplace(&val)?;
-        if self.ev.ecx.check_mplace(&mplace).is_err() {
-          let alloc_id = match self.ev.ecx.ptr_get_alloc_id(mplace.ptr) {
+        let val = ecx.read_immediate(op)?;
+        let mplace = ecx.ref_to_mplace(&val)?;
+        if let Some((size, _)) = ecx.size_and_align_of_mplace(&mplace)?
+          && ecx
+            .check_ptr_access(
+              mplace.ptr(),
+              size,
+              CheckInAllocMsg::MemoryAccessTest,
+            )
+            .report_err()
+            .is_err()
+        {
+          let alloc_id = match ecx
+            .ptr_get_alloc_id(mplace.ptr(), mplace.layout().size.bytes() as i64)
+            .report_err()
+          {
             Ok((alloc_id, _, _)) => Some(self.ev.remap_alloc_id(alloc_id)),
             Err(_) => None,
           };
-          return Ok(MValue::Unallocated { alloc_id });
+          return interp_ok(MValue::Unallocated { alloc_id });
         }
         self.read_pointer(mplace)?
       }
@@ -470,7 +518,6 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
 
         let upvar_names = match def_id.as_local() {
           Some(def_id) => {
-            let tcx = self.ev.ecx.tcx;
             let captures = tcx.closure_captures(def_id);
             captures
               .iter()
@@ -496,18 +543,15 @@ impl<'tcx> Reader<'_, '_, 'tcx> {
         }
       }
 
-      kind => todo!("{:?} / {:?}", **op, kind),
+      kind => todo!("{:?} / {:?}", op, kind),
     };
 
-    Ok(result)
+    interp_ok(result)
   }
 }
 
-impl<'tcx> VisEvaluator<'_, 'tcx> {
-  pub(super) fn read(
-    &self,
-    op: &OpTy<'tcx, miri::Provenance>,
-  ) -> InterpResult<'tcx, MValue> {
+impl<'tcx> VisEvaluator<'tcx> {
+  pub(super) fn read(&self, op: &OpTy<'tcx>) -> InterpResult<'tcx, MValue> {
     Reader {
       ev: self,
       heap_alloc_kinds: Vec::new(),

@@ -14,7 +14,7 @@ steps:
               line: 4
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           location:
             start:
               line: 0
@@ -23,7 +23,7 @@ steps:
               line: 0
               column: 9
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           locals: []
     heap:
       locations: []
@@ -38,7 +38,7 @@ steps:
               line: 4
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           location:
             start:
               line: 1
@@ -47,7 +47,7 @@ steps:
               line: 1
               column: 16
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           locals:
             - name: x
               value:
@@ -67,7 +67,7 @@ steps:
               line: 4
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           location:
             start:
               line: 2
@@ -76,7 +76,7 @@ steps:
               line: 2
               column: 17
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           locals:
             - name: x
               value:
@@ -109,7 +109,7 @@ steps:
               line: 4
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           location:
             start:
               line: 3
@@ -118,7 +118,7 @@ steps:
               line: 3
               column: 10
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           locals:
             - name: x
               value:
@@ -151,7 +151,7 @@ steps:
               line: 4
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           location:
             start:
               line: 4
@@ -160,10 +160,9 @@ steps:
               line: 4
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           locals: []
     heap:
       locations: []
 result:
   type: Success
-

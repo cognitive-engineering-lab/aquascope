@@ -1,12 +1,12 @@
 use std::{
   collections::HashMap, env, fs, io, panic, path::Path, process::Command,
+  sync::Arc,
 };
 
 use anyhow::{bail, Context, Result};
 use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
-use rustc_errors::Handler;
 use rustc_hir::BodyId;
 use rustc_middle::{
   mir::{Rvalue, StatementKind},
@@ -34,7 +34,7 @@ use crate::{
     },
     AquascopeAnalysis,
   },
-  errors::{self, silent_emitter::SilentEmitter},
+  errors::{self, silent::silent_session},
   interpreter::{self, MTrace},
 };
 
@@ -48,8 +48,8 @@ impl FileLoader for StringLoader {
     Ok(self.0.clone())
   }
 
-  fn read_binary_file(&self, path: &Path) -> io::Result<Vec<u8>> {
-    fs::read(path)
+  fn read_binary_file(&self, path: &Path) -> io::Result<Arc<[u8]>> {
+    fs::read(path).map(Into::into)
   }
 }
 
@@ -271,8 +271,9 @@ pub fn test_refinements_in_file(path: &Path) {
 
           let path = ctxt.place_to_path(&place);
           let point = ctxt.location_to_point(loc);
-          let computed_perms =
-            ctxt.permissions_data_at_point(path, point).permissions;
+          let computed_perms = ctxt
+            .permissions_data_at_point(path, point)
+            .permissions_ignore_liveness();
 
           assert!(
             (*expected_perms == computed_perms),
@@ -462,7 +463,7 @@ pub fn run_in_dir(
 
 pub fn for_each_body<'tcx>(
   tcx: TyCtxt<'tcx>,
-  mut f: impl FnMut(BodyId, &BodyWithBorrowckFacts<'tcx>),
+  mut f: impl FnMut(BodyId, &'tcx BodyWithBorrowckFacts<'tcx>),
 ) {
   find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
     let def_id = tcx.hir().body_owner_def_id(body_id);
@@ -523,14 +524,7 @@ where
   Cb: FnOnce(TyCtxt<'_>),
 {
   fn config(&mut self, config: &mut rustc_interface::Config) {
-    config.parse_sess_created = Some(Box::new(|sess| {
-      // Create a new emitter writer which consumes *silently* all
-      // errors. There most certainly is a *better* way to do this,
-      // if you, the reader, know what that is, please open an issue :)
-      let handler = Handler::with_emitter(Box::new(SilentEmitter));
-      sess.span_diagnostic = handler;
-    }));
-
+    config.psess_created = Some(silent_session());
     config.override_queries = Some(if self.is_interpreter {
       crate::interpreter::override_queries
     } else {
@@ -538,16 +532,16 @@ where
     });
   }
 
-  fn after_expansion<'tcx>(
+  fn after_analysis<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
-    queries: &'tcx rustc_interface::Queries<'tcx>,
+    tcx: TyCtxt<'tcx>,
   ) -> rustc_driver::Compilation {
     errors::initialize_error_tracking();
-    queries.global_ctxt().unwrap().enter(|tcx| {
-      let callback = self.callback.take().unwrap();
-      callback(tcx);
-    });
+
+    let callback = self.callback.take().unwrap();
+    callback(tcx);
+
     rustc_driver::Compilation::Stop
   }
 }

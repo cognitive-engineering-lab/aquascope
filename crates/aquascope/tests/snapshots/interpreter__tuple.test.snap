@@ -14,7 +14,7 @@ steps:
               line: 3
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           location:
             start:
               line: 0
@@ -23,7 +23,7 @@ steps:
               line: 0
               column: 9
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           locals: []
     heap:
       locations: []
@@ -38,7 +38,7 @@ steps:
               line: 3
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           location:
             start:
               line: 1
@@ -47,7 +47,7 @@ steps:
               line: 1
               column: 41
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           locals:
             - name: x
               value:
@@ -72,35 +72,49 @@ steps:
                                       name: RawVec
                                       variant: ~
                                       fields:
-                                        - - ptr
+                                        - - inner
                                           - type: Adt
                                             value:
-                                              name: Unique
+                                              name: RawVecInner
                                               variant: ~
                                               fields:
-                                                - - pointer
+                                                - - ptr
                                                   - type: Adt
                                                     value:
-                                                      name: NonNull
+                                                      name: Unique
                                                       variant: ~
                                                       fields:
                                                         - - pointer
-                                                          - type: Pointer
+                                                          - type: Adt
                                                             value:
-                                                              path:
-                                                                segment:
-                                                                  type: Heap
-                                                                  value:
-                                                                    index: 0
-                                                                parts:
-                                                                  - type: Index
-                                                                    value: 0
-                                                              range: ~
+                                                              name: NonNull
+                                                              variant: ~
+                                                              fields:
+                                                                - - pointer
+                                                                  - type: Pointer
+                                                                    value:
+                                                                      path:
+                                                                        segment:
+                                                                          type: Heap
+                                                                          value:
+                                                                            index: 0
+                                                                        parts:
+                                                                          - type: Index
+                                                                            value: 0
+                                                                      range: ~
+                                                              alloc_kind: ~
+                                                      alloc_kind: ~
+                                                - - cap
+                                                  - type: Adt
+                                                    value:
+                                                      name: Cap
+                                                      variant: ~
+                                                      fields:
+                                                        - - "0"
+                                                          - type: Uint
+                                                            value: 5
                                                       alloc_kind: ~
                                               alloc_kind: ~
-                                        - - cap
-                                          - type: Uint
-                                            value: 5
                                       alloc_kind: ~
                                 - - len
                                   - type: Uint
@@ -138,7 +152,7 @@ steps:
               line: 3
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           location:
             start:
               line: 2
@@ -147,7 +161,7 @@ steps:
               line: 2
               column: 11
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           locals:
             - name: x
               value:
@@ -172,35 +186,49 @@ steps:
                                       name: RawVec
                                       variant: ~
                                       fields:
-                                        - - ptr
+                                        - - inner
                                           - type: Adt
                                             value:
-                                              name: Unique
+                                              name: RawVecInner
                                               variant: ~
                                               fields:
-                                                - - pointer
+                                                - - ptr
                                                   - type: Adt
                                                     value:
-                                                      name: NonNull
+                                                      name: Unique
                                                       variant: ~
                                                       fields:
                                                         - - pointer
-                                                          - type: Pointer
+                                                          - type: Adt
                                                             value:
-                                                              path:
-                                                                segment:
-                                                                  type: Heap
-                                                                  value:
-                                                                    index: 0
-                                                                parts:
-                                                                  - type: Index
-                                                                    value: 0
-                                                              range: ~
+                                                              name: NonNull
+                                                              variant: ~
+                                                              fields:
+                                                                - - pointer
+                                                                  - type: Pointer
+                                                                    value:
+                                                                      path:
+                                                                        segment:
+                                                                          type: Heap
+                                                                          value:
+                                                                            index: 0
+                                                                        parts:
+                                                                          - type: Index
+                                                                            value: 0
+                                                                      range: ~
+                                                              alloc_kind: ~
+                                                      alloc_kind: ~
+                                                - - cap
+                                                  - type: Adt
+                                                    value:
+                                                      name: Cap
+                                                      variant: ~
+                                                      fields:
+                                                        - - "0"
+                                                          - type: Uint
+                                                            value: 5
                                                       alloc_kind: ~
                                               alloc_kind: ~
-                                        - - cap
-                                          - type: Uint
-                                            value: 5
                                       alloc_kind: ~
                                 - - len
                                   - type: Uint
@@ -238,7 +266,7 @@ steps:
               line: 3
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           location:
             start:
               line: 3
@@ -247,10 +275,9 @@ steps:
               line: 3
               column: 1
             filename:
-              private: 0
+              private_use_as_methods_instead: 0
           locals: []
     heap:
       locations: []
 result:
   type: Success
-

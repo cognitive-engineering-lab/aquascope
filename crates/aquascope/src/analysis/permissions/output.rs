@@ -10,19 +10,18 @@ use std::time::Instant;
 
 use datafrog::{Iteration, Relation, RelationLeaper, ValueFilter};
 use polonius_engine::{Algorithm, FactTypes, Output as PEOutput};
-use rustc_borrowck::{borrow_set::BorrowSet, consumers::BodyWithBorrowckFacts};
+use rustc_borrowck::consumers::{
+  places_conflict, BodyWithBorrowckFacts, BorrowSet, PlaceConflictBias,
+};
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, Mutability};
 use rustc_index::IndexVec;
 use rustc_middle::{
   mir::{Place, ProjectionElem},
-  ty::TyCtxt,
+  ty::{TyCtxt, TypingEnv},
 };
 use rustc_mir_dataflow::move_paths::MoveData;
-use rustc_utils::{
-  mir::places_conflict::{self, AccessDepth, PlaceConflictBias},
-  BodyExt, PlaceExt,
-};
+use rustc_utils::{BodyExt, PlaceExt};
 
 use super::{
   context::PermissionsCtxt, flow, AquascopeFacts, Loan, Move, Path, Point,
@@ -321,7 +320,7 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
               p == point2 && {
                 let mp_assigned_to = ctxt.moveable_path_to_path(assigned_to);
                 let place1 = ctxt.path_to_place(mp_assigned_to);
-                places_conflict::places_conflict(
+                places_conflict(
                   tcx,
                   body,
                   place1,
@@ -392,13 +391,11 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
       |(_origin, loan, _point)| {
         let borrow = ctxt.loan_to_borrow(*loan);
         places.iter().filter_map(|place| {
-          places_conflict::borrow_conflicts_with_place(
+          places_conflict(
             tcx,
             body,
-            borrow.borrowed_place,
-            borrow.kind,
-            place.as_ref(),
-            AccessDepth::Deep,
+            borrow.borrowed_place(),
+            *place,
             PlaceConflictBias::Overlap,
           )
           .then_some((*loan, ctxt.place_to_path(place)))
@@ -497,11 +494,11 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
 // Main entry
 
 /// Compute the [`PermissionsCtxt`] for a given body.
-pub fn compute<'a, 'tcx>(
+pub fn compute<'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
-  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
-) -> PermissionsCtxt<'a, 'tcx> {
+  body_with_facts: &'tcx BodyWithBorrowckFacts<'tcx>,
+) -> PermissionsCtxt<'tcx> {
   let timer = Instant::now();
   let def_id = tcx.hir().body_owner_def_id(body_id);
   let body = &body_with_facts.body;
@@ -520,23 +517,16 @@ pub fn compute<'a, 'tcx>(
 
   let locals_are_invalidated_at_exit =
     tcx.hir().body_owner_kind(def_id).is_fn_or_closure();
-  let move_data = match MoveData::gather_moves(body, tcx, tcx.param_env(def_id))
-  {
-    Ok(move_data) => move_data,
-    Err((move_data, _illegal_moves)) => {
-      log::debug!("illegal moves found {_illegal_moves:?}");
-      move_data
-    }
-  };
+  let move_data = MoveData::gather_moves(body, tcx, |_| true);
   let borrow_set =
     BorrowSet::build(tcx, body, locals_are_invalidated_at_exit, &move_data);
   let def_id = def_id.to_def_id();
-  let param_env = tcx.param_env_reveal_all_normalized(def_id);
+  let typing_env = TypingEnv::post_analysis(tcx, def_id);
 
   // This should always be true for the current analysis of aquascope
-  let locals_are_invalidated_at_exit = def_id.as_local().map_or(false, |did| {
-    tcx.hir().body_owner_kind(did).is_fn_or_closure()
-  });
+  let locals_are_invalidated_at_exit = def_id
+    .as_local()
+    .is_some_and(|did| tcx.hir().body_owner_kind(did).is_fn_or_closure());
 
   let mut ctxt = PermissionsCtxt {
     tcx,
@@ -549,7 +539,7 @@ pub fn compute<'a, 'tcx>(
     borrow_set,
     move_data,
     locals_are_invalidated_at_exit,
-    param_env,
+    typing_env,
     loan_regions: None,
     place_data: IndexVec::new(),
     rev_lookup: HashMap::default(),

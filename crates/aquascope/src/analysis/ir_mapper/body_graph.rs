@@ -1,4 +1,4 @@
-use rustc_data_structures::{captures::Captures, graph::*};
+use rustc_data_structures::graph::*;
 use rustc_middle::mir::{
   BasicBlock, BasicBlockData, BasicBlocks, Body, Location, Terminator,
   TerminatorKind,
@@ -11,11 +11,11 @@ use smallvec::SmallVec;
 /// regular control-flow. This removes cleanup blocks or those which
 /// fall in unwind paths. When mapping back to source-level constructs
 /// this is almost certainly what you want to use.
-pub(crate) struct CleanedBody<'a, 'tcx: 'a>(pub &'a Body<'tcx>);
+pub(crate) struct CleanedBody<'tcx>(pub &'tcx Body<'tcx>);
 
 #[allow(dead_code)]
-impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
-  pub fn body(&self) -> &'a Body<'tcx> {
+impl<'tcx> CleanedBody<'tcx> {
+  pub fn body(&self) -> &'tcx Body<'tcx> {
     self.0
   }
 
@@ -57,9 +57,7 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
     self.body().basic_blocks[block].terminator()
   }
 
-  pub fn blocks(
-    &self,
-  ) -> impl Iterator<Item = BasicBlock> + Captures<'a> + Captures<'tcx> + '_ {
+  pub fn blocks(&self) -> impl Iterator<Item = BasicBlock> + use<'tcx, '_> {
     self
       .0
       .basic_blocks
@@ -78,7 +76,7 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
   }
 
   fn keep_block(bb: &BasicBlockData) -> bool {
-    !bb.is_cleanup && !bb.is_empty_unreachable()
+    !bb.is_cleanup && !bb.is_unreachable()
   }
 
   fn is_imaginary_target(
@@ -99,33 +97,23 @@ impl<'a, 'tcx: 'a> CleanedBody<'a, 'tcx> {
 // -----------
 // Graph impls
 
-impl DirectedGraph for CleanedBody<'_, '_> {
+impl DirectedGraph for CleanedBody<'_> {
   type Node = BasicBlock;
-}
 
-impl WithStartNode for CleanedBody<'_, '_> {
-  fn start_node(&self) -> Self::Node {
-    self.0.basic_blocks.start_node()
-  }
-}
-
-impl<'tcx> WithNumNodes for CleanedBody<'_, 'tcx> {
   fn num_nodes(&self) -> usize {
     self.0.basic_blocks.len()
   }
 }
 
-impl<'tcx> GraphSuccessors<'_> for CleanedBody<'_, 'tcx> {
-  type Item = BasicBlock;
-  type Iter = smallvec::IntoIter<[BasicBlock; 4]>;
+impl StartNode for CleanedBody<'_> {
+  fn start_node(&self) -> Self::Node {
+    self.0.basic_blocks.start_node()
+  }
 }
 
-impl<'tcx> WithSuccessors for CleanedBody<'_, 'tcx> {
-  fn successors(
-    &self,
-    node: Self::Node,
-  ) -> <Self as GraphSuccessors<'_>>::Iter {
-    <BasicBlocks as WithSuccessors>::successors(&self.0.basic_blocks, node)
+impl Successors for CleanedBody<'_> {
+  fn successors(&self, node: Self::Node) -> impl Iterator<Item = Self::Node> {
+    <BasicBlocks as Successors>::successors(&self.0.basic_blocks, node)
       .filter(|bb| {
         let from_data = &self.0.basic_blocks[*bb];
         CleanedBody::keep_block(from_data)
@@ -136,20 +124,22 @@ impl<'tcx> WithSuccessors for CleanedBody<'_, 'tcx> {
   }
 }
 
-impl<'tcx> GraphPredecessors<'_> for CleanedBody<'_, 'tcx> {
-  type Item = BasicBlock;
-  type Iter = smallvec::IntoIter<[BasicBlock; 4]>;
-}
-
-impl<'tcx> WithPredecessors for CleanedBody<'_, 'tcx> {
-  fn predecessors(
-    &self,
-    node: Self::Node,
-  ) -> <Self as GraphSuccessors<'_>>::Iter {
-    <BasicBlocks as WithPredecessors>::predecessors(&self.0.basic_blocks, node)
+impl Predecessors for CleanedBody<'_> {
+  fn predecessors(&self, node: Self::Node) -> impl Iterator<Item = Self::Node> {
+    <BasicBlocks as Predecessors>::predecessors(&self.0.basic_blocks, node)
       .filter(|bb| CleanedBody::keep_block(&self.0.basic_blocks[*bb]))
       .collect::<SmallVec<[BasicBlock; 4]>>()
       .into_iter()
+  }
+}
+
+trait BasicBlockDataExt {
+  fn is_unreachable(&self) -> bool;
+}
+
+impl BasicBlockDataExt for BasicBlockData<'_> {
+  fn is_unreachable(&self) -> bool {
+    matches!(self.terminator().kind, TerminatorKind::Unreachable)
   }
 }
 

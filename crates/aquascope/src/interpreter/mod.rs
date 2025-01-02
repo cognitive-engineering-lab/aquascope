@@ -6,8 +6,8 @@ use rustc_data_structures::fx::FxIndexMap;
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
   mir::{Body, BorrowCheckResult},
-  query,
   ty::TyCtxt,
+  util::Providers,
 };
 use rustc_utils::{source_map::range::CharRange, SpanExt};
 
@@ -32,7 +32,7 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<CharRange>> {
       let (inst, mir_body_loc) = step.stack.frames.last().unwrap().location;
       log::trace!("{}", match mir_body_loc {
         Either::Left(loc) => {
-          let body = evaluator.ecx.load_mir(inst, None).unwrap();
+          let body = evaluator.ecx.load_mir(inst.def, None).unwrap();
           format!("{:?}", body.stmt_at(loc))
         }
         Either::Right(span) =>
@@ -101,18 +101,17 @@ fn fake_mir_borrowck(
 // if the MoveData is empty. Thankfully we can reset and ignore that error via
 // `Handler::reset_err_count` which we do by overriding optimized_mir.
 fn fake_optimized_mir(tcx: TyCtxt<'_>, did: LocalDefId) -> &'_ Body<'_> {
-  let mut providers = query::Providers::default();
+  let mut providers = Providers::default();
   rustc_mir_transform::provide(&mut providers);
   let body = (providers.optimized_mir)(tcx, did);
-  tcx.sess.diagnostic().reset_err_count();
+  tcx.sess.dcx().reset_err_count();
   body
 }
 
 // See `fake_mir_borrowck`
 pub fn override_queries(
   _session: &Session,
-  providers: &mut query::Providers,
-  _extern_providers: &mut query::ExternProviders,
+  providers: &mut rustc_middle::util::Providers,
 ) {
   providers.mir_borrowck = fake_mir_borrowck;
   providers.optimized_mir = fake_optimized_mir;
@@ -126,14 +125,12 @@ impl rustc_driver::Callbacks for InterpretCallbacks {
     }
   }
 
-  fn after_expansion<'tcx>(
+  fn after_analysis(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
-    queries: &'tcx rustc_interface::Queries<'tcx>,
+    tcx: TyCtxt<'_>,
   ) -> rustc_driver::Compilation {
-    queries.global_ctxt().unwrap().enter(|tcx| {
-      self.result = Some(interpret(tcx));
-    });
+    self.result = Some(interpret(tcx));
     rustc_driver::Compilation::Stop
   }
 }

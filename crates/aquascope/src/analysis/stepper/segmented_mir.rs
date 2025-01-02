@@ -216,7 +216,7 @@ type BranchSpannerMap<'a> =
   HashMap<BranchId, Box<dyn Fn(&mut Location) -> Span + 'a>>;
 
 pub(super) struct SegmentedMirBuilder<'a, 'tcx: 'a> {
-  mapper: &'a IRMapper<'a, 'tcx>,
+  mapper: &'a IRMapper<'tcx>,
   first_collection: CollectionId,
   root_mappings: BranchSpannerMap<'a>,
   collections: IndexVec<CollectionId, Collection>,
@@ -356,7 +356,7 @@ enum GetSpanner<'a> {
 }
 
 impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
-  pub fn make(mapper: &'a IRMapper<'a, 'tcx>) -> Self {
+  pub fn make(mapper: &'a IRMapper<'tcx>) -> Self {
     let from = mapper.cleaned_graph.start_node().start_location();
 
     let mut collections = IndexVec::new();
@@ -471,17 +471,19 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
     let mapper = &self.mapper;
 
     // Find all basic blocks that are reachable from the root.
-    let reachable = mapper
-      .cleaned_graph
-      .depth_first_search(root)
+    let reachable = depth_first_search(&mapper.cleaned_graph, root)
       .filter(|&to| mapper.dominates(root, to))
       .collect::<HashSet<_>>();
+
+    log::debug!("Reachable from root: {reachable:?}");
 
     // Find the blocks that is the _most_ post-dominating,
     // this is a point that must post-dominate everything else.
     let most_post_dominating = reachable
       .iter()
       .find(|&can| reachable.iter().all(|&n| mapper.post_dominates(*can, n)))?;
+
+    log::debug!("Most post-dominating: {most_post_dominating:?}");
 
     // If a block dominates the "most post-dominator" that means that this
     // block also post-dominates all branches that occur after the root.
@@ -496,6 +498,8 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
           && mapper.dominates(*can, *most_post_dominating)
       })
       .collect::<Vec<_>>();
+
+    log::debug!("Candidate least-dominating: {candidate_leasts:?}");
 
     // The least post-dominator dominates all the other post-dominators.
     candidate_leasts
@@ -868,6 +872,7 @@ pub(crate) mod test_exts {
     fn validate(&self, mapper: &IRMapper) -> Result<(), InvalidReason>;
   }
 
+  #[allow(dead_code)]
   #[derive(Debug)]
   pub enum InvalidReason {
     MissingLocations {
@@ -909,7 +914,7 @@ pub(crate) mod test_exts {
   impl MirSegment {
     fn explode<'a, 'tcx: 'a>(
       self,
-      mapper: &'a IRMapper<'a, 'tcx>,
+      mapper: &'a IRMapper<'tcx>,
     ) -> impl Iterator<Item = Location> + Captures<'tcx> + 'a {
       let sb = self.from.block;
       let eb = self.to.block;

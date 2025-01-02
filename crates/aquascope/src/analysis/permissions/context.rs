@@ -11,16 +11,16 @@
 //! about the theory of the permissions derivation.
 
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
-use rustc_borrowck::{
-  borrow_set::{BorrowData, BorrowSet},
-  consumers::{BodyWithBorrowckFacts, LocationTable, RichLocation, RustcFacts},
+use rustc_borrowck::consumers::{
+  BodyWithBorrowckFacts, BorrowData, BorrowSet, LocationTable, RichLocation,
+  RustcFacts,
 };
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{def_id::DefId, BodyId, Mutability};
 use rustc_index::IndexVec;
 use rustc_middle::{
   mir::{BorrowKind, Local, Location, Place, ProjectionElem},
-  ty::{self, ParamEnv, Ty, TyCtxt},
+  ty::{self, Ty, TyCtxt, TypingEnv},
 };
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
@@ -36,9 +36,9 @@ use crate::analysis::permissions::{
 /// A path as defined in rustc.
 type MoveablePath = <RustcFacts as FactTypes>::Path;
 
-pub struct PermissionsCtxt<'a, 'tcx> {
+pub struct PermissionsCtxt<'tcx> {
   pub tcx: TyCtxt<'tcx>,
-  pub polonius_input_facts: &'a AllFacts<RustcFacts>,
+  pub polonius_input_facts: &'tcx AllFacts<RustcFacts>,
   pub polonius_output: PEOutput<RustcFacts>,
 
   /// Program facts unique to Aquascope.
@@ -51,18 +51,18 @@ pub struct PermissionsCtxt<'a, 'tcx> {
   pub permissions_output: Output<AquascopeFacts>,
   pub body_id: BodyId,
   pub def_id: DefId,
-  pub body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+  pub body_with_facts: &'tcx BodyWithBorrowckFacts<'tcx>,
   pub borrow_set: BorrowSet<'tcx>,
   pub move_data: MoveData<'tcx>,
   pub loan_regions: Option<HashMap<Loan, (Point, Point)>>,
   pub locals_are_invalidated_at_exit: bool,
-  pub(crate) param_env: ParamEnv<'tcx>,
+  pub(crate) typing_env: TypingEnv<'tcx>,
   pub(crate) place_data: IndexVec<Path, Place<'tcx>>,
   pub(crate) rev_lookup: HashMap<Local, Vec<Path>>,
   pub(crate) region_flows: Option<RegionFlows>,
 }
 
-impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
+impl<'tcx> PermissionsCtxt<'tcx> {
   pub fn new_path(&mut self, place: Place<'tcx>) -> Path {
     let place = place.normalize(self.tcx, self.def_id);
     let new_path = self.place_data.push(place);
@@ -125,7 +125,11 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
 
   pub fn path_to_moveable_path(&self, p: Path) -> MoveablePath {
     let place = self.path_to_place(p);
-    self.move_data.rev_lookup.find_local(place.local)
+    self
+      .move_data
+      .rev_lookup
+      .find_local(place.local)
+      .unwrap_or_else(|| panic!("Missing local: {:?}", place.local))
   }
 
   pub fn moveable_path_to_path(&self, mp: MoveablePath) -> Path {
@@ -192,7 +196,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
   }
 
   pub fn is_mutable_borrow(&self, brw: &BorrowData<'tcx>) -> bool {
-    matches!(brw.kind, BorrowKind::Mut { .. })
+    matches!(brw.kind(), BorrowKind::Mut { .. })
   }
 
   pub fn is_mutable_loan(&self, loan: Loan) -> bool {
@@ -210,7 +214,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       .polonius_output
       .var_live_on_entry
       .get(&point)
-      .map_or(false, |live_vars| live_vars.contains(&var))
+      .is_some_and(|live_vars| live_vars.contains(&var))
   }
 
   /// On use would the given path be copied?
@@ -218,7 +222,7 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let body = &self.body_with_facts.body;
     let place = self.path_to_place(path);
     let ty = place.ty(&body.local_decls, self.tcx).ty;
-    ty.is_copyable(self.tcx, self.param_env)
+    ty.is_copyable(self.tcx, self.typing_env)
   }
 
   /// Can this path be written to?
@@ -290,17 +294,12 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       is_live: true,
       type_droppable: true,
       type_writeable: true,
-      type_copyable: ty.is_copyable(self.tcx, self.param_env),
+      type_copyable: ty.is_copyable(self.tcx, self.typing_env),
       path_moved: None,
       path_uninitialized: false,
       loan_read_refined: None,
       loan_write_refined: None,
       loan_drop_refined: None,
-      permissions: Permissions {
-        read: true,
-        write: true,
-        drop: true,
-      },
     }
   }
 
@@ -345,6 +344,8 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     path: Path,
     point: Point,
   ) -> PermissionsData {
+    log::trace!("permissions_data_at_point: {:?} at {:?}", path, point);
+
     let empty_hash_move = &HashMap::default();
     let empty_hash_loan = &HashMap::default();
     let empty_set = &HashSet::default();
@@ -380,36 +381,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
     let loan_drop_refined: Option<LoanKey> =
       loan_drop_refined.get(path).map(Into::<LoanKey>::into);
 
-    let mem_uninit = path_moved.is_some() || path_uninitialized;
-
-    // An English description of the previous Datalog rules:
-    //
-    // A path is readable IFF:
-    // - it is not moved.
-    // - there doesn't exist a read-refining loan at this point.
-    //
-    // A path is writeable IFF:
-    // - the path's declared type allows for mutability.
-    // - the path is readable (you can't write if you can't read)
-    //   this implies that the path isn't moved.
-    // - there doesn't exist a write-refining loan at this point.
-    //
-    // A path is droppable(without copy) IFF:
-    // - the path's declared type is droppable.
-    // - it isn't moved.
-    // - no drop-refining loan exists at this point.
-    let permissions = if !is_live {
-      Permissions::bottom()
-    } else {
-      let read = !mem_uninit && loan_read_refined.is_none();
-
-      let write = type_writeable && read && loan_write_refined.is_none();
-
-      let drop = type_droppable && read && loan_drop_refined.is_none();
-
-      Permissions { read, write, drop }
-    };
-
     PermissionsData {
       type_droppable,
       type_writeable,
@@ -420,7 +391,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
       loan_read_refined,
       loan_write_refined,
       loan_drop_refined,
-      permissions,
     }
   }
 
@@ -446,7 +416,6 @@ impl<'a, 'tcx> PermissionsCtxt<'a, 'tcx> {
           loan_read_refined: None,
           loan_write_refined: None,
           loan_drop_refined: None,
-          permissions: Permissions::bottom(),
         })
       })
       .collect::<HashMap<_, _>>()

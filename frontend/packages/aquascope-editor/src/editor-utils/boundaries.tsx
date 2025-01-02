@@ -24,62 +24,6 @@ import {
   writeChar
 } from "./misc.js";
 
-// FIXME: the tooltips are not currently being used. The tooltips
-// provided by CM6 aren't expressive enough for what we want.
-// export const copiedValueHover = hoverTooltip(
-//   (_view, pos: number, side: number) => {
-//     let copyPoints = Array.from(
-//       document.querySelectorAll<HTMLElement>(".copied-tip")
-//     );
-
-//     let sPos = pos.toString();
-//     let hovered = copyPoints.find(s => s.dataset.bufferPos == sPos);
-//     if (hovered == undefined || hovered == null || side >= 0) {
-//       return null;
-//     }
-
-//     let copiedPerm = hovered.textContent!;
-//     return {
-//       pos: pos,
-//       above: true,
-//       arrow: true,
-//       create(_view) {
-//         let dom = document.createElement("div");
-//         dom.textContent = "Value was copied: creating 'O' permission";
-//         dom.classList.add("cm-tooltip-cursor");
-//         return { dom };
-//       },
-//     };
-//   }
-// );
-
-// export const insufficientTypeHover = hoverTooltip(
-//   (_view, pos: number, side: number) => {
-//     let copyPoints = Array.from(
-//       document.querySelectorAll<HTMLElement>(".insufficient-type-tip")
-//     );
-
-//     let sPos = pos.toString();
-//     let hovered = copyPoints.find(s => s.dataset.bufferPos == sPos);
-//     if (hovered == undefined || hovered == null || side >= 0) {
-//       return null;
-//     }
-
-//     let perm = hovered.textContent!;
-//     return {
-//       pos: pos,
-//       above: true,
-//       arrow: true,
-//       create(_view) {
-//         let dom = document.createElement("div");
-//         dom.textContent = `Declared type does not allow for permission '${perm}'`;
-//         dom.classList.add("cm-tooltip-cursor");
-//         return { dom };
-//       },
-//     };
-//   }
-// );
-
 interface PermCharProps {
   content: PermLetter;
   names: string[];
@@ -93,8 +37,8 @@ let PermChar = ({ content, names, act, showit, hideit }: PermCharProps) => {
   name = name.charAt(0).toUpperCase() + name.slice(1);
   let title = `${name} permission is expected, `;
   title += act
-    ? "and the path has the permission."
-    : "but the path does not have the permission.";
+    ? "and the place has the permission."
+    : "but the place does not have the permission.";
   return (
     <div
       className={classNames(...names, { missing: !act })}
@@ -115,14 +59,14 @@ let PermStack = ({
   facts: AnalysisFacts;
   boundary: PermissionsBoundary;
 }) => {
-  const data = boundary.actual;
+  const data = boundary.data;
 
   let allIcons: (PermCharProps & { exp: boolean })[] = [
     {
       content: readChar,
       names: ["perm", "read"],
       exp: boundary.expected.read,
-      act: data.permissions.read,
+      act: boundary.actual.read,
       showit: () => {
         showLoanRegion(facts, data.loan_read_refined, ["read"]);
         showMoveRegion(facts, data.path_moved, ["read"]);
@@ -136,7 +80,7 @@ let PermStack = ({
       content: writeChar,
       names: ["perm", "write"],
       exp: boundary.expected.write,
-      act: data.permissions.write,
+      act: boundary.actual.write,
       showit: () => {
         showLoanRegion(facts, data.loan_write_refined, ["write"]);
         showMoveRegion(facts, data.path_moved, ["write"]);
@@ -150,7 +94,7 @@ let PermStack = ({
       content: ownChar,
       names: ["perm", "own"],
       exp: boundary.expected.drop,
-      act: data.permissions.drop,
+      act: boundary.actual.drop,
       showit: () => {
         showLoanRegion(facts, data.loan_drop_refined, ["own"]);
         showMoveRegion(facts, data.path_moved, ["own"]);
@@ -164,7 +108,7 @@ let PermStack = ({
       content: flowChar,
       names: ["perm", "flow"],
       exp: boundary.expecting_flow !== undefined,
-      act: !boundary.expecting_flow?.is_violation ?? false,
+      act: !(boundary.expecting_flow?.is_violation ?? false),
       showit: () => void null,
       hideit: () => void null
     }

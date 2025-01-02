@@ -2,48 +2,10 @@
 
 use std::collections::hash_map::Entry;
 
-use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_middle::mir::{Location, TerminatorEdges};
-use rustc_mir_dataflow::{
-  fmt::DebugWithContext, Analysis, AnalysisDomain, JoinSemiLattice,
-};
-use rustc_utils::BodyExt;
+use rustc_middle::mir::pretty::PrettyPrintMirOptions;
+use rustc_mir_dataflow::{fmt::DebugWithContext, JoinSemiLattice};
 
-use super::{
-  context::PermissionsCtxt, Permissions, PermissionsData, PermissionsDomain,
-};
-
-pub(crate) fn dump_permissions_with_mir(ctxt: &PermissionsCtxt) {
-  // XXX: Unfortunately, the only way I know how to do this is to do a MIR
-  // dataflow analysis and simply take the information from the context.
-  // This mean there will only be a single pass but :shrug:
-
-  let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
-
-  // Only print the analysis on a specific function
-  let owner = ctxt.tcx.hir().body_owner(ctxt.body_id);
-  let Some(name) = ctxt.tcx.hir().opt_name(owner) else {
-    return;
-  };
-  if name.as_str() != "dump_me" {
-    return;
-  }
-
-  let analysis = PAnalysis { ctxt };
-  let mut results = analysis
-    .into_engine(ctxt.tcx, &ctxt.body_with_facts.body)
-    .iterate_to_fixpoint();
-
-  log::debug!("Dumping results for {:?}", name.as_str());
-
-  if let Err(e) = ctxt.body_with_facts.body.write_analysis_results(
-    &mut results,
-    def_id.to_def_id(),
-    ctxt.tcx,
-  ) {
-    log::warn!("{:?}", e);
-  }
-}
+use super::{context::PermissionsCtxt, Permissions, PermissionsDomain};
 
 pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
   let tcx = ctxt.tcx;
@@ -56,8 +18,13 @@ pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
     body,
     &mut |_, _| Ok(()),
     &mut stderr,
+    PrettyPrintMirOptions {
+      include_extra_comments: false,
+    },
   )
   .unwrap();
+
+  log::debug!("{:?}", ctxt.polonius_output);
 }
 
 // --------------------------------------------------
@@ -97,7 +64,7 @@ impl JoinSemiLattice for PermissionsDomain<'_> {
     for (place, perms) in other.0.iter() {
       match self.0.entry(*place) {
         Entry::Occupied(mut entry) => {
-          changed |= entry.get_mut().permissions.join(&perms.permissions);
+          changed |= entry.get_mut().permissions().join(&perms.permissions());
         }
         Entry::Vacant(entry) => {
           entry.insert(*perms);
@@ -149,7 +116,7 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
       r#"<table border="0" cellborder="1" cellspacing="0" cellpadding="2">"#
     )?;
     for (place, perms) in self.iter() {
-      let perms = perms.permissions;
+      let perms = perms.permissions();
       write!(
         f,
         r#"<tr><td align="left">{place:?}</td><td align="left">{perms:?}</td></tr>"#
@@ -167,11 +134,11 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
     f: &mut std::fmt::Formatter<'_>,
   ) -> std::fmt::Result {
     let no_perm_changes = self.0.iter().all(|(place, permsd)| {
-      let perms = permsd.permissions;
+      let perms = permsd.permissions();
       old
         .0
         .get(place)
-        .map_or(true, |permd| permd.permissions == perms)
+        .is_none_or(|permd| permd.permissions() == perms)
     });
 
     if old == self || no_perm_changes {
@@ -183,10 +150,10 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
       r#"<table border="0" cellborder="1" cellspacing="0" cellpadding="2" sides="rb">"#
     )?;
     for (place, perms) in self.0.iter() {
-      let perms = perms.permissions;
+      let perms = perms.permissions();
       match old.0.get(place) {
         Some(old_perms) => {
-          let old_perms = old_perms.permissions;
+          let old_perms = old_perms.permissions();
           if perms != old_perms {
             write!(
               f,
@@ -206,98 +173,5 @@ impl<C> DebugWithContext<C> for PermissionsDomain<'_> {
     }
     write!(f, "</table>")?;
     Ok(())
-  }
-}
-
-// --------------------------------------------------
-// Analysis
-
-pub(crate) struct PAnalysis<'a, 'tcx> {
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
-}
-
-impl<'a, 'tcx> PAnalysis<'a, 'tcx> {
-  fn check_location(
-    &self,
-    state: &mut PermissionsDomain<'tcx>,
-    location: Location,
-  ) {
-    let point = self.ctxt.location_to_point(location);
-    let dmn = self.ctxt.permissions_domain_at_point(point);
-    for (place, perms) in state.iter_mut() {
-      let new_perms = dmn.get(place).unwrap();
-      *perms = *new_perms;
-    }
-  }
-}
-
-impl<'tcx> AnalysisDomain<'tcx> for PAnalysis<'_, 'tcx> {
-  type Domain = PermissionsDomain<'tcx>;
-  const NAME: &'static str = "PermissionsAnalysisDatalog";
-
-  fn bottom_value(
-    &self,
-    _body: &rustc_middle::mir::Body<'tcx>,
-  ) -> Self::Domain {
-    self
-      .ctxt
-      .domain_places()
-      .into_iter()
-      .map(|place| {
-        let path = self.ctxt.place_to_path(&place);
-        let mp = self.ctxt.max_permissions(path);
-        // NOTE: I'm currently just ignoring the permissions data
-        // for this utility just so we can see the permissions changes.
-        (place, PermissionsData {
-          is_live: false,
-          type_droppable: false,
-          type_writeable: false,
-          type_copyable: false,
-          path_moved: None,
-          path_uninitialized: false,
-          loan_read_refined: None,
-          loan_write_refined: None,
-          loan_drop_refined: None,
-          permissions: mp,
-        })
-      })
-      .collect::<HashMap<_, _>>()
-      .into()
-  }
-
-  fn initialize_start_block(
-    &self,
-    _body: &rustc_middle::mir::Body<'tcx>,
-    _state: &mut Self::Domain,
-  ) {
-  }
-}
-
-impl<'tcx> Analysis<'tcx> for PAnalysis<'_, 'tcx> {
-  fn apply_statement_effect(
-    &mut self,
-    state: &mut Self::Domain,
-    _statement: &rustc_middle::mir::Statement<'tcx>,
-    location: rustc_middle::mir::Location,
-  ) {
-    self.check_location(state, location);
-  }
-
-  fn apply_terminator_effect<'mir>(
-    &mut self,
-    state: &mut Self::Domain,
-    terminator: &'mir rustc_middle::mir::Terminator<'tcx>,
-    location: rustc_middle::mir::Location,
-  ) -> TerminatorEdges<'mir, 'tcx> {
-    self.check_location(state, location);
-    terminator.edges()
-  }
-
-  fn apply_call_return_effect(
-    &mut self,
-    _state: &mut Self::Domain,
-    _block: rustc_middle::mir::BasicBlock,
-    _return_places: rustc_middle::mir::CallReturnPlaces<'_, 'tcx>,
-  ) {
   }
 }

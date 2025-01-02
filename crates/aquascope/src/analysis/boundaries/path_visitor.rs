@@ -11,7 +11,7 @@ use rustc_middle::{
   hir::nested_filter::OnlyBodies,
   ty::{
     adjustment::{Adjust, AutoBorrow},
-    ParamEnv, TyCtxt, TypeckResults,
+    TyCtxt, TypeckResults, TypingEnv,
   },
 };
 use rustc_span::Span;
@@ -23,15 +23,15 @@ use crate::analysis::permissions::PermissionsCtxt;
 // The current region flow context for outer statements and returns.
 fluid_let!(pub static FLOW_CONTEXT: HirId);
 
-struct HirExprScraper<'a, 'tcx: 'a> {
+struct HirExprScraper<'tcx> {
   tcx: TyCtxt<'tcx>,
-  typeck_res: &'a TypeckResults<'tcx>,
-  param_env: ParamEnv<'tcx>,
+  typeck_res: &'tcx TypeckResults<'tcx>,
+  typing_env: TypingEnv<'tcx>,
   data: Vec<PathBoundary>,
   unsupported_feature: Option<(Span, String)>,
 }
 
-impl<'a, 'tcx: 'a> HirExprScraper<'a, 'tcx> {
+impl HirExprScraper<'_> {
   fn get_adjusted_permissions(&self, expr: &Expr) -> ExpectedPermissions {
     let ty_adj = self.typeck_res.expr_ty_adjusted(expr);
     let adjs = self.typeck_res.expr_adjustments(expr);
@@ -39,7 +39,7 @@ impl<'a, 'tcx: 'a> HirExprScraper<'a, 'tcx> {
     log::debug!("Path TY-ADJ: {:#?} from {:#?}", ty_adj, adjs);
 
     let is_auto_borrow = adjs.iter().find_map(|adj| {
-      if let Adjust::Borrow(AutoBorrow::Ref(_, m)) = adj.kind {
+      if let Adjust::Borrow(AutoBorrow::Ref(m)) = adj.kind {
         Some(m)
       } else {
         None
@@ -53,7 +53,7 @@ impl<'a, 'tcx: 'a> HirExprScraper<'a, 'tcx> {
     // At this point the usage is either a move or a copy. We
     // can determine this whether or not the type of the path
     // is copyable or not.
-    if ty_adj.is_copyable(self.tcx, self.param_env) {
+    if ty_adj.is_copyable(self.tcx, self.typing_env) {
       ExpectedPermissions::from_copy()
     } else {
       ExpectedPermissions::from_move()
@@ -61,7 +61,7 @@ impl<'a, 'tcx: 'a> HirExprScraper<'a, 'tcx> {
   }
 }
 
-impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
+impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
   type NestedFilter = OnlyBodies;
 
   fn nested_visit_map(&mut self) -> Self::Map {
@@ -71,12 +71,12 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
   // Visiting statements / body is only used for specifying a
   // region flow context. This would not be used for RWO
   // path boundaries.
-  fn visit_body(&mut self, body: &'tcx Body) {
+  fn visit_body(&mut self, body: &Body<'tcx>) {
     fluid_set!(FLOW_CONTEXT, &body.value.hir_id);
     intravisit::walk_body(self, body);
   }
 
-  fn visit_stmt(&mut self, stmt: &'tcx Stmt) {
+  fn visit_stmt(&mut self, stmt: &'tcx Stmt<'tcx>) {
     fluid_set!(FLOW_CONTEXT, &stmt.hir_id);
     intravisit::walk_stmt(self, stmt);
   }
@@ -255,16 +255,16 @@ impl<'a, 'tcx: 'a> Visitor<'tcx> for HirExprScraper<'a, 'tcx> {
   }
 }
 
-pub(super) fn get_path_boundaries<'a, 'tcx: 'a>(
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
+pub(super) fn get_path_boundaries(
+  ctxt: &PermissionsCtxt<'_>,
 ) -> Result<Vec<PathBoundary>> {
   let tcx = ctxt.tcx;
   let body_id = ctxt.body_id;
   let typeck_res = tcx.typeck_body(ctxt.body_id);
-  let param_env = ctxt.param_env;
+  let typing_env = ctxt.typing_env;
   let mut finder = HirExprScraper {
     tcx,
-    param_env,
+    typing_env,
     typeck_res,
     unsupported_feature: None,
     data: Vec::default(),

@@ -9,7 +9,7 @@ use either::Either;
 use itertools::Itertools;
 use miri::InterpCx;
 use rustc_hir::{intravisit::Visitor, Body, Expr, ExprKind, HirId, Stmt};
-use rustc_middle::{mir::Location, ty::InstanceDef};
+use rustc_middle::{mir::Location, ty::Instance};
 use rustc_span::{BytePos, Span};
 use rustc_utils::BodyExt;
 
@@ -45,29 +45,27 @@ struct MapperEntry {
   body_mapping: HashMap<Location, HirId>,
 }
 
-pub struct Mapper<'a, 'mir, 'tcx> {
-  ecx: &'a InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>,
-  mapping: RefCell<HashMap<InstanceDef<'tcx>, MapperEntry>>,
+pub struct Mapper<'a, 'tcx> {
+  ecx: &'a InterpCx<'tcx, miri::MiriMachine<'tcx>>,
+  mapping: RefCell<HashMap<Instance<'tcx>, MapperEntry>>,
 }
 
-impl<'a, 'mir, 'tcx> Mapper<'a, 'mir, 'tcx> {
-  pub fn new(
-    ecx: &'a InterpCx<'mir, 'tcx, miri::MiriMachine<'mir, 'tcx>>,
-  ) -> Self {
+impl<'a, 'tcx> Mapper<'a, 'tcx> {
+  pub fn new(ecx: &'a InterpCx<'tcx, miri::MiriMachine<'tcx>>) -> Self {
     Mapper {
       ecx,
       mapping: RefCell::default(),
     }
   }
 
-  fn build_body_mapping(&self, inst: InstanceDef<'tcx>) -> MapperEntry {
+  fn build_body_mapping(&self, inst: Instance<'tcx>) -> MapperEntry {
     let mut finder = FindSteppableNodes::default();
     let tcx = *self.ecx.tcx;
     let hir = tcx.hir();
-    let body_id = hir.body_owned_by(inst.def_id().expect_local());
-    finder.visit_body(hir.body(body_id));
+    let hir_body = hir.body_owned_by(inst.def_id().expect_local());
+    finder.visit_body(hir_body);
 
-    let body = self.ecx.load_mir(inst, None).unwrap();
+    let body = self.ecx.load_mir(inst.def, None).unwrap();
     log::debug!("{}", body.to_string(tcx).unwrap());
     let mapper = IRMapper::new(tcx, body, GatherMode::All);
 
@@ -88,7 +86,7 @@ impl<'a, 'mir, 'tcx> Mapper<'a, 'mir, 'tcx> {
       .collect();
 
     MapperEntry {
-      owner_id: hir.body_owner(body_id),
+      owner_id: hir.body_owner(hir_body.id()),
       body_mapping,
     }
   }
@@ -96,12 +94,12 @@ impl<'a, 'mir, 'tcx> Mapper<'a, 'mir, 'tcx> {
   fn is_cleanup(
     &self,
     owner_id: HirId,
-    inst: InstanceDef<'tcx>,
+    inst: Instance<'tcx>,
     location: Location,
   ) -> Option<Span> {
     let body_span = self.ecx.tcx.hir().span_with_body(owner_id);
     let end_brace = body_span.with_lo(body_span.hi() - BytePos(1));
-    let body = self.ecx.load_mir(inst, None).unwrap();
+    let body = self.ecx.load_mir(inst.def, None).unwrap();
     let loc_span = body.source_info(location).span;
     (loc_span == end_brace).then_some(end_brace)
   }

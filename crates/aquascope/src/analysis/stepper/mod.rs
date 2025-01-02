@@ -266,7 +266,7 @@ impl Difference for PermissionsData {
       loan_drop_refined: self.loan_drop_refined.diff(rhs.loan_drop_refined),
       path_moved: self.path_moved.diff(rhs.path_moved),
       path_uninitialized: self.path_uninitialized.diff(rhs.path_uninitialized),
-      permissions: self.permissions.diff(rhs.permissions),
+      permissions: self.permissions().diff(rhs.permissions()),
     }
   }
 }
@@ -319,12 +319,13 @@ impl MirSegment {
   pub fn span(&self, ctxt: &PermissionsCtxt) -> Span {
     let lo = ctxt.location_to_span(self.from);
     let hi = ctxt.location_to_span(self.to);
+    log::debug!("Span for segment {self:?}: {:?} -> {:?}", lo, hi);
     lo.with_hi(hi.hi())
   }
 
   pub fn into_diff<'tcx>(
     self,
-    ctxt: &PermissionsCtxt<'_, 'tcx>,
+    ctxt: &PermissionsCtxt<'tcx>,
   ) -> HashMap<Place<'tcx>, PermissionsDataDiff> {
     let p0 = ctxt.location_to_point(self.from);
     let p1 = ctxt.location_to_point(self.to);
@@ -337,18 +338,15 @@ impl MirSegment {
 // ----------
 // Main entry
 
-pub fn compute_permission_steps<'a, 'tcx>(
-  analysis: &AquascopeAnalysis<'a, 'tcx>,
-) -> Result<Vec<PermissionsLineDisplay>>
-where
-  'tcx: 'a,
-{
+pub fn compute_permission_steps(
+  analysis: &AquascopeAnalysis<'_>,
+) -> Result<Vec<PermissionsLineDisplay>> {
   let mode = INCLUDE_MODE.copied().unwrap_or(PermIncludeMode::Changes);
   let ctxt = &analysis.permissions;
   let ir_mapper = &analysis.ir_mapper;
   let body = &ctxt.body_with_facts.body;
   let mut hir_visitor =
-    hir_steps::HirStepPoints::make(&ctxt.tcx, body, ctxt.body_id, ir_mapper)?;
+    hir_steps::HirStepPoints::make(ctxt.tcx, body, ctxt.body_id, ir_mapper)?;
 
   hir_visitor.visit_nested_body(ctxt.body_id);
 

@@ -180,7 +180,10 @@ use either::Either;
 use path_visitor::get_path_boundaries;
 use rustc_hir::HirId;
 use rustc_middle::{
-  mir::{Body, Location, Mutability, Place, Rvalue, Statement, StatementKind},
+  mir::{
+    Body, Location, Mutability, Operand, Place, Rvalue, Statement,
+    StatementKind,
+  },
   ty::{adjustment::AutoBorrowMutability, TyCtxt},
 };
 use rustc_span::Span;
@@ -223,7 +226,8 @@ pub struct PermissionsBoundary {
   #[serde(skip)]
   byte_location: BytePos,
   pub expected: Permissions,
-  pub actual: PermissionsData,
+  pub actual: Permissions,
+  pub data: PermissionsData,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub expecting_flow: Option<FlowBoundary>,
 }
@@ -232,7 +236,7 @@ impl PermissionsBoundary {
   pub fn is_violation(&self) -> bool {
     macro_rules! is_missing {
       ($this:ident, $perm:ident) => {
-        ($this.expected.$perm && !$this.actual.permissions.$perm)
+        ($this.expected.$perm && !$this.actual.$perm)
       };
     }
 
@@ -336,6 +340,34 @@ impl std::fmt::Debug for PathBoundary {
   }
 }
 
+/// Get all local places within the body, sorted by their similarity to the given `HirId` place.
+fn locals_by_visible_distance<'tcx>(
+  tcx: TyCtxt<'tcx>,
+  id: HirId,
+  body: &Body<'tcx>,
+) -> Option<Place<'tcx>> {
+  use fuzzy_match::fuzzy_match;
+  use rustc_middle::mir::VarDebugInfoContents;
+
+  let map = tcx.hir();
+  // Get a textual representation of the path we're dealing with. Note, that this
+  // may be something like `*x` or `&x[0]` and not just `x`.
+  let node_str = tcx
+    .sess
+    .source_map()
+    .span_to_snippet(map.span(id))
+    .unwrap_or_default();
+
+  let all_local_places = body.var_debug_info.iter().filter_map(|debug_info| {
+    let VarDebugInfoContents::Place(p) = debug_info.value else {
+      return None;
+    };
+    Some((debug_info.name.as_str(), p))
+  });
+
+  fuzzy_match(&node_str, all_local_places)
+}
+
 // HACK: this is unsatisfying. Ideally, we would be able to take a (resolved) hir::Path
 // and turn it directly into its corresponding mir::Place, I (gavin)
 // haven't found a great way to do this, so for now, we consider all
@@ -349,64 +381,70 @@ impl std::fmt::Debug for PathBoundary {
 /// NOTE: candidates are expected to be given as an
 /// [*inorder*](https://en.wikipedia.org/wiki/Tree_traversal) HIR tree traversal.
 fn select_candidate_location<'tcx>(
-  _tcx: TyCtxt<'tcx>,
-  _body: &Body<'tcx>,
-  _hir_id: HirId,
+  tcx: TyCtxt<'tcx>,
+  body: &Body<'tcx>,
+  hir_id: HirId,
   subtract_from: impl FnOnce() -> Vec<(Location, Place<'tcx>)>,
   candidates: &[(Location, Place<'tcx>)],
 ) -> Option<(Location, Place<'tcx>)> {
-  if candidates.is_empty() {
-    return None;
-  }
-
-  if candidates.len() == 1 {
-    return Some(candidates[0]);
+  if candidates.len() <= 1 {
+    return candidates.first().copied();
   }
 
   let others = subtract_from();
   // Remove all candidates present in the subtraction set.
-  let candidates = candidates
-    .iter()
-    .filter(|t| !others.contains(t))
-    .collect::<Vec<_>>();
+  let candidates = candidates.iter().filter(|t| !others.contains(t));
 
-  // The first usage contains the relevant Local,
-  // in most cases the first use will also be the desired
-  // Place but when indexing an array this isn't true.
-  // ```ignore
-  // let a = [0];
-  // let i0 = a[i];
-  //          ^^^ expands to:
-  //          // len_a = Len(a)
-  //          // assert 0 <= i < len_a
-  //          // copy a[i]
-  // ```
-  // For an array index, the first use is actually getting the
-  // length of the array, but we want to make sure to use the
-  // actual indexing. To achieve this we filter out all places
-  // with a different base Local, then we chooset he Place with
-  // the *most* projections.
-  let base_local = candidates.first()?.1.local;
+  // From the list of local places sorted by similarity to the given `HirId`,
+  // pick the first one that matches the base local.
+  if let Some(similar_local) = locals_by_visible_distance(tcx, hir_id, body) {
+    log::debug!("Similar local found: {similar_local:?}");
+    candidates
+      .into_iter()
+      .find(|(_, can_place)| can_place.local == similar_local.local)
+      .copied()
+  } else {
+    // If no similar local is found, then we can do a "best effort" search.
 
-  let matching_locals = candidates
-    .into_iter()
-    .filter(|(_, p)| p.local == base_local);
+    let candidates = candidates.collect::<Vec<_>>();
+    // The first usage contains the relevant Local,
+    // in most cases the first use will also be the desired
+    // Place but when indexing an array this isn't true.
+    // ```ignore
+    // let a = [0];
+    // let i0 = a[i];
+    //          ^^^ expands to:
+    //          // len_a = Len(a)
+    //          // assert 0 <= i < len_a
+    //          // copy a[i]
+    // ```
+    // For an array index, the first use is actually getting the
+    // length of the array, but we want to make sure to use the
+    // actual indexing. To achieve this we filter out all places
+    // with a different base Local, then we choose the Place with
+    // the *most* projections.
+    let base_local = candidates.first()?.1.local;
 
-  // We first reverse the iterator because
-  // `max_by_key` takes the last matching value
-  // when there is a clash but we need the first.
-  matching_locals
-    .rev()
-    .max_by_key(|(_, p)| p.projection.len())
-    .copied()
+    let matching_locals = candidates
+      .into_iter()
+      .filter(|(_, p)| p.local == base_local);
+
+    // We first reverse the iterator because
+    // `max_by_key` takes the last matching value
+    // when there is a clash but we need the first.
+    matching_locals
+      .rev()
+      .max_by_key(|(_, p)| p.projection.len())
+      .copied()
+  }
 }
 
 /// Return the constraints that occur nested within a [`HirId`].
 ///
 /// Note, constraints involving regions belonging to the same SCC are removed.
-fn flow_constraints_at_hir_id<'a, 'tcx: 'a>(
-  ctxt: &'a PermissionsCtxt<'a, 'tcx>,
-  ir_mapper: &'a IRMapper<'a, 'tcx>,
+fn flow_constraints_at_hir_id<'tcx>(
+  ctxt: &PermissionsCtxt<'tcx>,
+  ir_mapper: &IRMapper<'tcx>,
   hir_id: HirId,
 ) -> Option<Vec<(Origin, Origin, Point)>> {
   let mir_locations =
@@ -543,34 +581,38 @@ fn get_flow_permission(
 /// given HIR node. This builds our set of candidate places
 /// that we consider for boundary resolution.
 #[allow(clippy::wildcard_in_or_patterns)]
-fn paths_at_hir_id<'a, 'tcx: 'a>(
+fn paths_at_hir_id<'tcx>(
   tcx: TyCtxt<'tcx>,
-  body: &'a Body<'tcx>,
-  ir_mapper: &'a IRMapper<'a, 'tcx>,
+  body: &'tcx Body<'tcx>,
+  ir_mapper: &IRMapper<'tcx>,
   hir_id: HirId,
 ) -> Option<Vec<(Location, Place<'tcx>)>> {
-  type TempBuff<'tcx> = SmallVec<[(Location, Place<'tcx>); 3]>;
+  type UsedPlace<'tcx> = (Location, Place<'tcx>);
+  type UsedPlaces<'tcx> = SmallVec<[UsedPlace<'tcx>; 3]>;
+
+  fn maybe_in_op<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    body: &'tcx Body<'tcx>,
+    loc: Location,
+    op: &Operand<'tcx>,
+  ) -> Option<UsedPlace<'tcx>> {
+    op.as_place()
+      .and_then(|p| p.is_source_visible(tcx, body).then_some(p))
+      .map(|p| (loc, p))
+  }
+
+  macro_rules! maybe_in_op {
+    ($loc:expr, $op:expr $(,$ops:expr)*) => {
+      maybe_in_op(tcx, body, $loc, $op).into_iter()
+        $(.chain(maybe_in_op(tcx, body, $loc, $ops).into_iter()))*
+        .collect()
+    };
+  }
 
   let mir_locations_opt =
     ir_mapper.get_mir_locations(hir_id, GatherDepth::Nested);
 
-  macro_rules! maybe_in_op {
-    ($loc:expr, $op:expr) => {
-      $op
-        .as_place()
-        .and_then(|p| p.is_source_visible(tcx, body).then_some(p))
-        .map(|p| smallvec![($loc, p)])
-        .unwrap_or(smallvec![])
-    };
-    ($loc:expr, $op1:expr, $op2:expr) => {{
-      let mut v: TempBuff = maybe_in_op!($loc, $op1);
-      let mut o: TempBuff = maybe_in_op!($loc, $op2);
-      v.append(&mut o);
-      v
-    }};
-  }
-
-  let look_in_rvalue = |rvalue: &Rvalue<'tcx>, loc: Location| -> TempBuff {
+  let look_in_rvalue = |rvalue: &Rvalue<'tcx>, loc: Location| -> UsedPlaces {
     match rvalue {
       // Nested operand cases
       Rvalue::Use(op)
@@ -581,41 +623,44 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
 
       // Given place cases.
       Rvalue::Ref(_, _, place)
-        | Rvalue::AddressOf(_, place)
         | Rvalue::Len(place)
         | Rvalue::Discriminant(place)
         | Rvalue::CopyForDeref(place)
+        | Rvalue::RawPtr(_, place)
         if place.is_source_visible(tcx, body) =>
       {
         smallvec![(loc, *place)]
       }
 
-      // Two operand cases
-      Rvalue::BinaryOp(_, box (left_op, right_op))
-        | Rvalue::CheckedBinaryOp(_, box (left_op, right_op)) => {
-          maybe_in_op!(loc, left_op, right_op)
-        }
+      // Operand case
+      Rvalue::BinaryOp(_, box (left_op, right_op)) => {
+        maybe_in_op!(loc, left_op, right_op)
+      }
+
+      Rvalue::Aggregate(_, fields) => {
+        fields.iter().filter_map(|op| maybe_in_op(tcx, body, loc, op)).collect()
+      }
 
       // Unimplemented cases, ignore nested information for now.
-      //
-      // These are separated in the or because they aren't implemented,
-      // but still silently ignored.
       Rvalue::ThreadLocalRef(..)
         | Rvalue::NullaryOp(..)
-        | Rvalue::Aggregate(..)
-
-      // Wildcard for catching the previous guarded matches.
-        | _ => {
-          log::warn!("couldn't find in RVALUE {rvalue:?}");
-          smallvec![]
-        }
+        // Without guard
+        | Rvalue::Ref(..)
+        | Rvalue::Len(..)
+        | Rvalue::Discriminant(..)
+        | Rvalue::CopyForDeref(..)
+        | Rvalue::RawPtr(..) => {
+          log::warn!("Unimplemented rvalue case: {rvalue:?}");
+          SmallVec::default()
+        },
     }
   };
 
-  let look_in_statement = |stmt: &Statement<'tcx>, loc: Location| -> TempBuff {
-    match &stmt.kind {
+  let look_in_statement =
+    |stmt: &Statement<'tcx>, loc: Location| -> UsedPlaces {
+      match &stmt.kind {
       StatementKind::Assign(box (lhs_place, ref rvalue)) => {
-        let mut found_so_far: TempBuff = look_in_rvalue(rvalue, loc);
+        let mut found_so_far: UsedPlaces = look_in_rvalue(rvalue, loc);
         if lhs_place.is_source_visible(tcx, body) {
           found_so_far.push((loc, *lhs_place));
         }
@@ -651,9 +696,10 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
       | StatementKind::Coverage(..)
       | StatementKind::Intrinsic(..)
       | StatementKind::ConstEvalCounter
+      | StatementKind::BackwardIncompatibleDropHint { .. }
       | StatementKind::Nop => smallvec![],
     }
-  };
+    };
 
   let mir_locations = mir_locations_opt?
     .values()
@@ -669,9 +715,9 @@ fn paths_at_hir_id<'a, 'tcx: 'a>(
   Some(mir_locations)
 }
 
-fn path_to_perm_boundary<'a, 'tcx: 'a>(
+fn path_to_perm_boundary(
   path_boundary: PathBoundary,
-  analysis: &'a AquascopeAnalysis<'a, 'tcx>,
+  analysis: &AquascopeAnalysis<'_>,
 ) -> Option<PermissionsBoundary> {
   let ctxt = &analysis.permissions;
   let ir_mapper = &analysis.ir_mapper;
@@ -702,10 +748,10 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
       &path_locations,
     )?;
 
-    log::debug!("Chosen place at location {place:#?} {loc:#?} other options: {path_locations:#?}");
-
     let point = ctxt.location_to_point(loc);
     let path = ctxt.place_to_path(&place);
+
+    log::debug!("Chosen place at location {place:#?} {loc:#?} ({point:?},{path:?})\nOther options: {path_locations:#?}");
 
     Some((point, path))
   };
@@ -722,13 +768,14 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
       })
     })
     .map(|(point, path)| {
-      let actual = ctxt.permissions_data_at_point(path, point);
+      let data = ctxt.permissions_data_at_point(path, point);
       let expected = path_boundary.expected;
+      let actual = data.permissions_ignore_liveness();
 
       let expecting_flow =
         get_flow_permission(analysis, path_boundary.flow_context, hir_id);
 
-      log::debug!("Permissions data:\n{actual:#?}\n{expecting_flow:#?}");
+      log::debug!("Permissions data for {}:\n{actual:#?}\n{expected:#?}\n{expecting_flow:#?}", hir.node_to_string(path_boundary.hir_id));
 
       let span = path_boundary
         .location
@@ -748,6 +795,7 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
         byte_location,
         expected: expected.into(),
         actual,
+        data,
         expecting_flow,
       }
     });
@@ -763,8 +811,8 @@ fn path_to_perm_boundary<'a, 'tcx: 'a>(
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
-  analysis: &AquascopeAnalysis<'a, 'tcx>,
+pub fn compute_permission_boundaries(
+  analysis: &AquascopeAnalysis<'_>,
 ) -> Result<Vec<PermissionsBoundary>> {
   let ctxt = &analysis.permissions;
 
@@ -781,7 +829,7 @@ pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
 
   let boundaries = path_use_points
     .filter(|pb| {
-      first_error_span_opt.map_or(true, |error_span| {
+      first_error_span_opt.is_none_or(|error_span| {
         pb.expecting_flow.is_some() || {
           let error_range =
             ByteRange::from_span(error_span, ctxt.tcx.sess.source_map())
@@ -793,4 +841,30 @@ pub fn compute_permission_boundaries<'a, 'tcx: 'a>(
     .collect::<Vec<_>>();
 
   Ok(boundaries)
+}
+
+#[cfg(test)]
+mod test {
+  use fuzzy_match::fuzzy_match;
+
+  #[test]
+  fn fuzzy_search_0() {
+    let search = "&*x[i]";
+    let haystack = vec![("x", 0), ("y", 1), ("z", 2)];
+    assert_eq!(Some(0), fuzzy_match(search, haystack));
+  }
+
+  #[test]
+  fn fuzzy_search_1() {
+    let search = "&&&&&z";
+    let haystack = vec![("x", 0), ("y", 1), ("z", 2)];
+    assert_eq!(Some(2), fuzzy_match(search, haystack));
+  }
+
+  #[test]
+  fn fuzzy_search_2() {
+    let search = "y[..a]";
+    let haystack = vec![("x", 0), ("y", 1), ("z", 2)];
+    assert_eq!(Some(1), fuzzy_match(search, haystack));
+  }
 }

@@ -5,26 +5,26 @@ pub(crate) mod mir_locations;
 pub(crate) mod post_dominators;
 // pub(crate) mod region_name;
 
-pub(crate) use body_graph::CleanedBody;
-pub(crate) use mir_locations::MirOrderedLocations;
-use post_dominators::AllPostDominators;
 use rustc_data_structures::{
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
   graph::{dominators::Dominators, *},
 };
 use rustc_hir::{self as hir, HirId};
 use rustc_middle::{
-  mir::{
-    self, visit::Visitor as MirVisitor, BasicBlock, Body, Location, Place,
-  },
+  mir::{self, visit::Visitor as MirVisitor, BasicBlock, Body, Location},
   ty::TyCtxt,
 };
 use rustc_utils::BodyExt;
 
-pub struct IRMapper<'a, 'tcx> {
-  pub(crate) cleaned_graph: CleanedBody<'a, 'tcx>,
+use self::post_dominators::AllPostDominators;
+pub(crate) use self::{
+  body_graph::CleanedBody, mir_locations::MirOrderedLocations,
+};
+
+pub struct IRMapper<'tcx> {
+  pub(crate) cleaned_graph: CleanedBody<'tcx>,
   tcx: TyCtxt<'tcx>,
-  body: &'a Body<'tcx>,
+  body: &'tcx Body<'tcx>,
   hir_to_mir: HashMap<HirId, HashSet<Location>>,
   gather_mode: GatherMode,
   pub(crate) dominators: Dominators<BasicBlock>,
@@ -67,13 +67,10 @@ pub enum GatherDepth {
   Nested,
 }
 
-impl<'a, 'tcx> IRMapper<'a, 'tcx>
-where
-  'tcx: 'a,
-{
+impl<'tcx> IRMapper<'tcx> {
   pub fn new(
     tcx: TyCtxt<'tcx>,
-    body: &'a Body<'tcx>,
+    body: &'tcx Body<'tcx>,
     gather_mode: GatherMode,
   ) -> Self {
     let cleaned_graph = CleanedBody(body);
@@ -137,9 +134,13 @@ where
     )
   }
 
-  pub fn local_assigned_place(&self, local: &hir::Local) -> Vec<Place<'tcx>> {
+  pub fn local_assigned_place(
+    &self,
+    local: &hir::LetStmt,
+  ) -> Vec<mir::Place<'tcx>> {
     use either::Either;
     use mir::{FakeReadCause as FRC, StatementKind as SK};
+
     let id = local.hir_id;
     self.get_mir_locations(id, GatherDepth::Outer).map_or_else(
       Vec::default,
@@ -296,7 +297,7 @@ where
 // -------------------------------------------------------------------
 // Gather the HIR -> MIR relationships for statements and terminators.
 
-impl<'tcx> MirVisitor<'tcx> for IRMapper<'_, 'tcx> {
+impl<'tcx> MirVisitor<'tcx> for IRMapper<'tcx> {
   fn visit_basic_block_data(
     &mut self,
     block: mir::BasicBlock,

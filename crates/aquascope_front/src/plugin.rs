@@ -12,7 +12,9 @@ use aquascope::{
     stepper::{PermIncludeMode, INCLUDE_MODE},
     AquascopeError, AquascopeResult,
   },
-  errors::{initialize_error_tracking, track_body_diagnostics},
+  errors::{
+    initialize_error_tracking, silent::silent_session, track_body_diagnostics,
+  },
 };
 use clap::{Parser, Subcommand};
 use fluid_let::fluid_set;
@@ -174,9 +176,10 @@ pub fn run_with_callbacks(
 
   log::debug!("building compiler ...");
 
-  compiler
-    .run()
-    .map_err(|_| AquascopeError::BuildError { range: None })
+  rustc_driver::catch_fatal_errors(move || {
+    compiler.run();
+  })
+  .map_err(|_| AquascopeError::BuildError { range: None })
 }
 
 pub trait AquascopeAnalysis: Sized + Send + Sync {
@@ -217,13 +220,14 @@ struct AquascopeCallbacks<A: AquascopeAnalysis> {
 
 impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
   fn config(&mut self, config: &mut rustc_interface::Config) {
+    config.psess_created = Some(silent_session());
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 
-  fn after_expansion<'tcx>(
+  fn after_expansion(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
-    queries: &'tcx rustc_interface::Queries<'tcx>,
+    tcx: TyCtxt<'_>,
   ) -> rustc_driver::Compilation {
     // Setting up error tracking happens here. Within rustc callbacks
     // seem to be set up *after* `config` is called.
@@ -234,14 +238,12 @@ impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
 
     let _start = Instant::now();
 
-    queries.global_ctxt().unwrap().enter(|tcx| {
-      let mut analysis = self.analysis.take().unwrap();
-      find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
-        // Track diagnostics for the analysis of the current body
-        let def_id = tcx.hir().body_owner_def_id(body_id);
-        track_body_diagnostics(def_id);
-        self.output.push(analysis.analyze(tcx, body_id));
-      });
+    let mut analysis = self.analysis.take().unwrap();
+    find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
+      // Track diagnostics for the analysis of the current body
+      let def_id = tcx.hir().body_owner_def_id(body_id);
+      track_body_diagnostics(def_id);
+      self.output.push(analysis.analyze(tcx, body_id));
     });
 
     log::debug!("Callback analysis took {:?}", self.rustc_start.elapsed());
