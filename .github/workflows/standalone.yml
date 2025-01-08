@@ -5,7 +5,7 @@ on:
     branches: [standalone-wasm]
     types: [labeled,closed]
 
- jobs:
+jobs:
   update-frontend:
     needs: publish-crates
     runs-on: ubuntu-latest
