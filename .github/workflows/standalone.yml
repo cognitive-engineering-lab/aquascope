@@ -10,9 +10,8 @@ jobs:
     needs: publish-crates
     runs-on: ubuntu-latest
     steps:
-      - name: Skipping action
-        run: echo "TODO--bring back frontend tests"
-
+      - name: Intentially Skipping Action!
+        run: echo "TODO: bring back frontend tests"
       # - uses: actions/checkout@v3
       # - uses: DeterminateSystems/nix-installer-action@main
       # - uses: DeterminateSystems/magic-nix-cache-action@main
