@@ -10,6 +10,10 @@ End-to-end testing is done with snapshot testing via [insta](https://github.com/
 
 ### Debugging
 
+We use the local playground to debug Aquascope. In one terminal, run `cargo run`, to run the local server. In a separate terminal, navigate to the `frontend` directory and run `depot --no-fullscreen build --watch`. The playground is live at `localhost:5173`, the server will log debug information about the programs you analyze.
+
+> Note, the local playground **does not** run within a sandbox.
+
 To see the full permissions analysis and get all debug output start a server with `cargo make watch`. Then, start an instance of the frontend by running `depot build -w` from the `frontend` directory. The page is served on `localhost:5173`.
 
 ## Asking questions
