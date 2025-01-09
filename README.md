@@ -2,13 +2,13 @@
 
 [![tests](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml/badge.svg)](https://github.com/cognitive-engineering-lab/aquascope/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/mdbook-aquascope.svg)](https://crates.io/crates/mdbook-aquascope)
-[![docs](https://img.shields.io/badge/docs-built-blue)](https://cognitive-engineering-lab.github.io/aquascope/doc/aquascope/)
+[![docs](https://img.shields.io/badge/docs-built-blue)](https://cel.cs.brown.edu//aquascope/doc/aquascope/)
 
 Aquascope is a tool that generates interactive visualizations of Rust programs. These visualizations show how Rust's borrow checker "thinks" about a program, and how a Rust program actually executes. Here is a sample output of Aquascope:
 
 <img alt="Example Aquascope output" src="https://user-images.githubusercontent.com/663326/219532624-a9605540-dac9-4d9b-a5f2-8a3d1ca81f50.png" height="550" />
 
-[Click here for a live demo.](https://cognitive-engineering-lab.github.io/aquascope/) Want to learn more about what the diagram means? [Read the new ownership chapter in our Rust Book Experiment.](https://rust-book.cs.brown.edu/ch04-01-what-is-ownership.html)
+[Click here for a live demo.](https://cel.cs.brown.edu/aquascope/) Want to learn more about what the diagram means? [Read the new ownership chapter in our Rust Book Experiment.](https://rust-book.cs.brown.edu/ch04-01-what-is-ownership.html)
 
 ⚠️🔬 **Aquascope is research software! If you encounter a bug, we welcome contributions!** 🧪⚠️
 
