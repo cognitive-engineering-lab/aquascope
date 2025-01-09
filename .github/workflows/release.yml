@@ -45,7 +45,7 @@ jobs:
       - uses: DeterminateSystems/flake-checker-action@main
 
       - name: Install aquascope and mdbook-aquascope
-        run: nix develop --command ci-install
+        run: nix develop --command ci-build-release
 
       - name: Package artifact
         run: tar -czf aquascope-x86_64-unknown-linux-gnu.tar.gz mdbook-aquascope cargo-aquascope aquascope-driver

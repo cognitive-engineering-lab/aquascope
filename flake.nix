@@ -32,6 +32,10 @@
       cargo install --path crates/mdbook-aquascope --debug --locked
     '';
 
+    ci-build-release = pkgs.writeScriptBin "ci-build-release" ''
+      ci-install && cargo build --release --locked
+    '';
+
     ci-publish-crates = pkgs.writeScriptBin "ci-publish-crates" ''
       cargo build
       cargo ws publish --from-git --allow-dirty --yes --token "$1"
@@ -67,6 +71,7 @@
           ci-check
           ci-install
           ci-publish-crates
+          ci-build-release
           ci-publish-full-pages
 
           llvmPackages_latest.llvm
@@ -76,6 +81,7 @@
           cargo-insta
           cargo-make
           cargo-watch
+          cargo-workspaces
           rust-analyzer
 
           mdbook
