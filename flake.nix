@@ -101,7 +101,7 @@
         RUSTC_LINKER = "${llvmPackages.clangUseLLVM}/bin/clang";
 
         # NOTE: the version of playwright-driver must match the version of
-        # playwright in the embed and standalone packages.
+        # playwright in the frontend embed and standalone packages.
         PLAYWRIGHT_BROWSERS_PATH="${playwright-driver.browsers}";
       };
 
