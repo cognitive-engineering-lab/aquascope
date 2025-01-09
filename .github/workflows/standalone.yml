@@ -5,23 +5,25 @@ on:
     branches: [standalone-wasm]
     types: [labeled,closed]
 
- jobs:
+jobs:
   update-frontend:
     needs: publish-crates
     runs-on: ubuntu-latest
-    if: false # disable for now
     steps:
-      - uses: actions/checkout@v3
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-      - uses: DeterminateSystems/flake-checker-action@main
+      - name: Skipping action
+        run: echo "TODO--bring back frontend tests"
 
-      - name: Build Docs and Standalone
-        run: nix develop .#minimal --command ci-build-pages
+      # - uses: actions/checkout@v3
+      # - uses: DeterminateSystems/nix-installer-action@main
+      # - uses: DeterminateSystems/magic-nix-cache-action@main
+      # - uses: DeterminateSystems/flake-checker-action@main
 
-      - uses: JamesIves/github-pages-deploy-action@v4.3.0
-        with:
-          branch: gh-pages
-          folder: ./frontend/packages/aquascope-standalone/dist
-          clean: true
-          clean-exclude: dev
+      # - name: Build Docs and Standalone
+      #   run: nix develop .#minimal --command ci-build-pages
+
+      # - uses: JamesIves/github-pages-deploy-action@v4.3.0
+      #   with:
+      #     branch: gh-pages
+      #     folder: ./frontend/packages/aquascope-standalone/dist
+      #     clean: true
+      #     clean-exclude: dev

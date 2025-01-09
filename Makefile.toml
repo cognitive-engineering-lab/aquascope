@@ -12,7 +12,7 @@ script = "cargo watch -i frontend -x 'install --path crates/aquascope_front --of
 script = "cargo watch -w crates/mdbook-aquascope/src -w frontend/packages/aquascope-embed/dist --no-vcs-ignores -x 'install --path crates/mdbook-aquascope --debug --offline'"
 
 [tasks.watch-server]
-script = "cargo run --features=no-docker"
+script = "cargo run"
 
 [tasks.watch.run_task]
 name = ["watch-front", "watch-server", "watch-mdbook"]
@@ -37,14 +37,3 @@ cargo install --path crates/aquascope_front --locked
 [tasks.install-mdbook]
 dependencies = ["install-aquascope"]
 script = "cargo install --path crates/mdbook-aquascope --locked"
-
-[tasks.playground-front]
-script = """
-export MIRI_SYSROOT=$(cargo miri setup --print-sysroot)
-cd frontend && depot --no-fullscreen build --watch
-"""
-
-[tasks.playground.run_task]
-dependencies = ["install-aquascope"]
-name = ["watch-server", "playground-front"]
-parallel = true
