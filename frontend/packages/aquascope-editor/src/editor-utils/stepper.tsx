@@ -132,6 +132,7 @@ let PermDiffRow = ({
     | "path_moved"
     | "path_uninitialized"
     | "loan_write_refined"
+    | "loan_read_write_refined"
     | "loan_read_refined";
 
   // There is a sort of hierarchy to the changing permissions:
@@ -156,7 +157,7 @@ let PermDiffRow = ({
       ]
     },
     {
-      fact: "loan_read_refined",
+      fact: "loan_read_write_refined",
       states: [
         {
           value: { type: "High", value: 0 },
@@ -167,21 +168,6 @@ let PermDiffRow = ({
           value: { type: "Low" },
           icon: "rotate-left",
           desc: "Borrow on place is dropped here"
-        }
-      ]
-    },
-    {
-      fact: "loan_write_refined",
-      states: [
-        {
-          value: { type: "High", value: 0 },
-          icon: "arrow-right",
-          desc: "Place is borrowed here"
-        },
-        {
-          value: { type: "Low" },
-          icon: "rotate-left",
-          desc: "Borrow on place is no longer used here"
         }
       ]
     },
@@ -199,35 +185,21 @@ let PermDiffRow = ({
           desc: "Place is no longer used here"
         }
       ]
-    },
-    {
-      fact: "path_uninitialized",
-      states: [
-        {
-          value: { type: "High", value: 0 },
-          icon: "sign-out",
-          desc: "Place contains uninitialized data"
-        },
-        {
-          value: { type: "Low" },
-          icon: "recycle",
-          desc: "Place data is initialized after move here"
-        }
-      ]
     }
   ];
 
-  let ico = null;
-  loop: for (let { fact, states } of visualFacts) {
+  let icos = [];
+  for (let { fact, states } of visualFacts) {
     for (let { value, icon, desc } of states) {
       if (_.isEqual(diffs[fact].type, value.type)) {
-        ico = (
-          <i
-            className={`fa fa-${icon} aquascope-action-indicator`}
-            title={desc}
-          />
+        icos.push(
+          <span className="perm-step-icon">
+            <i
+              className={`fa fa-${icon} aquascope-action-indicator`}
+              title={desc}
+            />
+          </span>
         );
-        break loop;
       } else {
         // console.log("unequal: ", diffs[fact].type, value.type);
       }
@@ -264,7 +236,7 @@ let PermDiffRow = ({
   return (
     <tr>
       {pathCol}
-      <td className="perm-step-event">{ico}</td>
+      <td className="perm-step-event">{icos}</td>
       {perms.map(perm => (
         <PermChar key={perm.perm} perm={perm} facts={facts} />
       ))}
