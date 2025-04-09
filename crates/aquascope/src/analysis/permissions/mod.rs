@@ -111,6 +111,10 @@ pub struct PermissionsData {
   pub loan_write_refined: Option<LoanKey>,
 
   #[serde(skip_serializing_if = "Option::is_none")]
+  /// Is a live loan removing `read` or `write` permissions?
+  pub loan_read_write_refined: Option<LoanKey>,
+
+  #[serde(skip_serializing_if = "Option::is_none")]
   /// Is a live loan removing `drop` permissions?
   pub loan_drop_refined: Option<LoanKey>,
 }
