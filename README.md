@@ -17,10 +17,10 @@ Aquascope is a tool that generates interactive visualizations of Rust programs. 
 We provide an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor that embeds Aquascope diagrams into an mdBook. To use it, you need to install the `mdbook-aquascope` and `cargo-aquascope` binaries as follows.
 
 ```sh
-cargo install mdbook-aquascope --locked --version 0.3.4
-rustup toolchain install nightly-2023-08-25 -c rust-src rustc-dev llvm-tools-preview miri
-cargo +nightly-2023-08-25 install aquascope_front --git https://github.com/cognitive-engineering-lab/aquascope --tag v0.3.4 --locked
-cargo +nightly-2023-08-25 miri setup
+cargo install mdbook-aquascope --locked --version 0.3.5
+rustup toolchain install nightly-2024-12-15 -c rust-src rustc-dev llvm-tools-preview miri
+cargo +nightly-2024-12-15 install aquascope_front --git https://github.com/cognitive-engineering-lab/aquascope --tag v0.3.5 --locked
+cargo +nightly-2024-12-15 miri setup
 ```
 
 Note that `cargo-aquascope` is installed via `aquascope_front` and must be installed via git and with a specific nightly toolchain. The `miri setup` command is a necessary prerequisite to running the Aquascope interpreter.
@@ -94,4 +94,3 @@ Aquascope was developed as a part of our academic research on [how people learn 
   keywords = {Rust, concept inventory, ownership types, program state visualization}
 }
 ```
-
