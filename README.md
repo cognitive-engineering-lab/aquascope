@@ -18,7 +18,7 @@ We provide an [mdBook](https://rust-lang.github.io/mdBook/) preprocessor that em
 
 ```sh
 cargo install mdbook-aquascope --locked --version 0.3.5
-rustup toolchain install nightly-2024-12-15 -c rust-src rustc-dev llvm-tools-preview miri
+rustup toolchain install nightly-2024-12-15 -c rust-src -c rustc-dev -c llvm-tools-preview -c miri
 cargo +nightly-2024-12-15 install aquascope_front --git https://github.com/cognitive-engineering-lab/aquascope --tag v0.3.5 --locked
 cargo +nightly-2024-12-15 miri setup
 ```
