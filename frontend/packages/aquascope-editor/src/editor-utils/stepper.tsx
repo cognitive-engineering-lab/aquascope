@@ -14,7 +14,7 @@ import type {
   PermissionsLineDisplay,
   PermissionsStepTable,
   StepperAnnotations,
-  ValueStep
+  ValueStep,
 } from "../types.js";
 import {
   hideLoanRegion,
@@ -26,7 +26,7 @@ import {
   readChar,
   showLoanRegion,
   showMoveRegion,
-  writeChar
+  writeChar,
 } from "./misc.js";
 
 interface PermInStep {
@@ -38,7 +38,7 @@ interface PermInStep {
 
 let PermChar = ({
   perm,
-  facts
+  facts,
 }: {
   perm: PermInStep;
   facts: AnalysisFacts;
@@ -110,7 +110,7 @@ let PermChar = ({
 let PermDiffRow = ({
   path,
   diffs,
-  facts
+  facts,
 }: {
   path: string;
   diffs: PermissionsDataDiff;
@@ -132,7 +132,7 @@ let PermDiffRow = ({
     | "path_moved"
     | "path_uninitialized"
     | "loan_write_refined"
-    | "loan_read_write_refined"
+    | "loan_refined"
     | "loan_read_refined";
 
   // There is a sort of hierarchy to the changing permissions:
@@ -147,29 +147,29 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "sign-out",
-          desc: "Place is moved here"
+          desc: "Place is moved here",
         },
         {
           value: { type: "Low" },
           icon: "recycle",
-          desc: "Place is re-initialized after move here"
-        }
-      ]
+          desc: "Place is re-initialized after move here",
+        },
+      ],
     },
     {
-      fact: "loan_read_write_refined",
+      fact: "loan_refined",
       states: [
         {
           value: { type: "High", value: 0 },
           icon: "arrow-right",
-          desc: "Place is borrowed here"
+          desc: "Place is borrowed here",
         },
         {
           value: { type: "Low" },
           icon: "rotate-left",
-          desc: "Borrow on place is dropped here"
-        }
-      ]
+          desc: "Borrow on place is dropped here",
+        },
+      ],
     },
     {
       fact: "is_live",
@@ -177,15 +177,15 @@ let PermDiffRow = ({
         {
           value: { type: "High", value: 0 },
           icon: "level-up",
-          desc: "Place is initialized here"
+          desc: "Place is initialized here",
         },
         {
           value: { type: "Low" },
           icon: "level-down",
-          desc: "Place is no longer used here"
-        }
-      ]
-    }
+          desc: "Place is no longer used here",
+        },
+      ],
+    },
   ];
 
   let icos = [];
@@ -215,20 +215,20 @@ let PermDiffRow = ({
       perm: readChar,
       step: diffs.permissions.read,
       loanKey: unwrap(diffs.loan_read_refined),
-      moveKey
+      moveKey,
     },
     {
       perm: writeChar,
       step: diffs.permissions.write,
       loanKey: unwrap(diffs.loan_write_refined),
-      moveKey
+      moveKey,
     },
     {
       perm: ownChar,
       step: diffs.permissions.drop,
       loanKey: unwrap(diffs.loan_drop_refined),
-      moveKey
-    }
+      moveKey,
+    },
   ];
 
   let pathCol = <td className="perm-step-path">{path}</td>;
@@ -237,7 +237,7 @@ let PermDiffRow = ({
     <tr>
       {pathCol}
       <td className="perm-step-event">{icos}</td>
-      {perms.map(perm => (
+      {perms.map((perm) => (
         <PermChar key={perm.perm} perm={perm} facts={facts} />
       ))}
     </tr>
@@ -250,7 +250,7 @@ let stepLocation = (step: PermissionsLineDisplay): CharPos => {
 
 let StepTable = ({
   rows,
-  facts
+  facts,
 }: {
   rows: [string, PermissionsDataDiff][];
   facts: AnalysisFacts;
@@ -269,7 +269,7 @@ let StepTable = ({
 let StepTableIndividual = ({
   focused,
   hidden,
-  facts
+  facts,
 }: {
   focused: [string, PermissionsDataDiff][];
   hidden: [string, PermissionsDataDiff][];
@@ -291,7 +291,7 @@ let StepTableIndividual = ({
     // biome-ignore lint/a11y/useKeyWithClickEvents: TODO
     <div
       className={classNames("step-table-container", {
-        "contains-hidden": hidden.length > 0
+        "contains-hidden": hidden.length > 0,
       })}
       onClick={() => setDisplayAll(!displayAll)}
     >
@@ -308,7 +308,7 @@ let StepLine = ({
   focusedRegex,
   tables,
   init,
-  facts
+  facts,
 }: {
   spaces: string;
   focusedRegex: RegExp;
@@ -344,7 +344,7 @@ let StepLine = ({
       </span>
       <div
         className={classNames("step-widget-container", {
-          "hidden-width": !display
+          "hidden-width": !display,
         })}
       >
         <div className="step-widget-spacer">{spaces}</div>
@@ -394,12 +394,12 @@ class PermissionStepLineWidget extends WidgetType {
 
     let matchers = this.annotations?.focused_paths[currLine.number];
     let rx = matchers
-      ?.map(matcher =>
+      ?.map((matcher) =>
         matcher.type === "Literal"
           ? _.escapeRegExp(matcher.value)
           : matcher.value
       )
-      .map(s => `(${s})`)
+      .map((s) => `(${s})`)
       .join("|");
     let r = new RegExp(rx ?? "(.*)?");
 
@@ -431,10 +431,10 @@ export function makeStepDecorations(
   stateSteps: PermissionsLineDisplay[],
   annotations?: StepperAnnotations
 ): Range<Decoration>[] {
-  return stateSteps.map(step =>
+  return stateSteps.map((step) =>
     Decoration.widget({
       widget: new PermissionStepLineWidget(view, step, facts, annotations),
-      side: 1
+      side: 1,
     }).range(linecolToPosition(stepLocation(step), view.state.doc))
   );
 }

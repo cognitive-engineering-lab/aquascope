@@ -20,7 +20,7 @@ use rustc_utils::source_map::range::CharRange;
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::analysis::{LoanKey, MoveKey};
+use crate::analysis::{LoanKey, LoanRefined, MoveKey};
 
 fluid_let!(pub static ENABLE_FLOW_PERMISSIONS: bool);
 pub const ENABLE_FLOW_DEFAULT: bool = false;
@@ -112,7 +112,7 @@ pub struct PermissionsData {
 
   #[serde(skip_serializing_if = "Option::is_none")]
   /// Is a live loan removing `read` or `write` permissions?
-  pub loan_read_write_refined: Option<LoanKey>,
+  pub loan_refined: Option<LoanRefined<LoanKey>>,
 
   #[serde(skip_serializing_if = "Option::is_none")]
   /// Is a live loan removing `drop` permissions?

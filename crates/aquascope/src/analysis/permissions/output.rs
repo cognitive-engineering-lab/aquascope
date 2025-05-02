@@ -82,11 +82,6 @@ where
   ///
   pub(crate) loan_write_refined: HashMap<T::Point, HashMap<T::Path, T::Loan>>,
 
-  /// A [`Path`] whose write permissions are refined at [`Point`] due to an active [`Loan`].
-  ///
-  pub(crate) loan_read_write_refined:
-    HashMap<T::Point, HashMap<T::Path, T::Loan>>,
-
   /// A [`Path`] whose drop permissions are refined at [`Point`] due to an active [`Loan`].
   ///
   /// ```text
@@ -165,7 +160,6 @@ impl Default for Output<AquascopeFacts> {
       never_write: HashSet::default(),
       loan_read_refined: HashMap::default(),
       loan_write_refined: HashMap::default(),
-      loan_read_write_refined: HashMap::default(),
       loan_drop_refined: HashMap::default(),
       path_maybe_uninitialized_on_entry: HashMap::default(),
       move_refined: HashMap::default(),
@@ -434,9 +428,6 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
     |&loan, &path, &point| (path, loan, point),
   );
 
-  let loan_read_write_refined =
-    Relation::merge(loan_read_refined.clone(), loan_write_refined.clone());
-
   let loan_drop_refined: Relation<(Path, Loan, Point)> = Relation::from_join(
     &loan_conflicts_with,
     &loan_live_at,
@@ -482,10 +473,6 @@ pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
     };
   }
 
-  insert_facts!(
-    loan_read_write_refined,
-    ctxt.permissions_output.loan_read_write_refined
-  );
   insert_facts!(loan_read_refined, ctxt.permissions_output.loan_read_refined);
   insert_facts!(
     loan_write_refined,

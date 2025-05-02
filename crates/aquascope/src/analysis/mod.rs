@@ -51,6 +51,16 @@ thread_local! {
 #[ts(export)]
 pub struct LoanKey(pub u32);
 
+/// Represents a point
+#[derive(
+  Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, TS,
+)]
+#[ts(export)]
+pub enum LoanRefined<T> {
+  RefineOnlyWrite { write_key: T },
+  RefineReadAndWrite { write_key: T },
+}
+
 #[derive(
   Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, TS,
 )]

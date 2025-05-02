@@ -27,10 +27,13 @@ use rustc_span::Span;
 use rustc_utils::{BodyExt, PlaceExt, SpanExt, TyExt};
 use smallvec::{smallvec, SmallVec};
 
-use crate::analysis::permissions::{
-  flow::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin,
-  Output, Path, Permissions, PermissionsData, PermissionsDomain, Point,
-  Variable,
+use crate::analysis::{
+  permissions::{
+    flow::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin,
+    Output, Path, Permissions, PermissionsData, PermissionsDomain, Point,
+    Variable,
+  },
+  LoanRefined,
 };
 
 /// A path as defined in rustc.
@@ -299,7 +302,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       path_uninitialized: false,
       loan_read_refined: None,
       loan_write_refined: None,
-      loan_read_write_refined: None,
+      loan_refined: None,
       loan_drop_refined: None,
     }
   }
@@ -363,10 +366,6 @@ impl<'tcx> PermissionsCtxt<'tcx> {
     let path_moved = pms.move_refined.get(point).unwrap_or(empty_hash_move);
     let loan_read_refined =
       pms.loan_read_refined.get(point).unwrap_or(empty_hash_loan);
-    let loan_read_write_refined = pms
-      .loan_read_write_refined
-      .get(point)
-      .unwrap_or(empty_hash_loan);
     let loan_write_refined =
       pms.loan_write_refined.get(point).unwrap_or(empty_hash_loan);
     let loan_drop_refined =
@@ -383,8 +382,22 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       loan_read_refined.get(path).map(Into::<LoanKey>::into);
     let loan_write_refined: Option<LoanKey> =
       loan_write_refined.get(path).map(Into::<LoanKey>::into);
-    let loan_read_write_refined: Option<LoanKey> =
-      loan_read_write_refined.get(path).map(Into::<LoanKey>::into);
+
+    let loan_refined: Option<LoanRefined<LoanKey>> = match (
+      loan_read_refined,
+      loan_write_refined,
+    ) {
+      (Some(_read_key), Some(write_key)) => {
+        Some(LoanRefined::RefineReadAndWrite { write_key })
+      }
+      (None, Some(write_key)) => {
+        Some(LoanRefined::RefineOnlyWrite { write_key })
+      }
+      (Some(_read_key), None) => {
+        unreachable!("If read permissions are lost at a point, write permissions are also lost.")
+      }
+      (None, None) => None,
+    };
     let loan_drop_refined: Option<LoanKey> =
       loan_drop_refined.get(path).map(Into::<LoanKey>::into);
 
@@ -397,7 +410,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       path_moved,
       loan_read_refined,
       loan_write_refined,
-      loan_read_write_refined,
+      loan_refined,
       loan_drop_refined,
     }
   }
@@ -423,7 +436,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
           path_uninitialized: false,
           loan_read_refined: None,
           loan_write_refined: None,
-          loan_read_write_refined: None,
+          loan_refined: None,
           loan_drop_refined: None,
         })
       })
