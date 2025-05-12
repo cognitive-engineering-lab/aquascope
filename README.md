@@ -94,3 +94,29 @@ Aquascope was developed as a part of our academic research on [how people learn 
   keywords = {Rust, concept inventory, ownership types, program state visualization}
 }
 ```
+
+## Local Setup
+
+```bash
+
+cargo install cargo-make
+cargo install depot-js
+cargo make install-mdbook
+```
+
+### backend
+```bash
+
+cd crates/aquascope_serve
+cargo run
+```
+
+### frontend
+```bash
+
+cd frontend
+pnpm install
+cd packages/aquascope-standalone
+npx vite
+
+```
