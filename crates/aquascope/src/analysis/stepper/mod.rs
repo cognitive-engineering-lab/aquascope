@@ -17,6 +17,7 @@ use rustc_utils::source_map::range::CharRange;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use super::LoanRefined;
 use crate::analysis::{
   permissions::{
     Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
@@ -167,8 +168,9 @@ pub struct PermissionsDataDiff {
   pub type_writeable: ValueStep<bool>,
   pub path_moved: ValueStep<MoveKey>,
   pub path_uninitialized: ValueStep<bool>,
-  pub loan_read_refined: ValueStep<LoanKey>,
+  pub loan_read_refined: ValueStep<LoanKey>, // ValueStep<LoanRefined<LoanKey>> where LoanRefined is ReadOnly or ReadPlusWrite
   pub loan_write_refined: ValueStep<LoanKey>,
+  pub loan_refined: ValueStep<LoanRefined<LoanKey>>,
   pub loan_drop_refined: ValueStep<LoanKey>,
   pub permissions: PermissionsDiff,
 }
@@ -182,6 +184,7 @@ impl std::fmt::Debug for PermissionsDataDiff {
     writeln!(f, "    type_writeable:     {:?}", self.type_writeable)?;
     writeln!(f, "    path_moved:         {:?}", self.path_moved)?;
     writeln!(f, "    loan_write_refined: {:?}", self.loan_write_refined)?;
+    writeln!(f, "    loan_refined: {:?}", self.loan_refined)?;
     writeln!(f, "    loan_drop_refined:  {:?}", self.loan_drop_refined)?;
     Ok(())
   }
@@ -263,6 +266,7 @@ impl Difference for PermissionsData {
       type_writeable: self.type_writeable.diff(rhs.type_writeable),
       loan_read_refined: self.loan_read_refined.diff(rhs.loan_read_refined),
       loan_write_refined: self.loan_write_refined.diff(rhs.loan_write_refined),
+      loan_refined: self.loan_refined.diff(rhs.loan_refined),
       loan_drop_refined: self.loan_drop_refined.diff(rhs.loan_drop_refined),
       path_moved: self.path_moved.diff(rhs.path_moved),
       path_uninitialized: self.path_uninitialized.diff(rhs.path_uninitialized),
