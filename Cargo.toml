@@ -5,7 +5,7 @@ resolver = "2"
 
 [workspace.dependencies]
 anyhow = "1.0.0"
-serde = { version = "=1.0.149", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
 rustc_plugin = "=0.12.0-nightly-2024-12-15"
 rustc_utils = "=0.12.0-nightly-2024-12-15"
 
