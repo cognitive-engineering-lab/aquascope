@@ -20,6 +20,7 @@ dev = ["mdbook-preprocessor-utils/testing"]
 
 [dependencies]
 clap = { version = "=4.3.24", features = ["derive"] }
+mdbook = "= 0.4.45"
 mdbook-preprocessor-utils = "0.2.0"
 nom = "7"
 nom_locate = "4"

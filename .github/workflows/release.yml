@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: DeterminateSystems/flakehub-cache-action@main
       - uses: DeterminateSystems/flake-checker-action@main
 
       - name: Install aquascope and mdbook-aquascope
@@ -41,11 +41,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: DeterminateSystems/flakehub-cache-action@main
       - uses: DeterminateSystems/flake-checker-action@main
 
       - name: Install aquascope and mdbook-aquascope
         run: nix develop --command ci-build-release
+
+      - name: Patch ELF Hack, FIX ASAP
+        run: | 
+          patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 target/release/mdbook-aquascope target/release/cargo-aquascope target/release/aquascope-driver
 
       - name: Package artifact
         run: tar -czf aquascope-x86_64-unknown-linux-gnu.tar.gz mdbook-aquascope cargo-aquascope aquascope-driver
