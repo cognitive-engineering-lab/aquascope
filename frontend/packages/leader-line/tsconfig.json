@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": [
+    "src"
+  ],
+  "compilerOptions": {
+    "outDir": "dist",
+    "allowJs": false,
+  },
+  "typedocOptions": {
+    "entryPoints": [
+      "./src/lib.ts"
+    ]
+  }
+}

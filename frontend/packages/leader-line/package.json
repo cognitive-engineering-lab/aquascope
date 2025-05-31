@@ -1,0 +1,25 @@
+{
+  "name": "@aquascope/leader-line",
+  "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
+  "main": "dist/lib.js",
+  "exports": {
+    ".": {
+      "default": "./dist/lib.js"
+    },
+    "./*": {
+      "default": "./dist/*.js"
+    }
+  },
+  "type": "module",
+  "depot": {
+    "platform": "browser",
+    "target": "lib",
+    "depot-version": "0.3.0"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}

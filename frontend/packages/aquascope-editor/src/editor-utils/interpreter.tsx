@@ -1,6 +1,10 @@
+import LeaderLine, {
+  type SocketType,
+  type AnchorAttachment,
+  type LeaderLine as LeaderLineCls
+} from "@aquascope/leader-line";
 import { Decoration, type EditorView, WidgetType } from "@codemirror/view";
 import classNames from "classnames";
-import LeaderLine from "leader-line-new";
 import _ from "lodash";
 import React, {
   type CSSProperties,
@@ -484,7 +488,7 @@ let renderArrows = (
       dst: HTMLElement;
       dstSel: string;
       dstRange?: HTMLElement;
-      endSocket: LeaderLine.SocketType;
+      endSocket: SocketType;
       dstIndex: number;
       group: {
         srcRegion: MemoryRegion;
@@ -502,7 +506,7 @@ let renderArrows = (
       let dstRange = src.dataset.pointToRange
         ? query(src.dataset.pointToRange)
         : undefined;
-      let endSocket = dst.dataset.connector as LeaderLine.SocketType;
+      let endSocket = dst.dataset.connector as SocketType;
       let group = {
         srcRegion: getMemoryRegion(src),
         dstRegion: getMemoryRegion(dst)
@@ -521,7 +525,7 @@ let renderArrows = (
     let groups = _.groupBy(pointers, "group");
 
     interface RenderedPointer {
-      line: LeaderLine;
+      line: LeaderLineCls;
       svgElements: Element[];
     }
 
@@ -532,10 +536,10 @@ let renderArrows = (
 
         // Heap -> stack pointers should start on the left and
         // everything else starts on the right
-        let startSocket: LeaderLine.SocketType =
+        let startSocket: SocketType =
           srcRegion === "heap" && dstRegion === "stack" ? "left" : "right";
 
-        let dstAnchor: LeaderLine.AnchorAttachment;
+        let dstAnchor: AnchorAttachment;
         if (ptr.dstRange) {
           // Pointers to ranges (eg string slices) need an area anchor
           // corresponding to the range of the slice
