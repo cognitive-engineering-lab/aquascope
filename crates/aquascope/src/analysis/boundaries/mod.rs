@@ -321,7 +321,7 @@ struct PathBoundary {
   /// both `*x` and `y` will appear as potential place candidates. We know
   /// at the marking phase that it isn't anything from the `Rvalue` so we
   /// flag it as ignored.
-  pub conflicting_node: Option<HirId>,
+  pub is_lhs: bool,
 
   /// Exact source span where boundaries should be placed.
   pub location: Span,
@@ -384,29 +384,23 @@ fn select_candidate_location<'tcx>(
   tcx: TyCtxt<'tcx>,
   body: &Body<'tcx>,
   hir_id: HirId,
-  subtract_from: impl FnOnce() -> Vec<(Location, Place<'tcx>)>,
+  //subtract_from: impl FnOnce() -> Vec<(Location, Place<'tcx>)>,
   candidates: &[(Location, Place<'tcx>)],
 ) -> Option<(Location, Place<'tcx>)> {
   if candidates.len() <= 1 {
     return candidates.first().copied();
   }
 
-  let others = subtract_from();
-  // Remove all candidates present in the subtraction set.
-  let candidates = candidates.iter().filter(|t| !others.contains(t));
-
   // From the list of local places sorted by similarity to the given `HirId`,
   // pick the first one that matches the base local.
   if let Some(similar_local) = locals_by_visible_distance(tcx, hir_id, body) {
     log::debug!("Similar local found: {similar_local:?}");
     candidates
-      .into_iter()
+      .iter()
       .find(|(_, can_place)| can_place.local == similar_local.local)
       .copied()
   } else {
-    // If no similar local is found, then we can do a "best effort" search.
-
-    let candidates = candidates.collect::<Vec<_>>();
+    // NOTE If no similar local is found, then we can do a "best effort" search.
     // The first usage contains the relevant Local,
     // in most cases the first use will also be the desired
     // Place but when indexing an array this isn't true.
@@ -418,16 +412,15 @@ fn select_candidate_location<'tcx>(
     //          // assert 0 <= i < len_a
     //          // copy a[i]
     // ```
-    // For an array index, the first use is actually getting the
+    // For an array index, the first use is just getting the
     // length of the array, but we want to make sure to use the
     // actual indexing. To achieve this we filter out all places
     // with a different base Local, then we choose the Place with
     // the *most* projections.
     let base_local = candidates.first()?.1.local;
 
-    let matching_locals = candidates
-      .into_iter()
-      .filter(|(_, p)| p.local == base_local);
+    let matching_locals =
+      candidates.iter().filter(|(_, p)| p.local == base_local);
 
     // We first reverse the iterator because
     // `max_by_key` takes the last matching value
@@ -577,15 +570,15 @@ fn get_flow_permission(
   })
 }
 
-/// Find all of the places used at the MIR-level of the
-/// given HIR node. This builds our set of candidate places
-/// that we consider for boundary resolution.
+/// Find all of the places used at the MIR-level of the given HIR node. This
+/// builds our set of candidate places that we consider for boundary resolution.
 #[allow(clippy::wildcard_in_or_patterns)]
 fn paths_at_hir_id<'tcx>(
   tcx: TyCtxt<'tcx>,
   body: &'tcx Body<'tcx>,
   ir_mapper: &IRMapper<'tcx>,
   hir_id: HirId,
+  is_lhs: bool,
 ) -> Option<Vec<(Location, Place<'tcx>)>> {
   type UsedPlace<'tcx> = (Location, Place<'tcx>);
   type UsedPlaces<'tcx> = SmallVec<[UsedPlace<'tcx>; 3]>;
@@ -656,16 +649,14 @@ fn paths_at_hir_id<'tcx>(
     }
   };
 
-  let look_in_statement =
-    |stmt: &Statement<'tcx>, loc: Location| -> UsedPlaces {
-      match &stmt.kind {
-      StatementKind::Assign(box (lhs_place, ref rvalue)) => {
-        let mut found_so_far: UsedPlaces = look_in_rvalue(rvalue, loc);
-        if lhs_place.is_source_visible(tcx, body) {
-          found_so_far.push((loc, *lhs_place));
-        }
-        found_so_far
-      }
+  let look_in_statement = |stmt: &Statement<'tcx>,
+                           loc: Location|
+   -> UsedPlaces {
+    match &stmt.kind {
+
+      StatementKind::Assign(box (lhs_place, _))
+            if is_lhs && lhs_place.is_source_visible(tcx, body) => smallvec![(loc, *lhs_place)],
+      StatementKind::Assign(box (_, ref rvalue)) if !is_lhs => look_in_rvalue(rvalue, loc),
       StatementKind::SetDiscriminant { place, .. }
         if place.is_source_visible(tcx, body) =>
       {
@@ -677,10 +668,11 @@ fn paths_at_hir_id<'tcx>(
         smallvec![(loc, *place)]
       }
 
-
       StatementKind::SetDiscriminant { .. }
       | StatementKind::FakeRead(..)
       | StatementKind::PlaceMention(..) // TODO: do we need to handle this new kind
+      // Didn't match
+      | StatementKind::Assign(..)
 
       // These variants are compiler generated, but it would be
       // insufficient to find a source-visible place only in
@@ -699,7 +691,7 @@ fn paths_at_hir_id<'tcx>(
       | StatementKind::BackwardIncompatibleDropHint { .. }
       | StatementKind::Nop => smallvec![],
     }
-    };
+  };
 
   let mir_locations = mir_locations_opt?
     .values()
@@ -732,21 +724,11 @@ fn path_to_perm_boundary(
   );
 
   let search_at_hir_id = |hir_id| {
-    let path_locations = paths_at_hir_id(tcx, body, ir_mapper, hir_id)?;
+    let path_locations =
+      paths_at_hir_id(tcx, body, ir_mapper, hir_id, path_boundary.is_lhs)?;
 
-    let (loc, place) = select_candidate_location(
-      tcx,
-      body,
-      hir_id,
-      // thunk to compute the places within the conflicting HirId,
-      || {
-        path_boundary
-          .conflicting_node
-          .and_then(|hir_id| paths_at_hir_id(tcx, body, ir_mapper, hir_id))
-          .unwrap_or_default()
-      },
-      &path_locations,
-    )?;
+    let (loc, place) =
+      select_candidate_location(tcx, body, hir_id, &path_locations)?;
 
     let point = ctxt.location_to_point(loc);
     let path = ctxt.place_to_path(&place);

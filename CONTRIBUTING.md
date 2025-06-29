@@ -2,7 +2,7 @@
 
 ## Quick Start
 
-For an overview of Aquascope's structure, please refer yourself to the [ARCHITECTURE.md](/ARCHITECTURE.md). To manage style we use the committed rustfmt file and the [`pre-commit`](https://pre-commit.com/) utility. Please follow the installation instructions there and then run `pre-commit install` to locally install the git hook scripts.
+For an overview of Aquascope's structure, please refer yourself to the [ARCHITECTURE.md](/ARCHITECTURE.md).
 
 ### Testing
 

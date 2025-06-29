@@ -113,7 +113,7 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
           location: discr.span,
           hir_id: discr.hir_id,
           flow_context,
-          conflicting_node: None,
+          is_lhs: false,
           expected,
         };
 
@@ -133,7 +133,7 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
           location: rcvr.span,
           hir_id: rcvr.hir_id,
           flow_context,
-          conflicting_node: None,
+          is_lhs: false,
           expected,
         };
 
@@ -152,7 +152,7 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
         let pb = PathBoundary {
           hir_id,
           flow_context,
-          conflicting_node: None,
+          is_lhs: false,
           location: inner.span.shrink_to_lo(),
           expected: ExpectedPermissions::from_borrow(mutability),
         };
@@ -176,7 +176,7 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
           location: lhs.span.shrink_to_lo(),
           hir_id: lhs.hir_id,
           flow_context,
-          conflicting_node: Some(rhs.hir_id),
+          is_lhs: true,
           expected: ExpectedPermissions::from_assignment(),
         };
         self.data.push(pb);
@@ -208,7 +208,7 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
           location: lhs.span.shrink_to_lo(),
           hir_id: lhs.hir_id,
           flow_context,
-          conflicting_node: Some(rhs.hir_id),
+          is_lhs: true,
           expected: ExpectedPermissions::from_assignment(),
         };
 
@@ -222,7 +222,7 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
         let pb = PathBoundary {
           hir_id,
           flow_context,
-          conflicting_node: None,
+          is_lhs: false,
           // We want the boundary to appear to the left of the deref.
           location: expr.span.shrink_to_lo(),
           expected: self.get_adjusted_permissions(expr),
@@ -230,7 +230,7 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
         self.data.push(pb);
       }
 
-      // XXX: we only want to attach permissions to path resolved to `Local` ids.
+      // We only want to attach permissions to path resolved to `Local` ids.
       ExprKind::Path(QPath::Resolved(
         _,
         Path {
@@ -242,7 +242,7 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
         let pb = PathBoundary {
           hir_id,
           flow_context,
-          conflicting_node: None,
+          is_lhs: false,
           location: span.shrink_to_lo(),
           expected: self.get_adjusted_permissions(expr),
         };
