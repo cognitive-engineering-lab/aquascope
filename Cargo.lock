@@ -213,7 +213,7 @@ dependencies = [
 
 [[package]]
 name = "aquascope_workspace_utils"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "serde",
@@ -1780,7 +1780,7 @@ dependencies = [
 
 [[package]]
 name = "mdbook-aquascope"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "aquascope_workspace_utils",
