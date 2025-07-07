@@ -171,7 +171,7 @@ impl std::fmt::Debug for PermissionsDiff {
   }
 }
 
-#[derive(Copy, Clone, Serialize, TS, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsDataDiff {
   pub is_live: ValueStep<bool>,
@@ -179,6 +179,10 @@ pub struct PermissionsDataDiff {
   pub type_writeable: ValueStep<bool>,
   pub path_moved: ValueStep<MoveKey>,
   pub path_uninitialized: ValueStep<bool>,
+  // NOTE the specific (_(read|write)_) versions are used *only* for
+  // internal testing to keep snapshots the same as they were before. The
+  // `loan_refined` field is sent to the frontend because we only care
+  // if something is "refined," doesn't matter if it read|write refined.
   pub loan_read_refined: ValueStep<LoanKey>,
   pub loan_write_refined: ValueStep<LoanKey>,
   pub loan_drop_refined: ValueStep<LoanKey>,

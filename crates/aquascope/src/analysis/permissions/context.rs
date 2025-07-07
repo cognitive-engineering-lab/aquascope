@@ -385,7 +385,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       loan_read_refined,
       loan_write_refined,
     ) {
-      (Some(..), Some(key)) => LoanRefined::Read { key },
+      (Some(key), Some(..)) => LoanRefined::Read { key },
       (None, Some(key)) => LoanRefined::Write { key },
       (Some(..), None) => {
         unreachable!("If read permissions are lost at a point, write permissions are also lost.")

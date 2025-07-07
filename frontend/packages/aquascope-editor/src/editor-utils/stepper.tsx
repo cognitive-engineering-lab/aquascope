@@ -116,24 +116,24 @@ let PermDiffRow = ({
   diffs: PermissionsDataDiff;
   facts: AnalysisFacts;
 }) => {
-  interface VisualFact<K extends keyof PermissionsDataDiff> {
+  type VisualPermissionFields = Omit<
+    Omit<PermissionsDataDiff, "loan_read_refined">,
+    "loan_write_refined"
+  > & {
+    loan_refined: ValueStep<LoanKey>;
+  };
+  interface VisualFact<K extends keyof VisualPermissionFields> {
     fact: K;
     states: VisualFactState<K>[];
   }
 
-  interface VisualFactState<K extends keyof PermissionsDataDiff> {
-    value: PermissionsDataDiff[K];
+  interface VisualFactState<K extends keyof VisualPermissionFields> {
+    value: VisualPermissionFields[K];
     icon: string;
     desc: string;
   }
 
-  type Facts =
-    | "is_live"
-    | "path_moved"
-    | "path_uninitialized"
-    | "loan_write_refined"
-    | "loan_refined"
-    | "loan_read_refined";
+  type Facts = "is_live" | "path_moved" | "path_uninitialized" | "loan_refined";
 
   // There is a sort of hierarchy to the changing permissions:
   // We first prioritize "moves" and "borrows" (permission refinements),
@@ -188,10 +188,18 @@ let PermDiffRow = ({
     }
   ];
 
+  let elaboratedDiffs = {
+    loan_refined:
+      "None" in diffs.loan_write_refined
+        ? diffs.loan_read_refined
+        : diffs.loan_write_refined,
+    ...diffs
+  };
+
   let icos = [];
   for (let { fact, states } of visualFacts) {
     for (let { value, icon, desc } of states) {
-      if (_.isEqual(diffs[fact].type, value.type)) {
+      if (_.isEqual(elaboratedDiffs[fact].type, value.type)) {
         icos.push(
           <span className="perm-step-icon">
             <i
@@ -200,8 +208,6 @@ let PermDiffRow = ({
             />
           </span>
         );
-      } else {
-        // console.log("unequal: ", diffs[fact].type, value.type);
       }
     }
   }

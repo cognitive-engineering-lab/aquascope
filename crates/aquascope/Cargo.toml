@@ -5,7 +5,7 @@ license = "MIT"
 edition = "2021"
 authors = [
   "Gavin Gray <gavinleroy6@gmail.com>",
-  "Will Crichton <wcrichto@cs.stanford.edu>"
+  "Will Crichton <wcrichto@cs.stanford.edu>",
 ]
 description = "Permissions analyzer for Rust code"
 repository = "https://github.com/cognitive-engineering-lab/aquascope"
@@ -26,10 +26,15 @@ ts-rs = "7"
 regex = "1"
 fluid-let = "1.0"
 fuzzy_match = "0.2.1"
-rustc_utils = {workspace = true, features = ["graphviz", "ts-rs", "serde", "test"]}
+rustc_utils = { workspace = true, features = [
+  "graphviz",
+  "ts-rs",
+  "serde",
+  "test",
+] }
 
 # interpret module
-miri = {git = "https://github.com/rust-lang/miri", rev = "afdbb080fe4b8e73838fffdbea8b290aa246f3d7"}
+miri = { git = "https://github.com/rust-lang/miri", rev = "afdbb080fe4b8e73838fffdbea8b290aa246f3d7" }
 aquascope_workspace_utils = { version = "0.3", path = "../aquascope_workspace_utils" }
 
 # testing utils
