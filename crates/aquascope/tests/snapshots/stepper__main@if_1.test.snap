@@ -22,8 +22,6 @@ description: main@if_1.test
           type: None
         loan_write_refined:
           type: None
-        loan_refined:
-          type: None
         loan_drop_refined:
           type: None
         permissions:
@@ -54,8 +52,6 @@ description: main@if_1.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
-        loan_refined:
           type: None
         loan_drop_refined:
           type: None
@@ -89,8 +85,6 @@ description: main@if_1.test
           type: None
         loan_write_refined:
           type: None
-        loan_refined:
-          type: None
         loan_drop_refined:
           type: None
         permissions:
@@ -120,8 +114,6 @@ description: main@if_1.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
-        loan_refined:
           type: None
         loan_drop_refined:
           type: None
@@ -156,11 +148,6 @@ description: main@if_1.test
         loan_write_refined:
           type: High
           value: 0
-        loan_refined:
-          type: High
-          value:
-            RefineReadAndWrite:
-              write_key: 0
         loan_drop_refined:
           type: High
           value: 0
@@ -191,8 +178,6 @@ description: main@if_1.test
           type: None
         loan_write_refined:
           type: None
-        loan_refined:
-          type: None
         loan_drop_refined:
           type: None
         permissions:
@@ -222,8 +207,6 @@ description: main@if_1.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
-        loan_refined:
           type: None
         loan_drop_refined:
           type: None
@@ -258,11 +241,6 @@ description: main@if_1.test
         loan_write_refined:
           type: High
           value: 4
-        loan_refined:
-          type: High
-          value:
-            RefineReadAndWrite:
-              write_key: 4
         loan_drop_refined:
           type: High
           value: 4
@@ -292,8 +270,6 @@ description: main@if_1.test
           type: None
         loan_write_refined:
           type: None
-        loan_refined:
-          type: None
         loan_drop_refined:
           type: None
         permissions:
@@ -321,8 +297,6 @@ description: main@if_1.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
-        loan_refined:
           type: None
         loan_drop_refined:
           type: None
@@ -353,8 +327,6 @@ description: main@if_1.test
           type: Low
         loan_write_refined:
           type: Low
-        loan_refined:
-          type: Low
         loan_drop_refined:
           type: Low
         permissions:
@@ -385,8 +357,6 @@ description: main@if_1.test
         loan_read_refined:
           type: Low
         loan_write_refined:
-          type: Low
-        loan_refined:
           type: Low
         loan_drop_refined:
           type: Low
@@ -419,8 +389,6 @@ description: main@if_1.test
           type: None
         loan_write_refined:
           type: None
-        loan_refined:
-          type: None
         loan_drop_refined:
           type: None
         permissions:
@@ -448,8 +416,6 @@ description: main@if_1.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
-        loan_refined:
           type: None
         loan_drop_refined:
           type: None

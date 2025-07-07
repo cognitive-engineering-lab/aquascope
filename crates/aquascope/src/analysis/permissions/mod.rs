@@ -102,17 +102,9 @@ pub struct PermissionsData {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub path_moved: Option<MoveKey>,
 
-  #[serde(skip_serializing_if = "Option::is_none")]
-  /// Is a live loan removing `read` permissions?
-  pub loan_read_refined: Option<LoanKey>,
-
-  #[serde(skip_serializing_if = "Option::is_none")]
-  /// Is a live loan removing `write` permissions?
-  pub loan_write_refined: Option<LoanKey>,
-
-  #[serde(skip_serializing_if = "Option::is_none")]
+  #[serde(skip_serializing_if = "LoanRefined::not_refined")]
   /// Is a live loan removing `read` or `write` permissions?
-  pub loan_refined: Option<LoanRefined<LoanKey>>,
+  pub loan_refined: LoanRefined<LoanKey>,
 
   #[serde(skip_serializing_if = "Option::is_none")]
   /// Is a live loan removing `drop` permissions?
@@ -147,9 +139,9 @@ impl PermissionsData {
   /// - no drop-refining loan exists at this point.
   pub fn permissions_ignore_liveness(&self) -> Permissions {
     let mem_uninit = self.path_moved.is_some() || self.path_uninitialized;
-    let read = !mem_uninit && self.loan_read_refined.is_none();
+    let read = !mem_uninit && !self.loan_refined.is_read_refined();
     let write =
-      self.type_writeable && read && self.loan_write_refined.is_none();
+      self.type_writeable && read && !self.loan_refined.is_write_refined();
     let drop = self.type_droppable && read && self.loan_drop_refined.is_none();
     Permissions { read, write, drop }
   }
