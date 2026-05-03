@@ -19,7 +19,9 @@ fn main() {
   let cfg = Config::from_env();
   assert!(cfg.no_docker);
 
-  log::warn!("The Aquascope server is only used for local debugging. Requests will be processed on your machine!");
+  log::warn!(
+    "The Aquascope server is only used for local debugging. Requests will be processed on your machine!"
+  );
 
   server::serve(cfg);
 }

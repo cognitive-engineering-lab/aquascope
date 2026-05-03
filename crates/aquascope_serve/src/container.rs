@@ -4,7 +4,7 @@ use std::{
 
 use aquascope_workspace_utils::miri_sysroot;
 use snafu::prelude::*;
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 use tokio::{self, process::Command, time};
 
 use crate::{ServerResponse, SingleFileRequest};
@@ -89,7 +89,7 @@ impl Container {
       Ok(Ok(output)) => Ok(output),
       // failure
       Ok(e @ Err(_)) => {
-        return e.map(|_| unreachable!()).context(UnableToExecCommandSnafu)
+        return e.map(|_| unreachable!()).context(UnableToExecCommandSnafu);
       }
       // timeout
       Err(e) => Err(e),
@@ -214,10 +214,10 @@ impl Container {
       .env("RUST_BACKTRACE", "1")
       .env("MIRI_SYSROOT", miri_sysroot()?);
 
-    if let Some(config) = req.config.as_ref().and_then(|cfg| cfg.as_object()) {
-      if config.contains_key("shouldFail") {
-        cmd.arg("--should-fail");
-      }
+    if let Some(config) = req.config.as_ref().and_then(|cfg| cfg.as_object())
+      && config.contains_key("shouldFail")
+    {
+      cmd.arg("--should-fail");
     }
 
     cmd.arg("interpreter");

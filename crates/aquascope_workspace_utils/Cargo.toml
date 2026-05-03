@@ -1,14 +1,11 @@
 [package]
 name = "aquascope_workspace_utils"
-authors = [
-  "Will Crichton <wcrichto@cs.stanford.edu>",
-  "Gavin Gray <gavinleroy6@gmail.com>"
-]
 version = "0.3.8"
-license = "MIT"
-edition = "2021"
+license = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
 description = "Handy utilities for working in the Aquascope workspace"
-repository = "https://github.com/cognitive-engineering-lab/aquascope"
 include = [
   "src/**/*",
   "Cargo.toml",

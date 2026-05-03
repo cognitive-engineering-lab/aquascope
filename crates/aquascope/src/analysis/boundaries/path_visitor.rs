@@ -1,17 +1,17 @@
 //! Visitor to calculate expected permissions for path usages.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use fluid_let::{fluid_let, fluid_set};
 use rustc_hir::{
+  Block, Body, Expr, ExprKind, HirId, Path, QPath, Stmt, UnOp,
   def::Res,
   intravisit::{self, Visitor},
-  Block, Body, Expr, ExprKind, HirId, Path, QPath, Stmt, UnOp,
 };
 use rustc_middle::{
   hir::nested_filter::OnlyBodies,
   ty::{
-    adjustment::{Adjust, AutoBorrow},
     TyCtxt, TypeckResults, TypingEnv,
+    adjustment::{Adjust, AutoBorrow},
   },
 };
 use rustc_span::Span;
@@ -64,8 +64,8 @@ impl HirExprScraper<'_> {
 impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
   type NestedFilter = OnlyBodies;
 
-  fn nested_visit_map(&mut self) -> Self::Map {
-    self.tcx.hir()
+  fn maybe_tcx(&mut self) -> Self::MaybeTyCtxt {
+    self.tcx
   }
 
   // Visiting statements / body is only used for specifying a
@@ -96,10 +96,7 @@ impl<'tcx> Visitor<'tcx> for HirExprScraper<'tcx> {
     let hir_id = expr.hir_id;
     let flow_context = FLOW_CONTEXT.copied().unwrap_or(hir_id);
 
-    log::debug!(
-      "visiting {}\n\n",
-      self.nested_visit_map().node_to_string(hir_id)
-    );
+    log::debug!("visiting {}\n\n", self.tcx.hir_id_to_string(hir_id));
 
     match expr.kind {
       // Method calls are a form of type-deref coercion which can
@@ -270,7 +267,7 @@ pub(super) fn get_path_boundaries(
     data: Vec::default(),
   };
 
-  log::debug!("THE BODY OWNER: {:?}", tcx.hir().body_owner(body_id));
+  log::debug!("THE BODY OWNER: {:?}", tcx.hir_body_owner(body_id));
 
   finder.visit_nested_body(body_id);
 

@@ -6,7 +6,7 @@ use rustc_data_structures::{
 };
 use rustc_middle::mir::{Local, Location, Place};
 use rustc_span::Span;
-use rustc_utils::{test_utils::DUMMY_CHAR_RANGE, PlaceExt, SpanExt};
+use rustc_utils::{PlaceExt, SpanExt, test_utils::DUMMY_CHAR_RANGE};
 
 use super::{segmented_mir::*, *};
 use crate::{analysis::permissions::PermissionsCtxt, errors};

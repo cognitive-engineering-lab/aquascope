@@ -56,12 +56,11 @@
 //! at the HIR level to find this micro adjustment which computes the branch target
 //! as being after the code initializing all bound variables in a match pattern.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use rustc_data_structures::{self, fx::FxHashMap as HashMap};
 use rustc_hir::{
-  self as hir,
+  self as hir, BodyId, HirId,
   intravisit::{self, Visitor as HirVisitor},
-  BodyId, HirId,
 };
 use rustc_middle::{
   hir::nested_filter,
@@ -240,14 +239,12 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   /// This method is a sort of HACK to avoid picking apart nodes expanded from
   /// macros, while visiting nodes expanded from expected desugarings (e.g. for / while loops).
   fn span_of(&self, id: HirId) -> Span {
-    let hir = self.tcx.hir();
-    let span = hir.span(id);
+    let span = self.tcx.hir_span(id);
     span.as_local(self.body.span).unwrap_or(span)
   }
 
   fn body_value_id(&self) -> HirId {
-    let hir = self.tcx.hir();
-    hir.body(self.body_id).value.hir_id
+    self.tcx.hir_body(self.body_id).value.hir_id
   }
 
   fn get_node_entry(&self, hir_id: HirId) -> Option<Location> {
@@ -280,8 +277,7 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
   }
 
   fn prettify_node(&self, hir_id: HirId) -> String {
-    let hir = self.tcx.hir();
-    hir.node_to_string(hir_id)
+    self.tcx.hir_id_to_string(hir_id)
   }
 
   /// Open a conditional expression for branching. On success, returns
@@ -488,8 +484,8 @@ impl<'a, 'tcx: 'a> HirStepPoints<'a, 'tcx> {
 impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
   type NestedFilter = nested_filter::All;
 
-  fn nested_visit_map(&mut self) -> Self::Map {
-    self.tcx.hir()
+  fn maybe_tcx(&mut self) -> Self::MaybeTyCtxt {
+    self.tcx
   }
 
   fn visit_body(&mut self, body: &hir::Body<'tcx>) {
@@ -629,14 +625,16 @@ impl<'a, 'tcx: 'a> HirVisitor<'tcx> for HirStepPoints<'a, 'tcx> {
       EK::Loop(
         hir::Block {
           stmts:
-            [hir::Stmt {
-              kind:
-                SK::Expr(hir::Expr {
-                  kind: EK::Match(cnd, arms @ [none, some], _),
-                  ..
-                }),
-              ..
-            }],
+            [
+              hir::Stmt {
+                kind:
+                  SK::Expr(hir::Expr {
+                    kind: EK::Match(cnd, arms @ [none, some], _),
+                    ..
+                  }),
+                ..
+              },
+            ],
           expr: None,
           ..
         },

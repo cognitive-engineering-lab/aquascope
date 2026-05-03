@@ -1,10 +1,10 @@
 [book]
 authors = ["Will Crichton"]
 language = "en"
-multilingual = false
 src = "src"
 
 [preprocessor.aquascope]
+command = "cargo run --bin mdbook-aquascope"
 
 [build]
 extra-watch-dirs = ["../../../frontend/packages/aquascope-embed/dist"]

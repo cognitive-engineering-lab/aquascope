@@ -1,16 +1,15 @@
 use std::{
   borrow::Cow,
   env,
-  process::{exit, Command},
+  process::{Command, exit},
   time::Instant,
 };
 
 use aquascope::{
   analysis::{
-    self,
+    self, AquascopeError, AquascopeResult,
     permissions::ENABLE_FLOW_PERMISSIONS,
-    stepper::{PermIncludeMode, INCLUDE_MODE},
-    AquascopeError, AquascopeResult,
+    stepper::{INCLUDE_MODE, PermIncludeMode},
   },
   errors::{
     initialize_error_tracking, silent::silent_session, track_body_diagnostics,
@@ -130,7 +129,7 @@ impl RustcPlugin for AquascopePlugin {
         let _ = run_with_callbacks(&compiler_args, &mut callbacks);
         postprocess(callbacks.output)
       }
-      Interpreter { .. } => {
+      Interpreter => {
         let mut callbacks = aquascope::interpreter::InterpretCallbacks::new(
           plugin_args.should_fail,
         );
@@ -172,12 +171,8 @@ pub fn run_with_callbacks(
 
   log::debug!("Running command with callbacks: {args:?}");
 
-  let compiler = rustc_driver::RunCompiler::new(&args, callbacks);
-
-  log::debug!("building compiler ...");
-
   rustc_driver::catch_fatal_errors(move || {
-    compiler.run();
+    rustc_driver::run_compiler(&args, callbacks)
   })
   .map_err(|_| AquascopeError::BuildError { range: None })
 }
@@ -241,7 +236,7 @@ impl<A: AquascopeAnalysis> rustc_driver::Callbacks for AquascopeCallbacks<A> {
     let mut analysis = self.analysis.take().unwrap();
     find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
       // Track diagnostics for the analysis of the current body
-      let def_id = tcx.hir().body_owner_def_id(body_id);
+      let def_id = tcx.hir_body_owner_def_id(body_id);
       track_body_diagnostics(def_id);
       self.output.push(analysis.analyze(tcx, body_id));
     });

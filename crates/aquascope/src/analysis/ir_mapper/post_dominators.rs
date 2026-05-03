@@ -1,7 +1,7 @@
 use rustc_data_structures::graph::*;
 use rustc_index::{
-  bit_set::{ChunkedBitSet, SparseBitMatrix},
   Idx,
+  bit_set::{DenseBitSet, SparseBitMatrix},
 };
 use rustc_utils::mir::control_dependencies::PostDominators;
 
@@ -21,7 +21,7 @@ impl<Node: Idx> AllPostDominators<Node> {
     for exit in exits {
       let exit_pdom = PostDominators::build(graph, exit);
       for node in all_nodes.clone() {
-        let mut is_pdom = ChunkedBitSet::new_empty(graph.num_nodes());
+        let mut is_pdom = DenseBitSet::new_empty(graph.num_nodes());
         if let Some(iter) = exit_pdom.post_dominators(node) {
           for other in iter {
             is_pdom.insert(other);

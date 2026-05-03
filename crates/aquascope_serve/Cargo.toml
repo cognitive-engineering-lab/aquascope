@@ -1,14 +1,11 @@
 [package]
 name = "aquascope_serve"
-authors = [
-  "Will Crichton <wcrichto@cs.stanford.edu>",
-  "Gavin Gray <gavinleroy6@gmail.com>"
-]
 version = "0.1.0"
-license = "MIT"
-edition = "2021"
+license = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
 default-run = "aquascope_serve"
-repository = "https://github.com/cognitive-engineering-lab/aquascope"
 publish = false
 
 [dependencies]
@@ -22,7 +19,7 @@ log = "0.4.0"
 serde.workspace = true
 serde_json = "1.0"
 snafu = "0.7.0"
-tokio = { version = "1.9", features = ["macros", "time", "process", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "time", "process", "rt-multi-thread"] }
 tower-http = { version = "0.3", features = ["cors", "trace"] }
 tar = "0.4"
 tempfile = "3.3.0"

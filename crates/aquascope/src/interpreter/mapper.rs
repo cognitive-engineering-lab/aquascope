@@ -8,7 +8,7 @@ use std::{
 use either::Either;
 use itertools::Itertools;
 use miri::InterpCx;
-use rustc_hir::{intravisit::Visitor, Body, Expr, ExprKind, HirId, Stmt};
+use rustc_hir::{Body, Expr, ExprKind, HirId, Stmt, intravisit::Visitor};
 use rustc_middle::{mir::Location, ty::Instance};
 use rustc_span::{BytePos, Span};
 use rustc_utils::BodyExt;
@@ -61,8 +61,7 @@ impl<'a, 'tcx> Mapper<'a, 'tcx> {
   fn build_body_mapping(&self, inst: Instance<'tcx>) -> MapperEntry {
     let mut finder = FindSteppableNodes::default();
     let tcx = *self.ecx.tcx;
-    let hir = tcx.hir();
-    let hir_body = hir.body_owned_by(inst.def_id().expect_local());
+    let hir_body = tcx.hir_body_owned_by(inst.def_id().expect_local());
     finder.visit_body(hir_body);
 
     let body = self.ecx.load_mir(inst.def, None).unwrap();
@@ -86,7 +85,7 @@ impl<'a, 'tcx> Mapper<'a, 'tcx> {
       .collect();
 
     MapperEntry {
-      owner_id: hir.body_owner(hir_body.id()),
+      owner_id: tcx.hir_body_owner(hir_body.id()),
       body_mapping,
     }
   }
@@ -97,7 +96,7 @@ impl<'a, 'tcx> Mapper<'a, 'tcx> {
     inst: Instance<'tcx>,
     location: Location,
   ) -> Option<Span> {
-    let body_span = self.ecx.tcx.hir().span_with_body(owner_id);
+    let body_span = self.ecx.tcx.hir_span_with_body(owner_id);
     let end_brace = body_span.with_lo(body_span.hi() - BytePos(1));
     let body = self.ecx.load_mir(inst.def, None).unwrap();
     let loc_span = body.source_info(location).span;

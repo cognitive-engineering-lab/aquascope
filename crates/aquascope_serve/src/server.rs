@@ -1,20 +1,19 @@
 use async_trait::async_trait;
 use axum::{
-  extract,
+  Router, extract,
   handler::Handler,
-  http::{header, Method},
+  http::{Method, header},
   response::IntoResponse,
   routing::{get, post},
-  Router,
 };
-use futures::{future::BoxFuture, FutureExt};
-use snafu::{prelude::*, IntoError};
+use futures::{FutureExt, future::BoxFuture};
+use snafu::{IntoError, prelude::*};
 use tower_http::cors::{self, CorsLayer};
 
 use crate::{
-  container::{self, Container},
   Config, ContainerCreationSnafu, Error, ErrorJson, InterpreterSnafu,
   PermissionsSnafu, Result, ServerResponse, SingleFileRequest,
+  container::{self, Container},
 };
 
 #[tokio::main]
@@ -92,7 +91,7 @@ where
   Ctx: IntoError<Error, Source = container::Error>,
 {
   let container = Container::new().await.context(ContainerCreationSnafu)?;
-  f(container, &req).await.map(Into::into).context(ctx)
+  f(container, &req).await.context(ctx)
 }
 
 /// Axum handler for any request that fails to match the router routes.

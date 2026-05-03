@@ -1,6 +1,6 @@
 use rustc_hir::{
-  intravisit::{self, Visitor},
   BodyId, Expr,
+  intravisit::{self, Visitor},
 };
 use rustc_middle::{hir::nested_filter::OnlyBodies, ty::TyCtxt};
 
@@ -19,8 +19,8 @@ where
 {
   type NestedFilter = OnlyBodies;
 
-  fn nested_visit_map(&mut self) -> Self::Map {
-    self.tcx.hir()
+  fn maybe_tcx(&mut self) -> Self::MaybeTyCtxt {
+    self.tcx
   }
 
   fn visit_expr(&mut self, expression: &'tcx Expr) {

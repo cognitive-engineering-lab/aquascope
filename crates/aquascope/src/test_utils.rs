@@ -1,57 +1,38 @@
-use std::{
-  collections::HashMap, env, fs, io, panic, path::Path, process::Command,
-  sync::Arc,
-};
+use std::{collections::HashMap, env, fs, panic, path::Path, process::Command};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use fluid_let::fluid_set;
 use itertools::Itertools;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
+use rustc_driver::run_compiler;
 use rustc_hir::BodyId;
 use rustc_middle::{
   mir::{Rvalue, StatementKind},
   ty::TyCtxt,
 };
-use rustc_span::source_map::FileLoader;
 use rustc_utils::{
+  BodyExt, OperandExt,
   mir::{borrowck_facts, location_or_arg::LocationOrArg},
   source_map::{
     find_bodies::find_bodies,
     range::{self, CharRange, ToSpan},
     spanner::Spanner,
   },
-  test_utils::{DUMMY_FILE, DUMMY_FILE_NAME},
-  BodyExt, OperandExt,
+  test_utils::{DUMMY_FILE, DUMMY_FILE_NAME, StringLoader},
 };
 
 use crate::{
   analysis::{
-    self,
-    boundaries::{compute_permission_boundaries, PermissionsBoundary},
-    permissions::{Permissions, ENABLE_FLOW_PERMISSIONS},
+    self, AquascopeAnalysis,
+    boundaries::{PermissionsBoundary, compute_permission_boundaries},
+    permissions::{ENABLE_FLOW_PERMISSIONS, Permissions},
     stepper::{
-      self, compute_permission_steps, PermIncludeMode, PermissionsDataDiff,
+      self, PermIncludeMode, PermissionsDataDiff, compute_permission_steps,
     },
-    AquascopeAnalysis,
   },
   errors::{self, silent::silent_session},
   interpreter::{self, MTrace},
 };
-
-struct StringLoader(String);
-impl FileLoader for StringLoader {
-  fn file_exists(&self, _: &Path) -> bool {
-    true
-  }
-
-  fn read_file(&self, _: &Path) -> io::Result<String> {
-    Ok(self.0.clone())
-  }
-
-  fn read_binary_file(&self, path: &Path) -> io::Result<Arc<[u8]>> {
-    fs::read(path).map(Into::into)
-  }
-}
 
 lazy_static::lazy_static! {
   static ref SYSROOT: String = {
@@ -307,13 +288,11 @@ fn analysis_snapshot_tag(ctxt: &AquascopeAnalysis) -> String {
   let owner = ctxt
     .permissions
     .tcx
-    .hir()
-    .body_owner(ctxt.permissions.body_id);
+    .hir_body_owner(ctxt.permissions.body_id);
   ctxt
     .permissions
     .tcx
-    .hir()
-    .opt_name(owner)
+    .hir_opt_name(owner)
     .map_or_else(|| String::from("(anon.body)"), |n| String::from(n.as_str()))
 }
 
@@ -345,15 +324,17 @@ pub fn test_boundaries_in_file(
 pub fn test_steps_in_file(
   path: &Path,
   assert_snap: impl Fn(String, Vec<(usize, Vec<(String, PermissionsDataDiff)>)>)
-    + Send
-    + Sync
-    + Copy,
+  + Send
+  + Sync
+  + Copy,
 ) {
   use stepper::INCLUDE_MODE;
 
   let inner = || -> Result<()> {
     let (source, _) = load_test_from_file(path)?;
+    eprintln!("SOURCE? {source}");
     compile_normal(source, move |tcx| {
+      eprintln!("AFTER COMPILE? {}", path.display());
       for_each_body(tcx, |body_id, _body_with_facts| {
         let ctxt = AquascopeAnalysis::new(tcx, body_id);
         let tag = analysis_snapshot_tag(&ctxt);
@@ -466,7 +447,7 @@ pub fn for_each_body<'tcx>(
   mut f: impl FnMut(BodyId, &'tcx BodyWithBorrowckFacts<'tcx>),
 ) {
   find_bodies(tcx).into_iter().for_each(|(_, body_id)| {
-    let def_id = tcx.hir().body_owner_def_id(body_id);
+    let def_id = tcx.hir_body_owner_def_id(body_id);
     errors::track_body_diagnostics(def_id);
     let body_with_facts =
       borrowck_facts::get_body_with_borrowck_facts(tcx, def_id);
@@ -497,24 +478,24 @@ pub fn compile(
   callback: impl FnOnce(TyCtxt<'_>) + Send,
 ) {
   let mut callbacks = TestCallbacks {
+    input: input.into(),
     callback: Some(callback),
     is_interpreter,
   };
   let args = format!(
-    "rustc {DUMMY_FILE_NAME} --edition=2021 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage -A warnings {args}",
+    "rustc {DUMMY_FILE_NAME} --edition=2024 -Z identify-regions -Z mir-opt-level=0 -Z track-diagnostics=yes -Z maximal-hir-to-mir-coverage -A warnings {args}",
   );
   let args = args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
 
   // Explicitly ignore the unused return value. Many test cases are intended
   // to fail compilation, but the analysis results should still be sound.
   rustc_driver::catch_fatal_errors(|| {
-    let mut compiler = rustc_driver::RunCompiler::new(&args, &mut callbacks);
-    compiler.set_file_loader(Some(Box::new(StringLoader(input.into()))));
-    compiler.run()
+    run_compiler(&args, &mut callbacks);
   });
 }
 
 struct TestCallbacks<Cb> {
+  input: String,
   callback: Option<Cb>,
   is_interpreter: bool,
 }
@@ -530,6 +511,7 @@ where
     } else {
       borrowck_facts::override_queries
     });
+    config.file_loader = Some(Box::new(StringLoader(self.input.clone())));
   }
 
   fn after_analysis<'tcx>(

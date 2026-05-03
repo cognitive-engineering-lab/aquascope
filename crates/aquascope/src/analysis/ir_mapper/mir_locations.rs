@@ -1,4 +1,4 @@
-use rustc_data_structures::{captures::Captures, fx::FxHashMap as HashMap};
+use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_middle::mir::{BasicBlock, Location};
 
 #[derive(Debug)]
@@ -46,7 +46,7 @@ impl MirOrderedLocations {
     Some((entry, exit))
   }
 
-  pub fn values(&self) -> impl Iterator<Item = Location> + Captures<'_> {
+  pub fn values(&self) -> impl Iterator<Item = Location> {
     self.locations.iter().flat_map(|(bb, idxs)| {
       idxs.iter().map(|idx| Location {
         block: *bb,

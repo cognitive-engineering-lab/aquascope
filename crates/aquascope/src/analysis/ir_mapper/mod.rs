@@ -11,7 +11,7 @@ use rustc_data_structures::{
 };
 use rustc_hir::{self as hir, HirId};
 use rustc_middle::{
-  mir::{self, visit::Visitor as MirVisitor, BasicBlock, Body, Location},
+  mir::{self, BasicBlock, Body, Location, visit::Visitor as MirVisitor},
   ty::TyCtxt,
 };
 use rustc_utils::BodyExt;
@@ -92,9 +92,8 @@ impl<'tcx> IRMapper<'tcx> {
 
     ir_map.visit_body(body);
 
-    let hir = tcx.hir();
     for (id, _locs) in ir_map.hir_to_mir.iter() {
-      let _hirs = hir.node_to_string(*id);
+      let _hirs = tcx.hir_id_to_string(*id);
     }
 
     if cfg!(debug_assertions) {
@@ -192,9 +191,12 @@ impl<'tcx> IRMapper<'tcx> {
       GatherDepth::Outer => (),
       // Gather all the mir locations for every HirId nested under this one.
       GatherDepth::Nested => {
-        let hir = self.tcx.hir();
         self.hir_to_mir.iter().for_each(|(child_id, locs)| {
-          if hir.parent_id_iter(*child_id).any(|id| id == hir_id) {
+          if self
+            .tcx
+            .hir_parent_id_iter(*child_id)
+            .any(|id| id == hir_id)
+          {
             for l in locs.iter() {
               locations.insert(*l);
             }
@@ -250,7 +252,9 @@ impl<'tcx> IRMapper<'tcx> {
 
     let exit_block = find_exit_from(&basic_blocks);
 
-    log::debug!("Gathering MIR location entry / exit blocks: {entry_block:?}{exit_block:?}");
+    log::debug!(
+      "Gathering MIR location entry / exit blocks: {entry_block:?}{exit_block:?}"
+    );
 
     if exit_block.is_none() {
       log::debug!("Found locations: {total_location_map:#?}");

@@ -3,11 +3,20 @@ members = ["crates/*"]
 exclude = ["files"]
 resolver = "2"
 
+[workspace.package]
+license = "MIT"
+edition = "2024"
+authors = [
+  "Gavin Gray <gavinleroy6@gmail.com>",
+  "Will Crichton <wcrichto@cs.stanford.edu>"
+]
+repository = "https://github.com/cognitive-engineering-lab/aquascope"
+
 [workspace.dependencies]
 anyhow = "1.0.0"
 serde = { version = "1", features = ["derive"] }
-rustc_plugin = "=0.12.0-nightly-2024-12-15"
-rustc_utils = "=0.12.0-nightly-2024-12-15"
+rustc_plugin = "=0.15.1-nightly-2026-05-01"
+rustc_utils = "=0.15.1-nightly-2026-05-01"
 
 # Make snapshot testing faster
 [profile.dev.package.insta]
@@ -15,3 +24,7 @@ opt-level = 3
 
 [profile.dev.package.similar]
 opt-level = 3
+
+[patch.crates-io]
+mdbook-preprocessor-utils = { path = "../mdbook-preprocessor-utils" }
+rustc_utils = { path = "../rustc_plugin/crates/rustc_utils" }

@@ -1,16 +1,9 @@
 #![feature(
   rustc_private,
   box_patterns,
-  associated_type_defaults,
   min_specialization,
-  type_alias_impl_trait,
-  trait_alias,
-  let_chains,
   unboxed_closures,
-  exact_size_is_empty,
-  type_changing_struct_update,
-  extract_if,
-  hash_extract_if
+  type_changing_struct_update
 )]
 // NOTE: these come from the clippy::pedantic group. Eventually, we'd like to deny
 // the entire group (or most of it), but these are cherry picked for the time being.
@@ -20,7 +13,7 @@
   clippy::case_sensitive_file_extension_comparisons,
   clippy::cloned_instead_of_copied,
   clippy::default_trait_access,
-  clippy::empty_enum,
+  clippy::empty_enums,
   clippy::enum_glob_use,
   clippy::expl_impl_clone_on_copy,
   clippy::explicit_deref_methods,
@@ -42,7 +35,6 @@
   clippy::many_single_char_names,
   clippy::map_unwrap_or,
   clippy::match_bool,
-  clippy::match_on_vec_items,
   clippy::match_same_arms,
   clippy::mut_mut,
   clippy::needless_for_each,
@@ -51,7 +43,7 @@
 )]
 // Only used for testing purposes, can we dissallow
 // uncommon codepoints when not testing?
-#![allow(uncommon_codepoints)]
+#![allow(uncommon_codepoints, clippy::doc_overindented_list_items)]
 
 extern crate datafrog;
 extern crate either;

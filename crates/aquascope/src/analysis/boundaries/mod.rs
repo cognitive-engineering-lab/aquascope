@@ -184,25 +184,25 @@ use rustc_middle::{
     Body, Location, Mutability, Operand, Place, Rvalue, Statement,
     StatementKind,
   },
-  ty::{adjustment::AutoBorrowMutability, TyCtxt},
+  ty::{TyCtxt, adjustment::AutoBorrowMutability},
 };
 use rustc_span::Span;
 use rustc_utils::{
-  source_map::range::{BytePos, ByteRange, CharPos, CharRange},
   OperandExt, PlaceExt, SpanExt,
+  source_map::range::{BytePos, ByteRange, CharPos, CharRange},
 };
 use serde::Serialize;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use ts_rs::TS;
 
 use crate::{
   analysis::{
+    AquascopeAnalysis,
     ir_mapper::{GatherDepth, IRMapper},
     permissions::{
-      flow::FlowEdgeKind, Origin, Permissions, PermissionsCtxt,
-      PermissionsData, Point, ENABLE_FLOW_DEFAULT, ENABLE_FLOW_PERMISSIONS,
+      ENABLE_FLOW_DEFAULT, ENABLE_FLOW_PERMISSIONS, Origin, Permissions,
+      PermissionsCtxt, PermissionsData, Point, flow::FlowEdgeKind,
     },
-    AquascopeAnalysis,
   },
   errors,
 };
@@ -349,13 +349,12 @@ fn locals_by_visible_distance<'tcx>(
   use fuzzy_match::fuzzy_match;
   use rustc_middle::mir::VarDebugInfoContents;
 
-  let map = tcx.hir();
   // Get a textual representation of the path we're dealing with. Note, that this
   // may be something like `*x` or `&x[0]` and not just `x`.
   let node_str = tcx
     .sess
     .source_map()
-    .span_to_snippet(map.span(id))
+    .span_to_snippet(tcx.hir_span(id))
     .unwrap_or_default();
 
   let all_local_places = body.var_debug_info.iter().filter_map(|debug_info| {
@@ -478,7 +477,6 @@ fn get_flow_permission(
 
   let ir_mapper = &analysis.ir_mapper;
   let ctxt = &analysis.permissions;
-  let hir = ctxt.tcx.hir();
   let body = &ctxt.body_with_facts.body;
 
   let region_flows = ctxt.region_flows();
@@ -559,7 +557,7 @@ fn get_flow_permission(
     FlowEdgeKind::Ok
   });
 
-  let raw_span = hir.span(flow_context);
+  let raw_span = ctxt.tcx.hir_span(flow_context);
   let span = raw_span.as_local(body.span).unwrap_or(body.span);
   let flow_context = analysis.span_to_range(span);
 
@@ -612,11 +610,11 @@ fn paths_at_hir_id<'tcx>(
         | Rvalue::Repeat(op, _)
         | Rvalue::Cast(_, op, _)
         | Rvalue::UnaryOp(_, op)
-        | Rvalue::ShallowInitBox(op, _) => maybe_in_op!(loc, op),
+        | Rvalue::WrapUnsafeBinder(op, _)
+         => maybe_in_op!(loc, op),
 
       // Given place cases.
       Rvalue::Ref(_, _, place)
-        | Rvalue::Len(place)
         | Rvalue::Discriminant(place)
         | Rvalue::CopyForDeref(place)
         | Rvalue::RawPtr(_, place)
@@ -636,10 +634,8 @@ fn paths_at_hir_id<'tcx>(
 
       // Unimplemented cases, ignore nested information for now.
       Rvalue::ThreadLocalRef(..)
-        | Rvalue::NullaryOp(..)
         // Without guard
         | Rvalue::Ref(..)
-        | Rvalue::Len(..)
         | Rvalue::Discriminant(..)
         | Rvalue::CopyForDeref(..)
         | Rvalue::RawPtr(..) => {
@@ -656,7 +652,7 @@ fn paths_at_hir_id<'tcx>(
 
       StatementKind::Assign(box (lhs_place, _))
             if is_lhs && lhs_place.is_source_visible(tcx, body) => smallvec![(loc, *lhs_place)],
-      StatementKind::Assign(box (_, ref rvalue)) if !is_lhs => look_in_rvalue(rvalue, loc),
+      StatementKind::Assign(box (_, rvalue)) if !is_lhs => look_in_rvalue(rvalue, loc),
       StatementKind::SetDiscriminant { place, .. }
         if place.is_source_visible(tcx, body) =>
       {
@@ -679,8 +675,7 @@ fn paths_at_hir_id<'tcx>(
       // compiler generated statements.
       //
       // They are also unimplemented so if something is missing
-      // suspect something in here.
-      | StatementKind::Deinit(..)
+      // suspect something in here.      
       | StatementKind::StorageLive(..)
       | StatementKind::StorageDead(..)
       | StatementKind::Retag(..)
@@ -715,12 +710,11 @@ fn path_to_perm_boundary(
   let ir_mapper = &analysis.ir_mapper;
   let body = &ctxt.body_with_facts.body;
   let tcx = ctxt.tcx;
-  let hir = tcx.hir();
   let hir_id = path_boundary.hir_id;
 
   log::debug!(
     "Resolving permissions boundary for {}",
-    hir.node_to_string(path_boundary.hir_id)
+    tcx.hir_id_to_string(path_boundary.hir_id)
   );
 
   let search_at_hir_id = |hir_id| {
@@ -733,7 +727,9 @@ fn path_to_perm_boundary(
     let point = ctxt.location_to_point(loc);
     let path = ctxt.place_to_path(&place);
 
-    log::debug!("Chosen place at location {place:#?} {loc:#?} ({point:?},{path:?})\nOther options: {path_locations:#?}");
+    log::debug!(
+      "Chosen place at location {place:#?} {loc:#?} ({point:?},{path:?})\nOther options: {path_locations:#?}"
+    );
 
     Some((point, path))
   };
@@ -744,8 +740,8 @@ fn path_to_perm_boundary(
   // so we traverse upwards in the tree until we find a location associated with it.
   let resolved_boundary = search_at_hir_id(hir_id)
     .or_else(|| {
-      hir.parent_iter(hir_id).find_map(|(hir_id, _)| {
-        log::debug!("\tsearching upwards in: {}", hir.node_to_string(hir_id));
+      tcx.hir_parent_iter(hir_id).find_map(|(hir_id, _)| {
+        log::debug!("\tsearching upwards in: {}", tcx.hir_id_to_string(hir_id));
         search_at_hir_id(hir_id)
       })
     })
@@ -757,7 +753,7 @@ fn path_to_perm_boundary(
       let expecting_flow =
         get_flow_permission(analysis, path_boundary.flow_context, hir_id);
 
-      log::debug!("Permissions data for {}:\n{actual:#?}\n{expected:#?}\n{expecting_flow:#?}", hir.node_to_string(path_boundary.hir_id));
+      log::debug!("Permissions data for {}:\n{actual:#?}\n{expected:#?}\n{expecting_flow:#?}", tcx.hir_id_to_string(path_boundary.hir_id));
 
       let span = path_boundary
         .location
@@ -785,7 +781,7 @@ fn path_to_perm_boundary(
   if resolved_boundary.is_none() {
     log::warn!(
       "Could not resolve a MIR place for expected boundary {}",
-      hir.node_to_string(path_boundary.hir_id)
+      tcx.hir_id_to_string(path_boundary.hir_id)
     );
   }
 

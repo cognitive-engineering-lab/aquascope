@@ -4,12 +4,8 @@ use anyhow::Result;
 use either::Either;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_hir::def_id::LocalDefId;
-use rustc_middle::{
-  mir::{Body, BorrowCheckResult},
-  ty::TyCtxt,
-  util::Providers,
-};
-use rustc_utils::{source_map::range::CharRange, SpanExt};
+use rustc_middle::{mir::Body, ty::TyCtxt, util::Providers};
+use rustc_utils::{SpanExt, source_map::range::CharRange};
 
 mod mapper;
 mod miri_utils;
@@ -18,7 +14,6 @@ mod step;
 
 pub use mvalue::MValue;
 use rustc_session::Session;
-use smallvec::SmallVec;
 pub use step::MTrace;
 
 use crate::interpreter::mapper::Mapper;
@@ -49,7 +44,7 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<CharRange>> {
     for step in &hir_steps.steps {
       let (_, hir_body_loc) = step.stack.frames.last().unwrap().location;
       log::trace!("{:?}", match hir_body_loc {
-        Either::Left(node_id) => tcx.hir().node_to_string(node_id),
+        Either::Left(node_id) => tcx.hir_id_to_string(node_id),
         Either::Right(span) =>
           tcx.sess.source_map().span_to_snippet(span).unwrap(),
       });
@@ -57,10 +52,9 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<CharRange>> {
   }
 
   let src_steps = mapper::group_steps(hir_steps, |(owner_id, hir_body_loc)| {
-    let hir = tcx.hir();
-    let outer_span = hir.span_with_body(owner_id);
+    let outer_span = tcx.hir_span_with_body(owner_id);
     let span = match hir_body_loc {
-      Either::Left(node_id) => hir.span(node_id).as_local(outer_span)?,
+      Either::Left(node_id) => tcx.hir_span(node_id).as_local(outer_span)?,
       Either::Right(span) => span.as_local(outer_span)?,
     };
     let range = CharRange::from_span(span, tcx.sess.source_map()).unwrap();
@@ -88,13 +82,8 @@ impl InterpretCallbacks {
 fn fake_mir_borrowck(
   tcx: TyCtxt<'_>,
   _id: LocalDefId,
-) -> &'_ BorrowCheckResult<'_> {
-  tcx.arena.alloc(BorrowCheckResult {
-    concrete_opaque_types: FxIndexMap::default(),
-    closure_requirements: None,
-    used_mut_upvars: SmallVec::new(),
-    tainted_by_errors: None,
-  })
+) -> rustc_middle::queries::mir_borrowck::ProvidedValue<'_> {
+  Ok(tcx.arena.alloc(FxIndexMap::default()))
 }
 
 // Some optimizations like drop elaboration depend on MoveData, and will raise an error
@@ -103,7 +92,7 @@ fn fake_mir_borrowck(
 fn fake_optimized_mir(tcx: TyCtxt<'_>, did: LocalDefId) -> &'_ Body<'_> {
   let mut providers = Providers::default();
   rustc_mir_transform::provide(&mut providers);
-  let body = (providers.optimized_mir)(tcx, did);
+  let body = (providers.queries.optimized_mir)(tcx, did);
   tcx.sess.dcx().reset_err_count();
   body
 }
@@ -113,8 +102,8 @@ pub fn override_queries(
   _session: &Session,
   providers: &mut rustc_middle::util::Providers,
 ) {
-  providers.mir_borrowck = fake_mir_borrowck;
-  providers.optimized_mir = fake_optimized_mir;
+  providers.queries.mir_borrowck = fake_mir_borrowck;
+  providers.queries.optimized_mir = fake_optimized_mir;
 }
 
 impl rustc_driver::Callbacks for InterpretCallbacks {

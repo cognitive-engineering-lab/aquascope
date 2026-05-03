@@ -7,7 +7,7 @@ mod table_builder;
 
 use std::collections::hash_map::Entry;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use fluid_let::fluid_let;
 use rustc_data_structures::{self, fx::FxHashMap as HashMap};
 use rustc_hir::intravisit::Visitor as HirVisitor;
@@ -18,10 +18,10 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::analysis::{
+  AquascopeAnalysis, LoanKey, MoveKey,
   permissions::{
     Permissions, PermissionsCtxt, PermissionsData, PermissionsDomain,
   },
-  AquascopeAnalysis, LoanKey, MoveKey,
 };
 
 fluid_let!(pub static INCLUDE_MODE: PermIncludeMode);
@@ -109,8 +109,8 @@ impl<A: Stepable> ValueStep<A> {
   fn is_symmetric_diff(&self, rhs: &Self) -> bool {
     matches!(
       (self, rhs),
-      (ValueStep::High { .. }, ValueStep::Low { .. })
-        | (ValueStep::Low { .. }, ValueStep::High { .. })
+      (ValueStep::High { .. }, ValueStep::Low)
+        | (ValueStep::Low, ValueStep::High { .. })
         | (ValueStep::None { .. }, ValueStep::None { .. })
     )
   }

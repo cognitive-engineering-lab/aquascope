@@ -7,14 +7,18 @@ mod output;
 
 pub mod utils;
 
-use std::ops::{Deref, DerefMut};
+use std::{
+  fmt,
+  ops::{Deref, DerefMut},
+};
 
 pub use context::PermissionsCtxt;
 use fluid_let::fluid_let;
-pub use output::{compute, Output};
+pub use output::{Output, compute};
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::RustcFacts;
 use rustc_data_structures::fx::FxHashMap;
+use rustc_index::Idx;
 use rustc_middle::mir::Place;
 use rustc_utils::source_map::range::CharRange;
 use serde::Serialize;
@@ -37,15 +41,44 @@ impl polonius_engine::FactTypes for AquascopeFacts {
   type Path = PathIndex;
 }
 
-rustc_index::newtype_index! {
-  #[derive(PartialOrd, Ord)]
-  #[debug_format = "path{}"]
-  pub struct PathIndex {}
+#[derive(Ord, PartialOrd, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PathIndex {
+  private_use_as_methods_instead: usize,
+}
+
+impl fmt::Debug for PathIndex {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "path{}", self.private_use_as_methods_instead)
+  }
+}
+
+impl Idx for PathIndex {
+  fn new(idx: usize) -> Self {
+    PathIndex {
+      private_use_as_methods_instead: idx,
+    }
+  }
+
+  fn index(self) -> usize {
+    self.private_use_as_methods_instead
+  }
+}
+
+impl From<usize> for PathIndex {
+  fn from(value: usize) -> Self {
+    PathIndex::new(value)
+  }
+}
+
+impl From<PathIndex> for usize {
+  fn from(value: PathIndex) -> Self {
+    value.index()
+  }
 }
 
 impl polonius_engine::Atom for PathIndex {
   fn index(self) -> usize {
-    rustc_index::Idx::index(self)
+    Idx::index(self)
   }
 }
 

@@ -73,28 +73,58 @@
 //! Briefly summarized here, the set of constraints provided by Polonius' `subset_base` facts
 //! are turned into a flow graph, where a constraint such as `'a: 'b` gets turned into an
 //! edge `'a -> 'b`. This graph forms the basis of flow analysis as outlined previously.
+use core::fmt;
 use std::time::Instant;
 
 use itertools::Itertools;
 use rustc_borrowck::consumers::{
-  places_conflict, BorrowData, PlaceConflictBias, PoloniusRegionVid,
+  BorrowData, PlaceConflictBias, PoloniusRegionVid, places_conflict,
 };
 use rustc_data_structures::{
   fx::FxHashSet as HashSet,
-  graph::{depth_first_search, scc::Sccs, vec_graph::VecGraph, Successors},
+  graph::{Successors, depth_first_search, scc::Sccs, vec_graph::VecGraph},
   transitive_relation::{TransitiveRelation, TransitiveRelationBuilder},
 };
-use rustc_index::{bit_set::ChunkedBitSet, Idx};
+use rustc_index::{Idx, bit_set::ChunkedBitSet};
 use rustc_utils::BodyExt;
 use serde::Serialize;
 use ts_rs::TS;
 
 use super::{Origin, PermissionsCtxt};
 
-rustc_index::newtype_index! {
-  #[derive(Ord, PartialOrd)]
-  #[debug_format = "scc{}"]
-  pub struct SccIdx {}
+#[derive(Ord, PartialOrd, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SccIdx {
+  private_use_as_methods_instead: usize,
+}
+
+impl fmt::Debug for SccIdx {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "scc{}", self.private_use_as_methods_instead)
+  }
+}
+
+impl Idx for SccIdx {
+  fn new(idx: usize) -> Self {
+    SccIdx {
+      private_use_as_methods_instead: idx,
+    }
+  }
+
+  fn index(self) -> usize {
+    self.private_use_as_methods_instead
+  }
+}
+
+impl From<usize> for SccIdx {
+  fn from(value: usize) -> Self {
+    SccIdx::new(value)
+  }
+}
+
+impl From<SccIdx> for usize {
+  fn from(value: SccIdx) -> Self {
+    value.index()
+  }
 }
 
 impl polonius_engine::Atom for SccIdx {
@@ -205,12 +235,18 @@ impl RegionFlows {
       self.scc(to)
     );
 
-    log::debug!("{from:?} is_local? {from_contains_local} is_abstract? {from_contains_abstract}", );
-    log::debug!("{to:?} is_local? {to_contains_local} is_abstract? {to_contains_abstract}", );
+    log::debug!(
+      "{from:?} is_local? {from_contains_local} is_abstract? {from_contains_abstract}",
+    );
+    log::debug!(
+      "{to:?} is_local? {to_contains_local} is_abstract? {to_contains_abstract}",
+    );
 
     // A local value can never flow into an abstract region.
     if from_contains_local && self.is_abstract_member(to) {
-      log::info!("early return LocalOutlivesUniversal: {from:?}->{to:?} ({scc_from:?} -> {scc_to:?})");
+      log::info!(
+        "early return LocalOutlivesUniversal: {from:?}->{to:?} ({scc_from:?} -> {scc_to:?})"
+      );
       log::info!(
         "FROM abstracts {:#?}",
         self.contains_abstract.reachable_from(scc_from)
@@ -480,8 +516,8 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   log::info!(
     "region flow analysis for {:?} took: {:?}",
     {
-      let owner = tcx.hir().body_owner(ctxt.body_id);
-      match tcx.hir().opt_name(owner) {
+      let owner = tcx.hir_body_owner(ctxt.body_id);
+      match tcx.hir_opt_name(owner) {
         Some(name) => name.to_ident_string(),
         None => "<anonymous>".to_owned(),
       }

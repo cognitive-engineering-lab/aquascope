@@ -72,7 +72,7 @@
 //! feel free to start at the [`SegmentedMirBuilder::insert`] function and explore
 //! from there.
 
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use rustc_data_structures::{
   frozen::Frozen,
   fx::{FxHashMap as HashMap, FxHashSet as HashSet},
@@ -295,7 +295,7 @@ impl OpenCollections {
     &'this mut self,
     cids: &'a HashSet<CollectionId>,
   ) -> impl Iterator<Item = CollectionBuilder> + 'a {
-    self.0.extract_if(|cb| cids.contains(&cb.collection))
+    self.0.extract_if(.., |cb| cids.contains(&cb.collection))
   }
 
   pub fn get(&self, i: BuilderIdx) -> &CollectionBuilder {
@@ -861,9 +861,7 @@ impl<'a, 'tcx: 'a> SegmentedMirBuilder<'a, 'tcx> {
 
 #[cfg(test)]
 pub(crate) mod test_exts {
-  use rustc_data_structures::{
-    captures::Captures, graph::iterate::post_order_from_to,
-  };
+  use rustc_data_structures::graph::iterate::post_order_from_to;
   use rustc_middle::mir::BasicBlockData;
 
   use super::*;
@@ -901,7 +899,7 @@ pub(crate) mod test_exts {
     block: &'a BasicBlockData<'tcx>,
     from: Option<usize>,
     to: Option<usize>,
-  ) -> impl Iterator<Item = Location> + Captures<'tcx> + 'a {
+  ) -> impl Iterator<Item = Location> + 'a {
     // End is an inclusive index.
     let start = from.unwrap_or(0);
     let end = to.unwrap_or(block.statements.len());
@@ -915,7 +913,7 @@ pub(crate) mod test_exts {
     fn explode<'a, 'tcx: 'a>(
       self,
       mapper: &'a IRMapper<'tcx>,
-    ) -> impl Iterator<Item = Location> + Captures<'tcx> + 'a {
+    ) -> impl Iterator<Item = Location> + 'a {
       let sb = self.from.block;
       let eb = self.to.block;
       let graph = &mapper.cleaned_graph;

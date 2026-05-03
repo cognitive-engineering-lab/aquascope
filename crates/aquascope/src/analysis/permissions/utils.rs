@@ -2,10 +2,10 @@
 
 use std::collections::hash_map::Entry;
 
-use rustc_middle::mir::pretty::PrettyPrintMirOptions;
-use rustc_mir_dataflow::{fmt::DebugWithContext, JoinSemiLattice};
+use rustc_middle::mir::pretty::MirWriter;
+use rustc_mir_dataflow::{JoinSemiLattice, fmt::DebugWithContext};
 
-use super::{context::PermissionsCtxt, Permissions, PermissionsDomain};
+use super::{Permissions, PermissionsDomain, context::PermissionsCtxt};
 
 pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
   let tcx = ctxt.tcx;
@@ -13,16 +13,7 @@ pub(crate) fn dump_mir_debug(ctxt: &PermissionsCtxt) {
   let _basic_blocks = body.basic_blocks.indices();
 
   let mut stderr = std::io::stderr();
-  rustc_middle::mir::pretty::write_mir_fn(
-    tcx,
-    body,
-    &mut |_, _| Ok(()),
-    &mut stderr,
-    PrettyPrintMirOptions {
-      include_extra_comments: false,
-    },
-  )
-  .unwrap();
+  MirWriter::new(tcx).write_mir_fn(body, &mut stderr).unwrap();
 
   log::debug!("{:?}", ctxt.polonius_output);
 }

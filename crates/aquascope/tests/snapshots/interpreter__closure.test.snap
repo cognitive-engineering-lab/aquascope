@@ -17,30 +17,6 @@ steps:
               private_use_as_methods_instead: 0
           location:
             start:
-              line: 0
-              column: 0
-            end:
-              line: 0
-              column: 9
-            filename:
-              private_use_as_methods_instead: 0
-          locals: []
-    heap:
-      locations: []
-  - stack:
-      frames:
-        - name: main
-          body_span:
-            start:
-              line: 0
-              column: 0
-            end:
-              line: 4
-              column: 1
-            filename:
-              private_use_as_methods_instead: 0
-          location:
-            start:
               line: 1
               column: 2
             end:

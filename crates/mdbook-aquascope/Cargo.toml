@@ -6,7 +6,7 @@ authors = [
 ]
 description = "Interactive Aquascope editor for your mdBook"
 license = "MIT"
-version = "0.3.8"
+version = "0.3.9"
 edition = "2021"
 include = [
   "src/**/*",
@@ -20,11 +20,10 @@ dev = ["mdbook-preprocessor-utils/testing"]
 
 [dependencies]
 clap = { version = "=4.3.24", features = ["derive"] }
-mdbook = "= 0.4.45"
-mdbook-preprocessor-utils = "0.2.0"
+mdbook-preprocessor-utils = "0.3.0"
 nom = "7"
 nom_locate = "4"
-anyhow.workspace = true
+anyhow = { workspace = true }
 tempfile = "3"
 serde_json = "1"
 serde = { workspace = true }
@@ -42,5 +41,5 @@ mdbook-aquascope = { path = ".", features = ["dev"] }
 maplit = "1.0"
 
 [build-dependencies]
-anyhow.workspace = true
-mdbook-preprocessor-utils = "0.2.0"
+anyhow = { workspace = true }
+mdbook-preprocessor-utils = "0.3.0"

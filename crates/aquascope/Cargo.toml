@@ -1,14 +1,11 @@
 [package]
 name = "aquascope"
 version = "0.1.0"
-license = "MIT"
-edition = "2021"
-authors = [
-  "Gavin Gray <gavinleroy6@gmail.com>",
-  "Will Crichton <wcrichto@cs.stanford.edu>"
-]
+license = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
 description = "Permissions analyzer for Rust code"
-repository = "https://github.com/cognitive-engineering-lab/aquascope"
 publish = false
 
 [package.metadata.rust-analyzer]
@@ -26,10 +23,10 @@ ts-rs = "7"
 regex = "1"
 fluid-let = "1.0"
 fuzzy_match = "0.2.1"
-rustc_utils = {workspace = true, features = ["graphviz", "ts-rs", "serde", "test"]}
+rustc_utils = {workspace = true, features = ["ts-rs", "serde", "test"]}
 
 # interpret module
-miri = {git = "https://github.com/rust-lang/miri", rev = "afdbb080fe4b8e73838fffdbea8b290aa246f3d7"}
+miri = {git = "https://github.com/rust-lang/miri", rev = "e88582ada7b20800d4257f13634d4e54b9757a9f"}
 aquascope_workspace_utils = { version = "0.3", path = "../aquascope_workspace_utils" }
 
 # testing utils

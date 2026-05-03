@@ -1,10 +1,4 @@
-#![feature(
-  rustc_private,
-  unboxed_closures,
-  box_patterns,
-  trait_alias,
-  trace_macros
-)]
+#![feature(rustc_private, unboxed_closures)]
 
 extern crate either;
 extern crate proc_macro;

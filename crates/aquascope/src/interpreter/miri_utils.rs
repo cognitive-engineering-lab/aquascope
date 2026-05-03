@@ -1,13 +1,12 @@
 use miri::{
-  interp_ok, InterpCx, InterpResult, MPlaceTy, Machine, MemPlaceMeta, OpTy,
-  Projectable,
+  InterpCx, InterpResult, MPlaceTy, Machine, MemPlaceMeta, OpTy, Projectable,
+  interp_ok,
 };
-use rustc_abi::FieldsShape;
+use rustc_abi::{FieldIdx, FieldsShape, Size};
 use rustc_middle::{
   mir::{Local, PlaceElem},
-  ty::{layout::TyAndLayout, AdtKind, FieldDef, TyKind},
+  ty::{AdtKind, FieldDef, TyKind, layout::TyAndLayout},
 };
-use rustc_target::abi::{FieldIdx, Size};
 
 pub trait OpTyExt<'tcx, M: Machine<'tcx>>: Sized {
   fn field_by_name(
@@ -41,7 +40,7 @@ where
             .collect::<Vec<_>>()
         )
       });
-    let field_op = ecx.project_field(self, i)?;
+    let field_op = ecx.project_field(self, FieldIdx::from_usize(i))?;
     interp_ok((field, field_op))
   }
 }

@@ -12,11 +12,11 @@
 
 use polonius_engine::{AllFacts, FactTypes, Output as PEOutput};
 use rustc_borrowck::consumers::{
-  BodyWithBorrowckFacts, BorrowData, BorrowSet, LocationTable, RichLocation,
+  BodyWithBorrowckFacts, BorrowData, BorrowSet, PoloniusLocationTable,
   RustcFacts,
 };
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
-use rustc_hir::{def_id::DefId, BodyId, Mutability};
+use rustc_hir::{BodyId, Mutability, def_id::DefId};
 use rustc_index::IndexVec;
 use rustc_middle::{
   mir::{BorrowKind, Local, Location, Place, ProjectionElem},
@@ -25,12 +25,12 @@ use rustc_middle::{
 use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_span::Span;
 use rustc_utils::{BodyExt, PlaceExt, SpanExt, TyExt};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 
 use crate::analysis::permissions::{
-  flow::RegionFlows, AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin,
-  Output, Path, Permissions, PermissionsData, PermissionsDomain, Point,
-  Variable,
+  AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin, Output, Path,
+  Permissions, PermissionsData, PermissionsDomain, Point, Variable,
+  flow::RegionFlows,
 };
 
 /// A path as defined in rustc.
@@ -102,7 +102,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
     self.place_data[p]
   }
 
-  fn location_table(&self) -> &LocationTable {
+  fn location_table(&self) -> &PoloniusLocationTable {
     self.body_with_facts.location_table.as_ref().unwrap()
   }
 
@@ -118,9 +118,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
   }
 
   pub fn point_to_location(&self, p: Point) -> Location {
-    match self.location_table().to_location(p) {
-      RichLocation::Start(l) | RichLocation::Mid(l) => l,
-    }
+    self.location_table().to_location(p)
   }
 
   pub fn path_to_moveable_path(&self, p: Path) -> MoveablePath {
@@ -478,19 +476,14 @@ impl<'tcx> PermissionsCtxt<'tcx> {
     }
 
     let mut hash: HashMap<Loan, (Point, Point)> = HashMap::default();
-
-    self
-      .polonius_output
-      .loan_live_at
-      .iter()
-      .for_each(|(point, loans)| {
-        loans.iter().for_each(|loan| {
-          hash
-            .entry(*loan)
-            .or_insert_with(|| PointExt::from_point(*point))
-            .expand(*point, self)
-        })
-      });
+    for (point, loans) in &self.polonius_output.loan_live_at {
+      for loan in loans {
+        hash
+          .entry(*loan)
+          .or_insert_with(|| PointExt::from_point(*point))
+          .expand(*point, self)
+      }
+    }
 
     self.loan_regions = Some(hash);
   }

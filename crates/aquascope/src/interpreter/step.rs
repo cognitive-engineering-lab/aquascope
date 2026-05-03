@@ -6,30 +6,25 @@ use std::{
   collections::{HashMap, HashSet},
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use either::Either;
 use itertools::Itertools;
-use miri::{
-  interp_ok, AllocId, AllocMap, AllocRange, Immediate, InterpCx,
-  InterpErrorInfo, InterpErrorKind, InterpResult, LocalState, Machine,
-  MiriConfig, MiriMachine, OpTy, UndefinedBehaviorInfo,
-};
-use rustc_abi::{FieldsShape, Size};
-use rustc_const_eval::ReportErrorExt;
+use miri::*;
+use rustc_abi::{ExternAbi, FieldsShape, Size};
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{
-    self, visit::Visitor, Local, Location, Place, PlaceElem,
-    VarDebugInfoContents, RETURN_PLACE,
+    self, Local, Location, Place, PlaceElem, RETURN_PLACE,
+    VarDebugInfoContents, visit::Visitor,
   },
   ty::{
-    layout::{HasTyCtxt, TyAndLayout},
     Instance, TyCtxt,
+    layout::{HasTyCtxt, TyAndLayout},
   },
 };
 use rustc_session::CtfeBacktrace;
 use rustc_span::Span;
-use rustc_utils::{source_map::range::CharRange, PlaceExt};
+use rustc_utils::{PlaceExt, source_map::range::CharRange};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -151,11 +146,11 @@ enum BodySpanType {
 
 /// Returns the span of a body, either just the header or the entire item
 fn body_span(tcx: TyCtxt, def_id: DefId, body_span_type: BodySpanType) -> Span {
-  let hir = tcx.hir();
-  let fn_node = hir.body_owner(hir.body_owned_by(def_id.expect_local()).id());
+  let fn_node =
+    tcx.hir_body_owner(tcx.hir_body_owned_by(def_id.expect_local()).id());
   match body_span_type {
-    BodySpanType::Header => hir.span(fn_node),
-    BodySpanType::Whole => hir.span_with_body(fn_node),
+    BodySpanType::Header => tcx.hir_span(fn_node),
+    BodySpanType::Whole => tcx.hir_span_with_body(fn_node),
   }
 }
 
@@ -176,17 +171,29 @@ impl<'tcx> VisEvaluator<'tcx> {
     let (main_id, entry_fn_type) = tcx
       .entry_fn(())
       .context("no main or start function found")?;
-    let ecx = miri::create_ecx(tcx, main_id, entry_fn_type, &MiriConfig {
-      mute_stdout_stderr: true,
-      // have to make sure miri doesn't complain about us poking around memory
-      validation: miri::ValidationMode::No,
-      borrow_tracker: None,
-      ..Default::default()
-    })
+    let mut ecx = miri::create_ecx(
+      tcx,
+      main_id,
+      MiriEntryFnType::Rustc(entry_fn_type),
+      &MiriConfig {
+        mute_stdout_stderr: true,
+        // have to make sure miri doesn't complain about us poking around memory
+        validation: miri::ValidationMode::No,
+        borrow_tracker: None,
+        ..Default::default()
+      },
+      None,
+    )
     .report_err()
-    .map_err(|e| {
-      anyhow!("{}", e.into_kind().diagnostic_message().as_str().unwrap())
-    })?;
+    .map_err(|e| anyhow!("{}", e.into_kind()))?;
+
+    // `create_ecx` no longer pushes the entry stack frame; the on-stack-empty
+    // callback it registers via `late_init` only fires from miri's own
+    // scheduler loop, which we don't use. Push the user's `main` directly so
+    // the first `step()` has work to do.
+    Self::push_entry_frame(&mut ecx, main_id)
+      .report_err()
+      .map_err(|e| anyhow!("{}", e.into_kind()))?;
 
     // Ensures we get nice backtraces from miri evaluation errors
     *tcx.sess.ctfe_backtrace.borrow_mut() = CtfeBacktrace::Capture;
@@ -196,6 +203,27 @@ impl<'tcx> VisEvaluator<'tcx> {
       memory_map: RefCell::default(),
       moved_places: RefCell::new(MovedPlaces::new()),
     })
+  }
+
+  fn push_entry_frame(
+    ecx: &mut InterpCx<'tcx, MiriMachine<'tcx>>,
+    main_id: DefId,
+  ) -> InterpResult<'tcx, ()> {
+    let tcx = *ecx.tcx;
+    let main_instance = Instance::mono(tcx, main_id);
+
+    let main_sig = tcx.fn_sig(main_id).no_bound_vars().unwrap();
+    let ret_ty = main_sig.output().no_bound_vars().unwrap();
+    let ret_layout = ecx.layout_of(ret_ty)?;
+    let ret_place = ecx.allocate(ret_layout, MiriMemoryKind::Machine.into())?;
+
+    ecx.call_thread_root_function(
+      main_instance,
+      ExternAbi::Rust,
+      &[],
+      Some(&ret_place),
+      rustc_span::DUMMY_SP,
+    )
   }
 
   pub(super) fn remap_alloc_id(&self, alloc_id: AllocId) -> usize {
@@ -383,13 +411,13 @@ impl<'tcx> VisEvaluator<'tcx> {
 
     match op {
       // Ignore uninitialized locals
-      Either::Right(Immediate::Uninit) => {
+      Either::Right(Immediate::Uninit) if !layout.is_zst() => {
         // Special case: a unit struct is considered uninitialized, but we would still like to
         // visualize it at the toplevel, so we handle that here. Might need to make this a configurable thing?
-        if !layout.is_zst() {
-          log::trace!("Ignoring local {local:?} because it's uninitialized and not zero-sized");
-          return interp_ok(None);
-        }
+        log::trace!(
+          "Ignoring local {local:?} because it's uninitialized and not zero-sized"
+        );
+        return interp_ok(None);
       }
 
       // If a local is Indirect, meaning there exists a pointer to it,
@@ -405,7 +433,9 @@ impl<'tcx> VisEvaluator<'tcx> {
         let (_, allocation) =
           self.ecx.memory.alloc_map().get(alloc_id).unwrap();
         if !self.mem_is_initialized(layout, allocation) {
-          log::trace!("Ignoring local {local:?} because it's a pointer to uninitialized memory");
+          log::trace!(
+            "Ignoring local {local:?} because it's a pointer to uninitialized memory"
+          );
           return interp_ok(None);
         }
 
@@ -607,10 +637,10 @@ impl<'tcx> VisEvaluator<'tcx> {
         Ordering::Equal => current_loc_opt,
       };
 
-      if let Some(current_loc) = current_loc_opt {
-        if let Some(step) = self.build_step(current_loc)? {
-          return interp_ok((Some(step), more_work));
-        }
+      if let Some(current_loc) = current_loc_opt
+        && let Some(step) = self.build_step(current_loc)?
+      {
+        return interp_ok((Some(step), more_work));
       }
 
       if !more_work {
@@ -632,11 +662,9 @@ impl<'tcx> VisEvaluator<'tcx> {
             alloc_id: self.remap_alloc_id(alloc_id),
           }
         }
-        ub => MUndefinedBehavior::Other(
-          ub.diagnostic_message().as_str().unwrap().to_string(),
-        ),
+        ub => MUndefinedBehavior::Other(ub.to_string()),
       },
-      err => bail!("{}", err.diagnostic_message().as_str().unwrap()),
+      err => bail!("{err}"),
     })
   }
 

@@ -11,7 +11,7 @@ use std::time::Instant;
 use datafrog::{Iteration, Relation, RelationLeaper, ValueFilter};
 use polonius_engine::{Algorithm, FactTypes, Output as PEOutput};
 use rustc_borrowck::consumers::{
-  places_conflict, BodyWithBorrowckFacts, BorrowSet, PlaceConflictBias,
+  BodyWithBorrowckFacts, BorrowSet, PlaceConflictBias, places_conflict,
 };
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, Mutability};
@@ -24,8 +24,8 @@ use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_utils::{BodyExt, PlaceExt};
 
 use super::{
-  context::PermissionsCtxt, flow, AquascopeFacts, Loan, Move, Path, Point,
-  ENABLE_FLOW_DEFAULT, ENABLE_FLOW_PERMISSIONS,
+  AquascopeFacts, ENABLE_FLOW_DEFAULT, ENABLE_FLOW_PERMISSIONS, Loan, Move,
+  Path, Point, context::PermissionsCtxt, flow,
 };
 
 /// Aquascope permissions facts output.
@@ -173,7 +173,7 @@ impl Default for Output<AquascopeFacts> {
 // this could definitely be optimized (for performance and memory consumption).
 #[allow(clippy::similar_names)]
 pub fn derive_permission_facts(ctxt: &mut PermissionsCtxt) {
-  let def_id = ctxt.tcx.hir().body_owner_def_id(ctxt.body_id);
+  let def_id = ctxt.tcx.hir_body_owner_def_id(ctxt.body_id);
   let body = &ctxt.body_with_facts.body;
   let tcx = ctxt.tcx;
 
@@ -500,12 +500,12 @@ pub fn compute<'tcx>(
   body_with_facts: &'tcx BodyWithBorrowckFacts<'tcx>,
 ) -> PermissionsCtxt<'tcx> {
   let timer = Instant::now();
-  let def_id = tcx.hir().body_owner_def_id(body_id);
+  let def_id = tcx.hir_body_owner_def_id(body_id);
   let body = &body_with_facts.body;
 
   // for debugging pruposes only
-  let owner = tcx.hir().body_owner(body_id);
-  let name = match tcx.hir().opt_name(owner) {
+  let owner = tcx.hir_body_owner(body_id);
+  let name = match tcx.hir_opt_name(owner) {
     Some(name) => name.to_ident_string(),
     None => "<anonymous>".to_owned(),
   };
@@ -516,7 +516,7 @@ pub fn compute<'tcx>(
     PEOutput::compute(polonius_input_facts, Algorithm::Naive, true);
 
   let locals_are_invalidated_at_exit =
-    tcx.hir().body_owner_kind(def_id).is_fn_or_closure();
+    tcx.hir_body_owner_kind(def_id).is_fn_or_closure();
   let move_data = MoveData::gather_moves(body, tcx, |_| true);
   let borrow_set =
     BorrowSet::build(tcx, body, locals_are_invalidated_at_exit, &move_data);
@@ -526,7 +526,7 @@ pub fn compute<'tcx>(
   // This should always be true for the current analysis of aquascope
   let locals_are_invalidated_at_exit = def_id
     .as_local()
-    .is_some_and(|did| tcx.hir().body_owner_kind(did).is_fn_or_closure());
+    .is_some_and(|did| tcx.hir_body_owner_kind(did).is_fn_or_closure());
 
   let mut ctxt = PermissionsCtxt {
     tcx,

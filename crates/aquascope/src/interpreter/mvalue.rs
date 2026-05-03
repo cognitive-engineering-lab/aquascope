@@ -1,23 +1,19 @@
 //! Interpreting memory as Rust data types
 
 use miri::{
-  interp_ok, AllocKind, AllocMap, CheckInAllocMsg, Immediate, InterpErrorInfo,
+  AllocKind, AllocMap, CheckInAllocMsg, Immediate, InterpErrorInfo,
   InterpErrorKind, InterpResult, MPlaceTy, MemPlaceMeta, MemoryKind, OpTy,
-  Projectable, UndefinedBehaviorInfo,
+  Projectable, UndefinedBehaviorInfo, interp_ok,
 };
-use rustc_abi::FieldsShape;
+use rustc_abi::{FieldIdx, FieldsShape, Size};
 use rustc_apfloat::Float;
-use rustc_middle::ty::{
-  layout::{LayoutOf, TyAndLayout},
-  AdtKind, Ty, TyKind, TypingEnv,
-};
-use rustc_target::abi::Size;
+use rustc_middle::ty::{AdtKind, Ty, TyKind, TypingEnv, layout::TyAndLayout};
 use rustc_type_ir::FloatTy;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{
-  miri_utils::{locate_address_in_type, OpTyExt},
+  miri_utils::{OpTyExt, locate_address_in_type},
   step::VisEvaluator,
 };
 
@@ -121,6 +117,7 @@ pub enum MValue {
   Uint(u64),
   Int(i64),
   Float(f64),
+  FnPtr,
 
   // Composites
   Tuple(Vec<MValue>),
@@ -198,6 +195,8 @@ impl<'tcx> Reader<'_, 'tcx> {
     &mut self,
     mplace: miri::MPlaceTy<'tcx>,
   ) -> InterpResult<'tcx, MValue> {
+    log::trace!("reading pointer: {mplace:?}");
+
     // Determine the base allocation from the mplace's provenance
     let (alloc_id, offset, _) = self
       .ev
@@ -206,7 +205,10 @@ impl<'tcx> Reader<'_, 'tcx> {
     let alloc_info = self.ev.ecx.get_alloc_info(alloc_id);
 
     if matches!(alloc_info.kind, AllocKind::Dead) {
-      log::warn!("Reading a dead allocation");
+      return interp_ok(MValue::Unallocated {
+        alloc_id: Some(alloc_id.0.get() as usize),
+      });
+      // log::warn!("Reading a dead allocation");
     }
 
     // Check if we have seen this allocation before
@@ -224,8 +226,15 @@ impl<'tcx> Reader<'_, 'tcx> {
 
       // Get the kind of memory we're looking at (either stack or heap)
       // from the allocation metadata.
-      let (memory_kind, _) =
-        self.ev.ecx.memory.alloc_map().get(alloc_id).unwrap();
+      let (memory_kind, _) = self
+        .ev
+        .ecx
+        .memory
+        .alloc_map()
+        .get(alloc_id)
+        .unwrap_or_else(|| {
+          panic!("Missing memory allocation for alloc: {alloc_id:?}")
+        });
 
       // Generate a corresponding `MMemorySegment` that locates the base allocation,
       // and a `TyAndLayout` that describes the allocation's entire layout.
@@ -324,7 +333,7 @@ impl<'tcx> Reader<'_, 'tcx> {
     let result = match ty.kind() {
       _ if ty.is_box() => {
         self.heap_alloc_kinds.push(HeapAllocKind::Box);
-        let unique = ecx.project_field(op, 0)?;
+        let unique = ecx.project_field(op, FieldIdx::from_usize(0))?;
         let result = self.read(&unique)?;
         self.heap_alloc_kinds.pop();
         MValue::Adt {
@@ -338,7 +347,7 @@ impl<'tcx> Reader<'_, 'tcx> {
       TyKind::Tuple(tys) => {
         let fields = (0 .. tys.len())
           .map(|i| {
-            let field_op = ecx.project_field(op, i)?;
+            let field_op = ecx.project_field(op, FieldIdx::from_usize(i))?;
             self.read(&field_op)
           })
           .collect::<InterpResult<'tcx, Vec<_>>>()?;
@@ -354,7 +363,7 @@ impl<'tcx> Reader<'_, 'tcx> {
           ($op:expr, $fields:expr) => {{
             let mut fields = Vec::new();
             for (i, field) in $fields.enumerate() {
-              let field_op = ecx.project_field($op, i)?;
+              let field_op = ecx.project_field($op, FieldIdx::from_usize(i))?;
 
               // Skip ZST fields since they don't exist at runtime
               if field_op.layout.is_zst() {
@@ -372,28 +381,29 @@ impl<'tcx> Reader<'_, 'tcx> {
           AdtKind::Struct => {
             let mut alloc_kind = None;
             match name.as_str() {
-              "String" => {
-                let (_, vec) = op.field_by_name("vec", ecx)?;
-                if let Some(len) = self.read_vec_len(&vec)? {
-                  alloc_kind = Some(HeapAllocKind::String { len });
-                }
+              "String"
+                if let (_, vec) = op.field_by_name("vec", ecx)?
+                  && let Some(len) = self.read_vec_len(&vec)? =>
+              {
+                alloc_kind = Some(HeapAllocKind::String { len });
               }
-              "Vec" => {
-                if let Some(len) = self.read_vec_len(op)? {
-                  if !matches!(
+
+              "Vec"
+                if let Some(len) = self.read_vec_len(op)?
+                  && !matches!(
                     self.heap_alloc_kinds.last(),
                     Some(HeapAllocKind::String { .. })
-                  ) {
-                    let el_ty = args[0].expect_ty();
-                    let el_ty = tcx
-                      .layout_of(
-                        TypingEnv::fully_monomorphized().as_query_input(el_ty),
-                      )
-                      .unwrap();
-                    alloc_kind = Some(HeapAllocKind::Vec { len, el_ty });
-                  }
-                }
+                  ) =>
+              {
+                let el_ty = args[0].expect_ty();
+                let el_ty = tcx
+                  .layout_of(
+                    TypingEnv::fully_monomorphized().as_query_input(el_ty),
+                  )
+                  .unwrap();
+                alloc_kind = Some(HeapAllocKind::Vec { len, el_ty });
               }
+
               _ => {}
             };
 
@@ -433,7 +443,12 @@ impl<'tcx> Reader<'_, 'tcx> {
         }
       }
 
-      _ if ty.is_primitive() => {
+      // TyKind::is_primitive
+      TyKind::Bool
+      | TyKind::Char
+      | TyKind::Int(_)
+      | TyKind::Uint(_)
+      | TyKind::Float(_) => {
         let imm = match ecx.read_immediate(op).report_err() {
           Ok(imm) => imm,
 
@@ -487,16 +502,17 @@ impl<'tcx> Reader<'_, 'tcx> {
         self.read_pointer(mplace)?
       }
 
-      _ if ty.is_any_ptr() => {
-        let val = ecx.read_immediate(op)?;
-        let mplace = ecx.ref_to_mplace(&val)?;
-        if let Some((size, _)) = ecx.size_and_align_of_mplace(&mplace)?
+      TyKind::FnPtr(..) => {
+        // let imm_ty = ecx.read_immediate(op)?;
+        MValue::FnPtr
+      }
+
+      TyKind::Ref(..) | TyKind::RawPtr(..) => {
+        let imm_ty = ecx.read_immediate(op)?;
+        let mplace = ecx.imm_ptr_to_mplace(&imm_ty)?;
+        if let Some((size, _)) = ecx.size_and_align_of_val(&mplace)?
           && ecx
-            .check_ptr_access(
-              mplace.ptr(),
-              size,
-              CheckInAllocMsg::MemoryAccessTest,
-            )
+            .check_ptr_access(mplace.ptr(), size, CheckInAllocMsg::MemoryAccess)
             .report_err()
             .is_err()
         {
@@ -541,6 +557,12 @@ impl<'tcx> Reader<'_, 'tcx> {
           fields,
           alloc_kind: None,
         }
+      }
+
+      TyKind::Pat(ty, _) => {
+        let layout = ecx.layout_of(*ty)?;
+        let inner = op.transmute(layout, ecx)?;
+        self.read(&inner)?
       }
 
       kind => todo!("{:?} / {:?}", op, kind),

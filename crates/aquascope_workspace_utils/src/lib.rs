@@ -1,6 +1,6 @@
 use std::{path::PathBuf, process::Command};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 const TOOLCHAIN_TOML: &str = include_str!("../rust-toolchain.toml");
 

@@ -1,14 +1,11 @@
 [package]
 name = "aquascope_front"
 version = "0.1.0"
-license = "MIT"
-edition = "2021"
-authors = [
-  "Gavin Gray <gavinleroy6@gmail.com>",
-  "Will Crichton <wcrichto@cs.stanford.edu>"
-]
+license = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
 description = "Interactive visualizations of Rust at compile-time and run-time"
-repository = "https://github.com/cognitive-engineering-lab/aquascope"
 publish = false
 
 [package.metadata.rust-analyzer]

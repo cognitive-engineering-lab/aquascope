@@ -2,7 +2,7 @@
 
 use std::{ffi::OsStr, io::Write, path::Path};
 
-fn main() {
+fn main() -> std::process::ExitCode {
   env_logger::Builder::from_default_env()
     .format(|buf, record| {
       let file = record.file().unwrap_or("unknown");
@@ -22,5 +22,5 @@ fn main() {
     })
     .init();
 
-  rustc_plugin::driver_main(aquascope_front::AquascopePlugin);
+  rustc_plugin::driver_main(aquascope_front::AquascopePlugin)
 }

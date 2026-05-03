@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::Parser;
 use mdbook_aquascope::AquascopePreprocessor;
 use mdbook_preprocessor_utils::{
-  mdbook::preprocess::PreprocessorContext, Asset, SimplePreprocessor,
+  mdbook_preprocessor::PreprocessorContext, Asset, SimplePreprocessor,
 };
 
 mdbook_preprocessor_utils::asset_generator!("../js/");
