@@ -7,6 +7,8 @@ import ReactDOM from "react-dom/client";
 import type {
   AnalysisFacts,
   BoundariesAnnotations,
+  LoanKey,
+  LoanRefined,
   PermissionsBoundary
 } from "../types.js";
 import {
@@ -52,6 +54,12 @@ let PermChar = ({ content, names, act, showit, hideit }: PermCharProps) => {
   );
 };
 
+const refiningLoan = (l: LoanRefined<LoanKey>) => {
+  if (l === "None") return;
+  else if ("Read" in l) return l.Read.key;
+  else return l.Write.key;
+};
+
 let PermStack = ({
   facts,
   boundary
@@ -68,11 +76,11 @@ let PermStack = ({
       exp: boundary.expected.read,
       act: boundary.actual.read,
       showit: () => {
-        showLoanRegion(facts, data.loan_read_refined, ["read"]);
+        showLoanRegion(facts, refiningLoan(data.loan_refined), ["read"]);
         showMoveRegion(facts, data.path_moved, ["read"]);
       },
       hideit: () => {
-        hideLoanRegion(facts, data.loan_read_refined, ["read"]);
+        hideLoanRegion(facts, refiningLoan(data.loan_refined), ["read"]);
         hideMoveRegion(facts, data.path_moved, ["read"]);
       }
     },
@@ -82,11 +90,11 @@ let PermStack = ({
       exp: boundary.expected.write,
       act: boundary.actual.write,
       showit: () => {
-        showLoanRegion(facts, data.loan_write_refined, ["write"]);
+        showLoanRegion(facts, refiningLoan(data.loan_refined), ["write"]);
         showMoveRegion(facts, data.path_moved, ["write"]);
       },
       hideit: () => {
-        hideLoanRegion(facts, data.loan_write_refined, ["write"]);
+        hideLoanRegion(facts, refiningLoan(data.loan_refined), ["write"]);
         hideMoveRegion(facts, data.path_moved, ["write"]);
       }
     },

@@ -105,6 +105,18 @@ pub enum ValueStep<A: Stepable> {
 }
 
 impl<A: Stepable> ValueStep<A> {
+  fn high(value: A) -> Self {
+    Self::High { value }
+  }
+
+  fn none() -> Self {
+    Self::None { value: None }
+  }
+
+  fn already(value: A) -> Self {
+    Self::None { value: Some(value) }
+  }
+
   // TODO: this is a loose surface-level notion of symmetry.
   fn is_symmetric_diff(&self, rhs: &Self) -> bool {
     matches!(
@@ -159,7 +171,7 @@ impl std::fmt::Debug for PermissionsDiff {
   }
 }
 
-#[derive(Copy, Clone, Serialize, TS, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, TS)]
 #[ts(export)]
 pub struct PermissionsDataDiff {
   pub is_live: ValueStep<bool>,
@@ -167,6 +179,10 @@ pub struct PermissionsDataDiff {
   pub type_writeable: ValueStep<bool>,
   pub path_moved: ValueStep<MoveKey>,
   pub path_uninitialized: ValueStep<bool>,
+  // NOTE the specific (_(read|write)_) versions are used *only* for
+  // internal testing to keep snapshots the same as they were before. The
+  // `loan_refined` field is sent to the frontend because we only care
+  // if something is "refined," doesn't matter if it read|write refined.
   pub loan_read_refined: ValueStep<LoanKey>,
   pub loan_write_refined: ValueStep<LoanKey>,
   pub loan_drop_refined: ValueStep<LoanKey>,
@@ -181,7 +197,16 @@ impl std::fmt::Debug for PermissionsDataDiff {
     writeln!(f, "    type_droppable:     {:?}", self.type_droppable)?;
     writeln!(f, "    type_writeable:     {:?}", self.type_writeable)?;
     writeln!(f, "    path_moved:         {:?}", self.path_moved)?;
-    writeln!(f, "    loan_write_refined: {:?}", self.loan_write_refined)?;
+    writeln!(
+      f,
+      "    loan_read_refined:       {:?}",
+      self.loan_read_refined
+    )?;
+    writeln!(
+      f,
+      "    loan_write_refined:       {:?}",
+      self.loan_write_refined
+    )?;
     writeln!(f, "    loan_drop_refined:  {:?}", self.loan_drop_refined)?;
     Ok(())
   }
@@ -208,9 +233,9 @@ impl Difference for bool {
     if *self && !rhs {
       ValueStep::Low
     } else if !*self && rhs {
-      ValueStep::High { value: true }
+      ValueStep::high(true)
     } else {
-      ValueStep::None { value: Some(*self) }
+      ValueStep::already(*self)
     }
   }
 }
@@ -226,9 +251,9 @@ impl<A: Stepable> Difference for Option<A> {
 
   fn diff(&self, rhs: Option<A>) -> Self::Diff {
     match (self, rhs) {
-      (None, None) => ValueStep::None { value: None },
+      (None, None) => ValueStep::none(),
       (Some(_), None) => ValueStep::Low,
-      (None, Some(value)) => ValueStep::High { value },
+      (None, Some(value)) => ValueStep::high(value),
       (Some(v0), Some(v1)) => {
         if *v0 != v1 {
           log::warn!(
@@ -261,8 +286,14 @@ impl Difference for PermissionsData {
       is_live: self.is_live.diff(rhs.is_live),
       type_droppable: self.type_droppable.diff(rhs.type_droppable),
       type_writeable: self.type_writeable.diff(rhs.type_writeable),
-      loan_read_refined: self.loan_read_refined.diff(rhs.loan_read_refined),
-      loan_write_refined: self.loan_write_refined.diff(rhs.loan_write_refined),
+      loan_read_refined: self
+        .loan_refined
+        .as_read_refinement()
+        .diff(rhs.loan_refined.as_read_refinement()),
+      loan_write_refined: self
+        .loan_refined
+        .as_write_refinement()
+        .diff(rhs.loan_refined.as_write_refinement()),
       loan_drop_refined: self.loan_drop_refined.diff(rhs.loan_drop_refined),
       path_moved: self.path_moved.diff(rhs.path_moved),
       path_uninitialized: self.path_uninitialized.diff(rhs.path_uninitialized),

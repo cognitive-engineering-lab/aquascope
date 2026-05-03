@@ -16,6 +16,7 @@ export { ValueStep } from "./bindings/ValueStep";
 export { LoanKey } from "./bindings/LoanKey";
 export { LoanPoints } from "./bindings/LoanPoints";
 export { LoanRegions } from "./bindings/LoanRegions";
+export { LoanRefined } from "./bindings/LoanRefined";
 
 export { MoveKey } from "./bindings/MoveKey";
 export { MovePoints } from "./bindings/MovePoints";

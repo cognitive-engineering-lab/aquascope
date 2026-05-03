@@ -604,4 +604,3 @@ description: ascii_capitalize@if_3.test
             value: false
           drop:
             type: Low
-

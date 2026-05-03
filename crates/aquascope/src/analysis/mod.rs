@@ -51,6 +51,49 @@ thread_local! {
 #[ts(export)]
 pub struct LoanKey(pub u32);
 
+/// Represents a point
+#[derive(
+  Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, TS,
+)]
+#[ts(export)]
+pub enum LoanRefined<T> {
+  None,
+  Read { key: T },
+  Write { key: T },
+}
+
+impl<T> LoanRefined<T> {
+  pub fn as_read_refinement(self) -> Option<T> {
+    match self {
+      Self::Read { key } => Some(key),
+      _ => None,
+    }
+  }
+
+  pub fn as_write_refinement(self) -> Option<T> {
+    match self {
+      Self::Read { key } | Self::Write { key } => Some(key),
+      _ => None,
+    }
+  }
+
+  pub fn not_refined(&self) -> bool {
+    matches!(self, LoanRefined::None)
+  }
+
+  pub fn is_refined(&self) -> bool {
+    !self.not_refined()
+  }
+
+  pub fn is_read_refined(&self) -> bool {
+    matches!(self, LoanRefined::Read { .. })
+  }
+
+  pub fn is_write_refined(&self) -> bool {
+    self.is_read_refined() || matches!(self, LoanRefined::Write { .. })
+  }
+}
+
 #[derive(
   Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, TS,
 )]

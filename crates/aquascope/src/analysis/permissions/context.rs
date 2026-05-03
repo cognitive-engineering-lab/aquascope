@@ -27,10 +27,13 @@ use rustc_span::Span;
 use rustc_utils::{BodyExt, PlaceExt, SpanExt, TyExt};
 use smallvec::{SmallVec, smallvec};
 
-use crate::analysis::permissions::{
-  AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin, Output, Path,
-  Permissions, PermissionsData, PermissionsDomain, Point, Variable,
-  flow::RegionFlows,
+use crate::analysis::{
+  LoanRefined,
+  permissions::{
+    AquascopeFacts, Loan, LoanKey, Move, MoveKey, Origin, Output, Path,
+    Permissions, PermissionsData, PermissionsDomain, Point, Variable,
+    flow::RegionFlows,
+  },
 };
 
 /// A path as defined in rustc.
@@ -295,8 +298,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       type_copyable: ty.is_copyable(self.tcx, self.typing_env),
       path_moved: None,
       path_uninitialized: false,
-      loan_read_refined: None,
-      loan_write_refined: None,
+      loan_refined: LoanRefined::None,
       loan_drop_refined: None,
     }
   }
@@ -376,6 +378,20 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       loan_read_refined.get(path).map(Into::<LoanKey>::into);
     let loan_write_refined: Option<LoanKey> =
       loan_write_refined.get(path).map(Into::<LoanKey>::into);
+
+    let loan_refined: LoanRefined<LoanKey> = match (
+      loan_read_refined,
+      loan_write_refined,
+    ) {
+      (Some(key), Some(..)) => LoanRefined::Read { key },
+      (None, Some(key)) => LoanRefined::Write { key },
+      (Some(..), None) => {
+        unreachable!(
+          "If read permissions are lost at a point, write permissions are also lost."
+        )
+      }
+      (None, None) => LoanRefined::None,
+    };
     let loan_drop_refined: Option<LoanKey> =
       loan_drop_refined.get(path).map(Into::<LoanKey>::into);
 
@@ -386,8 +402,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
       is_live,
       path_uninitialized,
       path_moved,
-      loan_read_refined,
-      loan_write_refined,
+      loan_refined,
       loan_drop_refined,
     }
   }
@@ -411,8 +426,7 @@ impl<'tcx> PermissionsCtxt<'tcx> {
           type_copyable: false,
           path_moved: None,
           path_uninitialized: false,
-          loan_read_refined: None,
-          loan_write_refined: None,
+          loan_refined: LoanRefined::None,
           loan_drop_refined: None,
         })
       })

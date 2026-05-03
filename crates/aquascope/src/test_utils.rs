@@ -470,7 +470,6 @@ pub fn compile_normal(
   )
 }
 
-#[allow(unused_must_use)]
 pub fn compile(
   input: impl Into<String>,
   args: &str,
@@ -489,6 +488,7 @@ pub fn compile(
 
   // Explicitly ignore the unused return value. Many test cases are intended
   // to fail compilation, but the analysis results should still be sound.
+  #[allow(unused_must_use)]
   rustc_driver::catch_fatal_errors(|| {
     run_compiler(&args, &mut callbacks);
   });
@@ -514,10 +514,10 @@ where
     config.file_loader = Some(Box::new(StringLoader(self.input.clone())));
   }
 
-  fn after_analysis<'tcx>(
+  fn after_analysis(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
-    tcx: TyCtxt<'tcx>,
+    tcx: TyCtxt,
   ) -> rustc_driver::Compilation {
     errors::initialize_error_tracking();
 

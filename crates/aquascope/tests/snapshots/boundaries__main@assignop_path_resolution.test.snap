@@ -70,7 +70,9 @@ description: main@assignop_path_resolution.test
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    loan_write_refined: 0
+    loan_refined:
+      Write:
+        key: 0
     loan_drop_refined: 0
 - location:
     line: 8
