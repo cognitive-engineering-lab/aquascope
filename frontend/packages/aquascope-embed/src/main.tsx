@@ -1,10 +1,14 @@
 import { Editor, type Result, type types } from "@aquascope/editor";
 import { useFloating } from "@floating-ui/react-dom";
+import { library } from "@fortawesome/fontawesome-svg-core";
+import { faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
 import React, { useContext, useLayoutEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { setup } from "./setup";
 import "./styles.scss";
+
+library.add(faArrowsRotate);
 
 const AQUASCOPE_NAME = "aquascope";
 const EMBED_NAME = "aquascope-embed";
@@ -193,7 +197,10 @@ window.initAquascopeBlocks = (root: HTMLElement) => {
 
       // button for computing the receiver permissions
       computePermBtn = document.createElement("button");
-      computePermBtn.className = "fa fa-refresh cm-button";
+      computePermBtn.className = "cm-button";
+      let refreshIcon = document.createElement("i");
+      refreshIcon.className = "fa fa-arrows-rotate";
+      computePermBtn.appendChild(refreshIcon);
 
       btnWrap.appendChild(computePermBtn);
       elem.appendChild(btnWrap);

@@ -10,15 +10,15 @@ description: mutate@deref_assign_0.test
     write: true
     drop: false
   actual:
+    read: true
+    write: true
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
 - location:
     line: 3
     column: 12
@@ -27,13 +27,12 @@ description: mutate@deref_assign_0.test
     write: false
     drop: true
   actual:
+    read: true
+    write: true
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
-

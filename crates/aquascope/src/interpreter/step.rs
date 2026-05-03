@@ -374,31 +374,35 @@ impl<'tcx> VisEvaluator<'tcx> {
       // TODO: this excludes compiler-generated temporaries which we sometimes need to
       // visualize in the case of f(&Some(x)). Need to figure out a good strategy for
       // deciding when a temp should be included.
-      let has_debug_info = frame
-        .body()
-        .var_debug_info
-        .iter()
-        .filter_map(|info| match info.value {
-          VarDebugInfoContents::Place(p) => {
-            if p.projection.is_empty() {
-              Some(p.local)
-            } else {
-              None
+      let opt_debug_info =
+        frame
+          .body()
+          .var_debug_info
+          .iter()
+          .find(|info| match info.value {
+            VarDebugInfoContents::Place(p) if let Some(l) = p.as_local() => {
+              l == local
             }
-          }
-          _ => None,
-        })
-        .any(|debug| local == debug);
-      if !has_debug_info {
-        log::trace!(
-          "Ignoring local {local:?} because it's not a source-level variable"
-        );
-        return interp_ok(None);
-      }
+            _ => false,
+          });
 
-      Place::from_local(local, *self.ecx.tcx)
-        .to_string(*self.ecx.tcx, frame.body())
-        .unwrap_or_else(|| String::from("(tmp)"))
+      match opt_debug_info {
+        Some(debug_info) if debug_info.source_info.span.from_expansion() => {
+          log::trace!(
+            "Ignoring local {local:?} because it's from a macro expansion"
+          );
+          return interp_ok(None);
+        }
+        None => {
+          log::trace!(
+            "Ignoring local {local:?} because it's not a source-level variable"
+          );
+          return interp_ok(None);
+        }
+        _ => Place::from_local(local, *self.ecx.tcx)
+          .to_string(*self.ecx.tcx, frame.body())
+          .unwrap_or_else(|| String::from("(tmp)")),
+      }
     };
 
     // Ignore dead locals

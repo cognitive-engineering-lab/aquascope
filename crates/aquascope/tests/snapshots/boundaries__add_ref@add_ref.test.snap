@@ -10,15 +10,15 @@ description: add_ref@add_ref.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: true
+  data:
     type_droppable: true
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: true
 - location:
     line: 3
     column: 3
@@ -27,15 +27,15 @@ description: add_ref@add_ref.test
     write: true
     drop: false
   actual:
+    read: true
+    write: true
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
   expecting_flow:
     is_violation: false
     flow_context:
@@ -46,7 +46,7 @@ description: add_ref@add_ref.test
         line: 3
         column: 12
       filename:
-        private: 0
+        private_use_as_methods_instead: 0
     kind: Ok
 - location:
     line: 3
@@ -56,15 +56,15 @@ description: add_ref@add_ref.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
   expecting_flow:
     is_violation: true
     flow_context:
@@ -75,6 +75,5 @@ description: add_ref@add_ref.test
         line: 3
         column: 12
       filename:
-        private: 0
+        private_use_as_methods_instead: 0
     kind: LocalOutlivesUniversal
-

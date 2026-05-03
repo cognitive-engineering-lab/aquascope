@@ -4,6 +4,8 @@ import LeaderLine, {
   type LeaderLine as LeaderLineCls
 } from "@aquascope/leader-line";
 import { Decoration, type EditorView, WidgetType } from "@codemirror/view";
+import { library } from "@fortawesome/fontawesome-svg-core";
+import { faBinoculars } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import _ from "lodash";
 import React, {
@@ -33,6 +35,8 @@ import {
   linecolToPosition,
   makeDecorationField
 } from "./misc.js";
+
+library.add(faBinoculars);
 
 const DEBUG: boolean = false;
 

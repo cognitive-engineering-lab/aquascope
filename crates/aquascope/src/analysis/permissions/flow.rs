@@ -301,13 +301,6 @@ where
   tups.iter().flat_map(|&(o1, o2)| [o1, o2]).unique()
 }
 
-fn count_nodes<T: Idx>(tups: &[(T, T)]) -> usize {
-  flatten_tuples(tups)
-    .minmax_by_key(|v| v.index())
-    .into_option()
-    .map_or(0, |(_, mx)| mx.index() + 1)
-}
-
 /// Compute the transitive flows from a set of given `sources` in `graph`.
 ///
 /// The return closure answers queries of the form "for (v, s) did `s` flow to v?"
@@ -398,10 +391,27 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
 
   let vertices = flatten_tuples(&constraints).collect::<HashSet<_>>();
 
+  let placeholders = ctxt
+    .polonius_input_facts
+    .placeholder
+    .iter()
+    .filter_map(|&(p, _)| vertices.contains(&p).then_some(p))
+    .chain(
+      body
+        .regions_in_return()
+        .map(|rg| PoloniusRegionVid::from(rg.as_var())),
+    )
+    .collect::<Vec<_>>();
+
   // Graph of constraints that need to be satisfied. This shows
   // us how data flows from one region into another.
-  let constraint_graph =
-    VecGraph::<_, false>::new(count_nodes(&constraints), constraints);
+  let max_region = constraints
+    .iter()
+    .flat_map(|(o1, o2)| [o1, o2])
+    .chain(&placeholders)
+    .max()
+    .map_or(0, |o| o.index());
+  let constraint_graph = VecGraph::<_, false>::new(max_region + 1, constraints);
 
   let scc_constraints = Sccs::<Origin, SccIdx>::new(&constraint_graph);
   let num_sccs = scc_constraints.num_sccs();
@@ -417,16 +427,8 @@ pub fn compute_flows(ctxt: &mut PermissionsCtxt) {
   // }
   // ```
   // The `'a`, does not appear in the placeholders set.
-  let placeholders = ctxt
-    .polonius_input_facts
-    .placeholder
-    .iter()
-    .filter_map(|&(p, _)| vertices.contains(&p).then_some(p))
-    .chain(
-      body
-        .regions_in_return()
-        .map(|rg| PoloniusRegionVid::from(rg.as_var())),
-    )
+  let placeholders = placeholders
+    .into_iter()
     .map(|p| scc_constraints.scc(p))
     .collect::<Vec<_>>();
 

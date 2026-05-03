@@ -265,9 +265,11 @@ description: foo@if_4.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
+          type: High
+          value: 1
         loan_drop_refined:
-          type: None
+          type: High
+          value: 1
         permissions:
           read:
             type: Low
@@ -293,9 +295,11 @@ description: foo@if_4.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
+          type: High
+          value: 1
         loan_drop_refined:
-          type: None
+          type: High
+          value: 1
         permissions:
           read:
             type: Low
@@ -410,9 +414,11 @@ description: foo@if_4.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
+          type: High
+          value: 3
         loan_drop_refined:
-          type: None
+          type: High
+          value: 3
         permissions:
           read:
             type: Low

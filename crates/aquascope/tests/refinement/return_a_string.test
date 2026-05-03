@@ -1,0 +1,5 @@
+fn return_a_string() -> &String {
+    let s = String::from("Hello world");
+    let s_ref = &s;
+    s_ref
+}

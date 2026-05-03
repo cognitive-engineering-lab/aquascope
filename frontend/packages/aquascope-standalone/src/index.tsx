@@ -1,7 +1,11 @@
 // import { vim } from "@replit/codemirror-vim";
 import * as Ed from "@aquascope/editor";
+import { library } from "@fortawesome/fontawesome-svg-core";
+import { faCaretDown } from "@fortawesome/free-solid-svg-icons";
 
 import { basicSetup } from "./setup";
+
+library.add(faCaretDown);
 
 declare global {
   var SERVER_URL: string;

@@ -10,15 +10,15 @@ description: main@captured_0.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: true
+  data:
     type_droppable: true
     type_writeable: false
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: true
 - location:
     line: 11
     column: 7
@@ -27,15 +27,16 @@ description: main@captured_0.test
     write: false
     drop: true
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: true
     type_writeable: false
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    loan_write_refined: 0
+    loan_refined:
+      Write:
+        key: 0
     loan_drop_refined: 0
-    permissions:
-      read: true
-      write: false
-      drop: false
-

@@ -571,47 +571,6 @@ steps:
                     value:
                       len: 4
               moved_paths: []
-            - name: args
-              value:
-                type: Tuple
-                value:
-                  - type: Unallocated
-                    value:
-                      alloc_id: 0
-              moved_paths: []
-            - name: args
-              value:
-                type: Array
-                value:
-                  type: All
-                  value:
-                    - type: Adt
-                      value:
-                        name: Argument
-                        variant: ~
-                        fields:
-                          - - ty
-                            - type: Adt
-                              value:
-                                name: ArgumentType
-                                variant: Placeholder
-                                fields:
-                                  - - value
-                                    - type: Adt
-                                      value:
-                                        name: NonNull
-                                        variant: ~
-                                        fields:
-                                          - - pointer
-                                            - type: Unallocated
-                                              value:
-                                                alloc_id: 94
-                                        alloc_kind: ~
-                                  - - formatter
-                                    - type: FnPtr
-                                alloc_kind: ~
-                        alloc_kind: ~
-              moved_paths: []
     heap:
       locations:
         - type: Array

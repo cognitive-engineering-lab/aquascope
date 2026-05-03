@@ -10,15 +10,15 @@ description: add_big_strings@closure_1.test
     write: false
     drop: false
   actual:
+    read: true
+    write: true
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
 - location:
     line: 2
     column: 33
@@ -27,15 +27,15 @@ description: add_big_strings@closure_1.test
     write: false
     drop: false
   actual:
+    read: true
+    write: true
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: true
-      drop: false
 - location:
     line: 3
     column: 13
@@ -44,15 +44,15 @@ description: add_big_strings@closure_1.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: true
+  data:
     type_droppable: true
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: true
 - location:
     line: 4
     column: 12
@@ -61,15 +61,15 @@ description: add_big_strings@closure_1.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
 - location:
     line: 4
     column: 28
@@ -78,15 +78,15 @@ description: add_big_strings@closure_1.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
 - location:
     line: 5
     column: 15
@@ -95,17 +95,19 @@ description: add_big_strings@closure_1.test
     write: true
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: true
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    loan_write_refined: 0
+    loan_refined:
+      Write:
+        key: 0
     loan_drop_refined: 0
-    permissions:
-      read: true
-      write: false
-      drop: false
 - location:
     line: 5
     column: 22
@@ -114,13 +116,12 @@ description: add_big_strings@closure_1.test
     write: false
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: false
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
-

@@ -565,9 +565,11 @@ description: ascii_capitalize@if_3.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
+          type: High
+          value: 2
         loan_drop_refined:
-          type: None
+          type: High
+          value: 2
         permissions:
           read:
             type: Low
@@ -593,9 +595,11 @@ description: ascii_capitalize@if_3.test
         loan_read_refined:
           type: None
         loan_write_refined:
-          type: None
+          type: High
+          value: 2
         loan_drop_refined:
-          type: None
+          type: High
+          value: 2
         permissions:
           read:
             type: Low

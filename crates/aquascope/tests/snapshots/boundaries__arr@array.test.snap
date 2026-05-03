@@ -10,13 +10,12 @@ description: arr@array.test
     write: true
     drop: false
   actual:
+    read: true
+    write: false
+    drop: true
+  data:
     type_droppable: true
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: true
-

@@ -1537,6 +1537,8 @@ dependencies = [
 [[package]]
 name = "mdbook-preprocessor-utils"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27b7cd6f3c6757782c527fb6e79d1bb245a1a4c1535830e500fdd04ba6c2ea14"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2144,9 +2146,9 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc_plugin"
-version = "0.15.1-nightly-2026-05-01"
+version = "0.15.2-nightly-2026-05-01"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe7cdcbec79fe983cb7c989c973f83d98a273614abaeb0f42d1a556d9dfe7bfd"
+checksum = "a9a531c11120bc5361eed63d769b216aee7c8a4923da7fc5e21b01e6ec4ad9a6"
 dependencies = [
  "cargo_metadata",
  "log",
@@ -2164,7 +2166,9 @@ checksum = "b3c5a95edfa0c893236ae4778bb7c4752760e4c0d245e19b5eff33c5aa5eb9dc"
 
 [[package]]
 name = "rustc_utils"
-version = "0.15.1-nightly-2026-05-01"
+version = "0.15.2-nightly-2026-05-01"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe49a3fd1cb8fdfa71c8770b8bc4aa87ab09383405288ec8f80ef791a0ba721d"
 dependencies = [
  "anyhow",
  "intervaltree",
@@ -2353,9 +2357,9 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "siphasher"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2aa850e253778c88a04c3d7323b043aeda9d3e30d5971937c1855769763678e"
+checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
 name = "slab"

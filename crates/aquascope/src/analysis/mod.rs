@@ -325,11 +325,12 @@ impl<'tcx> AquascopeAnalysis<'tcx> {
   pub fn run(
     tcx: TyCtxt<'tcx>,
     body_id: BodyId,
+    should_fail: bool,
   ) -> AquascopeResult<AnalysisOutput> {
     let analysis_ctxt = Self::new(tcx, body_id);
     let body = &analysis_ctxt.permissions.body_with_facts.body;
 
-    if body.tainted_by_errors.is_some() {
+    if body.tainted_by_errors.is_some() && !should_fail {
       let span = body.span;
       let source_map = tcx.sess.source_map();
       let range = CharRange::from_span(span, source_map).unwrap().into();

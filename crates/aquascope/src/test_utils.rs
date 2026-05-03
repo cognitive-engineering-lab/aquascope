@@ -239,7 +239,11 @@ pub fn test_refinements_in_file(path: &Path) {
             StatementKind::Assign(box (lhs, rvalue)) => {
               let exp = ctxt.place_to_path(&mir_spanner.place);
               let act = ctxt.place_to_path(lhs);
-              assert_eq!(exp, act);
+              assert_eq!(
+                exp, act,
+                "path index {exp:?} for {lhs:?} != path index {act:?} for {:?}",
+                mir_spanner.place
+              );
 
               match rvalue {
                 Rvalue::Ref(_, _, place) => *place,
@@ -332,9 +336,7 @@ pub fn test_steps_in_file(
 
   let inner = || -> Result<()> {
     let (source, _) = load_test_from_file(path)?;
-    eprintln!("SOURCE? {source}");
     compile_normal(source, move |tcx| {
-      eprintln!("AFTER COMPILE? {}", path.display());
       for_each_body(tcx, |body_id, _body_with_facts| {
         let ctxt = AquascopeAnalysis::new(tcx, body_id);
         let tag = analysis_snapshot_tag(&ctxt);
@@ -514,10 +516,10 @@ where
     config.file_loader = Some(Box::new(StringLoader(self.input.clone())));
   }
 
-  fn after_analysis(
+  fn after_expansion<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
-    tcx: TyCtxt,
+    tcx: TyCtxt<'tcx>,
   ) -> rustc_driver::Compilation {
     errors::initialize_error_tracking();
 

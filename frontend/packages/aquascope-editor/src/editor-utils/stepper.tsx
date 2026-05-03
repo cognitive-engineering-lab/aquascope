@@ -1,9 +1,27 @@
 import type { Line, Range } from "@codemirror/state";
 import { Decoration, type EditorView, WidgetType } from "@codemirror/view";
+import { library } from "@fortawesome/fontawesome-svg-core";
+import {
+  faArrowRight,
+  faArrowRightFromBracket,
+  faArrowTurnDown,
+  faArrowTurnUp,
+  faRecycle,
+  faRotateLeft
+} from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import _ from "lodash";
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
+
+library.add(
+  faArrowRight,
+  faArrowRightFromBracket,
+  faArrowTurnDown,
+  faArrowTurnUp,
+  faRecycle,
+  faRotateLeft
+);
 
 import type { CharPos } from "../bindings/CharPos.js";
 import type {
@@ -146,7 +164,7 @@ let PermDiffRow = ({
       states: [
         {
           value: { type: "High", value: 0 },
-          icon: "sign-out",
+          icon: "arrow-right-from-bracket",
           desc: "Place is moved here"
         },
         {
@@ -176,12 +194,12 @@ let PermDiffRow = ({
       states: [
         {
           value: { type: "High", value: 0 },
-          icon: "level-up",
+          icon: "arrow-turn-up",
           desc: "Place is initialized here"
         },
         {
           value: { type: "Low" },
-          icon: "level-down",
+          icon: "arrow-turn-down",
           desc: "Place is no longer used here"
         }
       ]

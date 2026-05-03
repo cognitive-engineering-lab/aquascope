@@ -22,5 +22,6 @@ fn main() -> std::process::ExitCode {
     })
     .init();
 
-  rustc_plugin::driver_main(aquascope_front::AquascopePlugin)
+  rustc_plugin::driver_main(aquascope_front::AquascopePlugin);
+  std::process::ExitCode::SUCCESS
 }

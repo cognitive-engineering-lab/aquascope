@@ -10,13 +10,12 @@ description: bx@box.test
     write: true
     drop: false
   actual:
+    read: true
+    write: false
+    drop: false
+  data:
     type_droppable: false
     type_writeable: false
     type_copyable: true
     is_live: true
     path_uninitialized: false
-    permissions:
-      read: true
-      write: false
-      drop: false
-

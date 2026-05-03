@@ -85,22 +85,23 @@ impl AquascopePreprocessor {
 
       let mut child =
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
-      if child.wait_timeout(Duration::from_secs(10))?.is_none() {
+      if child.wait_timeout(Duration::from_secs(30))?.is_none() {
         child.kill()?;
         bail!("Aquascope timed out on program:\n{}", block.code)
       };
 
       let output = child.wait_with_output()?;
 
+      let response = String::from_utf8(output.stdout)?;
+      let error = String::from_utf8(output.stderr)?;
+
       if !output.status.success() {
-        let error = String::from_utf8(output.stderr)?;
         bail!(
-          "Aquascope failed for program:\n{}\nwith error:\n{error}",
+          "Aquascope failed for program:\n{}\nwith stdout:\n{response}\nand error:\n{error}",
           block.code
         )
       }
 
-      let response = String::from_utf8(output.stdout)?;
       let response_json: serde_json::Value = serde_json::from_str(&response)?;
       let is_err = match (response_json.as_object(), response_json.as_array()) {
         (Some(obj), _) => obj.get("Err").is_some(),
@@ -108,9 +109,8 @@ impl AquascopePreprocessor {
         _ => false,
       };
       if is_err {
-        let stderr = String::from_utf8(output.stderr)?;
         bail!(
-          "Aquascope failed for program:\n{}\nwith error:\n{stderr}",
+          "Aquascope failed for program:\n{}\nwith stdout:\n{response}\nand error:\n{error}",
           block.code,
         )
       }
