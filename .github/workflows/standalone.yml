@@ -7,7 +7,7 @@ on:
 
 jobs:
   update-frontend:
-    needs: publish-crates
+    # needs: publish-crates
     runs-on: ubuntu-latest
     steps:
       - name: Skipping action

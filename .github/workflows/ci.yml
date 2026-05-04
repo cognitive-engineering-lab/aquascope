@@ -3,7 +3,7 @@ name: aquascope
 on:
   push:
     branches:
-      - "**"
+      - main
     tags-ignore:
       - "v*"
   pull_request:

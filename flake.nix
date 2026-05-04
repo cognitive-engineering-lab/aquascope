@@ -17,6 +17,24 @@
     toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
     depotjs = depot-js.packages.${system}.default;
 
+    mdbookRustPlatform = pkgs.makeRustPlatform {
+      cargo = pkgs.rust-bin.stable.latest.default;
+      rustc = pkgs.rust-bin.stable.latest.default;
+    };
+    mdbook = mdbookRustPlatform.buildRustPackage rec {
+      pname = "mdbook";
+      version = "0.5.2";
+      src = pkgs.fetchFromGitHub {
+        owner = "rust-lang";
+        repo = "mdBook";
+        rev = "v${version}";
+        hash = "sha256-gyjD47ZR9o2lIxipzesyJ6mxb9J9W+WS77TNWhKHP6U=";
+      };
+      cargoHash = "sha256-0flu6L79wxqoUd0Va8J6Xu9Kzp16ICZXFTbqNTUmXEA=";
+      auditable = false;
+      doCheck = false;
+    };
+
     ci-check = pkgs.writeScriptBin "ci-check" ''
       cargo fmt --check &&
       cargo clippy -- -D warnings &&
@@ -83,8 +101,6 @@
           cargo-watch
           cargo-workspaces
           rust-analyzer
-
-          mdbook
 
           toolchain
         ] ++ lib.optionals stdenv.isDarwin [
