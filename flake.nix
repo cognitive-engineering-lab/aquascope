@@ -102,6 +102,8 @@
           cargo-workspaces
           rust-analyzer
 
+          mdbook
+
           toolchain
         ] ++ lib.optionals stdenv.isDarwin [
           darwin.apple_sdk.frameworks.SystemConfiguration
