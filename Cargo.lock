@@ -195,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "aquascope_workspace_utils"
-version = "0.3.8"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -1427,7 +1427,7 @@ checksum = "73cbba799671b762df5a175adf59ce145165747bb891505c43d09aefbbf38beb"
 
 [[package]]
 name = "mdbook-aquascope"
-version = "0.3.9"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "aquascope_workspace_utils",

@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 anyhow = "1"
-aquascope_workspace_utils = {version = "0.3",  path = "../aquascope_workspace_utils"}
+aquascope_workspace_utils = {version = "0.4",  path = "../aquascope_workspace_utils"}
 async-trait = "0.1.52"
 axum = { version = "0.5" }
 env_logger = "0.9.0"

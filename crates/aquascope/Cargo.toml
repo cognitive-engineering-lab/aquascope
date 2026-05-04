@@ -27,7 +27,7 @@ rustc_utils = {workspace = true, features = ["ts-rs", "serde", "test"]}
 
 # interpret module
 miri = {git = "https://github.com/rust-lang/miri", rev = "e88582ada7b20800d4257f13634d4e54b9757a9f"}
-aquascope_workspace_utils = { version = "0.3", path = "../aquascope_workspace_utils" }
+aquascope_workspace_utils = { version = "0.4", path = "../aquascope_workspace_utils" }
 
 # testing utils
 lazy_static = { version = "1.4" }

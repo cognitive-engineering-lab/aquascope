@@ -1,6 +1,6 @@
 [package]
 name = "aquascope_workspace_utils"
-version = "0.3.8"
+version = "0.4.0"
 license = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
