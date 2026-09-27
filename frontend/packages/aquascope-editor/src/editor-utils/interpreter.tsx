@@ -634,32 +634,40 @@ let renderArrows = (
       .flatMap(([_g, ptrs]) => ptrs.map((ptr, i) => renderPtr(ptr, i)))
       .filter(obj => obj !== undefined) as RenderedPointer[];
 
-    // Lastly, we add a timer to reposition the arrow container
-    // if necessary.
+    // Reposition the arrows and arrow container on scroll, resize, or interval
     let curCoords = (): [number, number] => {
       let stepBox = stepContainer.getBoundingClientRect();
-      let x = stepBox.left + window.scrollX + container.scrollLeft;
-      let y = stepBox.top + window.scrollY + container.scrollTop;
+      let x = stepBox.left + window.scrollX;
+      let y = stepBox.top + window.scrollY;
       return [x, y];
     };
 
-    let positionArrowContainer = (x: number, y: number) => {
-      lines.forEach(({ line }) => line.position());
-      arrowContainer.style.transform = `translate(-${x}px, -${y}px)`;
-    };
     let lastCoords = curCoords();
-    positionArrowContainer(...lastCoords);
+    let positionArrowContainer = () => {
+      lines.forEach(({ line }) => line.position());
+      let [x, y] = curCoords();
+      arrowContainer.style.transform = `translate(${-x}px, ${-y}px)`;
+      lastCoords = [x, y];
+    };
+
+    positionArrowContainer();
+
+    container.addEventListener("scroll", positionArrowContainer, { passive: true });
+    window.addEventListener("scroll", positionArrowContainer, { passive: true, capture: true });
+    window.addEventListener("resize", positionArrowContainer, { passive: true });
 
     let interval = setInterval(() => {
-      let newCoords = curCoords();
-      if (newCoords[0] !== lastCoords[0] || newCoords[1] !== lastCoords[1]) {
-        positionArrowContainer(...newCoords);
+      let [x, y] = curCoords();
+      if (x !== lastCoords[0] || y !== lastCoords[1]) {
+        positionArrowContainer();
       }
-      lastCoords = newCoords;
     }, 300);
 
     return () => {
       clearInterval(interval);
+      container.removeEventListener("scroll", positionArrowContainer);
+      window.removeEventListener("scroll", positionArrowContainer, true);
+      window.removeEventListener("resize", positionArrowContainer);
       lines.forEach(({ svgElements }) => {
         svgElements.forEach(el => {
           el.parentNode!.removeChild(el);
