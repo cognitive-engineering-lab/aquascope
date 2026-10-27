@@ -1,0 +1,11 @@
+#[repr(C)]
+struct C {
+  a: u8,
+  b: u64,
+}
+
+fn main() {
+  let c = C { a: 1, b: 2 };
+  let ra = &c.a;
+  let rb = &c.b;
+}

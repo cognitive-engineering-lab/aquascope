@@ -5,7 +5,7 @@ use miri::{
 use rustc_abi::{FieldIdx, FieldsShape, Size};
 use rustc_middle::{
   mir::{Local, PlaceElem},
-  ty::{AdtKind, FieldDef, TyKind, layout::TyAndLayout},
+  ty::{FieldDef, Ty, TyKind, layout::TyAndLayout},
 };
 
 pub trait OpTyExt<'tcx, M: Machine<'tcx>>: Sized {
@@ -48,42 +48,42 @@ where
 struct AddressLocator<'a, 'tcx> {
   ecx: &'a InterpCx<'tcx, miri::MiriMachine<'tcx>>,
   target: u64,
+  // Type of the pointed-to place, if it is sized. A value and its first field
+  // share an address, so this is what tells `&s` apart from `&s.0`.
+  pointee_ty: Option<Ty<'tcx>>,
   segments: Vec<PlaceElem<'tcx>>,
 }
 
 impl<'tcx> AddressLocator<'_, 'tcx> {
-  fn locate(&mut self, layout: TyAndLayout<'tcx>, mut offset: u64) {
-    if offset == self.target {
+  /// Whether `locate` walks into the fields of `ty`.
+  fn walks_fields(&self, ty: Ty<'tcx>) -> bool {
+    match ty.kind() {
+      TyKind::Adt(adt_def, _) => {
+        adt_def.is_struct()
+          && !matches!(
+            self.ecx.tcx.item_name(adt_def.did()).as_str(),
+            "String" | "Vec"
+          )
+      }
+      TyKind::Tuple(_) => true,
+      _ => false,
+    }
+  }
+
+  fn locate(&mut self, layout: TyAndLayout<'tcx>, offset: u64) {
+    if offset == self.target
+      && (self.pointee_ty.is_none_or(|ty| ty == layout.ty)
+        || !self.walks_fields(layout.ty))
+    {
       return;
     }
 
     let ty = layout.ty;
     match ty.kind() {
-      TyKind::Adt(adt_def, _) => {
-        let def_id = adt_def.did();
-        let name = self.ecx.tcx.item_name(def_id).to_ident_string();
-        match adt_def.adt_kind() {
-          AdtKind::Struct => match name.as_str() {
-            "String" | "Vec" => {}
-            _ => {
-              for (i, _field) in adt_def.all_fields().enumerate() {
-                let field = layout.field(self.ecx, i);
-                if offset + field.size.bytes() > self.target {
-                  self
-                    .segments
-                    .push(PlaceElem::Field(FieldIdx::from_usize(i), field.ty));
-                  self.locate(field, offset);
-                  break;
-                }
+      _ if self.walks_fields(ty) => self.locate_field(layout, offset),
 
-                offset += field.size.bytes();
-              }
-            }
-          },
-          AdtKind::Enum => todo!(),
-          _ => {}
-        }
-      }
+      TyKind::Adt(adt_def, _) if adt_def.is_enum() => todo!(),
+      TyKind::Adt(..) => {}
 
       TyKind::Array(_, _) => {
         // dbg!(("array", offset, target));
@@ -101,27 +101,27 @@ impl<'tcx> AddressLocator<'_, 'tcx> {
         self.locate(elem, offset + array_offset);
       }
 
-      TyKind::Tuple(tys) => {
-        // dbg!(("tuple", offset, target));
-        for i in 0 .. tys.len() {
-          let field = layout.field(self.ecx, i);
-          if offset + field.size.bytes() > self.target {
-            self
-              .segments
-              .push(PlaceElem::Field(FieldIdx::from_usize(i), field.ty));
-            self.locate(field, offset);
-            break;
-          }
-
-          offset += field.size.bytes();
-        }
-      }
-
       _ if ty.is_primitive() || ty.is_any_ptr() => {
         panic!("offset {offset} != target {}", self.target)
       }
 
       ty => unimplemented!("{ty:#?}"),
+    }
+  }
+
+  /// Finds the field of a struct or tuple that contains the target, using the
+  /// field offsets from the layout (rustc may reorder fields and add padding).
+  fn locate_field(&mut self, layout: TyAndLayout<'tcx>, offset: u64) {
+    for i in 0 .. layout.fields.count() {
+      let field = layout.field(self.ecx, i);
+      let start = offset + layout.fields.offset(i).bytes();
+      if (start .. start + field.size.bytes()).contains(&self.target) {
+        self
+          .segments
+          .push(PlaceElem::Field(FieldIdx::from_usize(i), field.ty));
+        self.locate(field, start);
+        return;
+      }
     }
   }
 }
@@ -137,6 +137,8 @@ pub fn locate_address_in_type<'tcx>(
   let mut locator = AddressLocator {
     ecx,
     target: target.bytes(),
+    pointee_ty: matches!(mplace.meta(), MemPlaceMeta::None)
+      .then_some(mplace.layout.ty),
     segments: Vec::new(),
   };
 

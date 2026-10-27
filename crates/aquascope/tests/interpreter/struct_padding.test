@@ -1,0 +1,12 @@
+struct S {
+  a: u8,
+  b: u32,
+  c: u8,
+}
+
+fn main() {
+  let s = S { a: 1, b: 2, c: 3 };
+  let ra = &s.a;
+  let rb = &s.b;
+  let rc = &s.c;
+}

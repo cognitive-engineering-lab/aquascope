@@ -1,0 +1,15 @@
+struct Inner {
+  x: u64,
+  y: u64,
+}
+
+struct Outer {
+  flag: bool,
+  inner: Inner,
+}
+
+fn main() {
+  let o = Outer { flag: true, inner: Inner { x: 1, y: 2 } };
+  let inner = &o.inner;
+  let y = &o.inner.y;
+}

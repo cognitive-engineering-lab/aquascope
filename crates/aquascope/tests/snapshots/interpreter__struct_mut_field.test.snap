@@ -1,0 +1,178 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: struct_mut_field.test
+---
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 5
+              column: 0
+            end:
+              line: 9
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 6
+              column: 2
+            end:
+              line: 6
+              column: 59
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: acct
+              value:
+                type: Adt
+                value:
+                  name: Account
+                  variant: ~
+                  fields:
+                    - - is_signer
+                      - type: Bool
+                        value: true
+                    - - lamports
+                      - type: Uint
+                        value: 10
+                  alloc_kind: ~
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 5
+              column: 0
+            end:
+              line: 9
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 7
+              column: 2
+            end:
+              line: 7
+              column: 30
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: acct
+              value:
+                type: Adt
+                value:
+                  name: Account
+                  variant: ~
+                  fields:
+                    - - is_signer
+                      - type: Bool
+                        value: true
+                    - - lamports
+                      - type: Uint
+                        value: 10
+                  alloc_kind: ~
+              moved_paths: []
+            - name: r
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: acct
+                    parts:
+                      - type: Field
+                        value: 0
+                  range: ~
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 5
+              column: 0
+            end:
+              line: 9
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 8
+              column: 2
+            end:
+              line: 8
+              column: 13
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: acct
+              value:
+                type: Adt
+                value:
+                  name: Account
+                  variant: ~
+                  fields:
+                    - - is_signer
+                      - type: Bool
+                        value: false
+                    - - lamports
+                      - type: Uint
+                        value: 10
+                  alloc_kind: ~
+              moved_paths: []
+            - name: r
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: acct
+                    parts:
+                      - type: Field
+                        value: 0
+                  range: ~
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 5
+              column: 0
+            end:
+              line: 9
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 9
+              column: 0
+            end:
+              line: 9
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          locals: []
+    heap:
+      locations: []
+result:
+  type: Success

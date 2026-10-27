@@ -1,0 +1,225 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: struct_nested.test
+---
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 10
+              column: 0
+            end:
+              line: 14
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 11
+              column: 2
+            end:
+              line: 11
+              column: 60
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: o
+              value:
+                type: Adt
+                value:
+                  name: Outer
+                  variant: ~
+                  fields:
+                    - - flag
+                      - type: Bool
+                        value: true
+                    - - inner
+                      - type: Adt
+                        value:
+                          name: Inner
+                          variant: ~
+                          fields:
+                            - - x
+                              - type: Uint
+                                value: 1
+                            - - y
+                              - type: Uint
+                                value: 2
+                          alloc_kind: ~
+                  alloc_kind: ~
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 10
+              column: 0
+            end:
+              line: 14
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 12
+              column: 2
+            end:
+              line: 12
+              column: 23
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: o
+              value:
+                type: Adt
+                value:
+                  name: Outer
+                  variant: ~
+                  fields:
+                    - - flag
+                      - type: Bool
+                        value: true
+                    - - inner
+                      - type: Adt
+                        value:
+                          name: Inner
+                          variant: ~
+                          fields:
+                            - - x
+                              - type: Uint
+                                value: 1
+                            - - y
+                              - type: Uint
+                                value: 2
+                          alloc_kind: ~
+                  alloc_kind: ~
+              moved_paths: []
+            - name: inner
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: o
+                    parts:
+                      - type: Field
+                        value: 1
+                  range: ~
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 10
+              column: 0
+            end:
+              line: 14
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 13
+              column: 2
+            end:
+              line: 13
+              column: 21
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: o
+              value:
+                type: Adt
+                value:
+                  name: Outer
+                  variant: ~
+                  fields:
+                    - - flag
+                      - type: Bool
+                        value: true
+                    - - inner
+                      - type: Adt
+                        value:
+                          name: Inner
+                          variant: ~
+                          fields:
+                            - - x
+                              - type: Uint
+                                value: 1
+                            - - y
+                              - type: Uint
+                                value: 2
+                          alloc_kind: ~
+                  alloc_kind: ~
+              moved_paths: []
+            - name: inner
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: o
+                    parts:
+                      - type: Field
+                        value: 1
+                  range: ~
+              moved_paths: []
+            - name: y
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: o
+                    parts:
+                      - type: Field
+                        value: 1
+                      - type: Field
+                        value: 1
+                  range: ~
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 10
+              column: 0
+            end:
+              line: 14
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 14
+              column: 0
+            end:
+              line: 14
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          locals: []
+    heap:
+      locations: []
+result:
+  type: Success

@@ -1,0 +1,6 @@
+fn main() {
+  let t = (true, 10u64);
+  let whole = &t;
+  let r0 = &t.0;
+  let r1 = &t.1;
+}

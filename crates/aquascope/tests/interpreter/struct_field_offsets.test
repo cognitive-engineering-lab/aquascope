@@ -1,0 +1,11 @@
+struct Account {
+  is_signer: bool,
+  lamports: u64,
+}
+
+fn main() {
+  let acct = Account { is_signer: true, lamports: 10 };
+  let whole = &acct;
+  let signer = &acct.is_signer;
+  let lamports = &acct.lamports;
+}

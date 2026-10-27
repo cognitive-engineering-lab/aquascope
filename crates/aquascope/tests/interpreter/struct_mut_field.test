@@ -1,0 +1,10 @@
+struct Account {
+  is_signer: bool,
+  lamports: u64,
+}
+
+fn main() {
+  let mut acct = Account { is_signer: true, lamports: 10 };
+  let r = &mut acct.is_signer;
+  *r = false;
+}

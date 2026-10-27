@@ -1,0 +1,247 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: tuple_field.test
+---
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 5
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 1
+              column: 2
+            end:
+              line: 1
+              column: 24
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: t
+              value:
+                type: Tuple
+                value:
+                  - type: Bool
+                    value: true
+                  - type: Uint
+                    value: 10
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 5
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 2
+              column: 2
+            end:
+              line: 2
+              column: 17
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: t
+              value:
+                type: Tuple
+                value:
+                  - type: Bool
+                    value: true
+                  - type: Uint
+                    value: 10
+              moved_paths: []
+            - name: whole
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: t
+                    parts: []
+                  range: ~
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 5
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 3
+              column: 2
+            end:
+              line: 3
+              column: 16
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: t
+              value:
+                type: Tuple
+                value:
+                  - type: Bool
+                    value: true
+                  - type: Uint
+                    value: 10
+              moved_paths: []
+            - name: whole
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: t
+                    parts: []
+                  range: ~
+              moved_paths: []
+            - name: r0
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: t
+                    parts:
+                      - type: Field
+                        value: 0
+                  range: ~
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 5
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 4
+              column: 2
+            end:
+              line: 4
+              column: 16
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: t
+              value:
+                type: Tuple
+                value:
+                  - type: Bool
+                    value: true
+                  - type: Uint
+                    value: 10
+              moved_paths: []
+            - name: whole
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: t
+                    parts: []
+                  range: ~
+              moved_paths: []
+            - name: r0
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: t
+                    parts:
+                      - type: Field
+                        value: 0
+                  range: ~
+              moved_paths: []
+            - name: r1
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: t
+                    parts:
+                      - type: Field
+                        value: 1
+                  range: ~
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 5
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 5
+              column: 0
+            end:
+              line: 5
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          locals: []
+    heap:
+      locations: []
+result:
+  type: Success
