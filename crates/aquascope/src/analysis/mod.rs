@@ -342,7 +342,15 @@ impl<'tcx> AquascopeAnalysis<'tcx> {
     );
 
     let boundaries = compute_permission_boundaries(&analysis_ctxt)?;
-    let steps = compute_permission_steps(&analysis_ctxt)?;
+
+    // The stepper cannot yet segment every control-flow shape, for example a
+    // branch that leaves the body early followed by another branch (#157).
+    // The boundaries do not depend on the steps, so keep them and return no
+    // steps rather than failing the whole body.
+    let steps = compute_permission_steps(&analysis_ctxt).unwrap_or_else(|e| {
+      log::warn!("could not compute the permission steps: {e}");
+      Vec::new()
+    });
 
     let (loan_points, loan_regions) = analysis_ctxt.construct_loan_info();
     let (move_points, move_regions) = analysis_ctxt.construct_move_info();
