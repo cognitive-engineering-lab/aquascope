@@ -51,6 +51,38 @@ enum AquascopeCommand {
   RustcVersion,
 }
 
+/// The cargo arguments and the encoded `CARGO_ENCODED_RUSTFLAGS` that build
+/// every crate as `cargo miri` does, so that the interpreter can run the
+/// functions of other crates: with Miri's standard library and with each
+/// function's MIR kept in the crate's metadata. Naming the host as the target
+/// keeps these flags from build scripts and proc macros, which run natively.
+/// `existing` holds the flags already given, which are kept.
+fn miri_build(
+  sysroot: &str,
+  host: &str,
+  existing: Vec<String>,
+) -> ([String; 2], String) {
+  let mut flags = existing;
+  flags.extend([
+    "--sysroot".to_owned(),
+    sysroot.to_owned(),
+    "-Zalways-encode-mir".to_owned(),
+  ]);
+  (["--target".to_owned(), host.to_owned()], flags.join("\x1f"))
+}
+
+/// The compiler flags Cargo would take from the environment.
+fn existing_rustflags() -> Vec<String> {
+  match env::var("CARGO_ENCODED_RUSTFLAGS") {
+    Ok(encoded) if !encoded.is_empty() => {
+      encoded.split('\x1f').map(str::to_owned).collect()
+    }
+    _ => env::var("RUSTFLAGS")
+      .map(|flags| flags.split_whitespace().map(str::to_owned).collect())
+      .unwrap_or_default(),
+  }
+}
+
 pub struct AquascopePlugin;
 impl RustcPlugin for AquascopePlugin {
   type Args = AquascopePluginArgs;
@@ -99,6 +131,21 @@ impl RustcPlugin for AquascopePlugin {
     RustcPluginArgs {
       filter: CrateFilter::OnlyWorkspace,
       args,
+    }
+  }
+
+  fn modify_cargo(&self, cargo: &mut Command, args: &Self::Args) {
+    // Without Miri's standard library, the interpreter has nothing to run
+    // with, so only then is every crate built for it.
+    if let (AquascopeCommand::Interpreter, Ok(sysroot)) =
+      (&args.command, env::var("MIRI_SYSROOT"))
+    {
+      let (target, flags) = miri_build(
+        &sysroot,
+        rustc_session::config::host_tuple(),
+        existing_rustflags(),
+      );
+      cargo.args(target).env("CARGO_ENCODED_RUSTFLAGS", flags);
     }
   }
 
@@ -211,5 +258,24 @@ impl rustc_driver::Callbacks for AquascopeCallbacks {
     log::debug!("Callback analysis took {:?}", self.rustc_start.elapsed());
 
     rustc_driver::Compilation::Stop
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn the_interpreter_builds_every_crate_as_cargo_miri_does() {
+    let (target, flags) = miri_build("/sysroot", "aarch64-apple-darwin", vec![
+      "-Awarnings".to_owned(),
+    ]);
+    assert_eq!(target, ["--target", "aarch64-apple-darwin"]);
+    assert_eq!(flags.split('\x1f').collect::<Vec<_>>(), [
+      "-Awarnings",
+      "--sysroot",
+      "/sysroot",
+      "-Zalways-encode-mir"
+    ]);
   }
 }
