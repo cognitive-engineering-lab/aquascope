@@ -148,12 +148,12 @@ impl RustcPlugin for AquascopePlugin {
           },
         );
         let _ = run_with_callbacks(&compiler_args, &mut callbacks);
-        postprocess(
-          callbacks
-            .result
-            .unwrap()
-            .map_err(|_| AquascopeError::BuildError { range: None }),
-        )
+        postprocess(callbacks.result.unwrap().map_err(|e| {
+          // The output has no place for the reason, such as the program's
+          // exit code or an operation isolation refused, so it goes to stderr.
+          eprintln!("aquascope interpreter: {e:#}");
+          AquascopeError::BuildError { range: None }
+        }))
       }
       _ => unreachable!(),
     }

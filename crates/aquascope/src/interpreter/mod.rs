@@ -33,7 +33,7 @@ pub(crate) fn interpret(
   tcx: TyCtxt,
   options: &InterpretOptions,
 ) -> Result<MTrace<CharRange>> {
-  let mut evaluator = step::VisEvaluator::new(tcx, options).unwrap();
+  let mut evaluator = step::VisEvaluator::new(tcx, options)?;
   let mir_steps = evaluator.eval()?;
 
   if log::log_enabled!(log::Level::Trace) {

@@ -70,3 +70,15 @@ fn main() {
     json!({"type": "Bool", "value": true})
   );
 }
+
+// A crate without an entry point is an error with a reason, not a panic.
+#[test_log::test]
+fn a_crate_without_main_is_an_error() {
+  let code = r#"
+#![no_main]
+fn helper() {}
+"#;
+  let error =
+    test_utils::interpret_with(code, &InterpretOptions::default()).unwrap_err();
+  assert!(format!("{error:#}").contains("no main"), "{error:#}");
+}
