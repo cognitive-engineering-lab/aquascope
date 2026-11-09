@@ -29,6 +29,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use super::mvalue::{MMemorySegment, MPathSegment, MValue};
+use crate::analysis::span_file_path;
 
 #[derive(Serialize, Debug, TS)]
 #[ts(export)]
@@ -43,6 +44,9 @@ pub struct MLocal {
 pub struct MFrame<L> {
   pub name: String,
   pub body_span: CharRange,
+  /// The path of the file holding the function, as `span_file_path` gives
+  /// it, since `body_span` names its file only by an index.
+  pub file_path: String,
   pub location: L,
   pub locals: Vec<MLocal>,
 }
@@ -267,11 +271,9 @@ impl<'tcx> VisEvaluator<'tcx> {
     let name = self.fn_name(def_id);
 
     let tcx = *self.ecx.tcx;
-    let body_span = CharRange::from_span(
-      body_span(tcx, frame.instance().def_id(), BodySpanType::Whole),
-      tcx.sess.source_map(),
-    )
-    .unwrap();
+    let whole = body_span(tcx, frame.instance().def_id(), BodySpanType::Whole);
+    let body_span = CharRange::from_span(whole, tcx.sess.source_map()).unwrap();
+    let file_path = span_file_path(whole, tcx.sess.source_map());
 
     let current_loc = if current {
       loc_override
@@ -314,6 +316,7 @@ impl<'tcx> VisEvaluator<'tcx> {
     interp_ok(MFrame {
       name,
       body_span,
+      file_path,
       locals,
       location: current_loc,
     })
