@@ -37,3 +37,4 @@ insta = { version = "1.22.0", features = ["json", "yaml", "redactions"] }
 aquascope = { path = ".", features = ["testing"] }
 env_logger = "0.9.3"
 test-log = "0.2.11"
+serde_json = "1"

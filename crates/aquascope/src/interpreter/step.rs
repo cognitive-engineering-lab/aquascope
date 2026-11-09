@@ -11,7 +11,7 @@ use either::Either;
 use itertools::Itertools;
 use miri::*;
 use rustc_abi::{ExternAbi, FieldsShape, Size};
-use rustc_hir::def_id::DefId;
+use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_middle::{
   mir::{
     self, Local, Location, Place, PlaceElem, RETURN_PLACE,
@@ -28,7 +28,10 @@ use rustc_utils::{PlaceExt, source_map::range::CharRange};
 use serde::Serialize;
 use ts_rs::TS;
 
-use super::mvalue::{MMemorySegment, MPathSegment, MValue};
+use super::{
+  InterpretOptions,
+  mvalue::{MMemorySegment, MPathSegment, MValue},
+};
 
 #[derive(Serialize, Debug, TS)]
 #[ts(export)]
@@ -167,10 +170,13 @@ struct LocalFrame<'a, 'tcx> {
 }
 
 impl<'tcx> VisEvaluator<'tcx> {
-  pub fn new(tcx: TyCtxt<'tcx>) -> Result<Self> {
+  pub fn new(tcx: TyCtxt<'tcx>, options: &InterpretOptions) -> Result<Self> {
     let (main_id, entry_fn_type) = tcx
       .entry_fn(())
       .context("no main or start function found")?;
+    let args = std::iter::once(tcx.crate_name(LOCAL_CRATE).to_string())
+      .chain(options.program_args.iter().cloned())
+      .collect();
     let mut ecx = miri::create_ecx(
       tcx,
       main_id,
@@ -180,6 +186,12 @@ impl<'tcx> VisEvaluator<'tcx> {
         // have to make sure miri doesn't complain about us poking around memory
         validation: miri::ValidationMode::No,
         borrow_tracker: None,
+        args,
+        isolated_op: if options.disable_isolation {
+          IsolatedOp::Allow
+        } else {
+          MiriConfig::default().isolated_op
+        },
         ..Default::default()
       },
       None,
