@@ -15,6 +15,7 @@ steps:
               column: 1
             filename:
               private_use_as_methods_instead: 0
+          file_path: dummy.rs
           location:
             start:
               line: 1
@@ -44,6 +45,7 @@ steps:
               column: 1
             filename:
               private_use_as_methods_instead: 0
+          file_path: dummy.rs
           location:
             start:
               line: 2
@@ -78,6 +80,7 @@ steps:
               column: 1
             filename:
               private_use_as_methods_instead: 0
+          file_path: dummy.rs
           location:
             start:
               line: 3
@@ -112,6 +115,7 @@ steps:
               column: 1
             filename:
               private_use_as_methods_instead: 0
+          file_path: dummy.rs
           location:
             start:
               line: 4

@@ -160,6 +160,7 @@ pub fn group_steps<Loc1, Loc2: PartialEq + Clone>(
             location: current_loc,
             name: frame.name,
             body_span: frame.body_span,
+            file_path: frame.file_path,
             locals: frame.locals,
           })
         })
@@ -194,6 +195,7 @@ mod test {
         frames: vec![MFrame {
           name: name.to_owned(),
           body_span: dummy_char_range,
+          file_path: String::new(),
           locals: Vec::new(),
           location,
         }],
