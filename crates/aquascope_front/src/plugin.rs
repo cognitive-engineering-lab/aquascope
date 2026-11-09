@@ -1,6 +1,7 @@
 use std::{
   borrow::Cow,
   env,
+  path::PathBuf,
   process::{Command, exit},
   time::Instant,
 };
@@ -31,6 +32,11 @@ pub struct AquascopePluginArgs {
   #[clap(long)]
   should_fail: bool,
 
+  /// Analyse only the crate containing this file, instead of every crate of
+  /// the workspace.
+  #[clap(long, value_name = "FILE")]
+  crate_of: Option<PathBuf>,
+
   #[clap(subcommand)]
   command: AquascopeCommand,
 }
@@ -49,6 +55,19 @@ enum AquascopeCommand {
 
   Preload,
   RustcVersion,
+}
+
+impl AquascopePluginArgs {
+  /// The crates to analyse. In a workspace, the analysis of a crate stops
+  /// before writing the metadata that crates depending on it need, so in the
+  /// default whole-workspace run those crates get no results; `--crate-of`
+  /// builds them normally and analyses only the crate holding the file.
+  fn crate_filter(&self) -> CrateFilter {
+    match &self.crate_of {
+      Some(file) => CrateFilter::CrateContainingFile(file.clone()),
+      None => CrateFilter::OnlyWorkspace,
+    }
+  }
 }
 
 pub struct AquascopePlugin;
@@ -97,7 +116,7 @@ impl RustcPlugin for AquascopePlugin {
     };
 
     RustcPluginArgs {
-      filter: CrateFilter::OnlyWorkspace,
+      filter: args.crate_filter(),
       args,
     }
   }
@@ -211,5 +230,30 @@ impl rustc_driver::Callbacks for AquascopeCallbacks {
     log::debug!("Callback analysis took {:?}", self.rustc_start.elapsed());
 
     rustc_driver::Compilation::Stop
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::path::Path;
+
+  use super::*;
+
+  #[test]
+  fn crate_of_selects_the_crate_containing_the_file() {
+    let args = AquascopePluginArgs::parse_from([
+      "cargo-aquascope",
+      "--crate-of",
+      "src/lib.rs",
+      "permissions",
+    ]);
+    assert!(matches!(
+      args.crate_filter(),
+      CrateFilter::CrateContainingFile(file) if file.as_path() == Path::new("src/lib.rs")
+    ));
+
+    let args =
+      AquascopePluginArgs::parse_from(["cargo-aquascope", "permissions"]);
+    assert!(matches!(args.crate_filter(), CrateFilter::OnlyWorkspace));
   }
 }
