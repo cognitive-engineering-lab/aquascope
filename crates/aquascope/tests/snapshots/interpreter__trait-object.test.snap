@@ -1,0 +1,164 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: trait-object.test
+---
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 1
+              column: 2
+            end:
+              line: 1
+              column: 52
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: shown
+              value:
+                type: Adt
+                value:
+                  name: Box
+                  variant: ~
+                  fields:
+                    - - "0"
+                      - type: Adt
+                        value:
+                          name: Unique
+                          variant: ~
+                          fields:
+                            - - pointer
+                              - type: Adt
+                                value:
+                                  name: NonNull
+                                  variant: ~
+                                  fields:
+                                    - - pointer
+                                      - type: Pointer
+                                        value:
+                                          path:
+                                            segment:
+                                              type: Heap
+                                              value:
+                                                index: 0
+                                            parts: []
+                                          range: ~
+                                  alloc_kind: ~
+                          alloc_kind: ~
+                  alloc_kind:
+                    type: Box
+              moved_paths: []
+    heap:
+      locations:
+        - type: Adt
+          value:
+            name: "dyn std::fmt::Debug"
+            variant: ~
+            fields: []
+            alloc_kind: ~
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 2
+              column: 2
+            end:
+              line: 2
+              column: 12
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: shown
+              value:
+                type: Adt
+                value:
+                  name: Box
+                  variant: ~
+                  fields:
+                    - - "0"
+                      - type: Adt
+                        value:
+                          name: Unique
+                          variant: ~
+                          fields:
+                            - - pointer
+                              - type: Adt
+                                value:
+                                  name: NonNull
+                                  variant: ~
+                                  fields:
+                                    - - pointer
+                                      - type: Pointer
+                                        value:
+                                          path:
+                                            segment:
+                                              type: Heap
+                                              value:
+                                                index: 0
+                                            parts: []
+                                          range: ~
+                                  alloc_kind: ~
+                          alloc_kind: ~
+                  alloc_kind:
+                    type: Box
+              moved_paths: []
+            - name: n
+              value:
+                type: Int
+                value: 1
+              moved_paths: []
+    heap:
+      locations:
+        - type: Adt
+          value:
+            name: "dyn std::fmt::Debug"
+            variant: ~
+            fields: []
+            alloc_kind: ~
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 3
+              column: 0
+            end:
+              line: 3
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          locals: []
+    heap:
+      locations: []
+result:
+  type: Success

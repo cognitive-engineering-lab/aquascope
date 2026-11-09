@@ -1,0 +1,4 @@
+fn main() {
+  let shown: Box<dyn std::fmt::Debug> = Box::new(5);
+  let n = 1;
+}
