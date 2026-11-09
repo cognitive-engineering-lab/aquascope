@@ -1,0 +1,167 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: str-in-array.test
+---
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 4
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 1
+              column: 2
+            end:
+              line: 1
+              column: 25
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: bytes
+              value:
+                type: Array
+                value:
+                  type: All
+                  value:
+                    - type: Uint
+                      value: 104
+                    - type: Uint
+                      value: 105
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 4
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 2
+              column: 2
+            end:
+              line: 2
+              column: 47
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: bytes
+              value:
+                type: Array
+                value:
+                  type: All
+                  value:
+                    - type: Uint
+                      value: 104
+                    - type: Uint
+                      value: 105
+              moved_paths: []
+            - name: s
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: bytes
+                    parts: []
+                  range: 2
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 4
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 3
+              column: 2
+            end:
+              line: 3
+              column: 18
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: bytes
+              value:
+                type: Array
+                value:
+                  type: All
+                  value:
+                    - type: Uint
+                      value: 104
+                    - type: Uint
+                      value: 105
+              moved_paths: []
+            - name: s
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Stack
+                      value:
+                        frame: 0
+                        local: bytes
+                    parts: []
+                  range: 2
+              moved_paths: []
+            - name: n
+              value:
+                type: Uint
+                value: 2
+              moved_paths: []
+    heap:
+      locations: []
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 4
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 4
+              column: 0
+            end:
+              line: 4
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          locals: []
+    heap:
+      locations: []
+result:
+  type: Success

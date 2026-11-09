@@ -1,0 +1,4 @@
+fn main() {
+  let s = "hi";
+  let n = s.len();
+}

@@ -1,0 +1,132 @@
+---
+source: crates/aquascope/tests/interpreter.rs
+description: str-literal.test
+---
+steps:
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 1
+              column: 2
+            end:
+              line: 1
+              column: 15
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: s
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Heap
+                      value:
+                        index: 0
+                    parts:
+                      - type: Subslice
+                        value:
+                          - 0
+                          - 1
+                  range: 2
+              moved_paths: []
+    heap:
+      locations:
+        - type: Array
+          value:
+            type: All
+            value:
+              - type: Char
+                value: 104
+              - type: Char
+                value: 105
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 2
+              column: 2
+            end:
+              line: 2
+              column: 18
+            filename:
+              private_use_as_methods_instead: 0
+          locals:
+            - name: s
+              value:
+                type: Pointer
+                value:
+                  path:
+                    segment:
+                      type: Heap
+                      value:
+                        index: 0
+                    parts:
+                      - type: Subslice
+                        value:
+                          - 0
+                          - 1
+                  range: 2
+              moved_paths: []
+            - name: n
+              value:
+                type: Uint
+                value: 2
+              moved_paths: []
+    heap:
+      locations:
+        - type: Array
+          value:
+            type: All
+            value:
+              - type: Char
+                value: 104
+              - type: Char
+                value: 105
+  - stack:
+      frames:
+        - name: main
+          body_span:
+            start:
+              line: 0
+              column: 0
+            end:
+              line: 3
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          location:
+            start:
+              line: 3
+              column: 0
+            end:
+              line: 3
+              column: 1
+            filename:
+              private_use_as_methods_instead: 0
+          locals: []
+    heap:
+      locations: []
+result:
+  type: Success

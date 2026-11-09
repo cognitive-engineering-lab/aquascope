@@ -2,8 +2,8 @@
 
 use miri::{
   AllocKind, AllocMap, CheckInAllocMsg, Immediate, InterpErrorInfo,
-  InterpErrorKind, InterpResult, MPlaceTy, MemPlaceMeta, MemoryKind, OpTy,
-  Projectable, UndefinedBehaviorInfo, interp_ok,
+  InterpErrorKind, InterpResult, MPlaceTy, MemPlaceMeta, MemoryKind,
+  MiriMemoryKind, OpTy, Projectable, UndefinedBehaviorInfo, interp_ok,
 };
 use rustc_abi::{FieldIdx, FieldsShape, Size};
 use rustc_apfloat::Float;
@@ -170,6 +170,25 @@ impl<'tcx> Reader<'_, 'tcx> {
   ) -> InterpResult<'tcx, MValue> {
     let el_ty = base.layout.ty;
     let stride = base.layout.size;
+    // A `str` reached other than through a `String`, such as a string
+    // literal or a `&str` into an array, is read as its characters. Reading
+    // it as a value would read the same pointer again, until the stack
+    // overflows.
+    if el_ty.is_str() {
+      let len = base.meta().unwrap_meta().to_target_usize(&self.ev.ecx)?;
+      let u8_ty = self.ev.ecx.tcx.types.u8;
+      let MValue::Array(bytes) =
+        self.read_array(base, Size::from_bytes(1), len, u8_ty)?
+      else {
+        unreachable!()
+      };
+      return interp_ok(MValue::Array(bytes.map(|byte| {
+        let MValue::Uint(c) = byte else {
+          unreachable!()
+        };
+        MValue::Char(c as usize)
+      })));
+    }
     interp_ok(match self.heap_alloc_kinds.last() {
       Some(HeapAllocKind::String { len }) => {
         let array = self.read_array(base, stride, *len, el_ty)?;
@@ -226,14 +245,17 @@ impl<'tcx> Reader<'_, 'tcx> {
 
       // Get the kind of memory we're looking at (either stack or heap)
       // from the allocation metadata.
-      let (memory_kind, _) = self
+      // A global allocation, such as a string literal's, is in the machine's
+      // map only once written to; it is shown with the heap, the only place
+      // for memory outside the stack.
+      let memory_kind = self
         .ev
         .ecx
         .memory
         .alloc_map()
         .get(alloc_id)
-        .unwrap_or_else(|| {
-          panic!("Missing memory allocation for alloc: {alloc_id:?}")
+        .map_or(MemoryKind::Machine(MiriMemoryKind::Global), |(kind, _)| {
+          *kind
         });
 
       // Generate a corresponding `MMemorySegment` that locates the base allocation,
@@ -266,6 +288,10 @@ impl<'tcx> Reader<'_, 'tcx> {
 
           let layout = match self.heap_alloc_kinds.last() {
             Some(HeapAllocKind::Vec { el_ty, .. }) => *el_ty,
+            // A `str` is laid out like a `String`'s buffer, as bytes.
+            _ if mplace.layout.ty.is_str() => {
+              self.ev.ecx.layout_of(self.ev.ecx.tcx.types.u8)?
+            }
             _ => mplace.layout,
           };
 
@@ -283,11 +309,20 @@ impl<'tcx> Reader<'_, 'tcx> {
     // The pointer could point anywhere inside the allocation, so we use
     // `get_path_segments` to reverse-engineer a path from the memory location.
     let meta = mplace.meta();
-    let parts =
-      self.get_path_segments(alloc_info.size, alloc_layout, mplace, offset);
+    let trait_object = matches!(mplace.layout.ty.kind(), TyKind::Dynamic(..));
+    // An allocation whose layout has no size, such as a trait object's, has
+    // no parts to locate the pointer in, so the pointer names the whole.
+    let parts = if alloc_layout.size.bytes() == 0 && alloc_info.size.bytes() > 0
+    {
+      Vec::new()
+    } else {
+      self.get_path_segments(alloc_info.size, alloc_layout, mplace, offset)
+    };
     let path = MPath { segment, parts };
 
     let range = match meta {
+      // A trait object's metadata is its vtable, not a length.
+      MemPlaceMeta::Meta(_) if trait_object => None,
       MemPlaceMeta::Meta(meta) => Some(meta.to_u64()?),
       MemPlaceMeta::None => None,
     };
@@ -564,6 +599,15 @@ impl<'tcx> Reader<'_, 'tcx> {
         let inner = op.transmute(layout, ecx)?;
         self.read(&inner)?
       }
+
+      // A trait object's value depends on its concrete type, which is not
+      // read; it is shown by its type.
+      TyKind::Dynamic(..) => MValue::Adt {
+        name: ty.to_string(),
+        variant: None,
+        fields: Vec::new(),
+        alloc_kind: None,
+      },
 
       kind => todo!("{:?} / {:?}", op, kind),
     };
