@@ -132,12 +132,12 @@ impl RustcPlugin for AquascopePlugin {
           plugin_args.should_fail,
         );
         let _ = run_with_callbacks(&compiler_args, &mut callbacks);
-        postprocess(
-          callbacks
-            .result
-            .unwrap()
-            .map_err(|_| AquascopeError::BuildError { range: None }),
-        )
+        postprocess(callbacks.result.unwrap().map_err(|_| {
+          AquascopeError::BuildError {
+            range: None,
+            file_path: None,
+          }
+        }))
       }
       _ => unreachable!(),
     }
@@ -165,7 +165,10 @@ pub fn run_with_callbacks(
   rustc_driver::catch_fatal_errors(move || {
     rustc_driver::run_compiler(&args, callbacks)
   })
-  .map_err(|_| AquascopeError::BuildError { range: None })
+  .map_err(|_| AquascopeError::BuildError {
+    range: None,
+    file_path: None,
+  })
 }
 
 #[allow(dead_code)]

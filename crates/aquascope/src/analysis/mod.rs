@@ -25,7 +25,9 @@ use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::{self, Span};
+use rustc_span::{
+  self, FileName, RemapPathScopeComponents, Span, source_map::SourceMap,
+};
 use rustc_utils::{
   BodyExt, SpanExt,
   mir::borrowck_facts,
@@ -279,11 +281,32 @@ pub fn compute_permissions<'tcx>(
 #[serde(tag = "type")]
 pub enum AquascopeError {
   // An error occurred before the intended analysis could run.
-  BuildError { range: Option<CharRange> },
-  AnalysisError { msg: String },
+  BuildError {
+    range: Option<CharRange>,
+    /// The path of the file holding `range`, as given by `span_file_path`.
+    file_path: Option<String>,
+  },
+  AnalysisError {
+    msg: String,
+  },
 }
 
 pub type AquascopeResult<T> = ::std::result::Result<T, AquascopeError>;
+
+/// The path of the file containing `span`, as the compiler was given it. For a
+/// crate that Cargo builds, that is relative to the workspace root, such as
+/// `src/lib.rs` or `member/src/lib.rs`. Positions name their file only by an
+/// index into a table that is not part of the output, so this path is what
+/// lets a caller analysing a crate of several files place each result.
+pub fn span_file_path(span: Span, source_map: &SourceMap) -> String {
+  match &source_map.lookup_source_file(span.lo()).name {
+    FileName::Real(real) => real
+      .path(RemapPathScopeComponents::DOCUMENTATION)
+      .to_string_lossy()
+      .into_owned(),
+    other => format!("{other:?}"),
+  }
+}
 
 pub struct AquascopeAnalysis<'tcx> {
   pub(crate) permissions: PermissionsCtxt<'tcx>,
@@ -300,6 +323,8 @@ impl From<anyhow::Error> for AquascopeError {
 #[ts(export)]
 pub struct AnalysisOutput {
   pub body_range: CharRange,
+  /// The path of the file holding the body, as given by `span_file_path`.
+  pub file_path: String,
   pub boundaries: Vec<PermissionsBoundary>,
   pub steps: Vec<PermissionsLineDisplay>,
   pub loan_points: LoanPoints,
@@ -334,7 +359,8 @@ impl<'tcx> AquascopeAnalysis<'tcx> {
       let span = body.span;
       let source_map = tcx.sess.source_map();
       let range = CharRange::from_span(span, source_map).unwrap().into();
-      return Err(AquascopeError::BuildError { range });
+      let file_path = Some(span_file_path(span, source_map));
+      return Err(AquascopeError::BuildError { range, file_path });
     }
 
     crate::analysis::permissions::utils::dump_mir_debug(
@@ -348,9 +374,11 @@ impl<'tcx> AquascopeAnalysis<'tcx> {
     let (move_points, move_regions) = analysis_ctxt.construct_move_info();
 
     let body_range = analysis_ctxt.span_to_range(body.span);
+    let file_path = span_file_path(body.span, tcx.sess.source_map());
 
     Ok(AnalysisOutput {
       body_range,
+      file_path,
       boundaries,
       steps,
       loan_points,
