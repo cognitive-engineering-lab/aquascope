@@ -18,8 +18,22 @@ pub use step::MTrace;
 
 use crate::interpreter::mapper::Mapper;
 
-pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<CharRange>> {
-  let mut evaluator = step::VisEvaluator::new(tcx).unwrap();
+/// How the interpreter runs the program.
+#[derive(Debug, Default, Clone)]
+pub struct InterpretOptions {
+  /// Lift Miri's isolation, as `-Zmiri-disable-isolation` does, so that the
+  /// program can use the file system, the clock and the environment.
+  pub disable_isolation: bool,
+  /// The program's command-line arguments. The program sees the crate's name
+  /// before them, as a program run by Cargo sees its own.
+  pub program_args: Vec<String>,
+}
+
+pub(crate) fn interpret(
+  tcx: TyCtxt,
+  options: &InterpretOptions,
+) -> Result<MTrace<CharRange>> {
+  let mut evaluator = step::VisEvaluator::new(tcx, options).unwrap();
   let mir_steps = evaluator.eval()?;
 
   if log::log_enabled!(log::Level::Trace) {
@@ -66,13 +80,15 @@ pub(crate) fn interpret(tcx: TyCtxt) -> Result<MTrace<CharRange>> {
 
 pub struct InterpretCallbacks {
   should_fail: bool,
+  options: InterpretOptions,
   pub result: Option<Result<MTrace<CharRange>>>,
 }
 
 impl InterpretCallbacks {
-  pub fn new(should_fail: bool) -> Self {
+  pub fn new(should_fail: bool, options: InterpretOptions) -> Self {
     InterpretCallbacks {
       should_fail,
+      options,
       result: None,
     }
   }
@@ -119,7 +135,7 @@ impl rustc_driver::Callbacks for InterpretCallbacks {
     _compiler: &rustc_interface::interface::Compiler,
     tcx: TyCtxt<'_>,
   ) -> rustc_driver::Compilation {
-    self.result = Some(interpret(tcx));
+    self.result = Some(interpret(tcx, &self.options));
     rustc_driver::Compilation::Stop
   }
 }

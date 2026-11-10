@@ -375,6 +375,23 @@ pub fn test_steps_in_file(
   inner().unwrap()
 }
 
+/// Compiles `code` as a binary with Miri's standard library and runs it in
+/// the interpreter with `options`.
+pub fn interpret_with(
+  code: &str,
+  options: &interpreter::InterpretOptions,
+) -> Result<MTrace<CharRange>> {
+  let args = format!(
+    "--crate-type bin --sysroot {}",
+    aquascope_workspace_utils::miri_sysroot()?.display()
+  );
+  let mut result = None;
+  compile(code, &args, true, |tcx| {
+    result = Some(interpreter::interpret(tcx, options));
+  });
+  result.context("the program did not compile")?
+}
+
 pub fn test_interpreter_in_file(
   path: &Path,
   run_insta: impl Fn(String, MTrace<CharRange>) + Sync,
@@ -387,7 +404,7 @@ pub fn test_interpreter_in_file(
     );
     compile(input, &args, true, |tcx| {
       let name = path.file_name().unwrap().to_string_lossy().to_string();
-      let result = interpreter::interpret(tcx).unwrap();
+      let result = interpreter::interpret(tcx, &Default::default()).unwrap();
       run_insta(name, result);
     });
     Ok(())
